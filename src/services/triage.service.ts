@@ -1,0 +1,372 @@
+// ============================================================================
+// TRIAGE SERVICE
+// ============================================================================
+
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import type { 
+  IMEIRecord, 
+  DeviceCondition, 
+  TriageResult,
+  Order 
+} from '@/types'
+
+export interface TriageInput {
+  imei_record_id: string
+  physical_condition: DeviceCondition
+  functional_grade: DeviceCondition
+  cosmetic_grade: DeviceCondition
+  screen_condition: 'good' | 'cracked' | 'damaged' | 'dead'
+  battery_health: number // Percentage 0-100
+  storage_verified: boolean
+  original_accessories: boolean
+  functional_tests: {
+    touchscreen: boolean
+    display: boolean
+    speakers: boolean
+    microphone: boolean
+    cameras: boolean
+    wifi: boolean
+    bluetooth: boolean
+    cellular: boolean
+    charging_port: boolean
+    buttons: boolean
+    face_id_or_touch_id: boolean
+    gps: boolean
+  }
+  notes: string
+  triaged_by_id: string
+}
+
+export interface TriageOutcome {
+  passed: boolean
+  final_condition: DeviceCondition
+  condition_changed: boolean
+  price_adjustment: number
+  exception_required: boolean
+  exception_reason?: string
+}
+
+export class TriageService {
+  /**
+   * Submit triage results for a device
+   */
+  static async submitTriageResult(input: TriageInput): Promise<{
+    triageResult: TriageResult
+    outcome: TriageOutcome
+  }> {
+    const supabase = createServerSupabaseClient()
+
+    // Get the IMEI record
+    const { data: imeiRecord, error: imeiError } = await supabase
+      .from('imei_records')
+      .select(`
+        *,
+        order:orders(*)
+      `)
+      .eq('id', input.imei_record_id)
+      .single()
+
+    if (imeiError || !imeiRecord) {
+      throw new Error('IMEI record not found')
+    }
+
+    // Calculate outcome
+    const outcome = this.calculateTriageOutcome(input, imeiRecord as IMEIRecord)
+
+    // Create triage result
+    const { data: triageResult, error: triageError } = await supabase
+      .from('triage_results')
+      .insert({
+        imei_record_id: input.imei_record_id,
+        order_id: imeiRecord.order_id,
+        physical_condition: input.physical_condition,
+        functional_grade: input.functional_grade,
+        cosmetic_grade: input.cosmetic_grade,
+        screen_condition: input.screen_condition,
+        battery_health: input.battery_health,
+        storage_verified: input.storage_verified,
+        original_accessories: input.original_accessories,
+        functional_tests: input.functional_tests,
+        final_condition: outcome.final_condition,
+        condition_changed: outcome.condition_changed,
+        price_adjustment: outcome.price_adjustment,
+        exception_required: outcome.exception_required,
+        exception_reason: outcome.exception_reason,
+        notes: input.notes,
+        triaged_by_id: input.triaged_by_id,
+        triaged_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+    if (triageError) {
+      throw new Error(triageError.message)
+    }
+
+    // Update IMEI record with triage results
+    await supabase
+      .from('imei_records')
+      .update({
+        actual_condition: outcome.final_condition,
+        triage_status: outcome.exception_required ? 'needs_exception' : 'complete',
+      })
+      .eq('id', input.imei_record_id)
+
+    return {
+      triageResult: triageResult as TriageResult,
+      outcome,
+    }
+  }
+
+  /**
+   * Calculate triage outcome based on test results
+   */
+  private static calculateTriageOutcome(input: TriageInput, imeiRecord: IMEIRecord): TriageOutcome {
+    const tests = input.functional_tests
+    
+    // Count failed tests
+    const failedTests = Object.values(tests).filter(v => !v).length
+    const totalTests = Object.values(tests).length
+
+    // Determine final condition based on various factors
+    let finalCondition = input.physical_condition
+
+    // Downgrade based on failed tests
+    if (failedTests > 3) {
+      finalCondition = 'poor'
+    } else if (failedTests > 1) {
+      finalCondition = this.downgradeCondition(finalCondition)
+    }
+
+    // Downgrade based on battery health
+    if (input.battery_health < 70) {
+      finalCondition = 'poor'
+    } else if (input.battery_health < 80) {
+      finalCondition = this.downgradeCondition(finalCondition)
+    }
+
+    // Screen condition affects grade significantly
+    if (input.screen_condition === 'damaged' || input.screen_condition === 'dead') {
+      finalCondition = 'poor'
+    } else if (input.screen_condition === 'cracked') {
+      finalCondition = this.downgradeCondition(finalCondition)
+    }
+
+    // Check if condition changed from claimed
+    const conditionChanged = finalCondition !== imeiRecord.claimed_condition
+
+    // Calculate price adjustment (negative if downgraded)
+    const priceAdjustment = this.calculatePriceAdjustment(
+      imeiRecord.claimed_condition as DeviceCondition,
+      finalCondition,
+      imeiRecord.quoted_price || 0
+    )
+
+    // Determine if exception is required
+    const exceptionRequired = conditionChanged && priceAdjustment < -50 // More than $50 adjustment
+    
+    let exceptionReason: string | undefined
+    if (exceptionRequired) {
+      exceptionReason = `Condition changed from ${imeiRecord.claimed_condition} to ${finalCondition}. ` +
+        `Price adjustment: $${priceAdjustment.toFixed(2)}. ` +
+        `Failed tests: ${failedTests}/${totalTests}. ` +
+        `Battery health: ${input.battery_health}%. ` +
+        `Screen: ${input.screen_condition}.`
+    }
+
+    return {
+      passed: !exceptionRequired,
+      final_condition: finalCondition,
+      condition_changed: conditionChanged,
+      price_adjustment: priceAdjustment,
+      exception_required: exceptionRequired,
+      exception_reason: exceptionReason,
+    }
+  }
+
+  /**
+   * Downgrade a condition by one level
+   */
+  private static downgradeCondition(condition: DeviceCondition): DeviceCondition {
+    const order: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
+    const currentIndex = order.indexOf(condition)
+    return currentIndex < order.length - 1 ? order[currentIndex + 1] : 'poor'
+  }
+
+  /**
+   * Calculate price adjustment based on condition change
+   */
+  private static calculatePriceAdjustment(
+    claimedCondition: DeviceCondition,
+    actualCondition: DeviceCondition,
+    quotedPrice: number
+  ): number {
+    const multipliers: Record<DeviceCondition, number> = {
+      'new': 1.0,
+      'excellent': 0.9,
+      'good': 0.8,
+      'fair': 0.65,
+      'poor': 0.4,
+    }
+
+    const claimedMultiplier = multipliers[claimedCondition] || 1
+    const actualMultiplier = multipliers[actualCondition] || 1
+
+    // Guard against division by zero
+    if (claimedMultiplier === 0) return 0
+
+    // Calculate the original base price
+    const basePrice = quotedPrice / claimedMultiplier
+    
+    // Calculate new price and adjustment
+    const newPrice = basePrice * actualMultiplier
+    const adjustment = newPrice - quotedPrice
+
+    return Math.round(adjustment * 100) / 100
+  }
+
+  /**
+   * Get triage results for an order
+   */
+  static async getTriageResultsForOrder(orderId: string): Promise<TriageResult[]> {
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('triage_results')
+      .select(`
+        *,
+        imei_record:imei_records(*),
+        triaged_by:users(*)
+      `)
+      .eq('order_id', orderId)
+      .order('triaged_at', { ascending: false })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return data as TriageResult[]
+  }
+
+  /**
+   * Get pending triage items
+   */
+  static async getPendingTriageItems(): Promise<IMEIRecord[]> {
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('imei_records')
+      .select(`
+        *,
+        order:orders(*),
+        device:devices(*)
+      `)
+      .eq('triage_status', 'pending')
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return data as IMEIRecord[]
+  }
+
+  /**
+   * Get items needing exception approval
+   */
+  static async getExceptionItems(): Promise<TriageResult[]> {
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('triage_results')
+      .select(`
+        *,
+        imei_record:imei_records(*),
+        order:orders(*)
+      `)
+      .eq('exception_required', true)
+      .is('exception_approved_at', null)
+      .order('triaged_at', { ascending: true })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return data as TriageResult[]
+  }
+
+  /**
+   * Approve or reject an exception
+   */
+  static async handleException(
+    triageResultId: string,
+    approved: boolean,
+    approvedById: string,
+    notes?: string
+  ): Promise<TriageResult> {
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('triage_results')
+      .update({
+        exception_approved: approved,
+        exception_approved_by_id: approvedById,
+        exception_approved_at: new Date().toISOString(),
+        exception_notes: notes,
+      })
+      .eq('id', triageResultId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    // Update IMEI record status
+    const triageResult = data as TriageResult
+    await supabase
+      .from('imei_records')
+      .update({
+        triage_status: approved ? 'complete' : 'rejected',
+        actual_condition: approved ? triageResult.final_condition : null,
+      })
+      .eq('id', triageResult.imei_record_id)
+
+    return triageResult
+  }
+
+  /**
+   * Check if all items in an order have been triaged
+   */
+  static async checkOrderTriageComplete(orderId: string): Promise<{
+    total: number
+    complete: number
+    pending: number
+    needsException: number
+    isComplete: boolean
+  }> {
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('imei_records')
+      .select('triage_status')
+      .eq('order_id', orderId)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    const total = data.length
+    const complete = data.filter(r => r.triage_status === 'complete').length
+    const pending = data.filter(r => r.triage_status === 'pending').length
+    const needsException = data.filter(r => r.triage_status === 'needs_exception').length
+
+    return {
+      total,
+      complete,
+      pending,
+      needsException,
+      isComplete: complete === total,
+    }
+  }
+}

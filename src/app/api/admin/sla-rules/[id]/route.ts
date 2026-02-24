@@ -1,0 +1,82 @@
+// ============================================================================
+// SLA RULE BY ID API ROUTE
+// ============================================================================
+
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { SLAService } from '@/services/sla.service'
+import { updateSLARuleSchema } from '@/lib/validations'
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const validationResult = updateSLARuleSchema.safeParse(body)
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validationResult.error.errors },
+        { status: 400 }
+      )
+    }
+    const rule = await SLAService.updateSLARule(params.id, validationResult.data)
+    return NextResponse.json(rule)
+  } catch (error) {
+    console.error('Error updating SLA rule:', error)
+    return NextResponse.json(
+      { error: 'Failed to update SLA rule' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    await SLAService.deleteSLARule(params.id)
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting SLA rule:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete SLA rule' },
+      { status: 500 }
+    )
+  }
+}
