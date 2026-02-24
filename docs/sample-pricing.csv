@@ -1,0 +1,51 @@
+make,model,storage,carrier,condition,base_price,buy_price,sell_price,effective_date
+Apple,iPhone 15 Pro Max,256GB,Unlocked,new,1199.00,950.00,1149.00,2026-02-01
+Apple,iPhone 15 Pro Max,512GB,Unlocked,new,1399.00,1100.00,1349.00,2026-02-01
+Apple,iPhone 15 Pro Max,1TB,Unlocked,new,1599.00,1250.00,1549.00,2026-02-01
+Apple,iPhone 15 Pro,128GB,Unlocked,new,999.00,780.00,949.00,2026-02-01
+Apple,iPhone 15 Pro,256GB,Unlocked,new,1099.00,860.00,1049.00,2026-02-01
+Apple,iPhone 15 Pro,512GB,Unlocked,new,1299.00,1020.00,1249.00,2026-02-01
+Apple,iPhone 15,128GB,Unlocked,new,799.00,620.00,749.00,2026-02-01
+Apple,iPhone 15,256GB,Unlocked,new,899.00,700.00,849.00,2026-02-01
+Apple,iPhone 14 Pro Max,128GB,Unlocked,new,899.00,680.00,849.00,2026-02-01
+Apple,iPhone 14 Pro Max,256GB,Unlocked,new,999.00,760.00,949.00,2026-02-01
+Apple,iPhone 14 Pro,128GB,Unlocked,new,799.00,600.00,749.00,2026-02-01
+Apple,iPhone 14 Pro,256GB,Unlocked,new,899.00,680.00,849.00,2026-02-01
+Apple,iPhone 14,128GB,Unlocked,new,699.00,520.00,649.00,2026-02-01
+Apple,iPhone 14,256GB,Unlocked,new,799.00,600.00,749.00,2026-02-01
+Apple,iPhone 13 Pro Max,128GB,Unlocked,new,699.00,500.00,649.00,2026-02-01
+Apple,iPhone 13 Pro Max,256GB,Unlocked,new,799.00,580.00,749.00,2026-02-01
+Apple,iPhone 13 Pro,128GB,Unlocked,new,599.00,420.00,549.00,2026-02-01
+Apple,iPhone 13 Pro,256GB,Unlocked,new,699.00,500.00,649.00,2026-02-01
+Apple,iPhone 13,128GB,Unlocked,new,499.00,340.00,449.00,2026-02-01
+Apple,iPhone 13,256GB,Unlocked,new,599.00,420.00,549.00,2026-02-01
+Apple,iPhone 12,64GB,Unlocked,new,349.00,220.00,299.00,2026-02-01
+Apple,iPhone 12,128GB,Unlocked,new,399.00,260.00,349.00,2026-02-01
+Apple,iPhone SE (3rd Gen),64GB,Unlocked,new,299.00,180.00,249.00,2026-02-01
+Apple,iPhone SE (3rd Gen),128GB,Unlocked,new,349.00,220.00,299.00,2026-02-01
+Samsung,Galaxy S24 Ultra,256GB,Unlocked,new,1299.00,1000.00,1249.00,2026-02-01
+Samsung,Galaxy S24 Ultra,512GB,Unlocked,new,1419.00,1100.00,1369.00,2026-02-01
+Samsung,Galaxy S24+,256GB,Unlocked,new,999.00,760.00,949.00,2026-02-01
+Samsung,Galaxy S24,128GB,Unlocked,new,799.00,600.00,749.00,2026-02-01
+Samsung,Galaxy S23 Ultra,256GB,Unlocked,new,999.00,740.00,949.00,2026-02-01
+Samsung,Galaxy Z Fold 5,256GB,Unlocked,new,1799.00,1400.00,1749.00,2026-02-01
+Samsung,Galaxy Z Flip 5,256GB,Unlocked,new,999.00,760.00,949.00,2026-02-01
+Google,Pixel 8 Pro,128GB,Unlocked,new,999.00,760.00,949.00,2026-02-01
+Google,Pixel 8 Pro,256GB,Unlocked,new,1059.00,820.00,1009.00,2026-02-01
+Google,Pixel 8,128GB,Unlocked,new,699.00,520.00,649.00,2026-02-01
+Google,Pixel 7 Pro,128GB,Unlocked,new,599.00,420.00,549.00,2026-02-01
+Google,Pixel 7,128GB,Unlocked,new,449.00,300.00,399.00,2026-02-01
+Apple,iPad Pro 12.9" (M2),128GB,WiFi,new,1099.00,840.00,1049.00,2026-02-01
+Apple,iPad Pro 12.9" (M2),256GB,WiFi,new,1199.00,920.00,1149.00,2026-02-01
+Apple,iPad Pro 11" (M2),128GB,WiFi,new,799.00,600.00,749.00,2026-02-01
+Apple,iPad Air (5th Gen),64GB,WiFi,new,599.00,440.00,549.00,2026-02-01
+Apple,iPad Air (5th Gen),256GB,WiFi,new,749.00,560.00,699.00,2026-02-01
+Apple,iPad (10th Gen),64GB,WiFi,new,449.00,320.00,399.00,2026-02-01
+Apple,iPad mini (6th Gen),64GB,WiFi,new,499.00,360.00,449.00,2026-02-01
+Apple,MacBook Pro 16" (M3 Max),512GB,N/A,new,3499.00,2800.00,3449.00,2026-02-01
+Apple,MacBook Pro 14" (M3 Pro),512GB,N/A,new,1999.00,1560.00,1949.00,2026-02-01
+Apple,MacBook Air 15" (M3),256GB,N/A,new,1299.00,1000.00,1249.00,2026-02-01
+Apple,MacBook Air 13" (M3),256GB,N/A,new,1099.00,840.00,1049.00,2026-02-01
+Apple,Apple Watch Ultra 2,64GB,GPS+Cellular,new,799.00,600.00,749.00,2026-02-01
+Apple,Apple Watch Series 9,64GB,GPS,new,399.00,280.00,349.00,2026-02-01
+Apple,Apple Watch SE (2nd Gen),32GB,GPS,new,249.00,160.00,199.00,2026-02-01
