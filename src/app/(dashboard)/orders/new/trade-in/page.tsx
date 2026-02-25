@@ -143,7 +143,8 @@ export default function NewTradeInPage() {
         return {
           device_id: device?.id || '',
           quantity: parseInt(row.quantity) || 1,
-          claimed_condition: (row.condition?.toLowerCase() || 'good') as DeviceCondition,
+          storage: row.storage || '128GB',
+          condition: (row.condition?.toLowerCase() || 'good') as DeviceCondition,
           notes: row.notes || '',
         }
       })
@@ -152,7 +153,8 @@ export default function NewTradeInPage() {
       orderItems = items.map(i => ({
         device_id: i.device_id,
         quantity: i.quantity,
-        claimed_condition: i.condition,
+        storage: i.storage || '128GB',
+        condition: i.condition,
         notes: i.notes,
       }))
     }

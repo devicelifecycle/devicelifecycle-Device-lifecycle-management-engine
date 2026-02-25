@@ -1,0 +1,102 @@
+// ============================================================================
+// BULK ORDER TRANSITION API ROUTE
+// ============================================================================
+
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { OrderService } from '@/services/order.service'
+import { AuditService } from '@/services/audit.service'
+import { NotificationService } from '@/services/notification.service'
+import type { OrderStatus } from '@/types'
+
+const MAX_BATCH_SIZE = 50
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Only internal roles
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile || !['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const { order_ids, to_status, notes } = body
+
+    if (!Array.isArray(order_ids) || order_ids.length === 0) {
+      return NextResponse.json({ error: 'order_ids must be a non-empty array' }, { status: 400 })
+    }
+    if (order_ids.length > MAX_BATCH_SIZE) {
+      return NextResponse.json({ error: `Maximum ${MAX_BATCH_SIZE} orders per batch` }, { status: 400 })
+    }
+    if (!to_status || typeof to_status !== 'string') {
+      return NextResponse.json({ error: 'to_status is required' }, { status: 400 })
+    }
+
+    const results: { id: string; success: boolean; error?: string }[] = []
+
+    for (const orderId of order_ids) {
+      try {
+        const currentOrder = await OrderService.getOrderById(orderId)
+        if (!currentOrder) {
+          results.push({ id: orderId, success: false, error: 'Not found' })
+          continue
+        }
+
+        const canTransition = OrderService.isValidTransition(
+          currentOrder.status as OrderStatus,
+          to_status as OrderStatus
+        )
+        if (!canTransition) {
+          results.push({ id: orderId, success: false, error: `Cannot transition from ${currentOrder.status} to ${to_status}` })
+          continue
+        }
+
+        await OrderService.transitionOrder(orderId, to_status as OrderStatus, user.id, notes)
+
+        await AuditService.logStatusChange(
+          user.id, 'order', orderId,
+          currentOrder.status, to_status,
+          { notes, order_number: currentOrder.order_number, bulk: true }
+        )
+
+        // Fire-and-forget notifications
+        NotificationService.sendOrderTransitionNotifications(
+          {
+            id: orderId,
+            order_number: currentOrder.order_number,
+            customer_id: currentOrder.customer_id,
+            vendor_id: currentOrder.vendor_id,
+            assigned_to_id: currentOrder.assigned_to_id,
+            created_by_id: currentOrder.created_by_id,
+          },
+          currentOrder.status,
+          to_status
+        ).catch(err => console.error('Bulk notification error:', err))
+
+        results.push({ id: orderId, success: true })
+      } catch (err) {
+        results.push({ id: orderId, success: false, error: 'Internal error' })
+      }
+    }
+
+    const succeeded = results.filter(r => r.success).length
+    const failed = results.filter(r => !r.success).length
+
+    return NextResponse.json({ results, succeeded, failed })
+  } catch (error) {
+    console.error('Error in bulk transition:', error)
+    return NextResponse.json({ error: 'Failed to process bulk transition' }, { status: 500 })
+  }
+}

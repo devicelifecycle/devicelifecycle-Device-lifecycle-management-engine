@@ -5,7 +5,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, CheckCheck, Info, AlertTriangle, ShoppingCart, Package } from 'lucide-react'
+import { Bell, CheckCheck, AlertTriangle, ShoppingCart, Package } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,11 +14,14 @@ import { formatRelativeTime } from '@/lib/utils'
 
 const PAGE_SIZE = 20
 
-const typeIcons: Record<string, { icon: typeof Bell; bg: string; color: string }> = {
-  order_update: { icon: ShoppingCart, bg: 'bg-blue-500/10', color: 'text-blue-600' },
-  sla_warning: { icon: AlertTriangle, bg: 'bg-amber-500/10', color: 'text-amber-600' },
-  sla_breach: { icon: AlertTriangle, bg: 'bg-red-500/10', color: 'text-red-600' },
-  shipment_update: { icon: Package, bg: 'bg-purple-500/10', color: 'text-purple-600' },
+// Infer icon category from notification title
+const getCategoryIcon = (title: string): { icon: typeof Bell; bg: string; color: string } => {
+  const t = title.toLowerCase()
+  if (t.includes('breach')) return { icon: AlertTriangle, bg: 'bg-red-500/10', color: 'text-red-600' }
+  if (t.includes('sla') || t.includes('warning')) return { icon: AlertTriangle, bg: 'bg-amber-500/10', color: 'text-amber-600' }
+  if (t.includes('shipment') || t.includes('shipping')) return { icon: Package, bg: 'bg-purple-500/10', color: 'text-purple-600' }
+  if (t.includes('order')) return { icon: ShoppingCart, bg: 'bg-blue-500/10', color: 'text-blue-600' }
+  return { icon: Bell, bg: 'bg-muted', color: 'text-muted-foreground' }
 }
 
 export default function NotificationsPage() {
@@ -71,7 +74,7 @@ export default function NotificationsPage() {
           ) : (
             <div className="divide-y">
               {paginated.map(n => {
-                const typeConfig = typeIcons[n.type] || { icon: Info, bg: 'bg-muted', color: 'text-muted-foreground' }
+                const typeConfig = getCategoryIcon(n.title)
                 const IconComponent = typeConfig.icon
                 return (
                   <button

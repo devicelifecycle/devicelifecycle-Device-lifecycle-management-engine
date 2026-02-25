@@ -51,6 +51,12 @@ export function useAuth() {
 
       if (!mountedRef.current) return
 
+      if (!profile) {
+        // Auth session exists but no user profile row — treat as unauthenticated
+        setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+        return
+      }
+
       setState({
         user: profile as User,
         isLoading: false,

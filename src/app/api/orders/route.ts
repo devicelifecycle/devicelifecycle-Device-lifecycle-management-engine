@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrderService } from '@/services/order.service'
+import { EmailService } from '@/services/email.service'
 import { orderSchema } from '@/lib/validations'
 
 export async function GET(request: NextRequest) {
@@ -70,11 +71,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const orderData = validationResult.data
     const order = await OrderService.createOrder(
-      validationResult.data as Parameters<typeof OrderService.createOrder>[0],
+      orderData as Parameters<typeof OrderService.createOrder>[0],
       user.id,
       profile.organization_id
     )
+
+    // Send order confirmation email to customer (fire-and-forget)
+    ;(async () => {
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('contact_email, contact_name')
+        .eq('id', orderData.customer_id)
+        .single()
+
+      if (customer?.contact_email) {
+        await EmailService.sendOrderConfirmationEmail({
+          to: customer.contact_email,
+          recipientName: customer.contact_name || 'Customer',
+          orderNumber: order.order_number,
+          orderId: order.id,
+          orderType: orderData.type,
+          itemCount: orderData.items.length,
+        })
+      }
+    })().catch(err => console.error('Order confirmation email error:', err))
 
     return NextResponse.json(order, { status: 201 })
   } catch (error) {

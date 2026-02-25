@@ -89,7 +89,8 @@ export async function PATCH(
       .eq('id', user.id)
       .single()
 
-    if (currentProfile?.role !== 'admin') {
+    const isSelf = user.id === params.id
+    if (!isSelf && currentProfile?.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -105,6 +106,11 @@ export async function PATCH(
     const updateData: Record<string, unknown> = {
       ...validationResult.data,
       updated_at: new Date().toISOString()
+    }
+
+    // Non-admin users cannot change their own role
+    if (isSelf && currentProfile?.role !== 'admin') {
+      delete updateData.role
     }
 
     const { data: updatedUser, error } = await supabase

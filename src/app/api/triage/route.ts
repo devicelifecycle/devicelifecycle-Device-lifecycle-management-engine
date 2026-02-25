@@ -67,6 +67,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+
+    // Basic validation
+    if (!body.order_id || !body.order_item_id) {
+      return NextResponse.json({ error: 'order_id and order_item_id are required' }, { status: 400 })
+    }
+
     const result = await TriageService.submitTriageResult({
       ...body,
       triaged_by_id: user.id,
