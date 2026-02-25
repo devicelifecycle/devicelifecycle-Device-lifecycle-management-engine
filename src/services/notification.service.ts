@@ -3,10 +3,11 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import type { 
+import { EmailService } from '@/services/email.service'
+import { ORDER_EMAIL_CONFIG } from '@/lib/constants'
+import type {
   Notification,
   NotificationType,
-  NotificationStatus,
 } from '@/types'
 
 export class NotificationService {
@@ -60,7 +61,7 @@ export class NotificationService {
   }
 
   /**
-   * Create a notification
+   * Create a notification (in-app or email)
    */
   static async createNotification(input: {
     user_id: string
@@ -68,7 +69,7 @@ export class NotificationService {
     title: string
     message: string
     link?: string
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   }): Promise<Notification> {
     const supabase = createServerSupabaseClient()
 
@@ -85,10 +86,16 @@ export class NotificationService {
       throw new Error(error.message)
     }
 
-    // If it's an email notification, queue it for sending
-    if (input.type === 'email') {
-      // TODO: Integrate with email service (SendGrid)
-      await this.markAsSent(data.id)
+    // If it's an email notification, send via Resend
+    if (input.type === 'email' && input.metadata?.email) {
+      const sent = await EmailService.sendEmail(
+        input.metadata.email as string,
+        input.title,
+        input.message
+      )
+      if (sent) {
+        await this.markAsSent(data.id)
+      }
     }
 
     return data as Notification
@@ -149,12 +156,148 @@ export class NotificationService {
   }
 
   // ============================================================================
-  // NOTIFICATION HELPERS
+  // ORDER TRANSITION NOTIFICATIONS
   // ============================================================================
 
   /**
-   * Send quote ready notification
+   * Send email + in-app notifications when an order transitions status.
+   * Looks up recipients from the order's related records and sends based on config.
+   * Never throws — errors are logged silently.
    */
+  static async sendOrderTransitionNotifications(
+    order: {
+      id: string
+      order_number: string
+      customer_id?: string
+      vendor_id?: string
+      assigned_to_id?: string
+      created_by_id: string
+    },
+    fromStatus: string,
+    toStatus: string
+  ): Promise<void> {
+    const config = ORDER_EMAIL_CONFIG[toStatus]
+    if (!config) return // No notification configured for this status
+
+    const supabase = createServerSupabaseClient()
+    const { subject, message } = config
+    const subjectText = subject(order.order_number)
+    const messageText = message(order.order_number)
+    const orderLink = `/orders/${order.id}`
+
+    // Collect email recipients in parallel
+    const emailTargets: Array<{ email: string; name: string; userId?: string }> = []
+
+    const lookups: Promise<void>[] = []
+
+    // Customer
+    if (config.customer && order.customer_id) {
+      lookups.push((async () => {
+        const { data } = await supabase
+          .from('customers')
+          .select('contact_email, contact_name')
+          .eq('id', order.customer_id!)
+          .single()
+        if (data?.contact_email) {
+          emailTargets.push({ email: data.contact_email, name: data.contact_name || 'Customer' })
+        }
+      })())
+    }
+
+    // Vendor
+    if (config.vendor && order.vendor_id) {
+      lookups.push((async () => {
+        const { data } = await supabase
+          .from('vendors')
+          .select('contact_email, contact_name')
+          .eq('id', order.vendor_id!)
+          .single()
+        if (data?.contact_email) {
+          emailTargets.push({ email: data.contact_email, name: data.contact_name || 'Vendor' })
+        }
+      })())
+    }
+
+    // Assigned user
+    if (config.assigned && order.assigned_to_id) {
+      lookups.push((async () => {
+        const { data } = await supabase
+          .from('users')
+          .select('id, email, full_name')
+          .eq('id', order.assigned_to_id!)
+          .single()
+        if (data?.email) {
+          emailTargets.push({ email: data.email, name: data.full_name || 'Team Member', userId: data.id })
+        }
+      })())
+    }
+
+    // Admin users (all active admins)
+    if (config.admin) {
+      lookups.push((async () => {
+        const { data } = await supabase
+          .from('users')
+          .select('id, email, full_name')
+          .eq('role', 'admin')
+          .eq('is_active', true)
+        if (data) {
+          for (const admin of data) {
+            emailTargets.push({ email: admin.email, name: admin.full_name || 'Admin', userId: admin.id })
+          }
+        }
+      })())
+    }
+
+    await Promise.all(lookups)
+
+    // Deduplicate by email
+    const seen = new Set<string>()
+    const uniqueTargets = emailTargets.filter(t => {
+      if (seen.has(t.email)) return false
+      seen.add(t.email)
+      return true
+    })
+
+    // Send emails + create in-app notifications in parallel
+    const sends: Promise<void>[] = []
+
+    for (const target of uniqueTargets) {
+      // Send email
+      sends.push(
+        EmailService.sendOrderStatusEmail({
+          to: target.email,
+          recipientName: target.name,
+          orderNumber: order.order_number,
+          orderId: order.id,
+          fromStatus,
+          toStatus,
+          subject: subjectText,
+          message: messageText,
+        }).then(() => {})
+      )
+
+      // Create in-app notification for users with accounts
+      if (target.userId) {
+        sends.push(
+          this.createNotification({
+            user_id: target.userId,
+            type: 'in_app',
+            title: subjectText,
+            message: messageText,
+            link: orderLink,
+            metadata: { order_id: order.id, order_number: order.order_number, from_status: fromStatus, to_status: toStatus },
+          }).then(() => {}).catch(() => {})
+        )
+      }
+    }
+
+    await Promise.all(sends)
+  }
+
+  // ============================================================================
+  // LEGACY NOTIFICATION HELPERS (kept for backward compatibility)
+  // ============================================================================
+
   static async sendQuoteReadyNotification(
     userId: string,
     orderId: string,
@@ -171,9 +314,6 @@ export class NotificationService {
     })
   }
 
-  /**
-   * Send order accepted notification
-   */
   static async sendOrderAcceptedNotification(
     userId: string,
     orderId: string,
@@ -189,9 +329,6 @@ export class NotificationService {
     })
   }
 
-  /**
-   * Send SLA warning notification
-   */
   static async sendSLAWarningNotification(
     userId: string,
     orderId: string,
@@ -201,16 +338,13 @@ export class NotificationService {
     await this.createNotification({
       user_id: userId,
       type: 'in_app',
-      title: '⚠️ SLA Warning',
+      title: 'SLA Warning',
       message: `Order #${orderNumber} is approaching its SLA deadline. ${hoursRemaining} hours remaining.`,
       link: `/orders/${orderId}`,
       metadata: { order_id: orderId, order_number: orderNumber, type: 'sla_warning' },
     })
   }
 
-  /**
-   * Send SLA breach notification
-   */
   static async sendSLABreachNotification(
     userId: string,
     orderId: string,
@@ -219,16 +353,13 @@ export class NotificationService {
     await this.createNotification({
       user_id: userId,
       type: 'in_app',
-      title: '🚨 SLA BREACH',
+      title: 'SLA BREACH',
       message: `Order #${orderNumber} has BREACHED its SLA. Immediate action required.`,
       link: `/orders/${orderId}`,
       metadata: { order_id: orderId, order_number: orderNumber, type: 'sla_breach' },
     })
   }
 
-  /**
-   * Send order shipped notification
-   */
   static async sendOrderShippedNotification(
     userId: string,
     orderId: string,
@@ -238,7 +369,7 @@ export class NotificationService {
     await this.createNotification({
       user_id: userId,
       type: 'in_app',
-      title: '📦 Order Shipped',
+      title: 'Order Shipped',
       message: `Order #${orderNumber} has shipped!${trackingNumber ? ` Tracking: ${trackingNumber}` : ''}`,
       link: `/orders/${orderId}`,
       metadata: { order_id: orderId, order_number: orderNumber, tracking_number: trackingNumber },

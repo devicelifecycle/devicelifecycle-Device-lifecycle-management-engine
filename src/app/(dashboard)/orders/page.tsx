@@ -4,18 +4,21 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Plus, Search, ShoppingCart, X } from 'lucide-react'
+import { Plus, Search, ShoppingCart, X, Trash2, ArrowRightLeft, Download } from 'lucide-react'
+import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { formatCurrency, formatDate, formatRelativeTime } from '@/lib/utils'
+import { Checkbox } from '@/components/ui/checkbox'
+import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
 import { Pagination } from '@/components/ui/pagination'
 import type { OrderStatus, OrderType } from '@/types'
@@ -25,8 +28,13 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('')
   const [typeFilter, setTypeFilter] = useState<OrderType | ''>('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState<OrderStatus | ''>('')
   const debouncedSearch = useDebounce(search)
-  const { orders, isLoading, total, totalPages } = useOrders({
+  const { hasRole } = useAuth()
+  const isAdmin = hasRole(['admin'])
+
+  const { orders, isLoading, total, totalPages, bulkTransition, isBulkTransitioning, bulkDelete, isBulkDeleting } = useOrders({
     search: debouncedSearch,
     page,
     ...(statusFilter && { status: statusFilter }),
@@ -35,6 +43,75 @@ export default function OrdersPage() {
 
   const hasFilters = statusFilter || typeFilter
   const clearFilters = () => { setStatusFilter(''); setTypeFilter(''); setPage(1) }
+
+  const allSelected = orders.length > 0 && orders.every(o => selectedIds.has(o.id))
+  const someSelected = selectedIds.size > 0
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(orders.map(o => o.id)))
+    }
+  }
+
+  const toggleOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkTransition = async () => {
+    if (!bulkStatus || selectedIds.size === 0) return
+    try {
+      const result = await bulkTransition({ orderIds: Array.from(selectedIds), toStatus: bulkStatus as OrderStatus })
+      toast.success(`${result.succeeded} order(s) updated${result.failed > 0 ? `, ${result.failed} failed` : ''}`)
+      setSelectedIds(new Set())
+      setBulkStatus('')
+    } catch {
+      toast.error('Bulk transition failed')
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    try {
+      const result = await bulkDelete(Array.from(selectedIds))
+      toast.success(`${result.succeeded} order(s) deleted${result.failed > 0 ? `, ${result.failed} failed (only draft/cancelled can be deleted)` : ''}`)
+      setSelectedIds(new Set())
+    } catch {
+      toast.error('Bulk delete failed')
+    }
+  }
+
+  const handleExportCSV = () => {
+    const selected = orders.filter(o => selectedIds.has(o.id))
+    const rows = [
+      ['Order #', 'Type', 'Customer/Vendor', 'Status', 'Qty', 'Amount', 'Created'].join(','),
+      ...selected.map(o =>
+        [
+          o.order_number,
+          o.type === 'trade_in' ? 'Trade-In' : 'CPO',
+          `"${(o.type === 'trade_in' ? o.customer?.company_name : o.vendor?.company_name) || ''}"`,
+          o.status,
+          o.total_quantity,
+          o.total_amount || 0,
+          o.created_at,
+        ].join(',')
+      ),
+    ].join('\n')
+    const blob = new Blob([rows], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${selected.length} order(s)`)
+  }
 
   return (
     <div className="space-y-6">
@@ -96,6 +173,62 @@ export default function OrdersPage() {
         )}
       </div>
 
+      {/* Bulk Action Bar */}
+      {someSelected && (
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <div className="h-4 w-px bg-border" />
+
+          {/* Bulk Transition */}
+          <Select value={bulkStatus || 'pick'} onValueChange={v => setBulkStatus(v === 'pick' ? '' : v as OrderStatus)}>
+            <SelectTrigger className="w-[160px] h-8 text-xs">
+              <SelectValue placeholder="Move to..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pick">Move to...</SelectItem>
+              {Object.entries(ORDER_STATUS_CONFIG).map(([key, config]) => (
+                <SelectItem key={key} value={key}>{config.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="default"
+            disabled={!bulkStatus || isBulkTransitioning}
+            onClick={handleBulkTransition}
+          >
+            <ArrowRightLeft className="mr-1 h-3 w-3" />
+            {isBulkTransitioning ? 'Updating...' : 'Apply'}
+          </Button>
+
+          <div className="h-4 w-px bg-border" />
+
+          {/* Export CSV */}
+          <Button size="sm" variant="outline" onClick={handleExportCSV}>
+            <Download className="mr-1 h-3 w-3" />
+            Export CSV
+          </Button>
+
+          {/* Bulk Delete (admin only) */}
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isBulkDeleting}
+              onClick={handleBulkDelete}
+            >
+              <Trash2 className="mr-1 h-3 w-3" />
+              {isBulkDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          )}
+
+          <div className="flex-1" />
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Orders List */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -124,6 +257,9 @@ export default function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                  </TableHead>
                   <TableHead>Order #</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Customer / Vendor</TableHead>
@@ -136,10 +272,14 @@ export default function OrdersPage() {
               <TableBody>
                 {orders.map((order) => {
                   const statusConfig = ORDER_STATUS_CONFIG[order.status]
+                  const isSelected = selectedIds.has(order.id)
                   return (
-                    <TableRow key={order.id} className="group">
+                    <TableRow key={order.id} className={`group ${isSelected ? 'bg-muted/40' : ''}`}>
                       <TableCell>
-                        <Link 
+                        <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(order.id)} />
+                      </TableCell>
+                      <TableCell>
+                        <Link
                           href={`/orders/${order.id}`}
                           className="font-medium text-primary hover:underline"
                         >
@@ -153,8 +293,8 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell>
                         <span className="text-sm">
-                          {order.type === 'trade_in' 
-                            ? order.customer?.company_name 
+                          {order.type === 'trade_in'
+                            ? order.customer?.company_name
                             : order.vendor?.company_name}
                         </span>
                       </TableCell>

@@ -84,12 +84,8 @@ export default function AdminPricingPage() {
   const fetchCompetitorPrices = useCallback(async () => {
     setCpLoading(true)
     try {
-      const res = await fetch('/api/pricing/market?type=competitors')
+      const res = await fetch('/api/pricing/competitors')
       if (res.ok) { const d = await res.json(); setCompPrices(d.data || []) }
-      // If the market route doesn't support type=competitors, use direct fetch
-      if (!compPrices.length) {
-        // competitor prices are fetched via the market API by the service
-      }
     } catch {} finally { setCpLoading(false) }
   }, [])
 
@@ -211,17 +207,12 @@ export default function AdminPricingPage() {
       if (cpForm.trade_in_price) payload.trade_in_price = parseFloat(cpForm.trade_in_price)
       if (cpForm.sell_price) payload.sell_price = parseFloat(cpForm.sell_price)
 
-      // Use the market API for competitor prices too (service handles it)
-      const res = await fetch('/api/pricing/market', {
+      const res = await fetch('/api/pricing/competitors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, _type: 'competitor' }),
+        body: JSON.stringify(payload),
       })
-      // If that doesn't work, create directly
-      if (!res.ok) {
-        // Direct Supabase insert would be needed; for now toast error
-        throw new Error()
-      }
+      if (!res.ok) throw new Error()
       toast.success('Competitor price added')
       setCpDialogOpen(false)
       setCpForm({ device_id: '', storage: '', competitor_name: '', trade_in_price: '', sell_price: '' })

@@ -167,7 +167,7 @@ export class OrderService {
     if (input.items && input.items.length > 0) {
       const items = input.items.map(item => ({
         order_id: order.id,
-        device_catalog_id: item.device_catalog_id,
+        device_catalog_id: item.device_id || item.device_catalog_id,
         quantity: item.quantity,
         storage: item.storage,
         color: item.color,

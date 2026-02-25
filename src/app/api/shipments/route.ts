@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { ShipmentService } from '@/services/shipment.service'
-import { createShipmentSchema } from '@/lib/validations'
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,6 +65,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+
+    // Basic validation
+    if (!body.order_id || typeof body.order_id !== 'string') {
+      return NextResponse.json({ error: 'order_id is required' }, { status: 400 })
+    }
+
     const shipment = await ShipmentService.createShipment({
       ...body,
       created_by_id: user.id,

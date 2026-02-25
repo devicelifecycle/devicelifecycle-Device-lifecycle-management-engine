@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
+import { NotificationService } from '@/services/notification.service'
 import { orderTransitionSchema } from '@/lib/validations'
 import type { OrderStatus } from '@/types'
 
@@ -78,6 +79,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       newStatus,
       { notes, order_number: currentOrder.order_number }
     )
+
+    // Send email + in-app notifications (fire-and-forget, don't block response)
+    NotificationService.sendOrderTransitionNotifications(
+      {
+        id: params.id,
+        order_number: currentOrder.order_number,
+        customer_id: currentOrder.customer_id,
+        vendor_id: currentOrder.vendor_id,
+        assigned_to_id: currentOrder.assigned_to_id,
+        created_by_id: currentOrder.created_by_id,
+      },
+      currentOrder.status,
+      newStatus
+    ).catch(err => console.error('Notification error:', err))
 
     return NextResponse.json(updatedOrder)
   } catch (error) {

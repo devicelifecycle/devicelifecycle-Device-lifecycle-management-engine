@@ -75,7 +75,8 @@ export default function NewCPOOrderPage() {
         items: items.map(i => ({
           device_id: i.device_id,
           quantity: i.quantity,
-          claimed_condition: i.condition,
+          storage: i.storage || '128GB',
+          condition: i.condition,
           notes: i.notes,
         })),
         notes,

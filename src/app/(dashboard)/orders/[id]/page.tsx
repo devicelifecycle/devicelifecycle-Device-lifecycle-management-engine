@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, DollarSign, Send } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, DollarSign, Send, FileDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrder } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
@@ -272,6 +272,22 @@ export default function OrderDetailPage() {
           <Card>
             <CardHeader><CardTitle>Actions</CardTitle><CardDescription>Manage this order</CardDescription></CardHeader>
             <CardContent className="space-y-2">
+              {/* Download PDF */}
+              <Button
+                variant="outline"
+                className="w-full justify-between"
+                onClick={() => {
+                  const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
+                  window.open(`/api/orders/${order.id}/pdf`, '_blank')
+                  toast.success(`${isQuote ? 'Quote' : 'Invoice'} download started`)
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <FileDown className="h-4 w-4" />
+                  {['draft', 'submitted', 'quoted'].includes(order.status) ? 'Download Quote' : 'Download Invoice'}
+                </span>
+              </Button>
+
               {/* Pricing and Quote Actions */}
               {order.status !== 'cancelled' && order.status !== 'closed' && (
                 <>

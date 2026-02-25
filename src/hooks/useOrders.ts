@@ -2,8 +2,9 @@
 // ORDERS HOOK
 // ============================================================================
 
-import { useCallback, useState } from 'react'
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Order, OrderStatus, OrderType } from '@/types'
 
 interface OrderFilters {
@@ -25,9 +26,15 @@ interface OrdersResponse {
   total_pages: number
 }
 
+interface BulkResult {
+  results: { id: string; success: boolean; error?: string }[]
+  succeeded: number
+  failed: number
+}
+
 async function fetchOrders(filters: OrderFilters): Promise<OrdersResponse> {
   const params = new URLSearchParams()
-  
+
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') {
       params.append(key, String(value))
@@ -77,7 +84,7 @@ async function transitionOrder(id: string, newStatus: OrderStatus, notes?: strin
   const response = await fetch(`/api/orders/${id}/transition`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: newStatus, notes }),
+    body: JSON.stringify({ to_status: newStatus, notes }),
   })
   if (!response.ok) {
     throw new Error('Failed to transition order')
@@ -85,14 +92,57 @@ async function transitionOrder(id: string, newStatus: OrderStatus, notes?: strin
   return response.json()
 }
 
+async function bulkTransitionOrders(orderIds: string[], toStatus: OrderStatus, notes?: string): Promise<BulkResult> {
+  const response = await fetch('/api/orders/bulk-transition', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_ids: orderIds, to_status: toStatus, notes }),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to bulk transition orders')
+  }
+  return response.json()
+}
+
+async function bulkDeleteOrders(orderIds: string[]): Promise<BulkResult> {
+  const response = await fetch('/api/orders/bulk-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_ids: orderIds }),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to bulk delete orders')
+  }
+  return response.json()
+}
+
 export function useOrders(filters: OrderFilters = {}) {
   const queryClient = useQueryClient()
+  const supabase = createBrowserSupabaseClient()
 
   // Query for orders list
   const ordersQuery = useQuery({
     queryKey: ['orders', filters],
     queryFn: () => fetchOrders(filters),
   })
+
+  // Supabase Realtime — auto-refresh on INSERT/UPDATE/DELETE
+  useEffect(() => {
+    const channel = supabase
+      .channel('orders-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['orders'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [queryClient, supabase])
 
   // Mutation for creating orders
   const createMutation = useMutation({
@@ -120,6 +170,23 @@ export function useOrders(filters: OrderFilters = {}) {
     },
   })
 
+  // Bulk transition mutation
+  const bulkTransitionMutation = useMutation({
+    mutationFn: ({ orderIds, toStatus, notes }: { orderIds: string[]; toStatus: OrderStatus; notes?: string }) =>
+      bulkTransitionOrders(orderIds, toStatus, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (orderIds: string[]) => bulkDeleteOrders(orderIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+
   return {
     orders: ordersQuery.data?.data || [],
     total: ordersQuery.data?.total || 0,
@@ -128,15 +195,21 @@ export function useOrders(filters: OrderFilters = {}) {
     isLoading: ordersQuery.isLoading,
     error: ordersQuery.error,
     refetch: ordersQuery.refetch,
-    
+
     create: createMutation.mutateAsync,
     isCreating: createMutation.isPending,
-    
+
     update: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
-    
+
     transition: transitionMutation.mutateAsync,
     isTransitioning: transitionMutation.isPending,
+
+    bulkTransition: bulkTransitionMutation.mutateAsync,
+    isBulkTransitioning: bulkTransitionMutation.isPending,
+
+    bulkDelete: bulkDeleteMutation.mutateAsync,
+    isBulkDeleting: bulkDeleteMutation.isPending,
   }
 }
 
@@ -171,10 +244,10 @@ export function useOrder(id: string | null) {
     isLoading: orderQuery.isLoading,
     error: orderQuery.error,
     refetch: orderQuery.refetch,
-    
+
     update: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
-    
+
     transition: transitionMutation.mutateAsync,
     isTransitioning: transitionMutation.isPending,
   }

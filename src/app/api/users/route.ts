@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createUserSchema } from '@/lib/validations'
+import { EmailService } from '@/services/email.service'
 
 export async function GET(request: NextRequest) {
   try {
@@ -100,6 +101,14 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (profileError) throw profileError
+
+    // Send welcome email with login credentials (fire-and-forget)
+    EmailService.sendWelcomeEmail({
+      to: email,
+      recipientName: full_name,
+      role,
+      tempPassword: password,
+    }).catch(err => console.error('Welcome email error:', err))
 
     return NextResponse.json(newUser, { status: 201 })
   } catch (error) {

@@ -550,3 +550,88 @@ export const MARGIN_TIER_CONFIG: Record<MarginTier, {
 }
 
 export const COMPETITORS = ['Telus', 'Bell', 'Gazelle', 'Decluttr', 'Back Market'] as const
+
+// ============================================================================
+// ORDER EMAIL NOTIFICATION CONFIG
+// Maps each order status to who gets notified and what message they receive
+// ============================================================================
+
+export const ORDER_EMAIL_CONFIG: Record<string, {
+  customer?: boolean
+  vendor?: boolean
+  admin?: boolean
+  assigned?: boolean
+  subject: (orderNumber: string) => string
+  message: (orderNumber: string) => string
+}> = {
+  submitted: {
+    admin: true,
+    subject: (n) => `New Order #${n} Submitted`,
+    message: (n) => `A new order #${n} has been submitted and is awaiting your review.`,
+  },
+  quoted: {
+    customer: true,
+    subject: (n) => `Quote Ready — Order #${n}`,
+    message: (n) => `Your quote for order #${n} is ready for review. Please log in to accept or decline.`,
+  },
+  accepted: {
+    admin: true,
+    assigned: true,
+    subject: (n) => `Order #${n} Accepted`,
+    message: (n) => `Order #${n} has been accepted by the customer and is ready for processing.`,
+  },
+  rejected: {
+    admin: true,
+    subject: (n) => `Order #${n} Rejected`,
+    message: (n) => `The customer has rejected the quote for order #${n}.`,
+  },
+  sourcing: {
+    vendor: true,
+    assigned: true,
+    subject: (n) => `Sourcing Request — Order #${n}`,
+    message: (n) => `Order #${n} is now in sourcing. Please begin device procurement.`,
+  },
+  sourced: {
+    admin: true,
+    assigned: true,
+    subject: (n) => `Devices Sourced — Order #${n}`,
+    message: (n) => `All devices for order #${n} have been sourced and are ready for shipment to COE.`,
+  },
+  shipped_to_coe: {
+    admin: true,
+    subject: (n) => `Shipment Incoming — Order #${n}`,
+    message: (n) => `Devices for order #${n} have been shipped to the COE facility.`,
+  },
+  received: {
+    customer: true,
+    subject: (n) => `Devices Received — Order #${n}`,
+    message: (n) => `We've received the devices for order #${n}. They are now queued for quality inspection.`,
+  },
+  qc_complete: {
+    assigned: true,
+    subject: (n) => `QC Complete — Order #${n}`,
+    message: (n) => `Quality check for order #${n} is complete. The order is ready for final preparation.`,
+  },
+  ready_to_ship: {
+    customer: true,
+    subject: (n) => `Ready to Ship — Order #${n}`,
+    message: (n) => `Great news! Order #${n} has passed quality check and is ready to ship.`,
+  },
+  shipped: {
+    customer: true,
+    subject: (n) => `Order #${n} Shipped!`,
+    message: (n) => `Your order #${n} has shipped! You will receive tracking information shortly.`,
+  },
+  delivered: {
+    customer: true,
+    subject: (n) => `Order #${n} Delivered`,
+    message: (n) => `Your order #${n} has been delivered. Thank you for your business!`,
+  },
+  cancelled: {
+    customer: true,
+    vendor: true,
+    admin: true,
+    subject: (n) => `Order #${n} Cancelled`,
+    message: (n) => `Order #${n} has been cancelled. If you have questions, please contact our team.`,
+  },
+}
