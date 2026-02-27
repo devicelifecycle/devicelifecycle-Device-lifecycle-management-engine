@@ -319,6 +319,30 @@ export const COMMON_DEVICE_ISSUES = [
   'Carrier locked',
 ]
 
+// Maps triage/display issue labels to pricing FUNCTIONAL_DEDUCTIONS keys
+export const ISSUE_TO_DEDUCTION_KEY: Record<string, string> = {
+  'Screen crack': 'SCREEN_CRACK',
+  'Screen burn-in': 'SCREEN_CRACK',
+  'Dead pixels': 'SCREEN_DEAD',
+  'Battery swelling': 'BATTERY_POOR',
+  'Battery not charging': 'BATTERY_POOR',
+  'Charging port damaged': 'BUTTON_BROKEN',
+  'Speaker not working': 'SPEAKER_BROKEN',
+  'Microphone not working': 'SPEAKER_BROKEN',
+  'Camera not working': 'CAMERA_BROKEN',
+  'Face ID not working': 'BUTTON_BROKEN',
+  'Touch ID not working': 'BUTTON_BROKEN',
+  'WiFi not connecting': 'CARRIER_LOCKED',
+  'Cellular not connecting': 'CARRIER_LOCKED',
+  'SIM tray missing': 'BUTTON_BROKEN',
+  'Volume buttons stuck': 'BUTTON_BROKEN',
+  'Power button stuck': 'BUTTON_BROKEN',
+  'Water damage indicators triggered': 'WATER_DAMAGE',
+  'Activation locked': 'ICLOUD_LOCKED',
+  'MDM locked': 'ICLOUD_LOCKED',
+  'Carrier locked': 'CARRIER_LOCKED',
+}
+
 // ============================================================================
 // DEVICE BRANDS
 // ============================================================================
@@ -512,7 +536,7 @@ export const MARKETPLACE_FEE_PERCENT = 12
 export const COMPETITIVE_RELEVANCE_MIN = 0.85
 export const BREAKAGE_RISK_PERCENT = 5
 export const OUTLIER_DEVIATION_THRESHOLD = 0.20  // Flag if >20% from historical avg
-export const BROKEN_DEVICE_MULTIPLIER = 0.50     // Broken = 50% of good working trade price
+export const BROKEN_DEVICE_MULTIPLIER = 0.50     // Broken = 50% of good working trade price (Brian's rule)
 
 export type RiskMode = 'retail' | 'enterprise'
 export const RISK_MODE_CONFIG: Record<RiskMode, { label: string; margin_percent: number; description: string }> = {

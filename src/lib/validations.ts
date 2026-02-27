@@ -139,6 +139,7 @@ export const customerSchema = z.object({
   payment_terms: z.string().optional(),
   credit_limit: z.number().optional(),
   notes: z.string().optional(),
+  default_risk_mode: z.enum(['retail', 'enterprise']).optional(),
 })
 
 export const createCustomerSchema = customerSchema
@@ -211,6 +212,14 @@ export const orderTransitionSchema = z.object({
   notes: z.string().optional(),
 })
 
+const pricingMetadataSchema = z.object({
+  suggested_by_calc: z.boolean().optional(),
+  confidence: z.number().optional(),
+  margin_tier: z.string().optional(),
+  anchor_price: z.number().optional(),
+  channel_decision: z.string().optional(),
+}).passthrough()
+
 export const bulkUpdateOrderItemPricesSchema = z.object({
   items: z.array(
     z.object({
@@ -219,10 +228,13 @@ export const bulkUpdateOrderItemPricesSchema = z.object({
         .number()
         .min(0.01, 'Unit price must be at least $0.01')
         .max(100000, 'Unit price cannot exceed $100,000')
-        .finite('Unit price must be a valid number')
+        .finite('Unit price must be a valid number'),
+      pricing_metadata: pricingMetadataSchema.nullable().optional(),
     })
   ).min(1, 'At least one item is required')
 })
+
+const ALLOWED_ORDER_SORT_COLUMNS = ['created_at', 'updated_at', 'order_number', 'status', 'total_amount', 'quoted_amount'] as const
 
 export const orderFiltersSchema = paginationSchema.extend({
   status: z.union([
@@ -236,6 +248,8 @@ export const orderFiltersSchema = paginationSchema.extend({
   date_to: z.string().optional(),
   search: z.string().optional(),
   is_sla_breached: z.coerce.boolean().optional(),
+  sort_by: z.enum(ALLOWED_ORDER_SORT_COLUMNS).optional(),
+  sort_order: z.enum(['asc', 'desc']).optional(),
 })
 
 // ============================================================================
@@ -341,6 +355,32 @@ export const createTriageResultSchema = z.object({
   decision_reason: z.string().optional(),
   photo_urls: z.array(z.string().url()).default([]),
   notes: z.string().optional(),
+})
+
+export const triageSubmitSchema = z.object({
+  imei_record_id: z.string().uuid('Invalid imei_record_id'),
+  physical_condition: z.enum(DEVICE_CONDITION_VALUES),
+  functional_grade: z.enum(DEVICE_CONDITION_VALUES),
+  cosmetic_grade: z.enum(DEVICE_CONDITION_VALUES),
+  screen_condition: z.enum(['good', 'cracked', 'damaged', 'dead']),
+  battery_health: z.coerce.number().min(0).max(100),
+  storage_verified: z.boolean(),
+  original_accessories: z.boolean(),
+  functional_tests: z.object({
+    touchscreen: z.boolean(),
+    display: z.boolean(),
+    speakers: z.boolean(),
+    microphone: z.boolean(),
+    cameras: z.boolean(),
+    wifi: z.boolean(),
+    bluetooth: z.boolean(),
+    cellular: z.boolean(),
+    charging_port: z.boolean(),
+    buttons: z.boolean(),
+    face_id_or_touch_id: z.boolean(),
+    gps: z.boolean(),
+  }),
+  notes: z.string(),
 })
 
 // ============================================================================

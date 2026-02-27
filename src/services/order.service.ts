@@ -4,7 +4,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { VALID_ORDER_TRANSITIONS } from '@/lib/constants'
-import { generateOrderNumber } from '@/lib/utils'
+import { generateOrderNumber, sanitizeSearchInput } from '@/lib/utils'
 import type { 
   Order, 
   OrderStatus, 
@@ -75,15 +75,19 @@ export class OrderService {
     }
 
     if (search) {
-      query = query.ilike('order_number', `%${search}%`)
+      const safeSearch = sanitizeSearchInput(search)
+      if (safeSearch) query = query.ilike('order_number', `%${safeSearch}%`)
     }
 
     if (is_sla_breached !== undefined) {
       query = query.eq('is_sla_breached', is_sla_breached)
     }
 
-    // Apply sorting
-    query = query.order(sort_by, { ascending: sort_order === 'asc' })
+    // Apply sorting (allowlist to prevent injection)
+    const ALLOWED_SORT_COLUMNS = ['created_at', 'updated_at', 'order_number', 'status', 'total_amount', 'quoted_amount'] as const
+    const safeSortBy = ALLOWED_SORT_COLUMNS.includes(sort_by as (typeof ALLOWED_SORT_COLUMNS)[number]) ? sort_by : 'created_at'
+    const safeSortOrder = sort_order === 'asc' ? 'asc' : 'desc'
+    query = query.order(safeSortBy, { ascending: safeSortOrder === 'asc' })
 
     // Apply pagination
     const from = (page - 1) * page_size
@@ -362,6 +366,11 @@ export class OrderService {
       throw new Error(updateError.message)
     }
 
+    // Populate sales_history when order closes (for pricing model training)
+    if (toStatus === 'closed') {
+      await this.recordSalesHistory(supabase, id, order.type as 'trade_in' | 'cpo')
+    }
+
     // Add timeline event
     await this.addTimelineEvent(
       id,
@@ -394,6 +403,47 @@ export class OrderService {
   // ============================================================================
   // HELPER METHODS
   // ============================================================================
+
+  /**
+   * Record order items to sales_history when order closes.
+   * Feeds our data-driven pricing model training.
+   */
+  private static async recordSalesHistory(
+    supabase: ReturnType<typeof createServerSupabaseClient>,
+    orderId: string,
+    transactionType: 'trade_in' | 'cpo'
+  ): Promise<void> {
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('device_id, storage, actual_condition, claimed_condition, final_price, quoted_price, quantity')
+      .eq('order_id', orderId)
+
+    if (!items?.length) return
+
+    const rows = items
+      .filter(it => {
+        const price = it.final_price ?? it.quoted_price
+        return it.device_id && price != null && Number(price) > 0
+      })
+      .flatMap(it => {
+        const price = Number(it.final_price ?? it.quoted_price)
+        const condition = (it.actual_condition ?? it.claimed_condition ?? 'good') as string
+        const qty = it.quantity ?? 1
+        return Array.from({ length: qty }, () => ({
+          device_id: it.device_id,
+          storage: it.storage ?? '128GB',
+          carrier: 'Unlocked',
+          condition,
+          sold_price: price / qty,
+          order_id: orderId,
+          transaction_type: transactionType === 'trade_in' ? 'buy' : 'sell',
+        }))
+      })
+
+    if (rows.length > 0) {
+      await supabase.from('sales_history').insert(rows)
+    }
+  }
 
   /**
    * Add a timeline event to an order

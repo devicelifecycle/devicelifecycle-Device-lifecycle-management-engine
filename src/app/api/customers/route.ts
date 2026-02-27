@@ -16,10 +16,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Only internal roles can list all customers
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
@@ -30,8 +29,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const filters = {
       search: searchParams.get('search') || undefined,
-      is_active: searchParams.get('is_active') === 'true' ? true : 
+      is_active: searchParams.get('is_active') === 'true' ? true :
                  searchParams.get('is_active') === 'false' ? false : undefined,
+      organization_id: profile.organization_id,
       page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
       page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '20'), 1), 100),
     }
@@ -56,12 +56,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user's organization
+    // Get user's profile — only internal roles can create customers
     const { data: userData } = await supabase
       .from('users')
-      .select('organization_id')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
+
+    if (userData && ['customer', 'vendor'].includes(userData.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const body = await request.json()
     
@@ -74,10 +78,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const customer = await CustomerService.createCustomer(
-      validationResult.data,
-      userData?.organization_id || user.id
-    )
+    const orgId = userData?.organization_id
+    if (!orgId) {
+      return NextResponse.json(
+        { error: 'User organization is required to create customers' },
+        { status: 400 }
+      )
+    }
+    const customer = await CustomerService.createCustomer(validationResult.data, orgId)
     return NextResponse.json(customer, { status: 201 })
   } catch (error) {
     console.error('Error creating customer:', error)

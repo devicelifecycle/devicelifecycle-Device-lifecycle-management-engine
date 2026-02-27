@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { CustomerService } from '@/services/customer.service'
 
+const INTERNAL_ROLES = ['admin', 'coe_manager', 'sales']
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -16,6 +18,23 @@ export async function GET(
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
+      .single()
+
+    const customer = await CustomerService.getCustomerById(params.id)
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    }
+
+    if (!INTERNAL_ROLES.includes(profile?.role || '')) {
+      if (profile?.organization_id !== customer.organization_id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     const searchParams = request.nextUrl.searchParams

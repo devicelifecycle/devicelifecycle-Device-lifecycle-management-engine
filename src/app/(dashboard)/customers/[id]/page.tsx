@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { formatDate } from '@/lib/utils'
 
 export default function CustomerDetailPage() {
@@ -33,13 +34,16 @@ export default function CustomerDetailPage() {
       contact_email: customer.contact_email || '',
       contact_phone: customer.contact_phone || '',
       notes: customer.notes || '',
+      default_risk_mode: customer.default_risk_mode || '',
     })
     setEditing(true)
   }
 
   const handleSave = async () => {
     try {
-      await update(form)
+      const payload = { ...form }
+      if (payload.default_risk_mode === '') delete payload.default_risk_mode
+      await update(payload)
       toast.success('Customer updated successfully')
       setEditing(false)
     } catch {
@@ -106,6 +110,17 @@ export default function CustomerDetailPage() {
                 </div>
               </div>
               <div className="space-y-2">
+                <Label>Default Risk Mode (Pricing)</Label>
+                <Select value={form.default_risk_mode || 'retail'} onValueChange={v => setForm(f => ({ ...f, default_risk_mode: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="retail">Retail (20% margin)</SelectItem>
+                    <SelectItem value="enterprise">Enterprise (12% margin)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Used when suggesting prices for this customer&apos;s orders</p>
+              </div>
+              <div className="space-y-2">
                 <Label>Notes</Label>
                 <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
               </div>
@@ -131,6 +146,10 @@ export default function CustomerDetailPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Phone</p>
                 <p className="font-medium">{customer.contact_phone || '—'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Default Risk Mode (Pricing)</p>
+                <p className="font-medium capitalize">{customer.default_risk_mode || 'Retail'}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Payment Terms</p>

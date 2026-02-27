@@ -4,64 +4,64 @@
 
 @layer base {
   :root {
-    --background: 0 0% 99%;
-    --foreground: 224 71% 4%;
+    --background: 220 20% 98%;
+    --foreground: 224 45% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
+    --card-foreground: 224 45% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
-    --primary: 220 90% 56%;
+    --popover-foreground: 224 45% 11%;
+    --primary: 173 58% 39%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 9% 46%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 220 14% 96%;
-    --accent-foreground: 224 71% 4%;
-    --destructive: 0 84% 60%;
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 224 30% 30%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 220 10% 46%;
+    --accent: 173 45% 93%;
+    --accent-foreground: 173 58% 25%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 76% 36%;
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 220 90% 56%;
-    --radius: 0.625rem;
-    --sidebar-bg: 224 71% 4%;
-    --sidebar-foreground: 220 14% 96%;
-    --sidebar-muted: 215 20% 65%;
-    --sidebar-accent: 220 90% 56%;
+    --border: 214 20% 91%;
+    --input: 214 20% 91%;
+    --ring: 173 58% 39%;
+    --radius: 0.75rem;
+    --sidebar-bg: 224 35% 8%;
+    --sidebar-foreground: 210 25% 95%;
+    --sidebar-muted: 215 20% 55%;
+    --sidebar-accent: 173 58% 45%;
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 210 40% 98%;
-    --card: 225 50% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 225 50% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 220 90% 56%;
+    --background: 224 35% 7%;
+    --foreground: 210 25% 96%;
+    --card: 224 30% 10%;
+    --card-foreground: 210 25% 96%;
+    --popover: 224 30% 10%;
+    --popover-foreground: 210 25% 96%;
+    --primary: 173 58% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 215 28% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 215 28% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 215 28% 17%;
-    --accent-foreground: 210 40% 98%;
+    --secondary: 220 25% 18%;
+    --secondary-foreground: 210 25% 96%;
+    --muted: 220 25% 18%;
+    --muted-foreground: 215 20% 60%;
+    --accent: 173 40% 20%;
+    --accent-foreground: 173 60% 85%;
     --destructive: 0 62% 30%;
     --destructive-foreground: 210 40% 98%;
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    --border: 215 28% 17%;
-    --input: 215 28% 17%;
-    --ring: 220 90% 56%;
-    --sidebar-bg: 225 50% 6%;
-    --sidebar-foreground: 210 40% 98%;
+    --border: 220 25% 20%;
+    --input: 220 25% 20%;
+    --ring: 173 58% 45%;
+    --sidebar-bg: 224 35% 6%;
+    --sidebar-foreground: 210 25% 96%;
     --sidebar-muted: 215 20% 55%;
-    --sidebar-accent: 220 90% 56%;
+    --sidebar-accent: 173 58% 50%;
   }
 }
 
@@ -77,13 +77,16 @@
 
 @layer utilities {
   .animate-fade-in {
-    animation: fadeIn 0.3s ease-out;
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .animate-slide-in {
-    animation: slideIn 0.3s ease-out;
+    animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .animate-scale-in {
-    animation: scaleIn 0.2s ease-out;
+    animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
   }
 }
 
@@ -93,13 +96,18 @@
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
+  from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes glow {
+  from { opacity: 0.6; }
+  to { opacity: 1; }
 }
 
 /* Custom scrollbar */
@@ -120,5 +128,13 @@
 
 /* Smooth transitions for interactive elements */
 a, button, input, select, textarea {
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Subtle gradient mesh background */
+.bg-mesh {
+  background-image:
+    radial-gradient(at 40% 20%, hsl(var(--primary) / 0.06) 0px, transparent 50%),
+    radial-gradient(at 80% 0%, hsl(var(--primary) / 0.04) 0px, transparent 50%),
+    radial-gradient(at 0% 50%, hsl(var(--primary) / 0.03) 0px, transparent 50%);
 }

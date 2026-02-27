@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { OrderService } from '@/services/order.service'
 import type { Shipment } from '@/types'
 
 export interface CreateShipmentInput {
@@ -271,7 +272,10 @@ export class ShipmentService {
   }
 
   /**
-   * Mark shipment as received at COE
+   * Mark shipment as received at COE.
+   * - Updates shipment status to delivered
+   * - Creates IMEI records for each order item (placeholder IMEI if none provided)
+   * - Transitions order to 'received' when status is 'shipped_to_coe'
    */
   static async markAsReceived(
     id: string,
@@ -280,7 +284,15 @@ export class ShipmentService {
   ): Promise<Shipment> {
     const supabase = createServerSupabaseClient()
 
-    const { data, error } = await supabase
+    // Load shipment with order
+    const shipment = await this.getShipmentById(id)
+    if (!shipment) throw new Error('Shipment not found')
+
+    const orderId = shipment.order_id as string
+    if (!orderId) throw new Error('Shipment has no order')
+
+    // Update shipment
+    const { data: updatedShipment, error } = await supabase
       .from('shipments')
       .update({
         status: 'delivered',
@@ -293,11 +305,62 @@ export class ShipmentService {
       .select()
       .single()
 
-    if (error) {
-      throw new Error(error.message)
+    if (error) throw new Error(error.message)
+
+    // Load order and items
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .select('id, status')
+      .eq('id', orderId)
+      .single()
+
+    if (orderErr || !order) {
+      // Non-fatal: continue without order update
+    } else {
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('id, device_id, quantity, claimed_condition')
+        .eq('order_id', orderId)
+
+      const orderItems = (items || []).map(i => ({ ...i, quantity: i.quantity || 1 }))
+
+      // Check existing IMEI records to avoid duplicates
+      const { data: existing } = await supabase
+        .from('imei_records')
+        .select('id')
+        .eq('order_id', orderId)
+      const existingCount = existing?.length ?? 0
+
+      if (existingCount === 0) {
+        const base = `RCV-${Date.now().toString(36)}`
+        let seq = 0
+        for (const item of orderItems) {
+          const qty = Math.max(1, item.quantity)
+          for (let i = 0; i < qty; i++) {
+            const imei = `${base}-${(seq++).toString(36)}`
+            await supabase.from('imei_records').insert({
+              imei,
+              order_id: orderId,
+              order_item_id: item.id,
+              device_id: item.device_id,
+              claimed_condition: item.claimed_condition,
+              triage_status: 'pending',
+            })
+          }
+        }
+      }
+
+      // Transition order to received if valid
+      if ((order.status as string) === 'shipped_to_coe') {
+        try {
+          await OrderService.transitionOrder(orderId, 'received' as import('@/types').OrderStatus, receivedById, notes)
+        } catch {
+          // Non-fatal: order transition failed
+        }
+      }
     }
 
-    return data as Shipment
+    return updatedShipment as Shipment
   }
 
   /**

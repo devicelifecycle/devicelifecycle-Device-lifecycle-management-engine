@@ -29,6 +29,8 @@ export default function DeviceDetailPage({ params }: { params: { id: string } })
     variant: '',
     category: '',
     sku: '',
+    storage_options: '',
+    colors: '',
   })
 
   const fetchDevice = useCallback(async () => {
@@ -38,12 +40,15 @@ export default function DeviceDetailPage({ params }: { params: { id: string } })
       if (!res.ok) throw new Error('Device not found')
       const data = await res.json()
       setDevice(data)
+      const spec = (data.specifications || {}) as { storage_options?: string[]; colors?: string[] }
       setForm({
         make: data.make || '',
         model: data.model || '',
         variant: data.variant || '',
         category: data.category || '',
         sku: data.sku || '',
+        storage_options: spec.storage_options?.join(', ') || '',
+        colors: spec.colors?.join(', ') || '',
       })
     } catch {
       toast.error('Device not found')
@@ -58,10 +63,20 @@ export default function DeviceDetailPage({ params }: { params: { id: string } })
   const handleSave = async () => {
     setIsSaving(true)
     try {
+      const storageList = form.storage_options?.split(/[,;]/).map(s => s.trim()).filter(Boolean) || []
+      const colorList = form.colors?.split(/[,;]/).map(c => c.trim()).filter(Boolean) || []
+      const body = {
+        make: form.make,
+        model: form.model,
+        variant: form.variant || undefined,
+        category: form.category || undefined,
+        sku: form.sku || undefined,
+        specifications: (storageList.length || colorList.length) ? { storage_options: storageList, colors: colorList } : {},
+      }
       const res = await fetch(`/api/devices/${params.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error()
       toast.success('Device updated successfully')
@@ -157,6 +172,25 @@ export default function DeviceDetailPage({ params }: { params: { id: string } })
                 value={form.sku}
                 onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
                 placeholder="e.g. APL-IP15PM-256-BLK"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Storage (comma-separated)</Label>
+              <Input
+                value={form.storage_options}
+                onChange={e => setForm(f => ({ ...f, storage_options: e.target.value }))}
+                placeholder="e.g. 64GB, 128GB, 256GB"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Colors (comma-separated)</Label>
+              <Input
+                value={form.colors}
+                onChange={e => setForm(f => ({ ...f, colors: e.target.value }))}
+                placeholder="e.g. Black, Silver, Blue"
               />
             </div>
           </div>

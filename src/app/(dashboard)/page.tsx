@@ -30,16 +30,18 @@ export default function DashboardPage() {
       value: total,
       description: isInternal ? 'All time orders' : 'Your orders',
       icon: ShoppingCart,
-      iconBg: 'bg-blue-500/10',
-      iconColor: 'text-blue-600',
+      iconBg: 'bg-teal-500/12',
+      iconColor: 'text-teal-600 dark:text-teal-400',
+      gradient: 'from-teal-500/5 to-emerald-500/5',
     },
     {
       title: 'Pending',
       value: pendingOrders,
       description: 'Awaiting action',
       icon: Clock,
-      iconBg: 'bg-amber-500/10',
-      iconColor: 'text-amber-600',
+      iconBg: 'bg-amber-500/12',
+      iconColor: 'text-amber-600 dark:text-amber-400',
+      gradient: 'from-amber-500/5 to-orange-500/5',
     },
     ...(isInternal ? [
       {
@@ -47,16 +49,18 @@ export default function DashboardPage() {
         value: breachedOrders,
         description: 'Orders breaching SLA',
         icon: AlertTriangle,
-        iconBg: breachedOrders > 0 ? 'bg-red-500/10' : 'bg-green-500/10',
-        iconColor: breachedOrders > 0 ? 'text-red-600' : 'text-green-600',
+        iconBg: breachedOrders > 0 ? 'bg-red-500/12' : 'bg-emerald-500/12',
+        iconColor: breachedOrders > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400',
+        gradient: breachedOrders > 0 ? 'from-red-500/5 to-rose-500/5' : 'from-emerald-500/5 to-teal-500/5',
       },
       {
         title: 'Revenue',
         value: formatCurrency(totalRevenue),
         description: 'From recent orders',
         icon: DollarSign,
-        iconBg: 'bg-emerald-500/10',
-        iconColor: 'text-emerald-600',
+        iconBg: 'bg-emerald-500/12',
+        iconColor: 'text-emerald-600 dark:text-emerald-400',
+        gradient: 'from-emerald-500/5 to-teal-500/5',
       },
     ] : []),
   ]
@@ -72,14 +76,14 @@ export default function DashboardPage() {
           </p>
         </div>
         {isInternal && (
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <Link href="/orders/new/trade-in">
-              <Button className="shadow-md shadow-primary/20">
+              <Button className="shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow">
                 <Plus className="mr-2 h-4 w-4" />New Trade-In
               </Button>
             </Link>
             <Link href="/orders/new/cpo">
-              <Button variant="outline">
+              <Button variant="outline" className="border-2 hover:bg-muted/50">
                 <Plus className="mr-2 h-4 w-4" />New CPO
               </Button>
             </Link>
@@ -88,9 +92,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className={`grid gap-4 md:grid-cols-2 ${isInternal ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
+      <div className={`grid gap-5 md:grid-cols-2 ${isInternal ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
         {statCards.map((stat) => (
-          <Card key={stat.title} className="relative overflow-hidden">
+          <Card key={stat.title} className={`relative overflow-hidden border-0 shadow-lg shadow-black/5 bg-gradient-to-br ${stat.gradient} hover:shadow-xl hover:shadow-black/5 transition-all duration-300`}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -98,7 +102,7 @@ export default function DashboardPage() {
                   <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
                   <p className="text-xs text-muted-foreground">{stat.description}</p>
                 </div>
-                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.iconBg}`}>
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${stat.iconBg} ring-1 ring-black/5`}>
                   <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
                 </div>
               </div>
@@ -110,14 +114,14 @@ export default function DashboardPage() {
       {/* Quick Actions + Recent Orders */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Quick Actions */}
-        <Card className="lg:col-span-1">
+        <Card className="lg:col-span-1 border-0 shadow-lg shadow-black/5">
           <CardHeader>
             <CardTitle className="text-base">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Link href="/orders" className="flex items-center gap-3 rounded-lg border p-3 transition-all hover:bg-muted/50 hover:shadow-sm">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10">
-                <ShoppingCart className="h-4 w-4 text-blue-600" />
+            <Link href="/orders" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/12 group-hover:bg-teal-500/20 transition-colors">
+                <ShoppingCart className="h-5 w-5 text-teal-600" />
               </div>
               <div>
                 <p className="text-sm font-medium">{isInternal ? 'View All Orders' : 'My Orders'}</p>
@@ -126,9 +130,9 @@ export default function DashboardPage() {
             </Link>
             {isInternal && (
               <>
-                <Link href="/orders/new/trade-in" className="flex items-center gap-3 rounded-lg border p-3 transition-all hover:bg-muted/50 hover:shadow-sm">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10">
-                    <Package className="h-4 w-4 text-purple-600" />
+                <Link href="/orders/new/trade-in" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/12 group-hover:bg-violet-500/20 transition-colors">
+                    <Package className="h-5 w-5 text-violet-600" />
                   </div>
                   <div>
                     <p className="text-sm font-medium">New Order</p>
@@ -136,9 +140,9 @@ export default function DashboardPage() {
                   </div>
                 </Link>
                 {hasRole(['admin', 'coe_manager', 'sales']) && (
-                  <Link href="/customers/new" className="flex items-center gap-3 rounded-lg border p-3 transition-all hover:bg-muted/50 hover:shadow-sm">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-500/10">
-                      <Users className="h-4 w-4 text-green-600" />
+                  <Link href="/customers/new" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/12 group-hover:bg-emerald-500/20 transition-colors">
+                      <Users className="h-5 w-5 text-emerald-600" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Add Customer</p>
@@ -147,9 +151,9 @@ export default function DashboardPage() {
                   </Link>
                 )}
                 {hasRole(['admin', 'coe_manager', 'sales']) && (
-                  <Link href="/vendors/new" className="flex items-center gap-3 rounded-lg border p-3 transition-all hover:bg-muted/50 hover:shadow-sm">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500/10">
-                      <TrendingUp className="h-4 w-4 text-orange-600" />
+                  <Link href="/vendors/new" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/12 group-hover:bg-orange-500/20 transition-colors">
+                      <TrendingUp className="h-5 w-5 text-orange-600" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Add Vendor</p>
@@ -160,9 +164,9 @@ export default function DashboardPage() {
               </>
             )}
             {!isInternal && (
-              <Link href="/notifications" className="flex items-center gap-3 rounded-lg border p-3 transition-all hover:bg-muted/50 hover:shadow-sm">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10">
-                  <Clock className="h-4 w-4 text-amber-600" />
+            <Link href="/notifications" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/12 group-hover:bg-amber-500/20 transition-colors">
+                <Clock className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
                   <p className="text-sm font-medium">Notifications</p>
@@ -174,7 +178,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent Orders */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 border-0 shadow-lg shadow-black/5">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base">Recent Orders</CardTitle>
@@ -209,7 +213,7 @@ export default function DashboardPage() {
                     <Link
                       key={order.id}
                       href={`/orders/${order.id}`}
-                      className="flex items-center justify-between rounded-lg border p-3 transition-all hover:bg-muted/50 hover:shadow-sm group"
+                      className="flex items-center justify-between rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/10 group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">

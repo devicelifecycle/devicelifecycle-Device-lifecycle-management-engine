@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { full_name, email, role, password } = validationResult.data
+    const { full_name, email, role, password, organization_id } = validationResult.data
 
     // Create auth user
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -87,6 +87,14 @@ export async function POST(request: NextRequest) {
 
     if (authError) throw authError
 
+    const rolesRequiringOrg = ['sales', 'customer', 'vendor']
+    if (rolesRequiringOrg.includes(role) && !organization_id) {
+      return NextResponse.json(
+        { error: 'organization_id is required for sales, customer, and vendor roles' },
+        { status: 400 }
+      )
+    }
+
     // Create user profile
     const { data: newUser, error: profileError } = await supabase
       .from('users')
@@ -95,6 +103,7 @@ export async function POST(request: NextRequest) {
         full_name,
         email,
         role,
+        organization_id: organization_id || undefined,
         is_active: true,
       })
       .select()

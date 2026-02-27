@@ -11,6 +11,7 @@ import {
   OUTLIER_DEVIATION_THRESHOLD,
   BROKEN_DEVICE_MULTIPLIER,
   RISK_MODE_CONFIG,
+  ISSUE_TO_DEDUCTION_KEY,
 } from '@/lib/constants'
 import type {
   PricingTable,
@@ -67,7 +68,103 @@ const FUNCTIONAL_DEDUCTIONS: Record<string, { type: 'percentage' | 'fixed'; valu
 const round2 = (n: number) => Math.round(Math.max(n, 0) * 100) / 100
 const safeNum = (n: number) => Number.isFinite(n) ? n : 0
 
+/** Critical issues that make device "broken" — use 50% of good rule (Brian's algorithm) */
+const CRITICAL_BROKEN_ISSUES = ['SCREEN_DEAD', 'ICLOUD_LOCKED', 'WATER_DAMAGE', 'BATTERY_DEAD']
+
+/** Maps triage/display issue labels to FUNCTIONAL_DEDUCTIONS keys. Logs unmapped issues. */
+function mapIssuesToDeductionKeys(issues: string[]): string[] {
+  const keys: string[] = []
+  for (const issue of issues) {
+    if (FUNCTIONAL_DEDUCTIONS[issue]) {
+      keys.push(issue)
+    } else {
+      const mapped = ISSUE_TO_DEDUCTION_KEY[issue]
+      if (mapped && FUNCTIONAL_DEDUCTIONS[mapped]) {
+        keys.push(mapped)
+      } else if (!mapped) {
+        console.warn(`[Pricing] Issue has no matching deduction: "${issue}"`)
+      }
+    }
+  }
+  return keys
+}
+
+/** Device is "broken" — apply 50% of good working rule per Brian */
+function isBrokenDevice(condition: DeviceCondition, deductionKeys: string[]): boolean {
+  if (condition === 'poor') return true
+  return deductionKeys.some(k => CRITICAL_BROKEN_ISSUES.includes(k))
+}
+
+/** Filter competitor outliers — discard highest if >1.3x second-highest (e.g. Bell promotion) */
+function filterCompetitorOutliers(
+  list: Array<{ name: string; price: number }>
+): Array<{ name: string; price: number }> {
+  if (list.length < 4) return list
+  const sorted = [...list].sort((a, b) => b.price - a.price)
+  const highest = sorted[0].price
+  const secondHighest = sorted[1].price
+  if (secondHighest > 0 && highest > secondHighest * 1.3) {
+    return list.filter(c => c.price < highest)
+  }
+  return list
+}
+
+export interface PricingSettingsOverrides {
+  channel_green_min: number
+  channel_yellow_min: number
+  marketplace_fee_percent: number
+  breakage_risk_percent: number
+  competitive_relevance_min: number
+  outlier_deviation_threshold: number
+  trade_in_profit_percent: number
+  enterprise_margin_percent: number
+  cpo_markup_percent: number
+  cpo_enterprise_markup_percent: number
+  price_staleness_days: number
+  /** Use our trained data-driven model when true (reduces third-party dependency) */
+  prefer_data_driven?: boolean
+}
+
+const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
+  channel_green_min: CHANNEL_DECISION_THRESHOLDS.GREEN_MIN,
+  channel_yellow_min: CHANNEL_DECISION_THRESHOLDS.YELLOW_MIN,
+  marketplace_fee_percent: MARKETPLACE_FEE_PERCENT,
+  breakage_risk_percent: BREAKAGE_RISK_PERCENT,
+  competitive_relevance_min: COMPETITIVE_RELEVANCE_MIN,
+  outlier_deviation_threshold: OUTLIER_DEVIATION_THRESHOLD,
+  trade_in_profit_percent: 20,
+  enterprise_margin_percent: 12,
+  cpo_markup_percent: 25,
+  cpo_enterprise_markup_percent: 18,
+  price_staleness_days: 7,
+}
+
 export class PricingService {
+
+  static async getPricingSettings(): Promise<PricingSettingsOverrides> {
+    try {
+      const supabase = createServerSupabaseClient()
+      const { data, error } = await supabase
+        .from('pricing_settings')
+        .select('setting_key, setting_value')
+      if (error || !data || data.length === 0) return DEFAULT_PRICING_SETTINGS
+      const overrides = { ...DEFAULT_PRICING_SETTINGS }
+      for (const row of data) {
+        const key = row.setting_key as keyof PricingSettingsOverrides
+        if (key in overrides) {
+          if (key === 'prefer_data_driven') {
+            ;(overrides as Record<string, unknown>)[key] = row.setting_value === 'true' || row.setting_value === '1'
+          } else {
+            const num = parseFloat(row.setting_value)
+            if (!Number.isNaN(num)) (overrides as Record<string, number>)[key] = num
+          }
+        }
+      }
+      return overrides
+    } catch {
+      return DEFAULT_PRICING_SETTINGS
+    }
+  }
 
   // ============================================================================
   // V2: MARKET-REFERENCED PRICING (Primary)
@@ -94,6 +191,7 @@ export class PricingService {
   }): Promise<PriceCalculationResultV2> {
     const supabase = createServerSupabaseClient()
     const carrier = input.carrier || 'Unlocked'
+    const settings = await this.getPricingSettings()
 
     try {
       // Step 1: Get market reference prices
@@ -137,10 +235,11 @@ export class PricingService {
       const conditionAdjustment = anchorPrice * (1 - conditionMultiplier)
       let adjustedPrice = anchorPrice * conditionMultiplier
 
-      // Step 3: Apply functional deductions
+      // Step 3: Apply functional deductions (map triage labels to deduction keys)
       let totalDeductions = 0
-      if (input.issues && input.issues.length > 0) {
-        for (const issue of input.issues) {
+      const deductionKeys = mapIssuesToDeductionKeys(input.issues || [])
+      if (deductionKeys.length > 0) {
+        for (const issue of deductionKeys) {
           const deduction = FUNCTIONAL_DEDUCTIONS[issue]
           if (deduction) {
             if (deduction.type === 'percentage') {
@@ -155,38 +254,52 @@ export class PricingService {
         }
       }
 
-      // Step 4: Get competitor prices
+      // Ensure price never goes negative after deductions
+      adjustedPrice = Math.max(adjustedPrice, 0)
+
+      // Step 4: Get competitor prices (filter outliers — e.g. Bell promotion)
       const { data: competitorData } = await supabase
         .from('competitor_prices')
         .select('*')
         .eq('device_id', input.device_id)
         .eq('storage', input.storage)
 
-      const competitors: Array<{ name: string; price: number; gap_percent: number }> = []
-      let highestCompetitor = 0
+      const rawCompetitors: Array<{ name: string; price: number }> = []
+      let competitorDataAgeDays: number | undefined
 
       if (competitorData && competitorData.length > 0) {
+        const now = Date.now()
+        let maxAgeMs = 0
         for (const cp of competitorData) {
           const price = cp.trade_in_price || 0
-          if (price > 0) {
-            const gapPercent = anchorPrice > 0 ? (anchorPrice - price) / anchorPrice : 0
-            competitors.push({
-              name: cp.competitor_name,
-              price,
-              gap_percent: round2(gapPercent * 100) / 100,
-            })
-            if (price > highestCompetitor) highestCompetitor = price
+          const updatedAt = cp.updated_at || cp.scraped_at || cp.created_at
+          if (updatedAt) {
+            const ageMs = now - new Date(updatedAt).getTime()
+            if (ageMs > maxAgeMs) maxAgeMs = ageMs
           }
+          if (price > 0) rawCompetitors.push({ name: cp.competitor_name, price })
+        }
+        if (maxAgeMs > 0) {
+          competitorDataAgeDays = round2(maxAgeMs / (24 * 60 * 60 * 1000))
         }
       }
 
+      const filteredCompetitors = filterCompetitorOutliers(rawCompetitors)
+      const competitors: Array<{ name: string; price: number; gap_percent: number }> = filteredCompetitors.map(c => ({
+        name: c.name,
+        price: c.price,
+        gap_percent: round2(anchorPrice > 0 ? (anchorPrice - c.price) / anchorPrice * 100 : 0) / 100,
+      }))
+      const highestCompetitor = filteredCompetitors.length > 0 ? Math.max(...filteredCompetitors.map(c => c.price)) : 0
+
       // Step 5: Risk mode — enterprise has lower margin target
       const riskMode: RiskMode = input.risk_mode || 'retail'
-      const marginTarget = RISK_MODE_CONFIG[riskMode].margin_percent / 100
+      const marginTargetPercent = riskMode === 'enterprise' ? settings.enterprise_margin_percent : settings.trade_in_profit_percent
+      const marginTarget = marginTargetPercent / 100
 
       // Step 6: Marketplace data and D-grade formula
       const mpPrice = marketEntry?.marketplace_price || marketEntry?.marketplace_good || 0
-      const mpFeeRate = MARKETPLACE_FEE_PERCENT / 100
+      const mpFeeRate = settings.marketplace_fee_percent / 100
       const mpNet = mpPrice > 0 ? mpPrice * (1 - mpFeeRate) : 0
 
       // Get repair costs for value-add viability and D-grade formula
@@ -203,13 +316,14 @@ export class PricingService {
         : 25
 
       // D-grade formula (Faisal's method): selling_price - fees - margin - repairs - breakage = trade_price
-      // This provides a floor/reference from the marketplace-reverse perspective
+      // Brian: "If marketplace isn't above C stock price, someone's low-balling — don't use for formula"
       let dGradeFormula = undefined
-      if (mpPrice > 0) {
+      const marketplaceAboveCstock = mpPrice > 0 && mpPrice >= anchorPrice
+      if (mpPrice > 0 && marketplaceAboveCstock) {
         const feeDeduction = mpPrice * mpFeeRate
         const marginDeduction = mpPrice * marginTarget
         const estimatedRepairs = avgRepairCost
-        const breakageDeduction = mpPrice * (BREAKAGE_RISK_PERCENT / 100)
+        const breakageDeduction = mpPrice * (settings.breakage_risk_percent / 100)
         const dGradeTradePrice = mpPrice - feeDeduction - marginDeduction - estimatedRepairs - breakageDeduction
 
         dGradeFormula = {
@@ -222,19 +336,35 @@ export class PricingService {
         }
       }
 
-      // Step 7: Apply 5% breakage risk deduction to adjusted price
-      const breakageDeduction = adjustedPrice * (BREAKAGE_RISK_PERCENT / 100)
+      // Step 7: Apply breakage risk deduction to adjusted price
+      const breakageDeduction = adjustedPrice * (settings.breakage_risk_percent / 100)
       adjustedPrice -= breakageDeduction
 
+      // Step 7b: "Good working" trade price for broken-device rule (Brian: broken = 50% of good)
+      const goodConditionMult = CONDITION_MULTIPLIERS['good'] ?? 0.85
+      const goodWorkingAnchor = anchorPrice * goodConditionMult
+      const goodWorkingBreakage = goodWorkingAnchor * (settings.breakage_risk_percent / 100)
+      const goodWorkingAfterBreakage = Math.max(goodWorkingAnchor - goodWorkingBreakage, 0)
+      const competitiveFloor = highestCompetitor * settings.competitive_relevance_min
+      const dGradeFloor = dGradeFormula ? dGradeFormula.calculated_trade_price : 0
+      const goodWorkingTradePrice = Math.max(
+        goodWorkingAfterBreakage,
+        competitiveFloor,
+        dGradeFloor
+      )
+
       // Step 8: Determine trade price (competitive relevance)
-      // Use market_prices.trade_price if set, otherwise calculate
-      let tradePrice = marketEntry?.trade_price || 0
-      if (!tradePrice) {
-        // Ensure we're at least COMPETITIVE_RELEVANCE_MIN of highest competitor
-        const competitiveFloor = highestCompetitor * COMPETITIVE_RELEVANCE_MIN
-        // Also use D-grade formula as a reference floor if available
-        const dGradeFloor = dGradeFormula ? dGradeFormula.calculated_trade_price : 0
-        tradePrice = Math.max(adjustedPrice, competitiveFloor, dGradeFloor)
+      const isBroken = isBrokenDevice(input.condition, deductionKeys)
+      let tradePrice: number
+
+      if (isBroken) {
+        // Brian: "Broken could just be 50% of good" — simple rule
+        tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
+      } else {
+        tradePrice = marketEntry?.trade_price || 0
+        if (!tradePrice) {
+          tradePrice = Math.max(adjustedPrice, competitiveFloor, dGradeFloor)
+        }
       }
 
       // Step 9: Calculate margin vs C-stock
@@ -257,11 +387,11 @@ export class PricingService {
       let recommendedChannel: SalesChannel
       let reasoning: string
 
-      if (marginPercent >= CHANNEL_DECISION_THRESHOLDS.GREEN_MIN) {
+      if (marginPercent >= settings.channel_green_min) {
         marginTier = 'green'
         recommendedChannel = 'wholesale'
         reasoning = `${round2(marginPercent * 100)}% margin — strong. Direct wholesale viable.`
-      } else if (marginPercent >= CHANNEL_DECISION_THRESHOLDS.YELLOW_MIN) {
+      } else if (marginPercent >= settings.channel_yellow_min) {
         marginTier = 'yellow'
         recommendedChannel = mpNet > tradePrice ? 'marketplace' : 'wholesale'
         reasoning = `${round2(marginPercent * 100)}% margin — moderate. Check MP opportunity, evaluate value-add.`
@@ -272,7 +402,7 @@ export class PricingService {
       }
 
       // Append risk mode context
-      reasoning += ` [${riskMode} mode, ${RISK_MODE_CONFIG[riskMode].margin_percent}% target margin]`
+      reasoning += ` [${riskMode} mode, ${marginTargetPercent}% target margin]`
 
       const channelDecision: ChannelDecision = {
         recommended_channel: recommendedChannel,
@@ -286,8 +416,8 @@ export class PricingService {
 
       // Step 12: CPO price
       const cpoMarkup = riskMode === 'enterprise'
-        ? (DEFAULT_MARGIN_SETTINGS.cpo_enterprise_markup_percent / 100)
-        : (DEFAULT_MARGIN_SETTINGS.cpo_markup_percent / 100)
+        ? (settings.cpo_enterprise_markup_percent / 100)
+        : (settings.cpo_markup_percent / 100)
       const cpoPrice = marketEntry?.cpo_price || round2(anchorPrice * (1 + cpoMarkup))
 
       // Step 13: Outlier detection — compare trade price against historical sales
@@ -303,10 +433,12 @@ export class PricingService {
 
       if (recentSales && recentSales.length >= 3) {
         const historicalAvg = recentSales.reduce((s: number, d: { sold_price: number }) => s + d.sold_price, 0) / recentSales.length
-        const deviation = safeNum(Math.abs(tradePrice - historicalAvg) / historicalAvg)
-        if (deviation > OUTLIER_DEVIATION_THRESHOLD) {
-          outlierFlag = true
-          outlierReason = `Trade price $${round2(tradePrice)} deviates ${round2(deviation * 100)}% from 30-day avg $${round2(historicalAvg)} (threshold: ${OUTLIER_DEVIATION_THRESHOLD * 100}%)`
+        if (historicalAvg > 0) {
+          const deviation = Math.abs(tradePrice - historicalAvg) / historicalAvg
+          if (deviation > settings.outlier_deviation_threshold) {
+            outlierFlag = true
+            outlierReason = `Trade price $${round2(tradePrice)} deviates ${round2(deviation * 100)}% from 30-day avg $${round2(historicalAvg)} (threshold: ${settings.outlier_deviation_threshold * 100}%)`
+          }
         }
       }
 
@@ -315,6 +447,19 @@ export class PricingService {
 
       // Apply quantity
       const qty = input.quantity || 1
+
+      const dataStalenessWarnings: string[] = []
+      if (mpPrice > 0 && !marketplaceAboveCstock) {
+        dataStalenessWarnings.push(`Marketplace price ($${round2(mpPrice)}) below C-stock ($${round2(anchorPrice)}) — excluded from formula (possible low-baller).`)
+      }
+      let confidence = this.calculateConfidenceV2(!!marketEntry, competitors.length, marketplaceAboveCstock && mpPrice > 0)
+      if (competitorDataAgeDays != null && competitorDataAgeDays > settings.price_staleness_days) {
+        dataStalenessWarnings.push(`Competitor data is ${competitorDataAgeDays} days old (threshold: ${settings.price_staleness_days}). Consider refreshing prices.`)
+        confidence = Math.max(0, confidence - 0.15)
+      }
+      const dataStalenessWarning = dataStalenessWarnings.length > 0 ? dataStalenessWarnings.join(' ') : undefined
+      const validForHours = (confidence < 0.7 || outlierFlag) ? 12 : 24
+      const priceExpiresAt = new Date(Date.now() + validForHours * 60 * 60 * 1000).toISOString()
 
       return {
         success: true,
@@ -333,9 +478,12 @@ export class PricingService {
         outlier_flag: outlierFlag || undefined,
         outlier_reason: outlierReason,
         price_source: priceSource,
-        confidence: this.calculateConfidenceV2(!!marketEntry, competitors.length, mpPrice > 0),
+        confidence,
         price_date: new Date().toISOString(),
-        valid_for_hours: 24,
+        valid_for_hours: validForHours,
+        price_expires_at: priceExpiresAt,
+        competitor_data_age_days: competitorDataAgeDays,
+        data_staleness_warning: dataStalenessWarning,
         breakdown: {
           anchor_price: anchorPrice,
           condition_adjustment: round2(conditionAdjustment),
@@ -344,6 +492,11 @@ export class PricingService {
           margin_applied: round2(marginPercent * 100),
           final_trade_price: round2(tradePrice),
           final_cpo_price: round2(cpoPrice),
+          ...(isBroken && {
+            broken_applied: true,
+            good_working_trade_price: round2(goodWorkingTradePrice),
+            broken_multiplier: BROKEN_DEVICE_MULTIPLIER,
+          }),
         },
       }
     } catch (error) {
@@ -536,8 +689,9 @@ export class PricingService {
       calculatedPrice = afterCondition
 
       const issuesApplied: string[] = []
-      if (input.issues && input.issues.length > 0) {
-        for (const issue of input.issues) {
+      const deductionKeys = mapIssuesToDeductionKeys(input.issues || [])
+      if (deductionKeys.length > 0) {
+        for (const issue of deductionKeys) {
           const deduction = FUNCTIONAL_DEDUCTIONS[issue]
           if (deduction) {
             issuesApplied.push(issue)

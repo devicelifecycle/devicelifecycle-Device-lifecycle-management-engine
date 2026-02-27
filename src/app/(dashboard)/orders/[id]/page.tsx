@@ -4,10 +4,10 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, DollarSign, Send, FileDown } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrder } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
@@ -30,16 +30,20 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
-import { ORDER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG } from '@/lib/constants'
-import type { OrderStatus } from '@/types'
+import { ORDER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
+import type { OrderStatus, OrderItem, PricingMetadata } from '@/types'
 
 export default function OrderDetailPage() {
   const params = useParams()
   const { order, isLoading, transition, isTransitioning, refetch } = useOrder(params.id as string)
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({})
+  const [itemMetadata, setItemMetadata] = useState<Record<string, PricingMetadata>>({})
+  const [expandedPricingContext, setExpandedPricingContext] = useState<string | null>(null)
   const [isSavingPrices, setIsSavingPrices] = useState(false)
   const [isSendingQuote, setIsSendingQuote] = useState(false)
+  const [suggestingItemId, setSuggestingItemId] = useState<string | null>(null)
+  const [suggestingAll, setSuggestingAll] = useState(false)
   const [transitionTarget, setTransitionTarget] = useState<OrderStatus | null>(null)
   const [transitionNotes, setTransitionNotes] = useState('')
 
@@ -55,13 +59,120 @@ export default function OrderDetailPage() {
   }
 
   const handleOpenPricingDialog = () => {
-    // Initialize prices from current items
     const prices: Record<string, string> = {}
+    const metadata: Record<string, PricingMetadata> = {}
     order?.items?.forEach(item => {
       prices[item.id] = item.unit_price?.toString() || ''
+      if (item.pricing_metadata) metadata[item.id] = item.pricing_metadata
     })
     setItemPrices(prices)
+    setItemMetadata(metadata)
     setPricingDialogOpen(true)
+  }
+
+  const getStorageForItem = (item: OrderItem): string => {
+    if (item.storage && STORAGE_OPTIONS.includes(item.storage)) return item.storage
+    const variant = item.device?.variant || ''
+    const match = STORAGE_OPTIONS.find(s => variant.includes(s))
+    return match || '128GB'
+  }
+
+  const getRiskMode = (): 'retail' | 'enterprise' => {
+    return order?.customer?.default_risk_mode || 'retail'
+  }
+
+  const handleSuggestPrice = async (item: OrderItem) => {
+    if (!item.device_id) {
+      toast.error('Device not found for this item')
+      return
+    }
+    setSuggestingItemId(item.id)
+    try {
+      const res = await fetch('/api/pricing/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          version: 'v2',
+          device_id: item.device_id,
+          storage: getStorageForItem(item),
+          carrier: 'Unlocked',
+          condition: item.claimed_condition || 'good',
+          risk_mode: getRiskMode(),
+          quantity: item.quantity,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to calculate price')
+      }
+      const result = await res.json()
+      if (result.success && result.trade_price != null) {
+        const unitPrice = result.quantity ? result.trade_price / result.quantity : result.trade_price
+        setItemPrices(prev => ({ ...prev, [item.id]: unitPrice.toFixed(2) }))
+        setItemMetadata(prev => ({
+          ...prev,
+          [item.id]: {
+            suggested_by_calc: true,
+            confidence: result.confidence,
+            margin_tier: result.channel_decision?.margin_tier,
+            anchor_price: result.breakdown?.anchor_price,
+            channel_decision: result.channel_decision?.recommended_channel,
+          },
+        }))
+        toast.success(`Suggested ${formatCurrency(unitPrice)} (${result.channel_decision?.margin_tier || '—'} margin)`)
+      } else {
+        toast.error(result.error || 'Could not calculate price')
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to suggest price')
+    } finally {
+      setSuggestingItemId(null)
+    }
+  }
+
+  const handleSuggestAll = async () => {
+    if (!order?.items?.length) return
+    setSuggestingAll(true)
+    let successCount = 0
+    for (const item of order.items) {
+      if (!item.device_id) continue
+      try {
+        const res = await fetch('/api/pricing/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            version: 'v2',
+            device_id: item.device_id,
+            storage: getStorageForItem(item),
+            carrier: 'Unlocked',
+            condition: item.claimed_condition || 'good',
+            risk_mode: getRiskMode(),
+            quantity: item.quantity,
+          }),
+        })
+        if (!res.ok) continue
+        const result = await res.json()
+        if (result.success && result.trade_price != null) {
+          const unitPrice = result.quantity ? result.trade_price / result.quantity : result.trade_price
+          setItemPrices(prev => ({ ...prev, [item.id]: unitPrice.toFixed(2) }))
+          setItemMetadata(prev => ({
+            ...prev,
+            [item.id]: {
+              suggested_by_calc: true,
+              confidence: result.confidence,
+              margin_tier: result.channel_decision?.margin_tier,
+              anchor_price: result.breakdown?.anchor_price,
+              channel_decision: result.channel_decision?.recommended_channel,
+            },
+          }))
+          successCount++
+        }
+      } catch {
+        // continue to next item
+      }
+    }
+    setSuggestingAll(false)
+    toast.success(`Suggested prices for ${successCount} of ${order.items.length} items`)
   }
 
   const handleSavePrices = async () => {
@@ -69,10 +180,14 @@ export default function OrderDetailPage() {
 
     setIsSavingPrices(true)
     try {
-      const items = order.items.map(item => ({
-        id: item.id,
-        unit_price: parseFloat(itemPrices[item.id] || '0')
-      }))
+      const items = order.items.map(item => {
+        const payload: { id: string; unit_price: number; pricing_metadata?: PricingMetadata } = {
+          id: item.id,
+          unit_price: parseFloat(itemPrices[item.id] || '0'),
+        }
+        if (item.id in itemMetadata) payload.pricing_metadata = itemMetadata[item.id]
+        return payload
+      })
 
       const response = await fetch(`/api/orders/${params.id}/items`, {
         method: 'PATCH',
@@ -216,26 +331,60 @@ export default function OrderDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {order.items.map(item => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">
-                          {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
-                          {item.device?.variant && <span className="text-muted-foreground ml-1">({item.device.variant})</span>}
-                        </TableCell>
-                        <TableCell>{item.quantity}</TableCell>
-                        <TableCell>
-                          {item.claimed_condition && (
-                            <span className={CONDITION_CONFIG[item.claimed_condition]?.color}>
-                              {CONDITION_CONFIG[item.claimed_condition]?.label}
-                            </span>
+                    {order.items.map(item => {
+                      const meta = item.pricing_metadata
+                      const hasContext = meta?.suggested_by_calc
+                      const isExpanded = expandedPricingContext === item.id
+                      return (
+                        <Fragment key={item.id}>
+                          <TableRow>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-1">
+                                {hasContext && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedPricingContext(isExpanded ? null : item.id)}
+                                    className="text-muted-foreground hover:text-foreground p-0.5 -ml-1"
+                                    aria-expanded={isExpanded}
+                                  >
+                                    {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                  </button>
+                                )}
+                                {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
+                                {item.device?.variant && <span className="text-muted-foreground ml-1">({item.device.variant})</span>}
+                              </div>
+                            </TableCell>
+                            <TableCell>{item.quantity}</TableCell>
+                            <TableCell>
+                              {item.claimed_condition && (
+                                <span className={CONDITION_CONFIG[item.claimed_condition]?.color}>
+                                  {CONDITION_CONFIG[item.claimed_condition]?.label}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>{item.unit_price ? formatCurrency(item.unit_price) : '—'}</TableCell>
+                            <TableCell className="text-right">
+                              {item.unit_price ? formatCurrency(item.unit_price * item.quantity) : '—'}
+                            </TableCell>
+                          </TableRow>
+                          {hasContext && isExpanded && (
+                            <TableRow>
+                              <TableCell colSpan={5} className="bg-muted/30 py-3">
+                                <div className="text-sm text-muted-foreground space-y-1 pl-6">
+                                  <p><span className="font-medium">Pricing context</span> (from calculator)</p>
+                                  <div className="flex flex-wrap gap-4">
+                                    {meta?.margin_tier && <span>Margin tier: {meta.margin_tier}</span>}
+                                    {meta?.confidence != null && <span>Confidence: {Math.round(meta.confidence * 100)}%</span>}
+                                    {meta?.anchor_price != null && <span>Anchor: {formatCurrency(meta.anchor_price)}</span>}
+                                    {meta?.channel_decision && <span>Channel: {meta.channel_decision}</span>}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
                           )}
-                        </TableCell>
-                        <TableCell>{item.unit_price ? formatCurrency(item.unit_price) : '—'}</TableCell>
-                        <TableCell className="text-right">
-                          {item.unit_price ? formatCurrency(item.unit_price * item.quantity) : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                        </Fragment>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               ) : (
@@ -382,21 +531,34 @@ export default function OrderDetailPage() {
           <DialogHeader>
             <DialogTitle>Set Item Pricing</DialogTitle>
             <DialogDescription>
-              Set the unit price for each item in this order. The total will be automatically calculated.
+              Set the unit price for each item. Use &quot;Suggest Price&quot; to get market-based recommendations, or enter manually.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={suggestingAll || !order?.items?.length}
+                onClick={handleSuggestAll}
+              >
+                {suggestingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                <span className="ml-2">{suggestingAll ? 'Suggesting...' : 'Suggest All'}</span>
+              </Button>
+            </div>
             {order?.items?.map(item => (
-              <div key={item.id} className="grid grid-cols-2 gap-4 items-center">
+              <div key={item.id} className="grid grid-cols-[1fr_auto_140px] gap-4 items-end">
                 <div>
                   <Label className="text-sm font-medium">
                     {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
                   </Label>
                   <p className="text-xs text-muted-foreground">
                     Qty: {item.quantity} | {item.claimed_condition ? (CONDITION_CONFIG[item.claimed_condition]?.label || item.claimed_condition) : '—'}
+                    {getStorageForItem(item) !== '128GB' && ` | ${getStorageForItem(item)}`}
                   </p>
                 </div>
-                <div>
+                <div className="flex flex-col gap-1">
                   <Label htmlFor={`price-${item.id}`} className="text-xs text-muted-foreground">
                     Unit Price
                   </Label>
@@ -410,6 +572,20 @@ export default function OrderDetailPage() {
                     onChange={(e) => setItemPrices(prev => ({ ...prev, [item.id]: e.target.value }))}
                   />
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={suggestingAll || !item.device_id || !!suggestingItemId}
+                  onClick={() => handleSuggestPrice(item)}
+                >
+                  {suggestingItemId === item.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  <span className="ml-1">{suggestingItemId === item.id ? '...' : 'Suggest'}</span>
+                </Button>
               </div>
             ))}
           </div>
