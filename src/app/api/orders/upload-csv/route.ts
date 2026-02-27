@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { sanitizeCsvCell } from '@/lib/utils'
+import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 
 interface CSVRow {
   brand: string
@@ -85,13 +86,17 @@ export async function POST(request: NextRequest) {
       const condition = sanitizeCsvCell(row.condition)
       const quantity = Number(row.quantity)
 
+      const condLower = condition.toLowerCase().trim()
+      const validCondition = DEVICE_CONDITION_VALUES.includes(condLower as (typeof DEVICE_CONDITION_VALUES)[number])
+
       if (!brand) errors.push({ row: index + 1, message: 'Brand is required' })
       if (!model) errors.push({ row: index + 1, message: 'Model is required' })
       if (!storage) errors.push({ row: index + 1, message: 'Storage is required' })
       if (!condition) errors.push({ row: index + 1, message: 'Condition is required' })
+      if (!validCondition) errors.push({ row: index + 1, message: `Condition must be one of: ${DEVICE_CONDITION_VALUES.join(', ')}` })
       if (!quantity || quantity < 1 || quantity > 10000) errors.push({ row: index + 1, message: 'Quantity must be between 1 and 10,000' })
 
-      return { ...row, brand, model, storage, condition, quantity }
+      return { ...row, brand, model, storage, condition: validCondition ? condLower : condition, quantity }
     })
 
     if (errors.length > 0) {

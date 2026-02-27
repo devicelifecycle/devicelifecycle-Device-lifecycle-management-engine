@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
-import { orderSchema } from '@/lib/validations'
+import { orderSchema, orderFiltersSchema } from '@/lib/validations'
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,11 +25,19 @@ export async function GET(request: NextRequest) {
       vendor_id: searchParams.get('vendor_id') || undefined,
       assigned_to_id: searchParams.get('assigned_to_id') || undefined,
       search: searchParams.get('search') || undefined,
+      date_from: searchParams.get('date_from') || undefined,
+      date_to: searchParams.get('date_to') || undefined,
+      is_sla_breached: searchParams.get('is_sla_breached') ? searchParams.get('is_sla_breached') === 'true' : undefined,
       page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
       page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '20'), 1), 100),
+      sort_by: searchParams.get('sort_by') || undefined,
+      sort_order: searchParams.get('sort_order') || undefined,
     }
 
-    const result = await OrderService.getOrders(filters as Parameters<typeof OrderService.getOrders>[0])
+    const validated = orderFiltersSchema.safeParse(filters)
+    const safeFilters = validated.success ? validated.data : { ...filters, sort_by: undefined, sort_order: undefined }
+
+    const result = await OrderService.getOrders(safeFilters as Parameters<typeof OrderService.getOrders>[0])
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching orders:', error)

@@ -35,20 +35,27 @@ export default function LoginPage() {
     try {
       await login(email, password)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in')
+      const msg = err instanceof Error ? err.message : 'Failed to sign in'
+      if (msg.toLowerCase().includes('invalid login credentials') || msg.toLowerCase().includes('invalid email or password')) {
+        setError('Invalid email or password. If this is your first time, you may need to create a user in Supabase Dashboard → Authentication → Users.')
+      } else {
+        setError(msg)
+      }
     }
   }
 
   return (
     <div className="flex min-h-screen">
       {/* Left side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white">
-        <div className="absolute inset-0 opacity-10" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-teal-600 via-emerald-700 to-teal-800 text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-20" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.12'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }} />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
               <Package className="h-6 w-6" />
             </div>
             <span className="text-xl font-bold tracking-tight">Enterprise Engine</span>
@@ -59,31 +66,31 @@ export default function LoginPage() {
               Device Lifecycle<br />
               Management Platform
             </h1>
-            <p className="text-lg text-blue-100 max-w-md">
+            <p className="text-lg text-teal-100 max-w-md">
               Streamline your ITAD operations. Manage trade-ins, CPO orders, 
               triage, pricing, and fulfillment — all in one place.
             </p>
             <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4">
+              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 transition-colors">
                 <div className="text-2xl font-bold">40+</div>
-                <div className="text-sm text-blue-200">Supported Devices</div>
+                <div className="text-sm text-teal-200">Supported Devices</div>
               </div>
-              <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4">
+              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 transition-colors">
                 <div className="text-2xl font-bold">Real-time</div>
-                <div className="text-sm text-blue-200">Pricing Engine</div>
+                <div className="text-sm text-teal-200">Pricing Engine</div>
               </div>
-              <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4">
+              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 transition-colors">
                 <div className="text-2xl font-bold">SLA</div>
-                <div className="text-sm text-blue-200">Monitoring</div>
+                <div className="text-sm text-teal-200">Monitoring</div>
               </div>
-              <div className="rounded-xl bg-white/10 backdrop-blur-sm p-4">
+              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 transition-colors">
                 <div className="text-2xl font-bold">Full</div>
-                <div className="text-sm text-blue-200">Audit Trail</div>
+                <div className="text-sm text-teal-200">Audit Trail</div>
               </div>
             </div>
           </div>
 
-          <p className="text-sm text-blue-200">
+          <p className="text-sm text-teal-200/90">
             © {new Date().getFullYear()} Enterprise Engine. All rights reserved.
           </p>
         </div>
@@ -100,7 +107,7 @@ export default function LoginPage() {
             <span className="text-xl font-bold">Enterprise Engine</span>
           </div>
 
-          <Card className="border-0 shadow-xl shadow-black/5">
+          <Card className="border-0 shadow-xl shadow-black/5 ring-1 ring-black/5">
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
               <CardDescription className="text-base">
@@ -197,6 +204,9 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             By signing in, you agree to our Terms of Service and Privacy Policy.
+          </p>
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            First time? Create users in Supabase Dashboard → Authentication → Users, then link them in the <code className="rounded bg-muted px-1 py-0.5">users</code> table. See <code className="rounded bg-muted px-1 py-0.5">supabase/SETUP_INSTRUCTIONS.md</code>.
           </p>
         </div>
       </div>

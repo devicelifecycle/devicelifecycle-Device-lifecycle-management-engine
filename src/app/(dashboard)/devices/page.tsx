@@ -27,18 +27,31 @@ export default function DevicesPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [makeFilter, setMakeFilter] = useState<string>('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [page, setPage] = useState(1)
   const debouncedSearch = useDebounce(search)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ make: '', model: '', variant: '', category: '', sku: '' })
+  const [form, setForm] = useState({
+    make: '',
+    model: '',
+    variant: '',
+    category: '',
+    sku: '',
+    storage_options: '',
+    colors: '',
+  })
 
   const fetchDevices = useCallback(async () => {
     setIsLoading(true)
     try {
       const params = new URLSearchParams()
       if (debouncedSearch) params.append('search', debouncedSearch)
+      if (makeFilter) params.append('make', makeFilter)
+      if (categoryFilter) params.append('category', categoryFilter)
       params.append('page', String(page))
+      params.append('page_size', '50')
       const res = await fetch(`/api/devices?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
@@ -51,22 +64,32 @@ export default function DevicesPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [debouncedSearch, page])
+  }, [debouncedSearch, page, makeFilter, categoryFilter])
 
   useEffect(() => { fetchDevices() }, [fetchDevices])
 
   const handleCreate = async () => {
     setCreating(true)
     try {
+      const storageList = form.storage_options?.split(/[,;]/).map(s => s.trim()).filter(Boolean) || []
+      const colorList = form.colors?.split(/[,;]/).map(c => c.trim()).filter(Boolean) || []
+      const body = {
+        make: form.make,
+        model: form.model,
+        variant: form.variant || undefined,
+        category: form.category || undefined,
+        sku: form.sku || undefined,
+        specifications: (storageList.length || colorList.length) ? { storage_options: storageList, colors: colorList } : undefined,
+      }
       const res = await fetch('/api/devices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error('Failed to create device')
       toast.success('Device added to catalog')
       setDialogOpen(false)
-      setForm({ make: '', model: '', variant: '', category: '', sku: '' })
+      setForm({ make: '', model: '', variant: '', category: '', sku: '', storage_options: '', colors: '' })
       fetchDevices()
     } catch {
       toast.error('Failed to create device')
@@ -75,6 +98,8 @@ export default function DevicesPage() {
     }
   }
 
+  const MAKE_ORDER = ['Apple', 'Samsung', 'Google'] as const
+
   const categoryColors: Record<string, { bg: string; text: string }> = {
     phone: { bg: 'bg-blue-500/10', text: 'text-blue-700' },
     tablet: { bg: 'bg-purple-500/10', text: 'text-purple-700' },
@@ -82,6 +107,8 @@ export default function DevicesPage() {
     watch: { bg: 'bg-orange-500/10', text: 'text-orange-700' },
     other: { bg: 'bg-gray-500/10', text: 'text-gray-700' },
   }
+
+  const specs = (d: Device) => (d.specifications || {}) as { storage_options?: string[]; colors?: string[] }
 
   return (
     <div className="space-y-6">
@@ -136,6 +163,16 @@ export default function DevicesPage() {
                 <Label>SKU</Label>
                 <Input placeholder="e.g. APL-IP15PM-256-BLK" value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} />
               </div>
+              <div className="grid gap-4 grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Storage (comma-separated)</Label>
+                  <Input placeholder="e.g. 64GB, 128GB, 256GB" value={form.storage_options} onChange={e => setForm(f => ({ ...f, storage_options: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Colors (comma-separated)</Label>
+                  <Input placeholder="e.g. Black, Silver, Blue" value={form.colors} onChange={e => setForm(f => ({ ...f, colors: e.target.value }))} />
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -147,9 +184,32 @@ export default function DevicesPage() {
         </Dialog>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search devices by make, model, or SKU..." className="pl-10 bg-background" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Search make, model, SKU..." className="pl-10 bg-background" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Select value={makeFilter || 'all'} onValueChange={v => { setMakeFilter(v === 'all' ? '' : v); setPage(1) }}>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Brand" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All brands</SelectItem>
+              {MAKE_ORDER.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              {DEVICE_BRANDS.filter(b => !(MAKE_ORDER as readonly string[]).includes(b)).map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter || 'all'} onValueChange={v => { setCategoryFilter(v === 'all' ? '' : v); setPage(1) }}>
+            <SelectTrigger className="w-[120px]"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="phone">Phone</SelectItem>
+              <SelectItem value="tablet">Tablet</SelectItem>
+              <SelectItem value="laptop">Laptop</SelectItem>
+              <SelectItem value="watch">Watch</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Card>
@@ -178,36 +238,43 @@ export default function DevicesPage() {
                 <TableRow>
                   <TableHead>Make</TableHead>
                   <TableHead>Model</TableHead>
-                  <TableHead>Variant</TableHead>
+                  <TableHead>Storage</TableHead>
+                  <TableHead>Colors</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {devices.map(device => (
-                  <TableRow key={device.id}>
-                    <TableCell>
-                      <Link
-                        href={`/devices/${device.id}`}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {device.make}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{device.model}</TableCell>
-                    <TableCell>{device.variant || '—'}</TableCell>
-                    <TableCell>
-                      {device.category && (
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${(categoryColors[device.category] || categoryColors.other).bg} ${(categoryColors[device.category] || categoryColors.other).text}`}>
-                          {device.category}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{device.sku || '—'}</TableCell>
-                    <TableCell><Badge variant={device.is_active ? 'default' : 'secondary'} className="text-[11px]">{device.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
-                  </TableRow>
-                ))}
+                {devices.map(device => {
+                  const s = specs(device)
+                  const storageList = s.storage_options?.join(', ') || '—'
+                  const colorList = s.colors?.length ? (s.colors.length > 3 ? `${s.colors.slice(0, 3).join(', ')} +${s.colors.length - 3}` : s.colors.join(', ')) : '—'
+                  return (
+                    <TableRow key={device.id}>
+                      <TableCell>
+                        <Link
+                          href={`/devices/${device.id}`}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {device.make}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="font-medium">{device.model}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-[140px] truncate" title={storageList}>{storageList}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate" title={colorList}>{colorList}</TableCell>
+                      <TableCell>
+                        {device.category && (
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${(categoryColors[device.category] || categoryColors.other).bg} ${(categoryColors[device.category] || categoryColors.other).text}`}>
+                            {device.category}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground font-mono">{device.sku || '—'}</TableCell>
+                      <TableCell><Badge variant={device.is_active ? 'default' : 'secondary'} className="text-[11px]">{device.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}

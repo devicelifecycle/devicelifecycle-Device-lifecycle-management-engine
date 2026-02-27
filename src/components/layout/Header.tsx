@@ -31,7 +31,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   })
 
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-background/80 backdrop-blur-sm px-6">
+    <header className="flex h-14 items-center justify-between border-b border-border/60 bg-background/90 backdrop-blur-md px-6 sticky top-0 z-40">
       {/* Left side */}
       <div className="flex items-center gap-4">
         <Button
@@ -70,7 +70,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Button variant="ghost" size="icon" className="relative h-9 w-9">
             <Bell className="h-4 w-4" />
             {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white ring-2 ring-background">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-white ring-2 ring-background shadow-sm">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}

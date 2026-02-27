@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { TriageService } from '@/services/triage.service'
+import { triageSubmitSchema } from '@/lib/validations'
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,14 +68,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-
-    // Basic validation
-    if (!body.order_id || !body.order_item_id) {
-      return NextResponse.json({ error: 'order_id and order_item_id are required' }, { status: 400 })
+    const validation = triageSubmitSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validation.error.errors },
+        { status: 400 }
+      )
     }
 
     const result = await TriageService.submitTriageResult({
-      ...body,
+      ...validation.data,
       triaged_by_id: user.id,
     })
 

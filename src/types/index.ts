@@ -111,6 +111,7 @@ export interface Customer extends BaseEntity {
   credit_limit?: number;
   notes?: string;
   is_active: boolean;
+  default_risk_mode?: 'retail' | 'enterprise';
 }
 
 // ============================================================================
@@ -233,6 +234,9 @@ export interface PriceCalculationResultV2 {
   confidence: number;
   price_date: string;
   valid_for_hours: number;
+  price_expires_at?: string;
+  competitor_data_age_days?: number;
+  data_staleness_warning?: string;
   // D-grade formula breakdown
   d_grade_formula?: {
     selling_price: number;
@@ -302,16 +306,27 @@ export interface Order extends BaseEntity {
   items?: OrderItem[];
 }
 
+export interface PricingMetadata {
+  suggested_by_calc?: boolean;
+  confidence?: number;
+  margin_tier?: string;
+  anchor_price?: number;
+  channel_decision?: string;
+  [key: string]: unknown;
+}
+
 export interface OrderItem extends BaseEntity {
   order_id: string;
   device_id: string;
   quantity: number;
+  storage?: string;
   claimed_condition?: DeviceCondition;
   actual_condition?: DeviceCondition;
   unit_price?: number;
   quoted_price?: number;
   final_price?: number;
   notes?: string;
+  pricing_metadata?: PricingMetadata | null;
   
   // Joined relations
   device?: Device;

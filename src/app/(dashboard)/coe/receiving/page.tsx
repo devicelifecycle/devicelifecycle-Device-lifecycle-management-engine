@@ -5,7 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Package, CheckCircle2, Truck, Search, Clock } from 'lucide-react'
+import { Package, CheckCircle2, Truck, Search, Clock, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,9 +17,13 @@ import { Label } from '@/components/ui/label'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatDateTime, formatRelativeTime } from '@/lib/utils'
 import type { Shipment } from '@/types'
+import type { Order } from '@/types'
+
+const CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Other']
 
 const statusColors: Record<string, string> = {
   label_created: 'bg-gray-100 text-gray-700',
@@ -40,6 +44,16 @@ export default function COEReceivingPage() {
   const [receiveNotes, setReceiveNotes] = useState('')
   const [isReceiving, setIsReceiving] = useState(false)
 
+  // Record Inbound Shipment
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [orderSearch, setOrderSearch] = useState('')
+  const debouncedOrderSearch = useDebounce(orderSearch, 300)
+  const [orderResults, setOrderResults] = useState<Order[]>([])
+  const [orderSearching, setOrderSearching] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [createForm, setCreateForm] = useState({ carrier: 'FedEx', tracking_number: '' })
+  const [isCreating, setIsCreating] = useState(false)
+
   const fetchShipments = useCallback(async () => {
     setIsLoading(true)
     try {
@@ -52,6 +66,50 @@ export default function COEReceivingPage() {
   }, [])
 
   useEffect(() => { fetchShipments() }, [fetchShipments])
+
+  useEffect(() => {
+    if (!debouncedOrderSearch.trim()) {
+      setOrderResults([])
+      return
+    }
+    setOrderSearching(true)
+    fetch(`/api/orders?search=${encodeURIComponent(debouncedOrderSearch)}&page=1&page_size=10`)
+      .then(res => res.ok ? res.json() : { data: [] })
+      .then(r => setOrderResults(r.data || []))
+      .catch(() => setOrderResults([]))
+      .finally(() => setOrderSearching(false))
+  }, [debouncedOrderSearch])
+
+  const handleCreateInbound = async () => {
+    if (!selectedOrder) return
+    setIsCreating(true)
+    try {
+      const res = await fetch('/api/shipments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: selectedOrder.id,
+          direction: 'inbound',
+          carrier: createForm.carrier,
+          tracking_number: createForm.tracking_number,
+          from_address: { name: 'Customer', street1: 'TBD', city: 'TBD', state: 'TBD', postal_code: '00000', country: 'US' },
+          to_address: { name: 'COE Warehouse', street1: '123 COE Dr', city: 'Austin', state: 'TX', postal_code: '73301', country: 'US' },
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed')
+      }
+      toast.success('Inbound shipment recorded')
+      setCreateDialogOpen(false)
+      setSelectedOrder(null)
+      setOrderSearch('')
+      setCreateForm({ carrier: 'FedEx', tracking_number: '' })
+      fetchShipments()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to record shipment')
+    } finally { setIsCreating(false) }
+  }
 
   const handleReceive = async () => {
     if (!selectedShipment) return
@@ -92,9 +150,14 @@ export default function COEReceivingPage() {
           <h1 className="text-2xl font-bold">Receiving</h1>
           <p className="text-muted-foreground">Track and receive inbound shipments at COE</p>
         </div>
-        <Badge variant="outline" className="text-sm px-3 py-1">
-          <Clock className="mr-1.5 h-3.5 w-3.5" />{pendingCount} pending
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Badge variant="outline" className="text-sm px-3 py-1">
+            <Clock className="mr-1.5 h-3.5 w-3.5" />{pendingCount} pending
+          </Badge>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />Record Inbound Shipment
+          </Button>
+        </div>
       </div>
 
       <div className="relative">
@@ -211,6 +274,82 @@ export default function COEReceivingPage() {
             <Button variant="outline" onClick={() => setReceiveDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleReceive} disabled={isReceiving}>
               {isReceiving ? 'Receiving...' : 'Confirm Receipt'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Inbound Shipment Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={(open) => {
+        setCreateDialogOpen(open)
+        if (!open) { setSelectedOrder(null); setOrderSearch(''); setCreateForm({ carrier: 'FedEx', tracking_number: '' }) }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Inbound Shipment</DialogTitle>
+            <DialogDescription>
+              Create a record when a customer ships devices to COE. Enter order and tracking details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Order</Label>
+              {selectedOrder ? (
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+                  <span className="font-medium">{selectedOrder.order_number}</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedOrder(null)}>Change</Button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    placeholder="Search by order number..."
+                    value={orderSearch}
+                    onChange={e => setOrderSearch(e.target.value)}
+                  />
+                  {orderSearching && <p className="text-xs text-muted-foreground">Searching...</p>}
+                  {debouncedOrderSearch && !orderSearching && (
+                    <div className="max-h-32 overflow-auto rounded border bg-background">
+                      {orderResults.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted-foreground">No orders found</p>
+                      ) : (
+                        orderResults.map(o => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                            onClick={() => { setSelectedOrder(o); setOrderSearch(''); setOrderResults([]) }}
+                          >
+                            {o.order_number} — {o.status}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Carrier</Label>
+              <Select value={createForm.carrier} onValueChange={v => setCreateForm(f => ({ ...f, carrier: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CARRIERS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Tracking Number</Label>
+              <Input
+                value={createForm.tracking_number}
+                onChange={e => setCreateForm(f => ({ ...f, tracking_number: e.target.value }))}
+                placeholder="Enter tracking number"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateInbound} disabled={isCreating || !selectedOrder || !createForm.tracking_number}>
+              {isCreating ? 'Creating...' : 'Record Shipment'}
             </Button>
           </DialogFooter>
         </DialogContent>

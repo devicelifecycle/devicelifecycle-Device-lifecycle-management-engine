@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "create-admin": "node --env-file=.env.local scripts/create-admin-user.mjs",
+    "db:push": "supabase db push",
+    "db:migrate": "supabase migration up"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",

@@ -107,15 +107,15 @@ export function Sidebar() {
     .filter(section => section.items.length > 0)
 
   return (
-    <aside className="flex h-full w-[260px] flex-col bg-[hsl(224,71%,4%)] text-white">
+    <aside className="flex h-full w-[260px] flex-col bg-gradient-to-b from-[hsl(224,35%,8%)] via-[hsl(224,35%,6%)] to-[hsl(224,40%,4%)] text-white border-r border-white/5">
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 px-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 shadow-lg shadow-teal-500/20">
           <Package className="h-5 w-5 text-white" />
         </div>
         <div>
-          <span className="font-bold text-sm tracking-tight">Enterprise Engine</span>
-          <span className="block text-[10px] text-blue-400 font-medium tracking-wider uppercase">DLME Platform</span>
+          <span className="font-semibold text-sm tracking-tight">Enterprise Engine</span>
+          <span className="block text-[10px] text-teal-400/90 font-medium tracking-wider uppercase">DLME Platform</span>
         </div>
       </div>
 
@@ -129,7 +129,7 @@ export function Sidebar() {
                 onClick={() => toggleSection(section.title)}
                 className="flex w-full items-center justify-between px-3 mb-2"
               >
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400/90">
                   {section.title}
                 </span>
                 <ChevronDown className={cn(
@@ -147,16 +147,16 @@ export function Sidebar() {
                         key={item.href}
                         href={item.href}
                         className={cn(
-                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+                          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                           isActive
-                            ? 'bg-blue-600/20 text-blue-400'
+                            ? 'bg-teal-500/15 text-teal-300 shadow-sm'
                             : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                         )}
                       >
-                        <item.icon className={cn("h-4 w-4", isActive && "text-blue-400")} />
+                        <item.icon className={cn("h-4 w-4 shrink-0", isActive && "text-teal-400")} />
                         {item.title}
                         {isActive && (
-                          <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-400" />
+                          <div className="ml-auto h-2 w-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.5)]" />
                         )}
                       </Link>
                     )
@@ -170,8 +170,8 @@ export function Sidebar() {
 
       {/* User section */}
       <div className="border-t border-white/10 p-3">
-        <Link href="/profile" className="flex items-center gap-3 rounded-lg p-3 hover:bg-white/5 transition-colors">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-bold shadow-lg shadow-blue-500/20">
+        <Link href="/profile" className="flex items-center gap-3 rounded-xl p-3 hover:bg-white/5 transition-all duration-200">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-white text-sm font-bold shadow-lg shadow-teal-500/25">
             {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
           <div className="flex-1 min-w-0">

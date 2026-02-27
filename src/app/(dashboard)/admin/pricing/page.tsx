@@ -5,7 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { DollarSign, Search, Plus, Trash2, Pencil, TrendingUp, Calculator, BarChart3 } from 'lucide-react'
+import { DollarSign, Search, Plus, Trash2, Pencil, TrendingUp, Calculator, BarChart3, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,8 +20,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Switch } from '@/components/ui/switch'
 import { CONDITION_CONFIG, STORAGE_OPTIONS, CARRIERS, MARGIN_TIER_CONFIG, COMPETITORS as COMPETITOR_LIST } from '@/lib/constants'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import type { MarketPrice, CompetitorPrice, DeviceCondition, Device, PriceCalculationResultV2 } from '@/types'
 
 const conditions: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
@@ -65,6 +66,11 @@ export default function AdminPricingPage() {
   const [calcResult, setCalcResult] = useState<PriceCalculationResultV2 | null>(null)
   const [calculating, setCalculating] = useState(false)
 
+  // Pricing settings tab
+  const [settingsForm, setSettingsForm] = useState<Record<string, string>>({})
+  const [settingsLoading, setSettingsLoading] = useState(true)
+  const [settingsSaving, setSettingsSaving] = useState(false)
+
   // Fetch data
   const fetchDevices = useCallback(async () => {
     try {
@@ -89,7 +95,15 @@ export default function AdminPricingPage() {
     } catch {} finally { setCpLoading(false) }
   }, [])
 
-  useEffect(() => { fetchDevices(); fetchMarketPrices(); fetchCompetitorPrices() }, [fetchDevices, fetchMarketPrices, fetchCompetitorPrices])
+  const fetchSettings = useCallback(async () => {
+    setSettingsLoading(true)
+    try {
+      const res = await fetch('/api/pricing/settings')
+      if (res.ok) { const d = await res.json(); setSettingsForm(d.data || {}) }
+    } catch {} finally { setSettingsLoading(false) }
+  }, [])
+
+  useEffect(() => { fetchDevices(); fetchMarketPrices(); fetchCompetitorPrices(); fetchSettings() }, [fetchDevices, fetchMarketPrices, fetchCompetitorPrices, fetchSettings])
 
   const deviceMap = new Map(devices.map(d => [d.id, d]))
   const getDeviceLabel = (deviceId: string) => {
@@ -253,6 +267,35 @@ export default function AdminPricingPage() {
     } finally { setCalculating(false) }
   }
 
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true)
+    try {
+      const res = await fetch('/api/pricing/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settingsForm),
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Pricing settings saved')
+    } catch {
+      toast.error('Failed to save settings')
+    } finally { setSettingsSaving(false) }
+  }
+
+  const SETTINGS_FIELDS = [
+    { key: 'channel_green_min', label: 'Green Margin Min (%)', desc: 'Min margin for direct wholesale' },
+    { key: 'channel_yellow_min', label: 'Yellow Margin Min (%)', desc: 'Min margin for moderate tier' },
+    { key: 'marketplace_fee_percent', label: 'Marketplace Fee (%)', desc: 'Fee for MP channel' },
+    { key: 'breakage_risk_percent', label: 'Breakage Risk (%)', desc: 'Deduction for breakage' },
+    { key: 'competitive_relevance_min', label: 'Competitive Floor', desc: 'Min fraction of top competitor' },
+    { key: 'outlier_deviation_threshold', label: 'Outlier Threshold', desc: 'Flag if deviates more than this' },
+    { key: 'trade_in_profit_percent', label: 'Trade-In Profit (%)', desc: 'Retail profit target' },
+    { key: 'enterprise_margin_percent', label: 'Enterprise Margin (%)', desc: 'Enterprise profit target' },
+    { key: 'cpo_markup_percent', label: 'CPO Markup (%)', desc: 'Retail CPO markup' },
+    { key: 'cpo_enterprise_markup_percent', label: 'CPO Enterprise Markup (%)', desc: 'Enterprise CPO markup' },
+    { key: 'price_staleness_days', label: 'Price Staleness (days)', desc: 'Warn when competitor data older' },
+  ] as const
+
   // Filter market prices
   const filteredMp = marketPrices.filter(mp => {
     if (!search) return true
@@ -275,6 +318,7 @@ export default function AdminPricingPage() {
           <TabsTrigger value="market"><DollarSign className="mr-1.5 h-3.5 w-3.5" />Market Prices</TabsTrigger>
           <TabsTrigger value="competitors"><TrendingUp className="mr-1.5 h-3.5 w-3.5" />Competitors</TabsTrigger>
           <TabsTrigger value="calculator"><Calculator className="mr-1.5 h-3.5 w-3.5" />Price Calculator</TabsTrigger>
+          <TabsTrigger value="settings"><Settings className="mr-1.5 h-3.5 w-3.5" />Settings</TabsTrigger>
         </TabsList>
 
         {/* ============================================================ */}
@@ -400,25 +444,40 @@ export default function AdminPricingPage() {
                       <TableHead className="text-right">Trade-In Price</TableHead>
                       <TableHead className="text-right">Sell Price</TableHead>
                       <TableHead>Source</TableHead>
+                      <TableHead>Last Updated</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {compPrices.map(cp => (
-                      <TableRow key={cp.id}>
-                        <TableCell className="font-medium">{getDeviceLabel(cp.device_id)}</TableCell>
-                        <TableCell>{cp.storage}</TableCell>
-                        <TableCell><Badge variant="outline">{cp.competitor_name}</Badge></TableCell>
-                        <TableCell className="text-right font-mono">{cp.trade_in_price ? formatCurrency(cp.trade_in_price) : '—'}</TableCell>
-                        <TableCell className="text-right font-mono">{cp.sell_price ? formatCurrency(cp.sell_price) : '—'}</TableCell>
-                        <TableCell><span className="text-xs text-muted-foreground capitalize">{cp.source}</span></TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => setCpDeleteTarget(cp.id)}>
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {compPrices.map(cp => {
+                      const updatedAt = cp.updated_at || cp.scraped_at || cp.created_at
+                      const daysAgo = updatedAt ? Math.floor((Date.now() - new Date(updatedAt).getTime()) / (24 * 60 * 60 * 1000)) : null
+                      const isStale = daysAgo != null && daysAgo > 7
+                      return (
+                        <TableRow key={cp.id} className={isStale ? 'bg-amber-500/5' : undefined}>
+                          <TableCell className="font-medium">{getDeviceLabel(cp.device_id)}</TableCell>
+                          <TableCell>{cp.storage}</TableCell>
+                          <TableCell><Badge variant="outline">{cp.competitor_name}</Badge></TableCell>
+                          <TableCell className="text-right font-mono">{cp.trade_in_price ? formatCurrency(cp.trade_in_price) : '—'}</TableCell>
+                          <TableCell className="text-right font-mono">{cp.sell_price ? formatCurrency(cp.sell_price) : '—'}</TableCell>
+                          <TableCell><span className="text-xs text-muted-foreground capitalize">{cp.source}</span></TableCell>
+                          <TableCell>
+                            {daysAgo != null ? (
+                              <Badge variant={isStale ? 'destructive' : 'secondary'} className="text-xs">
+                                {daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" onClick={() => setCpDeleteTarget(cp.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -492,6 +551,19 @@ export default function AdminPricingPage() {
                     </div>
                   ) : (
                     <>
+                      {calcResult.data_staleness_warning && (
+                        <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                          {calcResult.data_staleness_warning}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        {calcResult.price_expires_at && (
+                          <span>Quote valid until {formatDateTime(calcResult.price_expires_at)}</span>
+                        )}
+                        {calcResult.competitor_data_age_days != null && (
+                          <span>Competitor data: {calcResult.competitor_data_age_days} days old</span>
+                        )}
+                      </div>
                       {/* Prices & Channel */}
                       <div className="grid grid-cols-3 gap-4">
                         <div className="rounded-xl border p-5">
@@ -669,6 +741,73 @@ export default function AdminPricingPage() {
                     </>
                   )}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ============================================================ */}
+        {/* TAB 4: PRICING SETTINGS */}
+        {/* ============================================================ */}
+        <TabsContent value="settings" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Pricing Engine Settings</CardTitle>
+                  <CardDescription>Configure thresholds, margins, and staleness. Changes apply to new price calculations.</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={async () => {
+                  try {
+                    const res = await fetch('/api/pricing/train', { method: 'POST' })
+                    const d = await res.json()
+                    if (res.ok) toast.success(`Training complete: ${d.baselines_upserted ?? 0} baselines, ${d.sample_counts?.order_items ?? 0}+${d.sample_counts?.imei_records ?? 0}+${d.sample_counts?.sales_history ?? 0} samples`)
+                    else toast.error(d.error || 'Training failed')
+                  } catch { toast.error('Training failed') }
+                }}>
+                  Train Model
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {settingsLoading ? (
+                <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-10 rounded-lg bg-muted/50 animate-pulse" />)}</div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div>
+                      <Label htmlFor="prefer-data-driven" className="text-sm font-medium">Prefer Data-Driven Model</Label>
+                      <p className="text-xs text-muted-foreground mt-1">Use our trained pricing model (from orders, IMEI, sales) instead of market/competitor data. Reduces third-party dependency.</p>
+                    </div>
+                    <Switch
+                      id="prefer-data-driven"
+                      checked={settingsForm.prefer_data_driven === 'true'}
+                      onCheckedChange={v => setSettingsForm(prev => ({ ...prev, prefer_data_driven: v ? 'true' : 'false' }))}
+                    />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                  {SETTINGS_FIELDS.map(f => (
+                    <div key={f.key} className="space-y-1">
+                      <Label htmlFor={`setting-${f.key}`} className="text-sm">{f.label}</Label>
+                      <Input
+                        id={`setting-${f.key}`}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={settingsForm[f.key] ?? ''}
+                        onChange={e => setSettingsForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                        placeholder="—"
+                      />
+                      <p className="text-xs text-muted-foreground">{f.desc}</p>
+                    </div>
+                  ))}
+                  </div>
+                </div>
+              )}
+              {!settingsLoading && (
+                <Button className="mt-6" onClick={handleSaveSettings} disabled={settingsSaving}>
+                  {settingsSaving ? 'Saving...' : 'Save Settings'}
+                </Button>
               )}
             </CardContent>
           </Card>

@@ -18,6 +18,17 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Only internal roles can add order items
+    const { data: itemProfile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (itemProfile && ['customer', 'vendor'].includes(itemProfile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { device_id, quantity, storage, color, condition, notes } = body
 
@@ -28,15 +39,22 @@ export async function POST(
       )
     }
 
-    // Verify order exists
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('id, status')
+      .select('id, status, customer:customers(organization_id)')
       .eq('id', params.id)
       .single()
 
     if (orderError || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    }
+
+    const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
+    if (userProfile?.organization_id) {
+      const cust = order.customer as { organization_id?: string } | null
+      if (cust?.organization_id && cust.organization_id !== userProfile.organization_id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     if (order.status !== 'draft') {
@@ -115,6 +133,22 @@ export async function PATCH(
       )
     }
 
+    const { data: order } = await supabase
+      .from('orders')
+      .select('id, customer:customers(organization_id)')
+      .eq('id', params.id)
+      .single()
+
+    if (order) {
+      const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
+      if (profile?.organization_id) {
+        const cust = order.customer as { organization_id?: string } | null
+        if (cust?.organization_id && cust.organization_id !== profile.organization_id) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+      }
+    }
+
     const body = await request.json()
 
     // Validate input with Zod schema
@@ -128,14 +162,18 @@ export async function PATCH(
 
     const { items } = validationResult.data
 
-    // Update each item's price
+    // Update each item's price and optional pricing_metadata
     const updates = items.map(async (item) => {
+      const updatePayload: Record<string, unknown> = {
+        unit_price: item.unit_price,
+        updated_at: new Date().toISOString(),
+      }
+      if (item.pricing_metadata !== undefined) {
+        updatePayload.pricing_metadata = item.pricing_metadata
+      }
       const { error } = await supabase
         .from('order_items')
-        .update({
-          unit_price: item.unit_price,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', item.id)
         .eq('order_id', params.id) // Ensure item belongs to this order
 

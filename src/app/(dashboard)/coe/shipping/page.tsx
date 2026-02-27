@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatDateTime, formatRelativeTime } from '@/lib/utils'
 import type { Shipment } from '@/types'
+import type { Order } from '@/types'
 
 const statusColors: Record<string, string> = {
   label_created: 'bg-gray-100 text-gray-700',
@@ -42,8 +43,12 @@ export default function COEShippingPage() {
   // Create shipment dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [orderSearch, setOrderSearch] = useState('')
+  const debouncedOrderSearch = useDebounce(orderSearch, 300)
+  const [orderResults, setOrderResults] = useState<Order[]>([])
+  const [orderSearching, setOrderSearching] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [form, setForm] = useState({
-    order_id: '',
     carrier: 'FedEx',
     tracking_number: '',
   })
@@ -68,14 +73,28 @@ export default function COEShippingPage() {
 
   useEffect(() => { fetchShipments() }, [fetchShipments])
 
+  useEffect(() => {
+    if (!debouncedOrderSearch.trim()) {
+      setOrderResults([])
+      return
+    }
+    setOrderSearching(true)
+    fetch(`/api/orders?search=${encodeURIComponent(debouncedOrderSearch)}&page=1&page_size=10`)
+      .then(res => res.ok ? res.json() : { data: [] })
+      .then(r => setOrderResults(r.data || []))
+      .catch(() => setOrderResults([]))
+      .finally(() => setOrderSearching(false))
+  }, [debouncedOrderSearch])
+
   const handleCreateShipment = async () => {
+    if (!selectedOrder) return
     setIsCreating(true)
     try {
       const res = await fetch('/api/shipments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          order_id: form.order_id,
+          order_id: selectedOrder.id,
           direction: 'outbound',
           carrier: form.carrier,
           tracking_number: form.tracking_number,
@@ -86,7 +105,9 @@ export default function COEShippingPage() {
       if (!res.ok) throw new Error()
       toast.success('Shipment created')
       setCreateDialogOpen(false)
-      setForm({ order_id: '', carrier: 'FedEx', tracking_number: '' })
+      setSelectedOrder(null)
+      setOrderSearch('')
+      setForm({ carrier: 'FedEx', tracking_number: '' })
       fetchShipments()
     } catch {
       toast.error('Failed to create shipment')
@@ -229,16 +250,51 @@ export default function COEShippingPage() {
       </Tabs>
 
       {/* Create Shipment Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <Dialog open={createDialogOpen} onOpenChange={(open) => {
+        setCreateDialogOpen(open)
+        if (!open) { setSelectedOrder(null); setOrderSearch(''); setForm({ carrier: 'FedEx', tracking_number: '' }) }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Outbound Shipment</DialogTitle>
-            <DialogDescription>Enter tracking details for the outbound shipment.</DialogDescription>
+            <DialogDescription>Select the order and enter tracking details for the outbound shipment.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Order ID</Label>
-              <Input value={form.order_id} onChange={e => setForm(f => ({ ...f, order_id: e.target.value }))} placeholder="Paste order UUID" />
+              <Label>Order</Label>
+              {selectedOrder ? (
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+                  <span className="font-medium">{selectedOrder.order_number}</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedOrder(null)}>Change</Button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    placeholder="Search by order number..."
+                    value={orderSearch}
+                    onChange={e => setOrderSearch(e.target.value)}
+                  />
+                  {orderSearching && <p className="text-xs text-muted-foreground">Searching...</p>}
+                  {debouncedOrderSearch && !orderSearching && (
+                    <div className="max-h-32 overflow-auto rounded border bg-background">
+                      {orderResults.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted-foreground">No orders found</p>
+                      ) : (
+                        orderResults.map(o => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                            onClick={() => { setSelectedOrder(o); setOrderSearch(''); setOrderResults([]) }}
+                          >
+                            {o.order_number} — {o.status}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Carrier</Label>
@@ -256,7 +312,7 @@ export default function COEShippingPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateShipment} disabled={isCreating || !form.order_id || !form.tracking_number}>
+            <Button onClick={handleCreateShipment} disabled={isCreating || !selectedOrder || !form.tracking_number}>
               {isCreating ? 'Creating...' : 'Create Shipment'}
             </Button>
           </DialogFooter>
