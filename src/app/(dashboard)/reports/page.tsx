@@ -5,9 +5,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { BarChart3, ShoppingCart, DollarSign, Truck, AlertTriangle, TrendingUp, Clock, CheckCircle2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
 
@@ -124,6 +126,20 @@ export default function ReportsPage() {
       <div>
         <h1 className="text-2xl font-bold">Reports</h1>
         <p className="text-muted-foreground">Analytics and performance metrics</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href="/orders">
+            <Button variant="outline" size="sm">Open Orders Workspace</Button>
+          </Link>
+          <Link href="/coe/receiving">
+            <Button variant="outline" size="sm">Open Receiving</Button>
+          </Link>
+          <Link href="/coe/shipping">
+            <Button variant="outline" size="sm">Open Shipping</Button>
+          </Link>
+          <Link href="/coe/exceptions">
+            <Button variant="outline" size="sm">Open Exceptions</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Top Stats */}
@@ -160,7 +176,7 @@ export default function ReportsPage() {
                   const config = ORDER_STATUS_CONFIG[status as keyof typeof ORDER_STATUS_CONFIG]
                   const pct = orderStats.total > 0 ? (count / orderStats.total) * 100 : 0
                   return (
-                    <div key={status} className="flex items-center gap-3">
+                    <Link key={status} href={`/orders?status=${status}`} className="flex items-center gap-3 rounded-md px-1 py-1 hover:bg-muted/40">
                       <span className={`w-24 text-xs font-medium ${config?.color || ''}`}>
                         {config?.label || status}
                       </span>
@@ -171,7 +187,7 @@ export default function ReportsPage() {
                         />
                       </div>
                       <span className="text-sm font-medium w-8 text-right">{count}</span>
-                    </div>
+                    </Link>
                   )
                 })
               }

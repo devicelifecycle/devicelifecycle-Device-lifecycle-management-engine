@@ -259,7 +259,7 @@ export class TriageService {
       .select(`
         *,
         order:orders(*),
-        device:devices(*)
+        device:device_catalog(*)
       `)
       .eq('triage_status', 'pending')
       .order('created_at', { ascending: true })

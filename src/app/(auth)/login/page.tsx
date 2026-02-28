@@ -11,7 +11,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { Package, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Package, Eye, EyeOff, Loader2, ShoppingCart, Brain, Truck, CheckCircle2, BarChart3, Shield } from 'lucide-react'
 
 export default function LoginPage() {
   const searchParams = useSearchParams()
@@ -46,52 +46,97 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen">
-      {/* Left side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-teal-600 via-emerald-700 to-teal-800 text-white overflow-hidden">
+      {/* Left side - Marketing Showcase */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-teal-600 via-emerald-700 to-teal-800 animate-gradient-shift text-white overflow-hidden">
         <div className="absolute inset-0 opacity-20" style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.12'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }} />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 animate-glow" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-400/15 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3 animate-glow" />
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-cyan-400/8 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
               <Package className="h-6 w-6" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Enterprise Engine</span>
+            <span className="text-xl font-bold tracking-tight">DLM Engine</span>
           </div>
 
-          <div className="space-y-6">
-            <h1 className="text-4xl font-bold leading-tight">
-              Device Lifecycle<br />
-              Management Platform
-            </h1>
-            <p className="text-lg text-teal-100 max-w-md">
-              Streamline your ITAD operations. Manage trade-ins, CPO orders, 
-              triage, pricing, and fulfillment — all in one place.
-            </p>
-            <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 transition-colors">
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <h1 className="text-4xl font-bold leading-tight animate-fade-in">
+                Device Lifecycle<br />
+                Management, Simplified.
+              </h1>
+              <p className="text-lg text-teal-100 max-w-md animate-fade-in animate-stagger-1">
+                The all-in-one platform for ITAD operations. From trade-in to delivery,
+                powered by AI pricing and real-time tracking.
+              </p>
+            </div>
+
+            {/* Feature highlights */}
+            <div className="grid grid-cols-2 gap-3 animate-fade-in animate-stagger-2">
+              <div className="flex items-center gap-3 rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10 hover:bg-white/15 transition-colors">
+                <ShoppingCart className="h-5 w-5 text-teal-200 flex-shrink-0" />
+                <span className="text-sm font-medium">Order Management</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10 hover:bg-white/15 transition-colors">
+                <Brain className="h-5 w-5 text-teal-200 flex-shrink-0" />
+                <span className="text-sm font-medium">AI Pricing</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10 hover:bg-white/15 transition-colors">
+                <Truck className="h-5 w-5 text-teal-200 flex-shrink-0" />
+                <span className="text-sm font-medium">COE Workflows</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10 hover:bg-white/15 transition-colors">
+                <BarChart3 className="h-5 w-5 text-teal-200 flex-shrink-0" />
+                <span className="text-sm font-medium">Live Analytics</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10 hover:bg-white/15 transition-colors">
+                <Shield className="h-5 w-5 text-teal-200 flex-shrink-0" />
+                <span className="text-sm font-medium">Role-Based Access</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white/10 backdrop-blur-sm p-3 border border-white/10 hover:bg-white/15 transition-colors">
+                <CheckCircle2 className="h-5 w-5 text-teal-200 flex-shrink-0" />
+                <span className="text-sm font-medium">SLA Monitoring</span>
+              </div>
+            </div>
+
+            {/* How it works flow */}
+            <div className="animate-fade-in animate-stagger-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-teal-300/80 mb-3">How it works</p>
+              <div className="flex items-center gap-2">
+                {['Submit Order', 'AI Pricing', 'COE Process', 'Delivery'].map((step, i) => (
+                  <div key={step} className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">{i + 1}</span>
+                      {step}
+                    </div>
+                    {i < 3 && <div className="w-4 h-px bg-white/30" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="flex gap-8 animate-fade-in animate-stagger-4">
+              <div>
                 <div className="text-2xl font-bold">40+</div>
-                <div className="text-sm text-teal-200">Supported Devices</div>
+                <div className="text-xs text-teal-200">Devices</div>
               </div>
-              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 transition-colors">
+              <div>
+                <div className="text-2xl font-bold">4</div>
+                <div className="text-xs text-teal-200">Pricing Models</div>
+              </div>
+              <div>
                 <div className="text-2xl font-bold">Real-time</div>
-                <div className="text-sm text-teal-200">Pricing Engine</div>
-              </div>
-              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 transition-colors">
-                <div className="text-2xl font-bold">SLA</div>
-                <div className="text-sm text-teal-200">Monitoring</div>
-              </div>
-              <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 transition-colors">
-                <div className="text-2xl font-bold">Full</div>
-                <div className="text-sm text-teal-200">Audit Trail</div>
+                <div className="text-xs text-teal-200">Tracking</div>
               </div>
             </div>
           </div>
 
           <p className="text-sm text-teal-200/90">
-            © {new Date().getFullYear()} Enterprise Engine. All rights reserved.
+            © {new Date().getFullYear()} DLM Engine. All rights reserved.
           </p>
         </div>
       </div>
@@ -104,7 +149,7 @@ export default function LoginPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Package className="h-6 w-6" />
             </div>
-            <span className="text-xl font-bold">Enterprise Engine</span>
+            <span className="text-xl font-bold">DLM Engine</span>
           </div>
 
           <Card className="border-0 shadow-xl shadow-black/5 ring-1 ring-black/5">

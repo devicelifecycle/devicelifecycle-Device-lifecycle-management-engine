@@ -156,7 +156,7 @@ export class PricingService {
             ;(overrides as Record<string, unknown>)[key] = row.setting_value === 'true' || row.setting_value === '1'
           } else {
             const num = parseFloat(row.setting_value)
-            if (!Number.isNaN(num)) (overrides as Record<string, number>)[key] = num
+            if (!Number.isNaN(num)) (overrides as unknown as Record<string, number>)[key] = num
           }
         }
       }

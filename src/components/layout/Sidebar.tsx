@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth'
 import {
   LayoutDashboard,
   ShoppingCart,
+  FilePlus2,
   Users,
   Building2,
   Package,
@@ -51,6 +52,9 @@ const navSections: NavSection[] = [
     title: 'Operations',
     items: [
       { title: 'Orders', href: '/orders', icon: ShoppingCart },
+      { title: 'My Orders', href: '/customer/orders', icon: ShoppingCart, roles: ['customer'] },
+      { title: 'Requests', href: '/customer/requests', icon: FilePlus2, roles: ['customer'] },
+      { title: 'Vendor Orders', href: '/vendor/orders', icon: Truck, roles: ['vendor'] },
       { title: 'Customers', href: '/customers', icon: Users, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Vendors', href: '/vendors', icon: Building2, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Devices', href: '/devices', icon: Package, roles: ['admin', 'coe_manager'] },
@@ -114,8 +118,8 @@ export function Sidebar() {
           <Package className="h-5 w-5 text-white" />
         </div>
         <div>
-          <span className="font-semibold text-sm tracking-tight">Enterprise Engine</span>
-          <span className="block text-[10px] text-teal-400/90 font-medium tracking-wider uppercase">DLME Platform</span>
+          <span className="font-semibold text-sm tracking-tight">DLM Engine</span>
+          <span className="block text-[10px] text-teal-400/90 font-medium tracking-wider uppercase">Lifecycle Platform</span>
         </div>
       </div>
 

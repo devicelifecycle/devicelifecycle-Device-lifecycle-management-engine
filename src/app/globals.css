@@ -88,6 +88,14 @@
   .animate-glow {
     animation: glow 2s ease-in-out infinite alternate;
   }
+  .animate-stagger-1 { animation-delay: 0.05s; animation-fill-mode: backwards; }
+  .animate-stagger-2 { animation-delay: 0.1s; animation-fill-mode: backwards; }
+  .animate-stagger-3 { animation-delay: 0.15s; animation-fill-mode: backwards; }
+  .animate-stagger-4 { animation-delay: 0.2s; animation-fill-mode: backwards; }
+  .animate-gradient-shift {
+    background-size: 200% 200%;
+    animation: gradientShift 8s ease infinite;
+  }
 }
 
 @keyframes fadeIn {
@@ -108,6 +116,12 @@
 @keyframes glow {
   from { opacity: 0.6; }
   to { opacity: 1; }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 /* Custom scrollbar */

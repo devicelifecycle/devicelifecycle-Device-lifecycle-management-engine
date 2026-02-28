@@ -91,7 +91,7 @@ export class PricingTrainingService {
         .select('device_id, claimed_condition, actual_condition, quoted_price, final_price, order_item_id')
         .limit(5000)
 
-      const itemIds = [...new Set((imeis || []).map(ir => ir.order_item_id).filter(Boolean))] as string[]
+      const itemIds = Array.from(new Set((imeis || []).map(ir => ir.order_item_id).filter(Boolean))) as string[]
       const storageByItem: Record<string, string> = {}
       if (itemIds.length > 0) {
         const { data: items } = await supabase
@@ -139,7 +139,7 @@ export class PricingTrainingService {
     const now = new Date().toISOString()
     let baselinesUpserted = 0
 
-    for (const [key, prices] of priceMap) {
+    for (const [key, prices] of Array.from(priceMap.entries())) {
       if (prices.length < 2) continue // require min 2 samples for stability
       const [deviceId, storage, condition] = key.split('|')
       const med = median(prices)
@@ -168,7 +168,7 @@ export class PricingTrainingService {
 
     // 4. Learn condition multipliers (ratio to "good" baseline)
     const goodPrices = new Map<string, number>() // device|storage -> median for "good"
-    for (const [key, prices] of priceMap) {
+    for (const [key, prices] of Array.from(priceMap.entries())) {
       const [deviceId, storage, condition] = key.split('|')
       if (condition === 'good' && prices.length >= 2) {
         goodPrices.set(`${deviceId}|${storage}`, median(prices))
@@ -183,7 +183,7 @@ export class PricingTrainingService {
       poor: [],
     }
 
-    for (const [key, prices] of priceMap) {
+    for (const [key, prices] of Array.from(priceMap.entries())) {
       const [deviceId, storage, condition] = key.split('|')
       const goodBase = goodPrices.get(`${deviceId}|${storage}`)
       if (!goodBase || goodBase <= 0) continue

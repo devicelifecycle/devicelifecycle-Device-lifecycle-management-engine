@@ -188,6 +188,76 @@ export class ShipmentService {
     return data as Shipment
   }
 
+  static async attachShippoPurchase(
+    shipmentId: string,
+    input: {
+      shippo_shipment_id: string
+      shippo_rate_id: string
+      shippo_transaction_id: string
+      tracking_number: string
+      carrier: string
+      shippo_tracking_status?: string
+      label_url?: string
+      label_pdf_url?: string
+      rate_amount?: number
+      rate_currency?: string
+      estimated_delivery?: string
+      shippo_raw: Record<string, unknown>
+      purchased_by_id: string
+    }
+  ): Promise<Shipment> {
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('shipments')
+      .update({
+        carrier: input.carrier,
+        tracking_number: input.tracking_number,
+        shippo_shipment_id: input.shippo_shipment_id,
+        shippo_rate_id: input.shippo_rate_id,
+        shippo_transaction_id: input.shippo_transaction_id,
+        shippo_tracking_status: input.shippo_tracking_status,
+        label_url: input.label_url,
+        label_pdf_url: input.label_pdf_url,
+        rate_amount: input.rate_amount,
+        rate_currency: input.rate_currency,
+        estimated_delivery: input.estimated_delivery,
+        shippo_raw: input.shippo_raw,
+        status: 'label_created',
+        created_by_id: input.purchased_by_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', shipmentId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return data as Shipment
+  }
+
+  static async updateShippoTrackingMeta(
+    shipmentId: string,
+    updates: {
+      shippo_tracking_status?: string
+    }
+  ): Promise<void> {
+    const supabase = createServerSupabaseClient()
+    const { error } = await supabase
+      .from('shipments')
+      .update({
+        shippo_tracking_status: updates.shippo_tracking_status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', shipmentId)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+  }
+
   /**
    * Add tracking event
    */
