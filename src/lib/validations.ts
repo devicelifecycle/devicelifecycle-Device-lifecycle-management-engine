@@ -243,6 +243,7 @@ export const orderFiltersSchema = paginationSchema.extend({
   ]).optional(),
   type: z.enum(ORDER_TYPE_VALUES).optional(),
   customer_id: z.string().uuid().optional(),
+  vendor_id: z.string().uuid().optional(),
   assigned_to_id: z.string().uuid().optional(),
   date_from: z.string().optional(),
   date_to: z.string().optional(),

@@ -21,7 +21,7 @@ src/
 │   ├── (vendor)/          # Vendor portal pages
 │   └── api/               # API route handlers
 │       ├── auth/          # Authentication endpoints
-│       ├── cron/          # Cron job endpoints (SLA check)
+│       ├── cron/          # Cron job endpoints (SLA, pricing, Shippo tracking sync)
 │       ├── customers/     # Customer CRUD
 │       ├── devices/       # Device CRUD
 │       ├── imei/          # IMEI lookup and tracking
@@ -30,6 +30,7 @@ src/
 │       ├── organizations/ # Organization management
 │       ├── pricing/       # Pricing calculations
 │       ├── shipments/     # Shipment tracking
+│       ├── shippo/        # Shippo webhook + label integration
 │       ├── triage/        # Triage operations
 │       ├── users/         # User management
 │       └── vendors/       # Vendor CRUD
@@ -134,6 +135,7 @@ Configurable SLA rules per order status with warning and breach thresholds. Auto
 - **Framework**: Next.js 14 (App Router)
 - **Database**: Supabase (PostgreSQL)
 - **Auth**: Supabase Auth
+- **Shipping**: Shippo API (label purchase + tracking sync)
 - **Styling**: TailwindCSS + shadcn/ui
 - **Forms**: React Hook Form + Zod
 - **State**: TanStack Query

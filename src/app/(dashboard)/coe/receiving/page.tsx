@@ -25,6 +25,15 @@ import type { Order } from '@/types'
 
 const CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Other']
 
+const COE_ADDRESS = {
+  name: 'COE Warehouse',
+  street1: '123 COE Dr',
+  city: 'Austin',
+  state: 'TX',
+  postal_code: '73301',
+  country: 'US',
+}
+
 const statusColors: Record<string, string> = {
   label_created: 'bg-gray-100 text-gray-700',
   picked_up: 'bg-blue-100 text-blue-700',
@@ -54,6 +63,26 @@ export default function COEReceivingPage() {
   const [createForm, setCreateForm] = useState({ carrier: 'FedEx', tracking_number: '' })
   const [isCreating, setIsCreating] = useState(false)
 
+  const buildFromAddress = (order: Order) => {
+    const customer = order.customer as unknown as Record<string, unknown> | undefined
+    const shipping = customer?.shipping_address as Record<string, unknown> | undefined
+    const billing = customer?.billing_address as Record<string, unknown> | undefined
+    const source = shipping || billing || {}
+
+    return {
+      name: (customer?.contact_name as string) || (customer?.company_name as string) || 'Customer',
+      company: (customer?.company_name as string) || undefined,
+      street1: (source.street1 as string) || (source.line1 as string) || (source.address1 as string) || 'Unknown',
+      street2: (source.street2 as string) || (source.line2 as string) || (source.address2 as string) || undefined,
+      city: (source.city as string) || 'Unknown',
+      state: (source.state as string) || 'Unknown',
+      postal_code: (source.postal_code as string) || (source.zip_code as string) || (source.zip as string) || '00000',
+      country: (source.country as string) || 'US',
+      phone: (customer?.contact_phone as string) || undefined,
+      email: (customer?.contact_email as string) || undefined,
+    }
+  }
+
   const fetchShipments = useCallback(async () => {
     setIsLoading(true)
     try {
@@ -75,7 +104,10 @@ export default function COEReceivingPage() {
     setOrderSearching(true)
     fetch(`/api/orders?search=${encodeURIComponent(debouncedOrderSearch)}&page=1&page_size=10`)
       .then(res => res.ok ? res.json() : { data: [] })
-      .then(r => setOrderResults(r.data || []))
+      .then(r => {
+        const data = (r.data || []) as Order[]
+        setOrderResults(data.filter(order => ['shipped_to_coe', 'received'].includes(order.status)))
+      })
       .catch(() => setOrderResults([]))
       .finally(() => setOrderSearching(false))
   }, [debouncedOrderSearch])
@@ -92,8 +124,8 @@ export default function COEReceivingPage() {
           direction: 'inbound',
           carrier: createForm.carrier,
           tracking_number: createForm.tracking_number,
-          from_address: { name: 'Customer', street1: 'TBD', city: 'TBD', state: 'TBD', postal_code: '00000', country: 'US' },
-          to_address: { name: 'COE Warehouse', street1: '123 COE Dr', city: 'Austin', state: 'TX', postal_code: '73301', country: 'US' },
+          from_address: buildFromAddress(selectedOrder),
+          to_address: COE_ADDRESS,
         }),
       })
       if (!res.ok) {

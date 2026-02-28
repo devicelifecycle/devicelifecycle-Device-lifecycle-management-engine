@@ -11,7 +11,7 @@ import { Toaster } from '@/components/ui/toaster'
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
 
 export const metadata: Metadata = {
-  title: 'Device Lifecycle Management Engine',
+  title: 'DLM Engine — Device Lifecycle Management',
   description: 'Enterprise platform for ITAD device lifecycle management',
 }
 

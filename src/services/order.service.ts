@@ -34,16 +34,62 @@ export class OrderService {
       status,
       type,
       customer_id,
+      vendor_id,
       assigned_to_id,
       date_from,
       date_to,
       search,
       is_sla_breached,
+      requester_id,
+      requester_role,
+      requester_organization_id,
     } = filters
 
     let query = supabase
       .from('orders')
-      .select('*, customer:customers(*)', { count: 'exact' })
+      .select('*, customer:customers(*), vendor:vendors(*)', { count: 'exact' })
+
+    if (requester_role === 'sales' && requester_id) {
+      query = query.or(`created_by_id.eq.${requester_id},assigned_to_id.eq.${requester_id}`)
+    }
+
+    if (requester_role === 'customer' && requester_organization_id) {
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('organization_id', requester_organization_id)
+
+      const allowedCustomerIds = (customers || []).map((customer) => customer.id)
+      if (allowedCustomerIds.length === 0) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          page_size,
+          total_pages: 0,
+        }
+      }
+      query = query.in('customer_id', allowedCustomerIds)
+    }
+
+    if (requester_role === 'vendor' && requester_organization_id) {
+      const { data: vendors } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('organization_id', requester_organization_id)
+
+      const allowedVendorIds = (vendors || []).map((vendor) => vendor.id)
+      if (allowedVendorIds.length === 0) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          page_size,
+          total_pages: 0,
+        }
+      }
+      query = query.in('vendor_id', allowedVendorIds)
+    }
 
     // Apply filters
     if (status) {
@@ -60,6 +106,10 @@ export class OrderService {
 
     if (customer_id) {
       query = query.eq('customer_id', customer_id)
+    }
+
+    if (vendor_id) {
+      query = query.eq('vendor_id', vendor_id)
     }
 
     if (assigned_to_id) {
@@ -120,6 +170,7 @@ export class OrderService {
       .select(`
         *,
         customer:customers(*),
+        vendor:vendors(*),
         items:order_items(*, device:device_catalog(*)),
         shipments(*),
         timeline:order_timeline(*)

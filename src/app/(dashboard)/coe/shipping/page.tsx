@@ -16,10 +16,18 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui/switch'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatDateTime, formatRelativeTime } from '@/lib/utils'
 import type { Shipment } from '@/types'
 import type { Order } from '@/types'
+
+type ShippoHealthStatus = {
+  keyConfigured: boolean
+  apiReachable: boolean
+  keyValid: boolean
+  message: string
+}
 
 const statusColors: Record<string, string> = {
   label_created: 'bg-gray-100 text-gray-700',
@@ -33,12 +41,23 @@ const statusColors: Record<string, string> = {
 const CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Other']
 const STATUSES = ['label_created', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered'] as const
 
+const COE_ADDRESS = {
+  name: 'COE Warehouse',
+  street1: '123 COE Dr',
+  city: 'Austin',
+  state: 'TX',
+  postal_code: '73301',
+  country: 'US',
+}
+
 export default function COEShippingPage() {
   const [outbound, setOutbound] = useState<Shipment[]>([])
   const [allShipments, setAllShipments] = useState<Shipment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search)
+  const [shippoHealth, setShippoHealth] = useState<ShippoHealthStatus | null>(null)
+  const [shippoHealthLoading, setShippoHealthLoading] = useState(false)
 
   // Create shipment dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -51,13 +70,39 @@ export default function COEShippingPage() {
   const [form, setForm] = useState({
     carrier: 'FedEx',
     tracking_number: '',
+    shippo_purchase: true,
+    weight: '2',
+    length: '12',
+    width: '8',
+    height: '4',
   })
 
   // Update status dialog
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
   const [newStatus, setNewStatus] = useState('')
+  const [exceptionDetails, setExceptionDetails] = useState('')
   const [isUpdating, setIsUpdating] = useState(false)
+
+  const buildCustomerAddress = (order: Order) => {
+    const customer = order.customer as unknown as Record<string, unknown> | undefined
+    const shipping = customer?.shipping_address as Record<string, unknown> | undefined
+    const billing = customer?.billing_address as Record<string, unknown> | undefined
+    const source = shipping || billing || {}
+
+    return {
+      name: (customer?.contact_name as string) || (customer?.company_name as string) || 'Customer',
+      company: (customer?.company_name as string) || undefined,
+      street1: (source.street1 as string) || (source.line1 as string) || (source.address1 as string) || 'Unknown',
+      street2: (source.street2 as string) || (source.line2 as string) || (source.address2 as string) || undefined,
+      city: (source.city as string) || 'Unknown',
+      state: (source.state as string) || 'Unknown',
+      postal_code: (source.postal_code as string) || (source.zip_code as string) || (source.zip as string) || '00000',
+      country: (source.country as string) || 'US',
+      phone: (customer?.contact_phone as string) || undefined,
+      email: (customer?.contact_email as string) || undefined,
+    }
+  }
 
   const fetchShipments = useCallback(async () => {
     setIsLoading(true)
@@ -71,7 +116,31 @@ export default function COEShippingPage() {
     } catch {} finally { setIsLoading(false) }
   }, [])
 
+  const fetchShippoHealth = useCallback(async () => {
+    setShippoHealthLoading(true)
+    try {
+      const res = await fetch('/api/shippo/health', { cache: 'no-store' })
+      const data = await res.json()
+      setShippoHealth({
+        keyConfigured: Boolean(data?.keyConfigured),
+        apiReachable: Boolean(data?.apiReachable),
+        keyValid: Boolean(data?.keyValid),
+        message: typeof data?.message === 'string' ? data.message : 'Shippo status unavailable',
+      })
+    } catch {
+      setShippoHealth({
+        keyConfigured: false,
+        apiReachable: false,
+        keyValid: false,
+        message: 'Unable to check Shippo health',
+      })
+    } finally {
+      setShippoHealthLoading(false)
+    }
+  }, [])
+
   useEffect(() => { fetchShipments() }, [fetchShipments])
+  useEffect(() => { fetchShippoHealth() }, [fetchShippoHealth])
 
   useEffect(() => {
     if (!debouncedOrderSearch.trim()) {
@@ -81,7 +150,10 @@ export default function COEShippingPage() {
     setOrderSearching(true)
     fetch(`/api/orders?search=${encodeURIComponent(debouncedOrderSearch)}&page=1&page_size=10`)
       .then(res => res.ok ? res.json() : { data: [] })
-      .then(r => setOrderResults(r.data || []))
+      .then(r => {
+        const data = (r.data || []) as Order[]
+        setOrderResults(data.filter(order => ['ready_to_ship', 'qc_complete'].includes(order.status)))
+      })
       .catch(() => setOrderResults([]))
       .finally(() => setOrderSearching(false))
   }, [debouncedOrderSearch])
@@ -97,17 +169,24 @@ export default function COEShippingPage() {
           order_id: selectedOrder.id,
           direction: 'outbound',
           carrier: form.carrier,
-          tracking_number: form.tracking_number,
-          from_address: { name: 'COE Warehouse', street1: '123 COE Dr', city: 'Austin', state: 'TX', postal_code: '73301', country: 'US' },
-          to_address: { name: 'Customer', street1: 'TBD', city: 'TBD', state: 'TBD', postal_code: '00000', country: 'US' },
+          tracking_number: form.shippo_purchase ? undefined : form.tracking_number,
+          from_address: COE_ADDRESS,
+          to_address: buildCustomerAddress(selectedOrder),
+          shippo_purchase: form.shippo_purchase,
+          weight: Number.parseFloat(form.weight) || 2,
+          dimensions: {
+            length: Number.parseFloat(form.length) || 12,
+            width: Number.parseFloat(form.width) || 8,
+            height: Number.parseFloat(form.height) || 4,
+          },
         }),
       })
       if (!res.ok) throw new Error()
-      toast.success('Shipment created')
+      toast.success(form.shippo_purchase ? 'Shipment created and Shippo label purchased' : 'Shipment created')
       setCreateDialogOpen(false)
       setSelectedOrder(null)
       setOrderSearch('')
-      setForm({ carrier: 'FedEx', tracking_number: '' })
+      setForm({ carrier: 'FedEx', tracking_number: '', shippo_purchase: true, weight: '2', length: '12', width: '8', height: '4' })
       fetchShipments()
     } catch {
       toast.error('Failed to create shipment')
@@ -121,13 +200,17 @@ export default function COEShippingPage() {
       const res = await fetch(`/api/shipments/${selectedShipment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({
+          status: newStatus,
+          metadata: newStatus === 'exception' ? { exception_details: exceptionDetails || 'Carrier exception' } : undefined,
+        }),
       })
       if (!res.ok) throw new Error()
       toast.success('Shipment status updated')
       setUpdateDialogOpen(false)
       setSelectedShipment(null)
       setNewStatus('')
+      setExceptionDetails('')
       fetchShipments()
     } catch {
       toast.error('Failed to update status')
@@ -170,8 +253,13 @@ export default function COEShippingPage() {
             <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(s.created_at)}</TableCell>
             {showActions && (
               <TableCell className="text-right">
+                {s.label_pdf_url && (
+                  <a href={s.label_pdf_url} target="_blank" rel="noreferrer" className="mr-2 text-xs text-primary hover:underline">
+                    Label PDF
+                  </a>
+                )}
                 {s.status !== 'delivered' && (
-                  <Button size="sm" variant="outline" onClick={() => { setSelectedShipment(s); setNewStatus(''); setUpdateDialogOpen(true) }}>
+                  <Button size="sm" variant="outline" onClick={() => { setSelectedShipment(s); setNewStatus(''); setExceptionDetails(''); setUpdateDialogOpen(true) }}>
                     Update Status
                   </Button>
                 )}
@@ -199,6 +287,33 @@ export default function COEShippingPage() {
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input placeholder="Search by tracking number, carrier, or order..." className="pl-10 bg-background" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Shippo Status</CardTitle>
+          <CardDescription>Readiness check before purchasing shipping labels.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {shippoHealthLoading ? 'Checking Shippo connectivity…' : shippoHealth?.message || 'Status not loaded'}
+          </p>
+          <Badge
+            variant={
+              shippoHealthLoading
+                ? 'secondary'
+                : shippoHealth?.keyValid
+                  ? 'default'
+                  : 'destructive'
+            }
+          >
+            {shippoHealthLoading
+              ? 'Checking'
+              : shippoHealth?.keyValid
+                ? 'Healthy'
+                : 'Action Required'}
+          </Badge>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="ready">
         <TabsList>
@@ -252,7 +367,7 @@ export default function COEShippingPage() {
       {/* Create Shipment Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => {
         setCreateDialogOpen(open)
-        if (!open) { setSelectedOrder(null); setOrderSearch(''); setForm({ carrier: 'FedEx', tracking_number: '' }) }
+        if (!open) { setSelectedOrder(null); setOrderSearch(''); setForm({ carrier: 'FedEx', tracking_number: '', shippo_purchase: true, weight: '2', length: '12', width: '8', height: '4' }) }
       }}>
         <DialogContent>
           <DialogHeader>
@@ -305,14 +420,44 @@ export default function COEShippingPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Purchase label with Shippo</p>
+                <p className="text-xs text-muted-foreground">Automatically buy cheapest rate and generate tracking number.</p>
+              </div>
+              <Switch checked={form.shippo_purchase} onCheckedChange={(checked) => setForm(f => ({ ...f, shippo_purchase: checked }))} />
+            </div>
             <div className="space-y-2">
               <Label>Tracking Number</Label>
-              <Input value={form.tracking_number} onChange={e => setForm(f => ({ ...f, tracking_number: e.target.value }))} placeholder="Enter tracking number" />
+              <Input
+                value={form.tracking_number}
+                onChange={e => setForm(f => ({ ...f, tracking_number: e.target.value }))}
+                placeholder={form.shippo_purchase ? 'Auto-generated by Shippo' : 'Enter tracking number'}
+                disabled={form.shippo_purchase}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Weight (lb)</Label>
+                <Input value={form.weight} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} placeholder="2" />
+              </div>
+              <div className="space-y-2">
+                <Label>Length (in)</Label>
+                <Input value={form.length} onChange={e => setForm(f => ({ ...f, length: e.target.value }))} placeholder="12" />
+              </div>
+              <div className="space-y-2">
+                <Label>Width (in)</Label>
+                <Input value={form.width} onChange={e => setForm(f => ({ ...f, width: e.target.value }))} placeholder="8" />
+              </div>
+              <div className="space-y-2">
+                <Label>Height (in)</Label>
+                <Input value={form.height} onChange={e => setForm(f => ({ ...f, height: e.target.value }))} placeholder="4" />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateShipment} disabled={isCreating || !selectedOrder || !form.tracking_number}>
+            <Button onClick={handleCreateShipment} disabled={isCreating || !selectedOrder || (!form.shippo_purchase && !form.tracking_number)}>
               {isCreating ? 'Creating...' : 'Create Shipment'}
             </Button>
           </DialogFooter>
@@ -337,9 +482,16 @@ export default function COEShippingPage() {
                   {STATUSES.map(s => (
                     <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, ' ')}</SelectItem>
                   ))}
+                  <SelectItem value="exception" className="capitalize">exception</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {newStatus === 'exception' && (
+              <div className="space-y-2">
+                <Label>Exception Details</Label>
+                <Input value={exceptionDetails} onChange={e => setExceptionDetails(e.target.value)} placeholder="Carrier issue, address problem, lost package, etc." />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUpdateDialogOpen(false)}>Cancel</Button>

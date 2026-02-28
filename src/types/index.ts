@@ -439,6 +439,16 @@ export interface Shipment extends BaseEntity {
   receiving_notes?: string;
   
   tracking_events?: unknown[];
+
+  shippo_shipment_id?: string;
+  shippo_rate_id?: string;
+  shippo_transaction_id?: string;
+  shippo_tracking_status?: string;
+  label_url?: string;
+  label_pdf_url?: string;
+  rate_amount?: number;
+  rate_currency?: string;
+  shippo_raw?: Record<string, unknown>;
   
   notes?: string;
   created_by_id?: string;
@@ -719,6 +729,9 @@ export interface OrderFilters extends PaginationParams {
   date_from?: string;
   date_to?: string;
   is_sla_breached?: boolean;
+  requester_id?: string;
+  requester_role?: UserRole;
+  requester_organization_id?: string;
 }
 
 export interface CreateOrderInput {

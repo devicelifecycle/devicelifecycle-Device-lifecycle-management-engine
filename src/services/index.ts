@@ -13,6 +13,7 @@ export { NotificationService } from './notification.service'
 export { SLAService } from './sla.service'
 export { TriageService } from './triage.service'
 export { ShipmentService } from './shipment.service'
+export { ShippoService } from './shippo.service'
 export { AuditService } from './audit.service'
 export { OrganizationService } from './organization.service'
 

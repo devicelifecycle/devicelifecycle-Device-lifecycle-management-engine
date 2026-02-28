@@ -37,7 +37,20 @@ export async function GET(request: NextRequest) {
     const validated = orderFiltersSchema.safeParse(filters)
     const safeFilters = validated.success ? validated.data : { ...filters, sort_by: undefined, sort_order: undefined }
 
-    const result = await OrderService.getOrders(safeFilters as Parameters<typeof OrderService.getOrders>[0])
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
+      .single()
+
+    const scopedFilters = {
+      ...safeFilters,
+      requester_id: user.id,
+      requester_role: profile?.role,
+      requester_organization_id: profile?.organization_id,
+    }
+
+    const result = await OrderService.getOrders(scopedFilters as Parameters<typeof OrderService.getOrders>[0])
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching orders:', error)

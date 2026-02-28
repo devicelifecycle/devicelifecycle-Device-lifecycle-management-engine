@@ -4,8 +4,9 @@
 
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Plus, Search, ShoppingCart, X, Trash2, ArrowRightLeft, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
@@ -24,6 +25,7 @@ import { Pagination } from '@/components/ui/pagination'
 import type { OrderStatus, OrderType } from '@/types'
 
 export default function OrdersPage() {
+  const searchParams = useSearchParams()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('')
@@ -33,6 +35,23 @@ export default function OrdersPage() {
   const debouncedSearch = useDebounce(search)
   const { hasRole } = useAuth()
   const isAdmin = hasRole(['admin'])
+  const isInternal = hasRole(['admin', 'coe_manager', 'coe_tech', 'sales'])
+  const isCustomer = hasRole(['customer'])
+  const canCreateTradeIn = isInternal || isCustomer
+  const canCreateCpo = isInternal
+  const canBulkTransition = isInternal
+
+  useEffect(() => {
+    const statusFromUrl = searchParams.get('status')
+    const typeFromUrl = searchParams.get('type')
+
+    if (statusFromUrl && statusFromUrl in ORDER_STATUS_CONFIG) {
+      setStatusFilter(statusFromUrl as OrderStatus)
+    }
+    if (typeFromUrl === 'trade_in' || typeFromUrl === 'cpo') {
+      setTypeFilter(typeFromUrl as OrderType)
+    }
+  }, [searchParams])
 
   const { orders, isLoading, total, totalPages, bulkTransition, isBulkTransitioning, bulkDelete, isBulkDeleting } = useOrders({
     search: debouncedSearch,
@@ -120,22 +139,26 @@ export default function OrdersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Orders</h1>
           <p className="text-muted-foreground mt-1">
-            Manage trade-in and CPO orders
+            {isInternal ? 'Manage trade-in and CPO orders' : isCustomer ? 'Track your submitted orders' : 'Track vendor order workflow'}
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/orders/new/trade-in">
-            <Button className="shadow-md shadow-primary/20">
-              <Plus className="mr-2 h-4 w-4" />
-              New Trade-In
-            </Button>
-          </Link>
-          <Link href="/orders/new/cpo">
-            <Button variant="outline">
-              <Plus className="mr-2 h-4 w-4" />
-              New CPO
-            </Button>
-          </Link>
+          {canCreateTradeIn && (
+            <Link href="/orders/new/trade-in">
+              <Button className="shadow-md shadow-primary/20">
+                <Plus className="mr-2 h-4 w-4" />
+                New Trade-In
+              </Button>
+            </Link>
+          )}
+          {canCreateCpo && (
+            <Link href="/orders/new/cpo">
+              <Button variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                New CPO
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -180,28 +203,32 @@ export default function OrdersPage() {
           <div className="h-4 w-px bg-border" />
 
           {/* Bulk Transition */}
-          <Select value={bulkStatus || 'pick'} onValueChange={v => setBulkStatus(v === 'pick' ? '' : v as OrderStatus)}>
-            <SelectTrigger className="w-[160px] h-8 text-xs">
-              <SelectValue placeholder="Move to..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pick">Move to...</SelectItem>
-              {Object.entries(ORDER_STATUS_CONFIG).map(([key, config]) => (
-                <SelectItem key={key} value={key}>{config.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            variant="default"
-            disabled={!bulkStatus || isBulkTransitioning}
-            onClick={handleBulkTransition}
-          >
-            <ArrowRightLeft className="mr-1 h-3 w-3" />
-            {isBulkTransitioning ? 'Updating...' : 'Apply'}
-          </Button>
+          {canBulkTransition && (
+            <>
+              <Select value={bulkStatus || 'pick'} onValueChange={v => setBulkStatus(v === 'pick' ? '' : v as OrderStatus)}>
+                <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <SelectValue placeholder="Move to..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pick">Move to...</SelectItem>
+                  {Object.entries(ORDER_STATUS_CONFIG).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="default"
+                disabled={!bulkStatus || isBulkTransitioning}
+                onClick={handleBulkTransition}
+              >
+                <ArrowRightLeft className="mr-1 h-3 w-3" />
+                {isBulkTransitioning ? 'Updating...' : 'Apply'}
+              </Button>
 
-          <div className="h-4 w-px bg-border" />
+              <div className="h-4 w-px bg-border" />
+            </>
+          )}
 
           {/* Export CSV */}
           <Button size="sm" variant="outline" onClick={handleExportCSV}>
@@ -248,10 +275,12 @@ export default function OrdersPage() {
             <div className="text-center py-16">
               <ShoppingCart className="mx-auto h-10 w-10 text-muted-foreground/40" />
               <p className="mt-3 text-sm font-medium text-muted-foreground">No orders found</p>
-              <p className="mt-1 text-xs text-muted-foreground">Create your first order to get started.</p>
-              <Link href="/orders/new/trade-in">
-                <Button size="sm" className="mt-4">Create Order</Button>
-              </Link>
+              <p className="mt-1 text-xs text-muted-foreground">{canCreateTradeIn ? 'Create your first order to get started.' : 'Orders will appear here as they are assigned.'}</p>
+              {canCreateTradeIn && (
+                <Link href="/orders/new/trade-in">
+                  <Button size="sm" className="mt-4">Create Order</Button>
+                </Link>
+              )}
             </div>
           ) : (
             <Table>

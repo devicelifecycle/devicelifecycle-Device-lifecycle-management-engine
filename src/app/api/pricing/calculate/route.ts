@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const version = body.version || 'v2'
     // Prefer data_driven when setting is enabled (reduces third-party dependency)
     const settings = await PricingService.getPricingSettings()
-    const preferDataDriven = (settings as Record<string, unknown>).prefer_data_driven === true || (settings as Record<string, unknown>).prefer_data_driven === 'true'
+    const preferDataDriven = (settings as unknown as Record<string, unknown>).prefer_data_driven === true || (settings as unknown as Record<string, unknown>).prefer_data_driven === 'true'
     const modelId = body.model_id ?? (preferDataDriven ? 'data_driven' : undefined)
 
     // model_id: use pricing model (e.g. data_driven) instead of PricingService

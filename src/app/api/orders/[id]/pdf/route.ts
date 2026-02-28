@@ -51,8 +51,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         billing_address: order.customer.billing_address,
         shipping_address: order.customer.shipping_address,
       } : undefined,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      items: order.items?.map((item: any) => ({
+      items: order.items?.map((item) => ({
         device: item.device,
         quantity: item.quantity,
         claimed_condition: item.claimed_condition,
