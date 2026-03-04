@@ -6,14 +6,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
+  // Rate limit auth callbacks: 10 per 15 min per IP
+  const rl = checkRateLimit(`auth-callback:${getClientIp(request)}`, RATE_LIMITS.auth)
+  if (!rl.allowed) {
+    return NextResponse.redirect(new URL('/login?error=rate_limited', request.url))
+  }
+
   const { searchParams } = request.nextUrl
   const code = searchParams.get('code')
-  const next = searchParams.get('next') || '/'
+  const next = searchParams.get('next') || '/dashboard'
 
   // Validate 'next' is a relative path to prevent open redirect
-  const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/'
+  const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard'
 
   if (code) {
     const cookieStore = cookies()

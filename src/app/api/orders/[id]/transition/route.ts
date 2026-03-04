@@ -62,6 +62,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
+    // Split order constraints: parent can't ship/deliver/close unless all sub-orders reach that state
+    if (currentOrder.is_split_order && currentOrder.sub_orders && currentOrder.sub_orders.length > 0) {
+      const gateStatuses = ['shipped', 'delivered', 'closed'] as const
+      if ((gateStatuses as readonly string[]).includes(newStatus)) {
+        const allReady = currentOrder.sub_orders.every(sub => {
+          const statusOrder = ['sourced', 'shipped', 'delivered', 'closed']
+          const targetIdx = statusOrder.indexOf(newStatus)
+          const subIdx = statusOrder.indexOf(sub.status)
+          return subIdx >= targetIdx
+        })
+        if (!allReady) {
+          return NextResponse.json(
+            { error: `Cannot transition to "${newStatus}" — not all sub-orders have reached this status yet` },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     // Perform transition
     const updatedOrder = await OrderService.transitionOrder(
       params.id,

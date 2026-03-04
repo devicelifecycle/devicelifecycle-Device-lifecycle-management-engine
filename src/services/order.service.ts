@@ -5,10 +5,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { VALID_ORDER_TRANSITIONS } from '@/lib/constants'
 import { generateOrderNumber, sanitizeSearchInput } from '@/lib/utils'
-import type { 
-  Order, 
-  OrderStatus, 
-  OrderType, 
+import { OrderSplitService } from './order-split.service'
+import type {
+  Order,
+  OrderStatus,
+  OrderType,
   OrderFilters,
   CreateOrderInput,
   UpdateOrderInput,
@@ -183,7 +184,33 @@ export class OrderService {
       throw new Error(error.message)
     }
 
-    return data as Order
+    const order = data as Order
+
+    // If this is a split parent, fetch sub-orders
+    if (order.is_split_order) {
+      const { data: subOrders } = await supabase
+        .from('orders')
+        .select('*, vendor:vendors(*), items:order_items(*, device:device_catalog(*))')
+        .eq('parent_order_id', id)
+        .order('order_number', { ascending: true })
+
+      order.sub_orders = (subOrders || []) as Order[]
+    }
+
+    // If this is a sub-order, fetch parent reference
+    if (order.parent_order_id) {
+      const { data: parentOrder } = await supabase
+        .from('orders')
+        .select('id, order_number, status, is_split_order')
+        .eq('id', order.parent_order_id)
+        .single()
+
+      if (parentOrder) {
+        order.parent_order = parentOrder as Order
+      }
+    }
+
+    return order
   }
 
   /**
@@ -432,6 +459,16 @@ export class OrderService {
 
     // Log to audit
     await this.logAudit(userId, 'status_change', 'order', id, order, updatedOrder)
+
+    // Split order handling:
+    // If cancelling a split parent → cascade cancel to all sub-orders
+    if (toStatus === 'cancelled' && order.is_split_order) {
+      await OrderSplitService.cancelSubOrders(id, userId)
+    }
+    // If transitioning a sub-order → check if parent should auto-transition
+    if (order.parent_order_id) {
+      await OrderSplitService.checkParentAutoTransition(id)
+    }
 
     return updatedOrder as Order
   }

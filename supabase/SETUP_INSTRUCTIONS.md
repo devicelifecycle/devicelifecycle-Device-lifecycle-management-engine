@@ -188,10 +188,10 @@ npm run build
 ## Next Steps (Phase 2)
 
 Once Phase 1 is verified:
-- [ ] Add real-time subscriptions for live updates
-- [ ] Implement advanced search with full-text
-- [ ] Add batch operations for bulk processing
-- [ ] Create Supabase Edge Functions for complex workflows
+- [x] Add real-time subscriptions for live updates (orders channel in useOrders)
+- [x] Implement search (order_number, device make/model/SKU, customer/vendor filters)
+- [x] Add batch operations (bulk-transition, bulk-delete for orders)
+- [ ] Create Supabase Edge Functions for complex workflows (optional)
 
 ## Support
 

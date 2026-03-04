@@ -6,11 +6,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 
 const MAX_BATCH_SIZE = 50
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 100 requests/min per IP
+    const rl = checkRateLimit(`bulk-delete:${getClientIp(request)}`, RATE_LIMITS.api)
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
+
     const supabase = createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 

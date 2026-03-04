@@ -7,7 +7,7 @@
 import { useState, Fragment } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2, GitBranch, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrder } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
@@ -29,12 +29,15 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import type { OrderStatus, OrderItem, PricingMetadata } from '@/types'
 
 export default function OrderDetailPage() {
   const params = useParams()
+  const { user } = useAuth()
+  const isCustomer = user?.role === 'customer'
   const { order, isLoading, transition, isTransitioning, refetch } = useOrder(params.id as string)
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({})
@@ -275,6 +278,21 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* Parent order banner (shown for sub-orders, hidden from customers) */}
+      {!isCustomer && order.parent_order_id && order.parent_order && (
+        <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
+          <CardContent className="flex items-center gap-3 py-3">
+            <GitBranch className="h-4 w-4 text-blue-600" />
+            <span className="text-sm">
+              This is a sub-order of{' '}
+              <Link href={`/orders/${order.parent_order_id}`} className="font-medium text-blue-600 hover:underline">
+                {order.parent_order.order_number}
+              </Link>
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
@@ -287,10 +305,12 @@ export default function OrderDetailPage() {
                   <p className="text-sm text-muted-foreground">Customer</p>
                   <p className="font-medium">{order.customer?.company_name || '—'}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Vendor</p>
-                  <p className="font-medium">{order.vendor?.company_name || '—'}</p>
-                </div>
+                {!isCustomer && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Vendor</p>
+                    <p className="font-medium">{order.vendor?.company_name || '—'}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-sm text-muted-foreground">Total Quantity</p>
                   <p className="font-medium">{order.total_quantity} devices</p>
@@ -394,7 +414,7 @@ export default function OrderDetailPage() {
           </Card>
 
           {/* Notes */}
-          {(order.notes || order.internal_notes) && (
+          {(order.notes || (!isCustomer && order.internal_notes)) && (
             <Card>
               <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
               <CardContent className="space-y-4">
@@ -404,12 +424,65 @@ export default function OrderDetailPage() {
                     <p className="text-sm">{order.notes}</p>
                   </div>
                 )}
-                {order.internal_notes && (
+                {!isCustomer && order.internal_notes && (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-1">Internal Notes</p>
                     <p className="text-sm">{order.internal_notes}</p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sub-Orders Section (shown for split parent orders, hidden from customers) */}
+          {!isCustomer && order.is_split_order && order.sub_orders && order.sub_orders.length > 0 && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle>Sub-Orders</CardTitle>
+                </div>
+                <CardDescription>
+                  This order has been split into {order.sub_orders.length} sub-orders
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order #</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Items</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {order.sub_orders.map(sub => {
+                      const subStatusConfig = ORDER_STATUS_CONFIG[sub.status]
+                      const subItemCount = sub.items?.reduce((sum, i) => sum + i.quantity, 0) || 0
+                      return (
+                        <TableRow key={sub.id}>
+                          <TableCell className="font-medium font-mono">{sub.order_number}</TableCell>
+                          <TableCell>{sub.vendor?.company_name || '—'}</TableCell>
+                          <TableCell>{subItemCount} units</TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${subStatusConfig?.bgColor || ''} ${subStatusConfig?.color || ''}`}>
+                              {subStatusConfig?.label || sub.status}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Link href={`/orders/${sub.id}`}>
+                              <Button variant="ghost" size="sm">
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </Button>
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}
@@ -463,6 +536,22 @@ export default function OrderDetailPage() {
                       </span>
                     </Button>
                   )}
+                </>
+              )}
+
+              {/* Split Order Button */}
+              {order.status === 'sourcing' && !order.is_split_order && !order.parent_order_id && (
+                <>
+                  <Separator className="my-2" />
+                  <Link href={`/orders/${order.id}/split`}>
+                    <Button variant="outline" className="w-full justify-between">
+                      <span className="flex items-center gap-2">
+                        <GitBranch className="h-4 w-4" />
+                        Split Across Vendors
+                      </span>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
                 </>
               )}
 

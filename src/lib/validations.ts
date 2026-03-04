@@ -487,6 +487,13 @@ export const createNotificationSchema = z.object({
 // SEARCH/FILTER SCHEMAS
 // ============================================================================
 
+export const shipmentPatchSchema = z.object({
+  action: z.enum(['receive']).optional(),
+  status: z.enum(['label_created', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'exception']).optional(),
+  notes: z.string().max(2000).optional(),
+  metadata: z.record(z.unknown()).optional(),
+})
+
 export const searchSchema = z.object({
   q: z.string().min(1).optional(),
   ...paginationSchema.shape,
