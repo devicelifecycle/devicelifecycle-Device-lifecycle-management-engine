@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ShippoService } from '@/services/shippo.service'
 import { OrderService } from '@/services/order.service'
+import { NotificationService } from '@/services/notification.service'
 import type { Shipment } from '@/types'
 
 export interface CreateShipmentInput {
@@ -226,7 +227,7 @@ export class ShipmentService {
         estimated_delivery: input.estimated_delivery,
         shippo_raw: input.shippo_raw,
         status: 'label_created',
-        created_by_id: input.purchased_by_id,
+        purchased_by_id: input.purchased_by_id,
         updated_at: new Date().toISOString(),
       })
       .eq('id', shipmentId)
@@ -255,7 +256,7 @@ export class ShipmentService {
 
     const { data: shipment } = await supabase
       .from('shipments')
-      .select('id, tracking_events')
+      .select('id, order_id, tracking_events')
       .eq('tracking_number', input.tracking_number)
       .single()
 
@@ -296,6 +297,43 @@ export class ShipmentService {
         updated_at: new Date().toISOString(),
       })
       .eq('id', shipment.id)
+
+    // Send notifications for delivery and exception events
+    if ((internalStatus === 'delivered' || internalStatus === 'exception') && shipment.order_id) {
+      try {
+        const { data: order } = await supabase
+          .from('orders')
+          .select('id, order_number, customer_id, created_by_id')
+          .eq('id', shipment.order_id)
+          .single()
+
+        if (order) {
+          // Notify the order creator
+          const title = internalStatus === 'delivered'
+            ? `Shipment Delivered — ${order.order_number}`
+            : `Shipment Exception — ${order.order_number}`
+          const message = internalStatus === 'delivered'
+            ? `Shipment ${input.tracking_number} for order #${order.order_number} has been delivered.`
+            : `Shipment ${input.tracking_number} for order #${order.order_number} has an exception: ${input.status_details || 'Carrier issue'}`
+
+          await NotificationService.createNotification({
+            user_id: order.created_by_id,
+            type: 'in_app',
+            title,
+            message,
+            link: `/orders/${order.id}`,
+            metadata: {
+              order_id: order.id,
+              order_number: order.order_number,
+              tracking_number: input.tracking_number,
+              shipment_status: internalStatus,
+            },
+          }).catch(() => {}) // Non-fatal
+        }
+      } catch {
+        // Non-fatal: notification delivery should not break webhook
+      }
+    }
   }
 
   static async updateShippoTrackingMeta(
@@ -491,33 +529,6 @@ export class ShipmentService {
     }
 
     return updatedShipment as Shipment
-  }
-
-  /**
-   * Generate shipping label (placeholder for carrier integration)
-   */
-  static async generateShippingLabel(input: {
-    carrier: string
-    from_address: AddressInput
-    to_address: AddressInput
-    weight: number
-    dimensions?: { length: number; width: number; height: number }
-  }): Promise<{
-    tracking_number: string
-    label_url: string
-    estimated_delivery: string
-    cost: number
-  }> {
-    // This would integrate with shipping carriers (FedEx, UPS, USPS, etc.)
-    // For now, generate a mock tracking number
-    const trackingNumber = `MOCK${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-    
-    return {
-      tracking_number: trackingNumber,
-      label_url: `/api/shipments/label/${trackingNumber}`,
-      estimated_delivery: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-      cost: 12.99,
-    }
   }
 
   /**

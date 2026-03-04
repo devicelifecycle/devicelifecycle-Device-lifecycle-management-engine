@@ -18,7 +18,7 @@ export async function GET(
 
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
@@ -28,6 +28,23 @@ export async function GET(
 
     const shipment = await ShipmentService.getShipmentById(params.id)
     if (!shipment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // Enforce org boundary for coe_tech (IDOR prevention)
+    if (profile.role === 'coe_tech' && profile.organization_id && shipment.order_id) {
+      const order = shipment.order as { customer_id?: string; vendor_id?: string } | undefined
+      let hasAccess = false
+      if (order?.customer_id) {
+        const { data: c } = await supabase.from('customers').select('organization_id').eq('id', order.customer_id).single()
+        if (c?.organization_id === profile.organization_id) hasAccess = true
+      }
+      if (!hasAccess && order?.vendor_id) {
+        const { data: v } = await supabase.from('vendors').select('organization_id').eq('id', order.vendor_id).single()
+        if (v?.organization_id === profile.organization_id) hasAccess = true
+      }
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
 
     return NextResponse.json(shipment)
   } catch (error) {
@@ -47,12 +64,32 @@ export async function PATCH(
 
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
     if (!profile || !['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const shipment = await ShipmentService.getShipmentById(params.id)
+    if (!shipment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // Enforce org boundary for coe_tech (IDOR prevention)
+    if (profile.role === 'coe_tech' && profile.organization_id && shipment.order_id) {
+      const order = shipment.order as { customer_id?: string; vendor_id?: string } | undefined
+      let hasAccess = false
+      if (order?.customer_id) {
+        const { data: c } = await supabase.from('customers').select('organization_id').eq('id', order.customer_id).single()
+        if (c?.organization_id === profile.organization_id) hasAccess = true
+      }
+      if (!hasAccess && order?.vendor_id) {
+        const { data: v } = await supabase.from('vendors').select('organization_id').eq('id', order.vendor_id).single()
+        if (v?.organization_id === profile.organization_id) hasAccess = true
+      }
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     const body = await request.json()

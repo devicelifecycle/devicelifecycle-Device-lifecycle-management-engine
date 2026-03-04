@@ -7,7 +7,7 @@
 import { useState, Fragment } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2, GitBranch, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2, GitBranch, ExternalLink, Truck, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrder } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/useAuth'
+import { useOrderShipments } from '@/hooks/useShipments'
 import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import type { OrderStatus, OrderItem, PricingMetadata } from '@/types'
@@ -39,6 +40,7 @@ export default function OrderDetailPage() {
   const { user } = useAuth()
   const isCustomer = user?.role === 'customer'
   const { order, isLoading, transition, isTransitioning, refetch } = useOrder(params.id as string)
+  const { shipments: orderShipments } = useOrderShipments(params.id as string)
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({})
   const [itemMetadata, setItemMetadata] = useState<Record<string, PricingMetadata>>({})
@@ -360,7 +362,7 @@ export default function OrderDetailPage() {
                           <TableRow>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-1">
-                                {hasContext && (
+                                {(hasContext || item.imei || item.serial_number || item.cpu || item.accessories) && (
                                   <button
                                     type="button"
                                     onClick={() => setExpandedPricingContext(isExpanded ? null : item.id)}
@@ -372,7 +374,15 @@ export default function OrderDetailPage() {
                                 )}
                                 {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
                                 {item.device?.variant && <span className="text-muted-foreground ml-1">({item.device.variant})</span>}
+                                {item.colour && <span className="text-muted-foreground ml-1">· {item.colour}</span>}
                               </div>
+                              {(item.imei || item.serial_number) && (
+                                <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                                  {item.imei && `IMEI: ${item.imei}`}
+                                  {item.imei && item.serial_number && ' · '}
+                                  {item.serial_number && `S/N: ${item.serial_number}`}
+                                </p>
+                              )}
                             </TableCell>
                             <TableCell>{item.quantity}</TableCell>
                             <TableCell>
@@ -387,17 +397,37 @@ export default function OrderDetailPage() {
                               {item.unit_price ? formatCurrency(item.unit_price * item.quantity) : '—'}
                             </TableCell>
                           </TableRow>
-                          {hasContext && isExpanded && (
+                          {isExpanded && (
                             <TableRow>
                               <TableCell colSpan={5} className="bg-muted/30 py-3">
-                                <div className="text-sm text-muted-foreground space-y-1 pl-6">
-                                  <p><span className="font-medium">Pricing context</span> (from calculator)</p>
-                                  <div className="flex flex-wrap gap-4">
-                                    {meta?.margin_tier && <span>Margin tier: {meta.margin_tier}</span>}
-                                    {meta?.confidence != null && <span>Confidence: {Math.round(meta.confidence * 100)}%</span>}
-                                    {meta?.anchor_price != null && <span>Anchor: {formatCurrency(meta.anchor_price)}</span>}
-                                    {meta?.channel_decision && <span>Channel: {meta.channel_decision}</span>}
-                                  </div>
+                                <div className="text-sm text-muted-foreground space-y-2 pl-6">
+                                  {/* Extended device metadata */}
+                                  {(item.cpu || item.ram || item.screen_size || item.year || item.model_number || item.accessories || item.faults) && (
+                                    <div>
+                                      <p className="font-medium mb-1">Device Details</p>
+                                      <div className="flex flex-wrap gap-4">
+                                        {item.model_number && <span>Model #: {item.model_number}</span>}
+                                        {item.year && <span>Year: {item.year}</span>}
+                                        {item.cpu && <span>CPU: {item.cpu}</span>}
+                                        {item.ram && <span>RAM: {item.ram}</span>}
+                                        {item.screen_size && <span>Screen: {item.screen_size}</span>}
+                                      </div>
+                                      {item.accessories && <p className="mt-1">Accessories: {item.accessories}</p>}
+                                      {item.faults && <p className="mt-1 text-amber-600 dark:text-amber-400">Faults: {item.faults}</p>}
+                                    </div>
+                                  )}
+                                  {/* Pricing context */}
+                                  {hasContext && (
+                                    <div>
+                                      <p className="font-medium mb-1">Pricing Context</p>
+                                      <div className="flex flex-wrap gap-4">
+                                        {meta?.margin_tier && <span>Margin tier: {meta.margin_tier}</span>}
+                                        {meta?.confidence != null && <span>Confidence: {Math.round(meta.confidence * 100)}%</span>}
+                                        {meta?.anchor_price != null && <span>Anchor: {formatCurrency(meta.anchor_price)}</span>}
+                                        {meta?.channel_decision && <span>Channel: {meta.channel_decision}</span>}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -430,6 +460,59 @@ export default function OrderDetailPage() {
                     <p className="text-sm">{order.internal_notes}</p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Shipments Section */}
+          {orderShipments.length > 0 && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle>Shipments</CardTitle>
+                </div>
+                <CardDescription>
+                  {orderShipments.length} shipment{orderShipments.length !== 1 ? 's' : ''} for this order
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {orderShipments.map(shipment => {
+                    const statusColor: Record<string, string> = {
+                      label_created: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+                      picked_up: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                      in_transit: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+                      out_for_delivery: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+                      delivered: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+                      exception: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+                    }
+                    return (
+                      <div key={shipment.id} className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="flex items-center gap-3">
+                          <Package className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-mono font-medium">{shipment.tracking_number}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {shipment.carrier} · {shipment.direction}
+                              {shipment.estimated_delivery && ` · ETA ${formatDateTime(shipment.estimated_delivery)}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColor[shipment.status] || ''}`}>
+                            {shipment.status.replace(/_/g, ' ')}
+                          </span>
+                          {shipment.label_pdf_url && (
+                            <a href={shipment.label_pdf_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                              Label
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </CardContent>
             </Card>
           )}

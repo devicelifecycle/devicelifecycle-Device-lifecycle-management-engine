@@ -112,7 +112,7 @@ export function Sidebar() {
     .filter(section => section.items.length > 0)
 
   return (
-    <aside className="flex h-full w-[260px] flex-col bg-gradient-to-b from-[hsl(224,35%,8%)] via-[hsl(224,35%,6%)] to-[hsl(224,40%,4%)] text-white border-r border-white/5">
+    <aside className="flex h-full w-[260px] flex-col bg-[#050508] text-white border-r border-white/[0.06] shadow-[4px_0_24px_-8px_rgba(0,0,0,0.5)]">
       {/* Logo */}
       <motion.div
         className="flex h-16 items-center gap-3 px-6"
@@ -121,15 +121,15 @@ export function Sidebar() {
         transition={{ type: 'spring', stiffness: 300, damping: 24 }}
       >
         <motion.div
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 shadow-lg shadow-teal-500/20"
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-amber-500 shadow-lg shadow-cyan-500/25 ring-1 ring-white/10"
           whileHover={{ scale: 1.05, rotate: 5 }}
           whileTap={{ scale: 0.98 }}
         >
           <Package className="h-5 w-5 text-white" />
         </motion.div>
         <div>
-          <span className="font-heading font-semibold text-sm tracking-tight">DLM Engine</span>
-          <span className="block text-[10px] text-teal-400/90 font-medium tracking-wider uppercase">Lifecycle Platform</span>
+          <span className="font-heading font-semibold text-sm tracking-tight text-white">DLM Engine</span>
+          <span className="block text-[10px] text-cyan-400/95 font-medium tracking-[0.2em] uppercase">Lifecycle Platform</span>
         </div>
       </motion.div>
 
@@ -177,8 +177,8 @@ export function Sidebar() {
                               <motion.div
                                 className={cn(
                                   'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200',
-                                  isActive
-                                    ? 'text-teal-300 shadow-sm'
+                                    isActive
+                                    ? 'text-cyan-300 shadow-sm'
                                     : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                                 )}
                                 whileHover={{ x: 4 }}
@@ -188,15 +188,15 @@ export function Sidebar() {
                                 {isActive && (
                                   <motion.div
                                     layoutId="sidebar-active"
-                                    className="absolute inset-0 rounded-lg bg-teal-500/15"
+                                    className="absolute inset-0 rounded-lg bg-cyan-500/15"
                                     transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                                   />
                                 )}
-                                <item.icon className={cn("relative z-10 h-4 w-4 shrink-0", isActive && "text-teal-400")} />
+                                <item.icon className={cn("relative z-10 h-4 w-4 shrink-0", isActive && "text-cyan-400")} />
                                 <span className="relative z-10">{item.title}</span>
                                 {isActive && (
                                   <motion.div
-                                    className="relative z-10 ml-auto h-2 w-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.5)]"
+                                    className="relative z-10 ml-auto h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]"
                                     animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
                                     transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
                                   />
@@ -219,7 +219,7 @@ export function Sidebar() {
       <div className="border-t border-white/10 p-3">
         <Link href="/profile" className="flex items-center gap-3 rounded-xl p-3 hover:bg-white/5 transition-all duration-200">
           <motion.div
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-white text-sm font-bold shadow-lg shadow-teal-500/25"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-amber-500 text-black text-sm font-bold shadow-lg shadow-cyan-500/25"
             whileHover={{ scale: 1.05 }}
           >
             {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}

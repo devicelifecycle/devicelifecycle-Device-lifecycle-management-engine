@@ -1,6 +1,6 @@
 
-import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NextRequest } from 'next/server'
 
 const getShipmentByIdMock = vi.fn()
 const attachShippoPurchaseMock = vi.fn()

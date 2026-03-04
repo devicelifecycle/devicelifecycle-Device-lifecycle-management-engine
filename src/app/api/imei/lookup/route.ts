@@ -9,9 +9,19 @@ import { IMEIService } from '@/services/imei.service'
 export async function GET(request: NextRequest) {
   try {
     const supabase = createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!userProfile || !['admin', 'coe_manager', 'coe_tech'].includes(userProfile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -19,14 +29,32 @@ export async function GET(request: NextRequest) {
     const vendorId = searchParams.get('vendor_id')
     const customerId = searchParams.get('customer_id')
 
-    // Search by vendor
+    // Search by vendor - enforce org boundary (IDOR prevention)
     if (vendorId) {
+      const { data: vendor } = await supabase
+        .from('vendors')
+        .select('organization_id')
+        .eq('id', vendorId)
+        .single()
+      if (!vendor) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
+      if (userProfile.role === 'coe_tech' && vendor.organization_id !== userProfile.organization_id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
       const records = await IMEIService.getByVendor(vendorId)
       return NextResponse.json({ data: records })
     }
 
-    // Search by customer
+    // Search by customer - enforce org boundary (IDOR prevention)
     if (customerId) {
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('organization_id')
+        .eq('id', customerId)
+        .single()
+      if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+      if (userProfile.role === 'coe_tech' && customer.organization_id !== userProfile.organization_id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
       const records = await IMEIService.getByCustomer(customerId)
       return NextResponse.json({ data: records })
     }
@@ -49,8 +77,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -58,7 +86,7 @@ export async function POST(request: NextRequest) {
     const { data: user } = await supabase
       .from('users')
       .select('role')
-      .eq('id', session.user.id)
+      .eq('id', authUser.id)
       .single()
 
     if (!user || !['admin', 'coe_manager', 'coe_tech'].includes(user.role)) {
@@ -74,7 +102,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const record = await IMEIService.createIMEIRecord(body, session.user.id)
+    const record = await IMEIService.createIMEIRecord(body, authUser.id)
     return NextResponse.json(record, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create IMEI record'

@@ -70,8 +70,8 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatus, {
   },
   received: {
     label: 'Received',
-    color: 'text-teal-600',
-    bgColor: 'bg-teal-100',
+    color: 'text-amber-600 dark:text-amber-400',
+    bgColor: 'bg-amber-100 dark:bg-amber-500/20',
     description: 'Received at COE',
   },
   in_triage: {
@@ -88,8 +88,8 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatus, {
   },
   ready_to_ship: {
     label: 'Ready to Ship',
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-100',
+    color: 'text-amber-600 dark:text-amber-400',
+    bgColor: 'bg-amber-100 dark:bg-amber-500/20',
     description: 'Ready for customer shipment',
   },
   shipped: {
@@ -437,6 +437,11 @@ export const API_ROUTES = {
   
   // Shipments
   SHIPMENTS: '/api/shipments',
+  SHIPMENT: (id: string) => `/api/shipments/${id}`,
+  SHIPMENT_PURCHASE_LABEL: (id: string) => `/api/shipments/${id}/purchase-label`,
+  SHIPMENTS_STATS: '/api/shipments/stats',
+  SHIPPO_HEALTH: '/api/shippo/health',
+  SHIPPO_WEBHOOK: '/api/shippo/webhook',
   
   // Triage
   TRIAGE: '/api/triage',

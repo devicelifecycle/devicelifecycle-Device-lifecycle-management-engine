@@ -87,9 +87,9 @@ export default function DashboardPage() {
       value: total,
       description: isInternal ? 'All time orders' : 'Your orders',
       icon: ShoppingCart,
-      iconBg: 'bg-teal-500/12',
-      iconColor: 'text-teal-600 dark:text-teal-400',
-      gradient: 'from-teal-500/5 to-emerald-500/5',
+      iconBg: 'bg-amber-500/12',
+      iconColor: 'text-amber-600 dark:text-amber-400',
+      gradient: 'from-amber-500/5 to-amber-600/5',
     },
     {
       title: 'Pending',
@@ -106,18 +106,18 @@ export default function DashboardPage() {
         value: breachedOrders,
         description: 'Orders breaching SLA',
         icon: AlertTriangle,
-        iconBg: breachedOrders > 0 ? 'bg-red-500/12' : 'bg-emerald-500/12',
-        iconColor: breachedOrders > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400',
-        gradient: breachedOrders > 0 ? 'from-red-500/5 to-rose-500/5' : 'from-emerald-500/5 to-teal-500/5',
+        iconBg: breachedOrders > 0 ? 'bg-red-500/12' : 'bg-amber-500/12',
+        iconColor: breachedOrders > 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400',
+        gradient: breachedOrders > 0 ? 'from-red-500/5 to-rose-500/5' : 'from-amber-500/5 to-amber-600/5',
       },
       {
         title: 'Revenue',
         value: formatCurrency(totalRevenue),
         description: 'From recent orders',
         icon: DollarSign,
-        iconBg: 'bg-emerald-500/12',
-        iconColor: 'text-emerald-600 dark:text-emerald-400',
-        gradient: 'from-emerald-500/5 to-teal-500/5',
+        iconBg: 'bg-amber-500/12',
+        iconColor: 'text-amber-600 dark:text-amber-400',
+        gradient: 'from-amber-500/5 to-amber-600/5',
       },
     ] : []),
   ]
@@ -144,8 +144,8 @@ export default function DashboardPage() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight font-heading">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-3xl font-bold tracking-tight font-heading cinematic-title">Dashboard</h1>
+          <p className="text-muted-foreground mt-1.5 text-[15px]">
             Welcome back, {user?.full_name || 'User'}. Here&apos;s what&apos;s happening today.
           </p>
         </div>
@@ -213,10 +213,10 @@ export default function DashboardPage() {
             transition={{ delay: 0.3 }}
             whileHover={{ y: -2 }}
           >
-            <Card className="border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5 card-hover-lift card-glow animate-shine">
+            <Card className="border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 card-hover-lift cinematic-card cinematic-vignette">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2 font-heading">
-                <TrendingUp className="h-4 w-4 text-teal-500" />
+                <TrendingUp className="h-4 w-4 text-amber-500" />
                 Order Trend (7 days)
               </CardTitle>
               <CardDescription>New orders created per day</CardDescription>
@@ -228,9 +228,9 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={trendData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="tealGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+                      <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 20% 91% / 0.5)" />
@@ -248,9 +248,9 @@ export default function DashboardPage() {
                     <Area
                       type="monotone"
                       dataKey="orders"
-                      stroke="#14b8a6"
+                      stroke="#f59e0b"
                       strokeWidth={2}
-                      fill="url(#tealGradient)"
+                      fill="url(#chartGradient)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -266,7 +266,7 @@ export default function DashboardPage() {
             transition={{ delay: 0.35 }}
             whileHover={{ y: -2 }}
           >
-            <Card className="border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5 card-hover-lift card-glow animate-shine">
+            <Card className="border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 card-hover-lift cinematic-card cinematic-vignette">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2 font-heading">
                 <Activity className="h-4 w-4 text-violet-500" />
@@ -318,15 +318,15 @@ export default function DashboardPage() {
         className="grid gap-6 lg:grid-cols-3"
       >
         {/* Quick Actions */}
-        <Card className="lg:col-span-1 border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5">
+        <Card className="lg:col-span-1 border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 cinematic-card">
           <CardHeader>
             <CardTitle className="text-base font-heading">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <Link href="/orders">
               <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/12 group-hover:bg-teal-500/20 transition-colors">
-                <ShoppingCart className="h-5 w-5 text-teal-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/12 group-hover:bg-amber-500/20 transition-colors">
+                <ShoppingCart className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-sm font-medium">{isInternal ? 'View All Orders' : 'My Orders'}</p>
@@ -350,8 +350,8 @@ export default function DashboardPage() {
                 {hasRole(['admin', 'coe_manager', 'sales']) && (
                   <Link href="/customers/new">
                     <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/12 group-hover:bg-emerald-500/20 transition-colors">
-                      <Users className="h-5 w-5 text-emerald-600" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/12 group-hover:bg-amber-500/20 transition-colors">
+                      <Users className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Add Customer</p>
@@ -392,7 +392,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent Orders */}
-        <Card className="lg:col-span-2 border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5">
+        <Card className="lg:col-span-2 border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 cinematic-card cinematic-vignette">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base font-heading">Recent Orders</CardTitle>
@@ -462,10 +462,10 @@ export default function DashboardPage() {
 
       {/* Activity Feed (internal only) */}
       {isInternal && recentOrders.length > 0 && (
-        <Card className="border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5">
+        <Card className="border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 cinematic-card cinematic-vignette">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 font-heading">
-              <Activity className="h-4 w-4 text-emerald-500" />
+              <Activity className="h-4 w-4 text-amber-500" />
               Activity Feed
             </CardTitle>
             <CardDescription>Recent order timeline</CardDescription>

@@ -55,28 +55,31 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen">
-      {/* Left - Bento showcase */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-teal-600 via-emerald-700 to-teal-800 animate-gradient-shift text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-20" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.12'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+      {/* Left - Cinematic showcase panel */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-[#050508] animate-gradient-shift text-white overflow-hidden cinematic-grain">
+        {/* Vignette */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_70%_at_50%_50%,transparent_40%,rgba(0,0,0,0.6)_100%)] pointer-events-none z-10" />
+        <div className="absolute inset-0 opacity-[0.04]" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
         }} />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 animate-glow" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-400/15 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3 animate-glow" />
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-cyan-500/12 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 animate-glow" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-violet-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 animate-glow" />
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-amber-400/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3">
-            <motion.div whileHover={{ scale: 1.05, rotate: 5 }} className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm shadow-lg">
-              <Package className="h-6 w-6" />
+            <motion.div whileHover={{ scale: 1.05, rotate: 5 }} className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/30 via-violet-500/20 to-amber-500/20 backdrop-blur-sm shadow-lg ring-1 ring-white/10">
+              <Package className="h-6 w-6 text-cyan-300" />
             </motion.div>
             <span className="font-heading text-xl font-bold tracking-tight">DLM Engine</span>
           </motion.div>
 
           <div className="space-y-8">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-4">
-              <h1 className="font-heading text-4xl font-bold leading-tight">
+              <h1 className="font-heading text-4xl font-bold leading-tight tracking-tight" style={{ textShadow: '0 2px 20px rgba(0,0,0,0.3)' }}>
                 Device Lifecycle<br />
-                <span className="text-teal-100">Management, Simplified.</span>
+                <span className="bg-gradient-to-r from-cyan-300 via-violet-300 to-amber-300 bg-clip-text text-transparent">Management, Simplified.</span>
               </h1>
-              <p className="text-lg text-teal-100 max-w-md">
+              <p className="text-base text-slate-400 max-w-md leading-relaxed">
                 The all-in-one platform for ITAD operations. From trade-in to delivery,
                 powered by AI pricing and real-time tracking.
               </p>
@@ -90,12 +93,12 @@ export default function LoginPage() {
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.2 + i * 0.05 }}
                   whileHover={{ scale: 1.03, y: -4 }}
-                  className={`${tile.className} flex flex-col justify-center rounded-2xl bg-white/10 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/15 hover:border-white/20 cursor-default transition-all`}
+                  className={`${tile.className} flex flex-col justify-center rounded-2xl bg-white/5 backdrop-blur-sm p-4 border border-white/10 hover:bg-white/10 hover:border-cyan-500/30 cursor-default transition-all duration-300`}
                 >
-                  <tile.icon className="h-8 w-8 text-teal-200 mb-2" />
+                  <tile.icon className="h-8 w-8 text-cyan-400/90 mb-2" />
                   <span className="text-sm font-semibold">{tile.label}</span>
                   {tile.className.includes('row-span-2') && (
-                    <span className="text-xs text-teal-200/90 mt-1">Trade-in & CPO</span>
+                    <span className="text-xs text-cyan-400/70 mt-1">Trade-in & CPO</span>
                   )}
                 </motion.div>
               ))}
@@ -103,26 +106,26 @@ export default function LoginPage() {
 
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="flex gap-8">
               <div>
-                <motion.div className="font-heading text-2xl font-bold" whileHover={{ scale: 1.1 }}>40+</motion.div>
-                <div className="text-xs text-teal-200">Devices</div>
+                <motion.div className="font-heading text-2xl font-bold text-cyan-300/90" whileHover={{ scale: 1.05 }}>40+</motion.div>
+                <div className="text-xs text-slate-500">Devices</div>
               </div>
               <div>
-                <motion.div className="font-heading text-2xl font-bold" whileHover={{ scale: 1.1 }}>4</motion.div>
-                <div className="text-xs text-teal-200">Pricing Models</div>
+                <motion.div className="font-heading text-2xl font-bold text-violet-300/90" whileHover={{ scale: 1.05 }}>4</motion.div>
+                <div className="text-xs text-slate-500">Pricing Models</div>
               </div>
               <div>
-                <motion.div className="font-heading text-2xl font-bold" whileHover={{ scale: 1.1 }}>Real-time</motion.div>
-                <div className="text-xs text-teal-200">Tracking</div>
+                <motion.div className="font-heading text-2xl font-bold text-amber-300/90" whileHover={{ scale: 1.05 }}>Real-time</motion.div>
+                <div className="text-xs text-slate-500">Tracking</div>
               </div>
             </motion.div>
           </div>
 
-          <p className="text-sm text-teal-200/90">© {new Date().getFullYear()} DLM Engine.</p>
+          <p className="text-sm text-slate-500">© {new Date().getFullYear()} DLM Engine.</p>
         </div>
       </div>
 
       {/* Right - Form */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-mesh bg-muted/20">
+      <div className="flex w-full lg:w-1/2 items-center justify-center p-8 bg-[#050508] bg-mesh cinematic-grain">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

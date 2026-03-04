@@ -25,9 +25,13 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const direction = searchParams.get('direction') as 'inbound' | 'outbound' | null
+    const orderId = searchParams.get('order_id')
 
     let shipments
-    if (direction === 'inbound') {
+    if (orderId) {
+      // Get shipments for a specific order
+      shipments = await ShipmentService.getShipmentsByOrderId(orderId)
+    } else if (direction === 'inbound') {
       shipments = await ShipmentService.getPendingInboundShipments()
     } else if (direction === 'outbound') {
       shipments = await ShipmentService.getPendingOutboundShipments()

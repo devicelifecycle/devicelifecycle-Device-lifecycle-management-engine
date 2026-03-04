@@ -12,14 +12,35 @@ export async function GET(
 ) {
   try {
     const supabase = createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const record = await IMEIService.getByIMEI(params.imei)
     if (!record) {
       return NextResponse.json({ error: 'IMEI not found' }, { status: 404 })
+    }
+
+    // Enforce org boundary for non-admin/coe_manager (IDOR prevention)
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
+      .single()
+    if (userProfile?.role === 'coe_tech' && userProfile.organization_id) {
+      let hasAccess = false
+      if (record.source_vendor_id) {
+        const { data: v } = await supabase.from('vendors').select('organization_id').eq('id', record.source_vendor_id).single()
+        if (v?.organization_id === userProfile.organization_id) hasAccess = true
+      }
+      if (!hasAccess && record.current_customer_id) {
+        const { data: c } = await supabase.from('customers').select('organization_id').eq('id', record.current_customer_id).single()
+        if (c?.organization_id === userProfile.organization_id) hasAccess = true
+      }
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     return NextResponse.json(record)
@@ -37,31 +58,52 @@ export async function PATCH(
 ) {
   try {
     const supabase = createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Check role - only admin, coe_manager, coe_tech can update IMEI records
-    const { data: user } = await supabase
+    const { data: userProfile } = await supabase
       .from('users')
-      .select('role')
-      .eq('id', session.user.id)
+      .select('role, organization_id')
+      .eq('id', authUser.id)
       .single()
 
-    if (!user || !['admin', 'coe_manager', 'coe_tech'].includes(user.role)) {
+    if (!userProfile || !['admin', 'coe_manager', 'coe_tech'].includes(userProfile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    const record = await IMEIService.getByIMEI(params.imei)
+    if (!record) {
+      return NextResponse.json({ error: 'IMEI not found' }, { status: 404 })
+    }
+
+    // Enforce org boundary for non-admin/coe_manager (IDOR prevention)
+    if (userProfile.role === 'coe_tech' && userProfile.organization_id) {
+      let hasAccess = false
+      if (record.source_vendor_id) {
+        const { data: v } = await supabase.from('vendors').select('organization_id').eq('id', record.source_vendor_id).single()
+        if (v?.organization_id === userProfile.organization_id) hasAccess = true
+      }
+      if (!hasAccess && record.current_customer_id) {
+        const { data: c } = await supabase.from('customers').select('organization_id').eq('id', record.current_customer_id).single()
+        if (c?.organization_id === userProfile.organization_id) hasAccess = true
+      }
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
     const body = await request.json()
-    const record = await IMEIService.updateIMEIRecord(
+    const updated = await IMEIService.updateIMEIRecord(
       params.imei,
       body,
-      session.user.id,
+      authUser.id,
       body.event_description
     )
 
-    return NextResponse.json(record)
+    return NextResponse.json(updated)
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to update IMEI record' },
