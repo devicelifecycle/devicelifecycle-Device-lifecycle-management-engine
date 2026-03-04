@@ -28,7 +28,7 @@ function getGreeting(): string {
 export function Header({ onMenuClick }: HeaderProps) {
   const { unreadCount } = useNotifications()
   const { user } = useAuth()
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
   const pathname = usePathname()
 
   // Generate breadcrumbs from pathname
@@ -43,7 +43,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   })
 
   return (
-    <header className="relative flex h-14 items-center justify-between border-b border-border/60 bg-background/80 dark:bg-background/60 backdrop-blur-xl px-6 sticky top-0 z-40">
+    <header className="relative flex h-14 items-center justify-between border-b border-white/5 bg-[#050508]/90 backdrop-blur-2xl px-6 sticky top-0 z-40">
       {/* Left side */}
       <div className="flex items-center gap-4">
         <Button
@@ -90,7 +90,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           transition={{ delay: 0.3 }}
           className="hidden lg:flex items-center gap-1.5 text-sm text-muted-foreground"
         >
-          <Sparkles className="h-3.5 w-3.5 text-teal-500" />
+          <Sparkles className="h-3.5 w-3.5 text-cyan-500" />
           <span>{getGreeting()}, <span className="font-medium text-foreground">{user?.full_name?.split(' ')[0] || 'User'}</span></span>
         </motion.div>
 
@@ -102,17 +102,17 @@ export function Header({ onMenuClick }: HeaderProps) {
           variant="ghost"
           size="icon"
           className="h-9 w-9"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
-              key={theme}
+              key={resolvedTheme ?? 'light'}
               initial={{ y: -10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 10, opacity: 0 }}
               transition={{ duration: 0.15 }}
             >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </motion.div>
           </AnimatePresence>
         </Button>
@@ -133,7 +133,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   animate={{ scale: 1 }}
                   exit={{ scale: 0 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 15 }}
-                  className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-white ring-2 ring-background shadow-sm"
+                  className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500 text-[10px] font-bold text-black ring-2 ring-background shadow-sm"
                 >
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </motion.span>
@@ -143,8 +143,9 @@ export function Header({ onMenuClick }: HeaderProps) {
         </Link>
       </div>
 
-      {/* Bottom accent line */}
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+      {/* Bottom accent line — cinematic glow */}
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="absolute bottom-0 left-1/4 right-1/4 h-px bg-primary/20 blur-sm" />
     </header>
   )
 }

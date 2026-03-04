@@ -24,7 +24,7 @@ export function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
           isUser
             ? 'bg-primary text-primary-foreground'
-            : 'bg-gradient-to-br from-teal-500 to-emerald-600 text-white'
+            : 'bg-gradient-to-br from-amber-500 to-amber-600 text-white'
         )}
       >
         {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}

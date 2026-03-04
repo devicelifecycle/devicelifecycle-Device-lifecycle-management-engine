@@ -22,8 +22,30 @@ export default function VendorsPage() {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const debouncedSearch = useDebounce(search)
-  const { vendors, total, isLoading, totalPages } = useVendors({ search: debouncedSearch, page })
+  const isActiveFilter = statusFilter === 'all' ? undefined : statusFilter === 'active'
+  const { vendors, total, isLoading, totalPages, error } = useVendors({
+    search: debouncedSearch,
+    page,
+    is_active: isActiveFilter,
+  })
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold tracking-tight">Vendors</h1>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-destructive font-medium">Failed to load vendors</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              You may not have permission to view this page, or there was a connection error.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -37,9 +59,20 @@ export default function VendorsPage() {
         </Link>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search vendors..." className="pl-10 bg-background" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Search vendors..." className="pl-10 bg-background" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
+        </div>
+        <select
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value as 'all' | 'active' | 'inactive'); setPage(1) }}
+        >
+          <option value="all">All vendors</option>
+          <option value="active">Active only</option>
+          <option value="inactive">Inactive only</option>
+        </select>
       </div>
 
       <Card>

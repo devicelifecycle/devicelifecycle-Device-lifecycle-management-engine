@@ -4,8 +4,12 @@ import React from 'react'
 import { motion, useInView, type Variants } from 'framer-motion'
 
 const fadeInUp: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0 },
+  hidden: { opacity: 0, y: 28 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 260, damping: 24 },
+  },
 }
 
 const fadeIn: Variants = {
@@ -14,8 +18,12 @@ const fadeIn: Variants = {
 }
 
 const scaleIn: Variants = {
-  hidden: { opacity: 0, scale: 0.95 },
-  visible: { opacity: 1, scale: 1 },
+  hidden: { opacity: 0, scale: 0.92 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { type: 'spring', stiffness: 280, damping: 22 },
+  },
 }
 
 const staggerContainer: Variants = {
@@ -128,9 +136,9 @@ export function MotionCard({
 export function PageTransition({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 22 }}
       className={className}
     >
       {children}

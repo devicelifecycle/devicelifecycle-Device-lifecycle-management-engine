@@ -1,21 +1,184 @@
 // ============================================================================
 // ORDER CSV UPLOAD API ROUTE
 // ============================================================================
+// Auto-detects 3 CSV template formats:
+//   1. Trade-In: Make, Model, Storage/GB, IMEI, Colour, Condition, Faults/Notes
+//   2. CPO Request: Make, Model, Storage/GB, Condition, Quantity
+//   3. Vendor Inventory: Product, Year, Model, Screen Size, CPU, RAM, Storage, Sample S/N, Accessories, Condition
+// ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 
-interface CSVRow {
+type TemplateType = 'trade_in' | 'cpo' | 'vendor_inventory'
+
+// Column name aliases → canonical field names
+const COLUMN_MAP: Record<string, string> = {
+  // Brand / Make
+  'make': 'brand',
+  'make*': 'brand',
+  'brand': 'brand',
+  'manufacturer': 'brand',
+  // Model
+  'model': 'model',
+  'model*': 'model',
+  'device': 'model',
+  'product': 'product',  // special: parse brand from "MacBook Pro 16-inch"
+  // Storage
+  'storage': 'storage',
+  'storage/gb': 'storage',
+  'storage/gb*': 'storage',
+  'capacity': 'storage',
+  // Condition
+  'condition': 'condition',
+  // Quantity
+  'quantity': 'quantity',
+  'qty': 'quantity',
+  // IMEI
+  'imei': 'imei',
+  // Serial number
+  'serial_number': 'serial_number',
+  'serial': 'serial_number',
+  'sample s/n': 'serial_number',
+  's/n': 'serial_number',
+  'sn': 'serial_number',
+  // Colour
+  'colour': 'colour',
+  'color': 'colour',
+  // Faults / Notes
+  'faults/notes': 'faults',
+  'faults': 'faults',
+  'fault': 'faults',
+  'notes': 'notes',
+  // Extended metadata
+  'year': 'year',
+  'cpu': 'cpu',
+  'processor': 'cpu',
+  'ram': 'ram',
+  'memory': 'ram',
+  'screen size': 'screen_size',
+  'screen': 'screen_size',
+  'display': 'screen_size',
+  'model number': 'model_number',
+  'accessories': 'accessories',
+  'accessories. ex., charger?': 'accessories',
+}
+
+// Map free-text condition → enum
+// Order: check worst conditions first (poor→fair) before better ones (good→excellent→new)
+// to avoid false positives like "battery worn" matching "new" via substring
+function normalizeCondition(raw: string): string | null {
+  if (!raw) return null
+  const lower = raw.toLowerCase().trim()
+
+  // Direct match
+  if (DEVICE_CONDITION_VALUES.includes(lower as (typeof DEVICE_CONDITION_VALUES)[number])) {
+    return lower
+  }
+
+  // Check worst → best to avoid substring false positives
+  if (lower.includes('cracked') || lower.includes('broken') || lower.includes('damaged')) return 'poor'
+  if (lower.includes('battery') || lower.includes('scratch') || lower.includes('worn') || lower.includes('fair')) return 'fair'
+  if (lower.includes('good') || lower.includes('reset and cleaned') || lower.includes('clean')) return 'good'
+  // "like new" and "mint" must be checked before bare "new"
+  if (lower.includes('like new') || lower.includes('excellent') || lower.includes('mint')) return 'excellent'
+  if (lower.includes('new') || lower.includes('sealed') || lower.includes('unopened')) return 'new'
+
+  return null // Couldn't map — will store raw text in faults/notes
+}
+
+// Extract brand from product string like "MacBook Pro 16-inch"
+function extractBrandFromProduct(product: string): { brand: string; model: string } {
+  const lower = product.toLowerCase()
+  if (lower.includes('macbook') || lower.includes('iphone') || lower.includes('ipad') || lower.includes('apple watch')) {
+    return { brand: 'Apple', model: product }
+  }
+  if (lower.includes('galaxy') || lower.includes('samsung')) {
+    return { brand: 'Samsung', model: product.replace(/samsung\s*/i, '') }
+  }
+  if (lower.includes('pixel') || lower.includes('google')) {
+    return { brand: 'Google', model: product.replace(/google\s*/i, '') }
+  }
+  if (lower.includes('surface') || lower.includes('microsoft')) {
+    return { brand: 'Microsoft', model: product }
+  }
+  if (lower.includes('thinkpad') || lower.includes('lenovo')) {
+    return { brand: 'Lenovo', model: product }
+  }
+  if (lower.includes('dell') || lower.includes('latitude') || lower.includes('xps')) {
+    return { brand: 'Dell', model: product }
+  }
+  if (lower.includes('hp') || lower.includes('elitebook') || lower.includes('probook')) {
+    return { brand: 'HP', model: product }
+  }
+  // Fallback: first word is brand
+  const parts = product.trim().split(/\s+/)
+  return { brand: parts[0], model: parts.slice(1).join(' ') || parts[0] }
+}
+
+// Detect template type from column headers
+function detectTemplate(columns: string[]): TemplateType {
+  const lowerCols = columns.map(c => c.toLowerCase().trim())
+
+  // Vendor inventory: has Product + Year + CPU/RAM columns
+  if (lowerCols.some(c => c === 'product') && (lowerCols.some(c => c === 'cpu' || c === 'processor') || lowerCols.some(c => c === 'ram' || c === 'memory'))) {
+    return 'vendor_inventory'
+  }
+
+  // CPO: has Quantity column
+  if (lowerCols.some(c => c === 'quantity' || c === 'qty')) {
+    return 'cpo'
+  }
+
+  // Default: trade-in (per-device rows)
+  return 'trade_in'
+}
+
+// Map raw column headers to canonical field names
+function mapColumns(columns: string[]): Record<number, string> {
+  const mapping: Record<number, string> = {}
+  for (let i = 0; i < columns.length; i++) {
+    const lower = columns[i].toLowerCase().trim()
+    if (COLUMN_MAP[lower]) {
+      mapping[i] = COLUMN_MAP[lower]
+    }
+  }
+  return mapping
+}
+
+// Convert a raw row to a canonical record using column mapping
+function mapRow(rawRow: Record<string, string>, columns: string[], colMap: Record<number, string>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (let i = 0; i < columns.length; i++) {
+    const fieldName = colMap[i]
+    if (fieldName) {
+      const value = rawRow[columns[i]] || ''
+      result[fieldName] = value.trim()
+    }
+  }
+  return result
+}
+
+interface NormalizedRow {
   brand: string
   model: string
   storage: string
-  condition: string
+  condition: string | null
   quantity: number
   imei?: string
   serial_number?: string
+  colour?: string
+  cpu?: string
+  ram?: string
+  screen_size?: string
+  year?: number
+  model_number?: string
+  accessories?: string
+  faults?: string
   notes?: string
+  raw_condition?: string  // original free-text if condition couldn't be mapped
 }
 
 export async function POST(request: NextRequest) {
@@ -27,7 +190,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Role-based authorization: only sales, coe_manager, admin can upload CSVs
     const { data: userProfile } = await supabase
       .from('users')
       .select('role, organization_id')
@@ -39,74 +201,117 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { rows, customer_id } = body as { rows: CSVRow[]; customer_id: string }
-
-    if (!rows || !Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json(
-        { error: 'No data rows provided' },
-        { status: 400 }
-      )
+    const { rows, columns, customer_id, order_type } = body as {
+      rows: Record<string, string>[]
+      columns?: string[]
+      customer_id: string
+      order_type?: 'trade_in' | 'cpo'
     }
 
-    // Security: Limit row count to prevent DOS
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return NextResponse.json({ error: 'No data rows provided' }, { status: 400 })
+    }
+
     if (rows.length > 1000) {
-      return NextResponse.json(
-        { error: 'Too many rows. Maximum 1,000 rows per upload.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Too many rows. Maximum 1,000 rows per upload.' }, { status: 400 })
     }
 
     if (!customer_id) {
-      return NextResponse.json(
-        { error: 'customer_id is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'customer_id is required' }, { status: 400 })
     }
 
-    // Verify customer_id is a valid UUID and exists (prevents IDOR)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!uuidRegex.test(customer_id)) {
       return NextResponse.json({ error: 'Invalid customer_id format' }, { status: 400 })
     }
+
     const { data: customer } = await supabase
       .from('customers')
       .select('id, organization_id, is_active')
       .eq('id', customer_id)
       .single()
-    if (!customer) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
-    }
-    if (!customer.is_active) {
-      return NextResponse.json({ error: 'Customer is inactive' }, { status: 400 })
-    }
-    // Multi-tenant: sales can only create orders for customers in their org
+
+    if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    if (!customer.is_active) return NextResponse.json({ error: 'Customer is inactive' }, { status: 400 })
+
     if (userProfile.role === 'sales' && userProfile.organization_id && customer.organization_id) {
       if (customer.organization_id !== userProfile.organization_id) {
         return NextResponse.json({ error: 'Cannot create orders for customers in another organization' }, { status: 403 })
       }
     }
 
-    // Sanitize and validate rows
+    // Detect column headers
+    const detectedColumns = columns || Object.keys(rows[0])
+    const templateType = detectTemplate(detectedColumns)
+    const colMap = mapColumns(detectedColumns)
+
+    // Normalize all rows
     const errors: { row: number; message: string }[] = []
-    const sanitizedRows = rows.map((row, index) => {
-      const brand = sanitizeCsvCell(row.brand)
-      const model = sanitizeCsvCell(row.model)
-      const storage = sanitizeCsvCell(row.storage)
-      const condition = sanitizeCsvCell(row.condition)
-      const quantity = Number(row.quantity)
+    const normalizedRows: NormalizedRow[] = []
 
-      const condLower = condition.toLowerCase().trim()
-      const validCondition = DEVICE_CONDITION_VALUES.includes(condLower as (typeof DEVICE_CONDITION_VALUES)[number])
+    for (let i = 0; i < rows.length; i++) {
+      const rawRow = rows[i]
+      const mapped = mapRow(rawRow, detectedColumns, colMap)
 
-      if (!brand) errors.push({ row: index + 1, message: 'Brand is required' })
-      if (!model) errors.push({ row: index + 1, message: 'Model is required' })
-      if (!storage) errors.push({ row: index + 1, message: 'Storage is required' })
-      if (!condition) errors.push({ row: index + 1, message: 'Condition is required' })
-      if (!validCondition) errors.push({ row: index + 1, message: `Condition must be one of: ${DEVICE_CONDITION_VALUES.join(', ')}` })
-      if (!quantity || quantity < 1 || quantity > 10000) errors.push({ row: index + 1, message: 'Quantity must be between 1 and 10,000' })
+      // If no column mapping worked, fall back to raw keys with aliases
+      let brand = sanitizeCsvCell(mapped.brand || rawRow.brand || rawRow.Brand || rawRow.make || rawRow.Make || rawRow['Make*'] || '')
+      let model = sanitizeCsvCell(mapped.model || rawRow.model || rawRow.Model || rawRow['Model*'] || '')
+      const storage = sanitizeCsvCell(mapped.storage || rawRow.storage || rawRow.Storage || rawRow['Storage/GB'] || rawRow['Storage/GB*'] || '')
 
-      return { ...row, brand, model, storage, condition: validCondition ? condLower : condition, quantity }
-    })
+      // Handle "Product" column (vendor inventory format)
+      if (!brand && mapped.product) {
+        const extracted = extractBrandFromProduct(mapped.product)
+        brand = extracted.brand
+        if (!model) model = extracted.model
+      }
+
+      // Condition: try to normalize to enum, store raw text if not mappable
+      const rawCondition = sanitizeCsvCell(mapped.condition || rawRow.condition || rawRow.Condition || '')
+      const faults = sanitizeCsvCell(mapped.faults || rawRow['Faults/Notes'] || rawRow.faults || rawRow.Faults || '')
+      // Try condition column first; if empty/unmappable, derive from faults text
+      const normalizedCondition = normalizeCondition(rawCondition) || normalizeCondition(faults)
+
+      // If condition is free text and couldn't be normalized, store it in faults
+      const effectiveFaults = (!normalizedCondition && rawCondition)
+        ? [faults, rawCondition].filter(Boolean).join(' | ')
+        : faults
+
+      // Quantity: default to 1 for trade-in/inventory (per-device rows)
+      let quantity = Number(mapped.quantity || rawRow.quantity || rawRow.Quantity || rawRow.Qty || 0)
+      if (templateType !== 'cpo' && (!quantity || quantity < 1)) {
+        quantity = 1  // Per-device rows have implicit qty=1
+      }
+
+      // Validation
+      if (!brand) errors.push({ row: i + 1, message: 'Make/Brand is required' })
+      if (!model) errors.push({ row: i + 1, message: 'Model is required' })
+      if (templateType === 'cpo' && (!quantity || quantity < 1)) {
+        errors.push({ row: i + 1, message: 'Quantity is required for CPO orders' })
+      }
+
+      const yearStr = mapped.year || rawRow.year || rawRow.Year || ''
+      const yearNum = yearStr ? parseInt(yearStr, 10) : undefined
+
+      normalizedRows.push({
+        brand,
+        model,
+        storage: storage.replace(/\s*GB\s*/i, '').trim() || storage, // Strip "GB" suffix
+        condition: normalizedCondition,
+        quantity: Math.max(1, quantity),
+        imei: sanitizeCsvCell(mapped.imei || rawRow.imei || rawRow.IMEI || ''),
+        serial_number: sanitizeCsvCell(mapped.serial_number || rawRow.serial_number || rawRow['Sample S/N'] || rawRow['S/N'] || rawRow.Serial || ''),
+        colour: sanitizeCsvCell(mapped.colour || rawRow.colour || rawRow.Colour || rawRow.color || rawRow.Color || ''),
+        cpu: sanitizeCsvCell(mapped.cpu || rawRow.cpu || rawRow.CPU || rawRow.Processor || ''),
+        ram: sanitizeCsvCell(mapped.ram || rawRow.ram || rawRow.RAM || rawRow.Memory || ''),
+        screen_size: sanitizeCsvCell(mapped.screen_size || rawRow['Screen Size'] || rawRow.screen_size || rawRow.Screen || ''),
+        year: yearNum && yearNum > 1990 && yearNum < 2100 ? yearNum : undefined,
+        model_number: sanitizeCsvCell(mapped.model_number || rawRow['Model Number'] || ''),
+        accessories: sanitizeCsvCell(mapped.accessories || rawRow.accessories || rawRow.Accessories || rawRow['Accessories. Ex., Charger?'] || ''),
+        faults: effectiveFaults || undefined,
+        notes: sanitizeCsvCell(mapped.notes || rawRow.notes || rawRow.Notes || ''),
+        raw_condition: rawCondition || undefined,
+      })
+    }
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -115,19 +320,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate order number using DB function to avoid collisions
-    const { data: orderNumResult } = await supabase.rpc('generate_order_number')
-    const orderNumber = orderNumResult || `TI-${Date.now()}`
+    // Determine order type
+    const effectiveOrderType = order_type || (templateType === 'cpo' ? 'cpo' : 'trade_in')
 
-    // Calculate totals using sanitized rows
-    const totalQuantity = sanitizedRows.reduce((sum, row) => sum + row.quantity, 0)
+    // Generate order number
+    const { data: orderNumResult } = await supabase.rpc('generate_order_number')
+    const orderNumber = orderNumResult || `${effectiveOrderType === 'cpo' ? 'CPO' : 'TI'}-${Date.now()}`
+
+    const totalQuantity = normalizedRows.reduce((sum, row) => sum + row.quantity, 0)
 
     // Create order
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
         order_number: orderNumber,
-        type: 'trade_in',
+        type: effectiveOrderType,
         status: 'draft',
         customer_id,
         created_by_id: user.id,
@@ -139,26 +346,46 @@ export async function POST(request: NextRequest) {
 
     if (orderError) throw orderError
 
-    // Look up devices and create order items from sanitized rows
+    // Look up devices and create order items
     const orderItems = []
-    for (const row of sanitizedRows) {
-      // Try to find matching device
+    for (const row of normalizedRows) {
+      // Try to find matching device in catalog
+      let deviceId: string | null = null
+
+      // First try exact make + model match
       const { data: device } = await supabase
         .from('device_catalog')
         .select('id')
         .ilike('make', row.brand)
-        .ilike('model', row.model)
+        .ilike('model', `%${row.model}%`)
         .limit(1)
         .single()
 
-      orderItems.push({
+      deviceId = device?.id || null
+
+      // Build the order item
+      const item: Record<string, unknown> = {
         order_id: order.id,
-        device_id: device?.id || null,
+        device_id: deviceId,
         quantity: row.quantity,
-        storage: row.storage,
-        claimed_condition: row.condition,
-        notes: row.notes || null,
-      })
+        storage: row.storage || null,
+        claimed_condition: row.condition || null,
+        notes: [row.notes, row.faults].filter(Boolean).join(' | ') || null,
+      }
+
+      // Add extended fields if present
+      if (row.imei) item.imei = row.imei
+      if (row.serial_number) item.serial_number = row.serial_number
+      if (row.colour) item.colour = row.colour
+      if (row.cpu) item.cpu = row.cpu
+      if (row.ram) item.ram = row.ram
+      if (row.screen_size) item.screen_size = row.screen_size
+      if (row.year) item.year = row.year
+      if (row.model_number) item.model_number = row.model_number
+      if (row.accessories) item.accessories = row.accessories
+      if (row.faults) item.faults = row.faults
+
+      orderItems.push(item)
     }
 
     if (orderItems.length > 0) {
@@ -173,6 +400,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       order,
+      template_detected: templateType,
+      order_type: effectiveOrderType,
       items_created: orderItems.length,
       total_quantity: totalQuantity,
     }, { status: 201 })

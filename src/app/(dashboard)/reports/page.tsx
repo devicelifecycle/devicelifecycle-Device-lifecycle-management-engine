@@ -102,8 +102,8 @@ export default function ReportsPage() {
       title: 'Total Revenue',
       value: formatCurrency(orderStats?.totalRevenue || 0),
       icon: DollarSign,
-      iconBg: 'bg-emerald-500/10',
-      iconColor: 'text-emerald-600',
+      iconBg: 'bg-amber-500/10',
+      iconColor: 'text-amber-600 dark:text-amber-400',
     },
     {
       title: 'Avg. Order Value',

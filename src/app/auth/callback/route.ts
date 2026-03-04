@@ -19,8 +19,18 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const next = searchParams.get('next') || '/dashboard'
 
-  // Validate 'next' is a relative path to prevent open redirect
-  const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard'
+  // Strict whitelist to prevent open redirect (e.g. /%2f%2fevil.com)
+  const ALLOWED = ['/', '/dashboard', '/login', '/reset-password']
+  let decoded = next
+  try {
+    decoded = decodeURIComponent(next)
+  } catch {
+    decoded = '/dashboard'
+  }
+  const isAllowed =
+    (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes(':')) &&
+    (ALLOWED.includes(decoded) || decoded.startsWith('/dashboard/') || decoded.startsWith('/login'))
+  const safeNext = isAllowed ? decoded : '/dashboard'
 
   if (code) {
     const cookieStore = cookies()

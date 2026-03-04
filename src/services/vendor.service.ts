@@ -20,7 +20,7 @@ export class VendorService {
    * Get vendors with pagination
    */
   static async getVendors(
-    params: PaginationParams & { search?: string; capability?: string }
+    params: PaginationParams & { search?: string; capability?: string; is_active?: boolean }
   ): Promise<PaginatedResponse<Vendor>> {
     const supabase = createServerSupabaseClient()
     
@@ -31,12 +31,17 @@ export class VendorService {
       sort_order = 'asc',
       search,
       capability,
+      is_active,
     } = params
 
     let query = supabase
       .from('vendors')
       .select('*', { count: 'exact' })
-      .eq('is_active', true)
+
+    // Filter by is_active only when explicitly provided; omit to show all (admin view)
+    if (is_active !== undefined) {
+      query = query.eq('is_active', is_active)
+    }
 
     if (search) {
       const s = sanitizeSearchInput(search)

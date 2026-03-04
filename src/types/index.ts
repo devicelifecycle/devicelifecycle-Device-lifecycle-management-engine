@@ -335,6 +335,20 @@ export interface OrderItem extends BaseEntity {
   notes?: string;
   pricing_metadata?: PricingMetadata | null;
 
+  // Per-device identifiers (from CSV import)
+  imei?: string;
+  serial_number?: string;
+  colour?: string;
+
+  // Extended device metadata (laptops, tablets)
+  cpu?: string;
+  ram?: string;
+  screen_size?: string;
+  year?: number;
+  model_number?: string;
+  accessories?: string;
+  faults?: string;
+
   // Split order fields
   parent_item_id?: string;
   allocated_vendor_id?: string;

@@ -5,7 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Truck, Search, Package, Send } from 'lucide-react'
+import { Truck, Search, Package, Send, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -217,6 +217,27 @@ export default function COEShippingPage() {
     } finally { setIsUpdating(false) }
   }
 
+  const handleMarkOrderShipped = async (shipment: Shipment) => {
+    const order = shipment.order as unknown as Record<string, string> | undefined
+    const orderId = shipment.order_id || order?.id
+    if (!orderId) { toast.error('No order linked to this shipment'); return }
+    try {
+      const res = await fetch(`/api/orders/${orderId}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'shipped' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to transition order')
+      }
+      toast.success('Order marked as shipped')
+      fetchShipments()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to mark order as shipped')
+    }
+  }
+
   const filterShipments = (list: Shipment[]) => {
     if (!debouncedSearch) return list
     const q = debouncedSearch.toLowerCase()
@@ -257,6 +278,11 @@ export default function COEShippingPage() {
                   <a href={s.label_pdf_url} target="_blank" rel="noreferrer" className="mr-2 text-xs text-primary hover:underline">
                     Label PDF
                   </a>
+                )}
+                {s.status === 'label_created' && (s.order as unknown as Record<string, string>)?.status === 'ready_to_ship' && (
+                  <Button size="sm" variant="default" className="mr-2" onClick={() => handleMarkOrderShipped(s)}>
+                    <CheckCircle2 className="mr-1 h-3 w-3" />Ship Order
+                  </Button>
                 )}
                 {s.status !== 'delivered' && (
                   <Button size="sm" variant="outline" onClick={() => { setSelectedShipment(s); setNewStatus(''); setExceptionDetails(''); setUpdateDialogOpen(true) }}>

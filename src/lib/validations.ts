@@ -300,8 +300,8 @@ export const addressSchema = z.object({
   street2: z.string().optional(),
   city: z.string().min(1, 'City is required'),
   state: z.string().min(1, 'State is required'),
-  zip_code: z.string().min(1, 'ZIP code is required'),
-  country: z.string().default('USA'),
+  postal_code: z.string().min(1, 'ZIP/Postal code is required'),
+  country: z.string().default('US'),
   phone: phoneSchema,
   email: emailSchema.optional(),
 })

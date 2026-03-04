@@ -12,7 +12,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 
 export default function RegisterPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-muted/30 via-background to-muted/50 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050508] bg-mesh cinematic-grain px-4">
       <Link href="/" className="mb-8 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
           <Package className="h-6 w-6" />
@@ -21,8 +21,8 @@ export default function RegisterPage() {
       </Link>
       <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-blue-500/10 mb-3">
-            <ShieldCheck className="h-7 w-7 text-blue-600" />
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500/10 mb-3">
+            <ShieldCheck className="h-7 w-7 text-amber-600 dark:text-amber-400" />
           </div>
           <CardTitle className="text-2xl font-bold">Request Access</CardTitle>
           <CardDescription className="text-base">
@@ -40,8 +40,8 @@ export default function RegisterPage() {
               <li>You&apos;ll receive login credentials once approved</li>
             </ol>
           </div>
-          <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 p-4">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4">
+            <p className="text-sm text-amber-800 dark:text-amber-200">
               <strong>Already have credentials?</strong> If your admin has created your account, you can sign in immediately.
             </p>
           </div>

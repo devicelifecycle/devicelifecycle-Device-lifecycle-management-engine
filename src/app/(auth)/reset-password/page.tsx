@@ -101,8 +101,8 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-muted/30 via-background to-muted/50 px-4">
-        <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#050508] bg-mesh cinematic-grain px-4">
+        <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in bg-card">
           <CardContent className="pt-8 pb-6 text-center space-y-4">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-green-500/10">
               <CheckCircle2 className="h-7 w-7 text-green-600" />
@@ -123,14 +123,14 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-muted/30 via-background to-muted/50 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050508] bg-mesh cinematic-grain px-4">
       <Link href="/" className="mb-8 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
           <Package className="h-6 w-6" />
         </div>
         <span className="text-xl font-bold tracking-tight">Enterprise Engine</span>
       </Link>
-      <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in">
+      <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in bg-card">
         <CardHeader className="text-center pb-2">
           <CardTitle className="text-2xl font-bold">Set New Password</CardTitle>
           <CardDescription>
