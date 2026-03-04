@@ -3,6 +3,8 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { ShippoService } from '@/services/shippo.service'
 import { OrderService } from '@/services/order.service'
 import type { Shipment } from '@/types'
 
@@ -236,6 +238,64 @@ export class ShipmentService {
     }
 
     return data as Shipment
+  }
+
+  /**
+   * Process Shippo webhook updates. Uses service-role client (no user session).
+   */
+  static async processShippoWebhook(input: {
+    tracking_number: string
+    shippo_tracking_status: string
+    status_details?: string
+    status_date?: string
+    location?: { city?: string; state?: string; country?: string }
+    event?: string
+  }): Promise<void> {
+    const supabase = createServiceRoleClient()
+
+    const { data: shipment } = await supabase
+      .from('shipments')
+      .select('id, tracking_events')
+      .eq('tracking_number', input.tracking_number)
+      .single()
+
+    if (!shipment) return
+
+    const internalStatus = ShippoService.mapShippoTrackingStatusToInternal(input.shippo_tracking_status)
+
+    await supabase
+      .from('shipments')
+      .update({
+        status: internalStatus,
+        shippo_tracking_status: input.shippo_tracking_status,
+        ...(internalStatus === 'exception' && {
+          exception_details: input.status_details || 'Carrier exception',
+          exception_at: new Date().toISOString(),
+        }),
+        ...(internalStatus === 'delivered' && { delivered_at: new Date().toISOString() }),
+        ...(internalStatus === 'in_transit' && { in_transit_at: new Date().toISOString() }),
+        ...(internalStatus === 'out_for_delivery' && { out_for_delivery_at: new Date().toISOString() }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', shipment.id)
+
+    const loc = input.location
+    const locationStr = [loc?.city, loc?.state, loc?.country].filter(Boolean).join(', ') || 'N/A'
+    const currentEvents = (shipment.tracking_events as unknown[]) || []
+    const newEvent = {
+      status: input.shippo_tracking_status,
+      description: input.status_details || input.event || 'Tracking update',
+      location: locationStr,
+      timestamp: input.status_date || new Date().toISOString(),
+    }
+
+    await supabase
+      .from('shipments')
+      .update({
+        tracking_events: [...currentEvents, newEvent],
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', shipment.id)
   }
 
   static async updateShippoTrackingMeta(

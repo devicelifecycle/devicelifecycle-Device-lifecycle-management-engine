@@ -1,35 +1,26 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const getShipmentByTrackingNumberMock = vi.fn()
-const updateShipmentStatusMock = vi.fn()
-const addTrackingEventMock = vi.fn()
-const updateShippoTrackingMetaMock = vi.fn()
-
-const validateWebhookMock = vi.fn()
-const mapStatusMock = vi.fn()
+const processShippoWebhookMock = vi.fn()
 
 vi.mock('@/services/shipment.service', () => ({
   ShipmentService: {
-    getShipmentByTrackingNumber: getShipmentByTrackingNumberMock,
-    updateShipmentStatus: updateShipmentStatusMock,
-    addTrackingEvent: addTrackingEventMock,
-    updateShippoTrackingMeta: updateShippoTrackingMetaMock,
+    processShippoWebhook: processShippoWebhookMock,
   },
 }))
 
+const validateWebhookMock = vi.fn()
 vi.mock('@/services/shippo.service', () => ({
   ShippoService: {
     validateWebhook: validateWebhookMock,
-    mapShippoTrackingStatusToInternal: mapStatusMock,
   },
 }))
 
 describe('POST /api/shippo/webhook', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mapStatusMock.mockReturnValue('in_transit')
     validateWebhookMock.mockReturnValue(true)
+    processShippoWebhookMock.mockResolvedValue(undefined)
   })
 
   it('returns 401 when webhook signature is invalid', async () => {
@@ -45,11 +36,10 @@ describe('POST /api/shippo/webhook', () => {
     const response = await POST(req)
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Invalid signature' })
+    expect(processShippoWebhookMock).not.toHaveBeenCalled()
   })
 
-  it('applies status update and tracking event for known shipment', async () => {
-    getShipmentByTrackingNumberMock.mockResolvedValue({ id: 'shipment-1' })
-
+  it('calls processShippoWebhook and returns ok for valid payload', async () => {
     const { POST } = await import('@/app/api/shippo/webhook/route')
     const req = new NextRequest('http://localhost:3000/api/shippo/webhook', {
       method: 'POST',
@@ -71,14 +61,14 @@ describe('POST /api/shippo/webhook', () => {
     const response = await POST(req)
 
     expect(response.status).toBe(200)
-    expect(getShipmentByTrackingNumberMock).toHaveBeenCalledWith('TRACK123')
-    expect(mapStatusMock).toHaveBeenCalledWith('TRANSIT')
-    expect(updateShipmentStatusMock).toHaveBeenCalledWith('shipment-1', 'in_transit', {
-      exception_details: undefined,
-    })
-    expect(addTrackingEventMock).toHaveBeenCalledTimes(1)
-    expect(updateShippoTrackingMetaMock).toHaveBeenCalledWith('shipment-1', {
+    await expect(response.json()).resolves.toEqual({ ok: true })
+    expect(processShippoWebhookMock).toHaveBeenCalledWith({
+      tracking_number: 'TRACK123',
       shippo_tracking_status: 'TRANSIT',
+      status_details: 'Package in transit',
+      status_date: '2026-02-27T12:00:00.000Z',
+      location: { city: 'Dallas', state: 'TX', country: 'US' },
+      event: 'track_updated',
     })
   })
 
@@ -93,29 +83,20 @@ describe('POST /api/shippo/webhook', () => {
     const response = await POST(req)
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({ ok: true, skipped: true })
-    expect(getShipmentByTrackingNumberMock).not.toHaveBeenCalled()
+    expect(processShippoWebhookMock).not.toHaveBeenCalled()
   })
 
-  it('returns skipped when shipment is not found', async () => {
-    getShipmentByTrackingNumberMock.mockResolvedValue(null)
-
+  it('returns 400 for invalid JSON payload', async () => {
     const { POST } = await import('@/app/api/shippo/webhook/route')
     const req = new NextRequest('http://localhost:3000/api/shippo/webhook', {
       method: 'POST',
-      body: JSON.stringify({
-        event: 'track_updated',
-        data: { tracking_number: 'MISSING-TRACK', tracking_status: { status: 'TRANSIT' } },
-      }),
+      body: 'not valid json {',
       headers: { 'content-type': 'application/json', 'shippo-signature': 'ok' },
     })
 
     const response = await POST(req)
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
-      ok: true,
-      skipped: true,
-      reason: 'shipment_not_found',
-    })
-    expect(updateShipmentStatusMock).not.toHaveBeenCalled()
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid JSON payload' })
+    expect(processShippoWebhookMock).not.toHaveBeenCalled()
   })
 })

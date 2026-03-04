@@ -130,7 +130,7 @@ export function useAuth() {
       }
 
       await fetchUser()
-      router.push('/')
+      router.push('/dashboard')
     } catch (error) {
       setState((prev) => ({ ...prev, isLoading: false }))
       throw error

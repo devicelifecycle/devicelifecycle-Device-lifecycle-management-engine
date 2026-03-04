@@ -268,4 +268,80 @@ export class EmailService {
 
     return this.sendEmail(to, `Order #${orderNumber} Confirmed — ${APP_NAME}`, html)
   }
+
+  /**
+   * Send SLA reminder email to customer who hasn't responded to a quote.
+   */
+  static async sendSLAReminderEmail(params: {
+    to: string
+    recipientName: string
+    orderNumber: string
+    orderId: string
+    daysRemaining: number
+  }): Promise<boolean> {
+    const { to, recipientName, orderNumber, orderId, daysRemaining } = params
+    const orderUrl = `${APP_URL}/orders/${orderId}`
+
+    const urgencyColor = daysRemaining <= 2 ? '#ef4444' : daysRemaining <= 4 ? '#f59e0b' : '#3b82f6'
+    const urgencyText = daysRemaining <= 2 ? 'Urgent: ' : ''
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background:#18181b;padding:24px 32px;">
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">
+                ${urgencyText}Your quote for Order #${orderNumber} is still awaiting your response.
+                Please review and accept or reject the quote.
+              </p>
+
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 4px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order #${orderNumber}</p>
+                    <p style="margin:0;color:${urgencyColor};font-size:18px;font-weight:600;">${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining to respond</p>
+                  </td>
+                </tr>
+              </table>
+
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background:#18181b;border-radius:6px;">
+                    <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Review Quote</a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions about the quote, reply to this email or contact our team.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+    return this.sendEmail(to, `${urgencyText}Quote Awaiting Response — Order #${orderNumber}`, html)
+  }
 }

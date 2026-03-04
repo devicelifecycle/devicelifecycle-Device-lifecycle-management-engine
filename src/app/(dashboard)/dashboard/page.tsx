@@ -6,6 +6,7 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
 import { ShoppingCart, Users, AlertTriangle, TrendingUp, Plus, ArrowRight, DollarSign, Package, Clock, Activity } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useAuth } from '@/hooks/useAuth'
@@ -15,6 +16,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
+import { AnimatedCounter } from '@/components/ui/motion'
 
 // Generate last 7 days trend data from orders
 function useOrderTrend(orders: { created_at: string }[]) {
@@ -120,12 +122,29 @@ export default function DashboardPage() {
     ] : []),
   ]
 
+  const staggerClasses = ['animate-stagger-1', 'animate-stagger-2', 'animate-stagger-3', 'animate-stagger-4']
+
+  const displayValue = (stat: (typeof statCards)[0]) => {
+    if (typeof stat.value === 'number') return <AnimatedCounter value={stat.value} />
+    return stat.value
+  }
+
   return (
-    <div className="space-y-8">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-8"
+    >
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        className="flex items-center justify-between"
+      >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight font-heading">Dashboard</h1>
           <p className="text-muted-foreground mt-1">
             Welcome back, {user?.full_name || 'User'}. Here&apos;s what&apos;s happening today.
           </p>
@@ -133,36 +152,54 @@ export default function DashboardPage() {
         {isInternal && (
           <div className="flex gap-3">
             <Link href="/orders/new/trade-in">
-              <Button className="shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow">
-                <Plus className="mr-2 h-4 w-4" />New Trade-In
-              </Button>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button className="shadow-lg shadow-primary/25 btn-glow">
+                  <Plus className="mr-2 h-4 w-4" />New Trade-In
+                </Button>
+              </motion.div>
             </Link>
             <Link href="/orders/new/cpo">
-              <Button variant="outline" className="border-2 hover:bg-muted/50">
-                <Plus className="mr-2 h-4 w-4" />New CPO
-              </Button>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button variant="outline" className="border-2 hover:bg-muted/50">
+                  <Plus className="mr-2 h-4 w-4" />New CPO
+                </Button>
+              </motion.div>
             </Link>
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* Stats Cards */}
       <div className={`grid gap-5 md:grid-cols-2 ${isInternal ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
         {statCards.map((stat, i) => (
-          <Card key={stat.title} className={`relative overflow-hidden border-0 shadow-lg shadow-black/5 bg-gradient-to-br ${stat.gradient} hover:shadow-xl hover:shadow-black/5 transition-all duration-300 animate-slide-in animate-stagger-${i + 1}`}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                  <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground">{stat.description}</p>
+          <motion.div
+            key={stat.title}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 + i * 0.05 }}
+            whileHover={{ y: -4, scale: 1.02 }}
+            className="group"
+          >
+            <Card className={`relative overflow-hidden border border-transparent bg-card/80 dark:bg-card/60 backdrop-blur-sm bg-gradient-to-br ${stat.gradient} transition-all duration-300 card-hover-lift card-glow animate-gradient-border`}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
+                    <p className="text-2xl font-bold tracking-tight font-heading">{displayValue(stat)}</p>
+                    <p className="text-xs text-muted-foreground">{stat.description}</p>
+                  </div>
+                  <motion.div
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl ${stat.iconBg} ring-1 ring-black/5`}
+                    whileHover={{ scale: 1.1, rotate: 5 }}
+                    animate={i === 0 ? { y: [0, -2, 0] } : undefined}
+                    transition={i === 0 ? { duration: 3, repeat: Infinity, ease: 'easeInOut' } : undefined}
+                  >
+                    <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
+                  </motion.div>
                 </div>
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${stat.iconBg} ring-1 ring-black/5`}>
-                  <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </motion.div>
         ))}
       </div>
 
@@ -170,9 +207,15 @@ export default function DashboardPage() {
       {isInternal && (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Order Trend */}
-          <Card className="border-0 shadow-lg shadow-black/5">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
+            whileHover={{ y: -2 }}
+          >
+            <Card className="border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5 card-hover-lift card-glow animate-shine">
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2 font-heading">
                 <TrendingUp className="h-4 w-4 text-teal-500" />
                 Order Trend (7 days)
               </CardTitle>
@@ -213,12 +256,19 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               )}
             </CardContent>
-          </Card>
+            </Card>
+          </motion.div>
 
           {/* Order Pipeline */}
-          <Card className="border-0 shadow-lg shadow-black/5">
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.35 }}
+            whileHover={{ y: -2 }}
+          >
+            <Card className="border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5 card-hover-lift card-glow animate-shine">
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2 font-heading">
                 <Activity className="h-4 w-4 text-violet-500" />
                 Order Pipeline
               </CardTitle>
@@ -255,19 +305,26 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               )}
             </CardContent>
-          </Card>
+            </Card>
+          </motion.div>
         </div>
       )}
 
       {/* Quick Actions + Recent Orders + Activity Feed */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="grid gap-6 lg:grid-cols-3"
+      >
         {/* Quick Actions */}
-        <Card className="lg:col-span-1 border-0 shadow-lg shadow-black/5">
+        <Card className="lg:col-span-1 border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5">
           <CardHeader>
-            <CardTitle className="text-base">Quick Actions</CardTitle>
+            <CardTitle className="text-base font-heading">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Link href="/orders" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+            <Link href="/orders">
+              <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/12 group-hover:bg-teal-500/20 transition-colors">
                 <ShoppingCart className="h-5 w-5 text-teal-600" />
               </div>
@@ -275,10 +332,12 @@ export default function DashboardPage() {
                 <p className="text-sm font-medium">{isInternal ? 'View All Orders' : 'My Orders'}</p>
                 <p className="text-xs text-muted-foreground">{isInternal ? 'Manage trade-in & CPO orders' : 'View your order history'}</p>
               </div>
+              </motion.div>
             </Link>
             {isInternal && (
               <>
-                <Link href="/orders/new/trade-in" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+                <Link href="/orders/new/trade-in">
+                  <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/12 group-hover:bg-violet-500/20 transition-colors">
                     <Package className="h-5 w-5 text-violet-600" />
                   </div>
@@ -286,33 +345,39 @@ export default function DashboardPage() {
                     <p className="text-sm font-medium">New Order</p>
                     <p className="text-xs text-muted-foreground">Create trade-in or CPO order</p>
                   </div>
+                  </motion.div>
                 </Link>
                 {hasRole(['admin', 'coe_manager', 'sales']) && (
-                  <Link href="/customers/new" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+                  <Link href="/customers/new">
+                    <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/12 group-hover:bg-emerald-500/20 transition-colors">
                       <Users className="h-5 w-5 text-emerald-600" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Add Customer</p>
-                      <p className="text-xs text-muted-foreground">Register new customer</p>
-                    </div>
+                    <p className="text-xs text-muted-foreground">Register new customer</p>
+                  </div>
+                    </motion.div>
                   </Link>
                 )}
                 {hasRole(['admin', 'coe_manager', 'sales']) && (
-                  <Link href="/vendors/new" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+                  <Link href="/vendors/new">
+                    <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/12 group-hover:bg-orange-500/20 transition-colors">
                       <TrendingUp className="h-5 w-5 text-orange-600" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Add Vendor</p>
-                      <p className="text-xs text-muted-foreground">Register new vendor</p>
-                    </div>
+                    <p className="text-xs text-muted-foreground">Register new vendor</p>
+                  </div>
+                    </motion.div>
                   </Link>
                 )}
               </>
             )}
             {!isInternal && (
-              <Link href="/notifications" className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group">
+              <Link href="/notifications">
+                <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/12 group-hover:bg-amber-500/20 transition-colors">
                   <Clock className="h-5 w-5 text-amber-600" />
                 </div>
@@ -320,16 +385,17 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium">Notifications</p>
                   <p className="text-xs text-muted-foreground">View updates and alerts</p>
                 </div>
+                </motion.div>
               </Link>
             )}
           </CardContent>
         </Card>
 
         {/* Recent Orders */}
-        <Card className="lg:col-span-2 border-0 shadow-lg shadow-black/5">
+        <Card className="lg:col-span-2 border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base">Recent Orders</CardTitle>
+              <CardTitle className="text-base font-heading">Recent Orders</CardTitle>
               <CardDescription>Latest order activity</CardDescription>
             </div>
             <Link href="/orders">
@@ -358,11 +424,11 @@ export default function DashboardPage() {
                 {recentOrders.map((order) => {
                   const statusConfig = ORDER_STATUS_CONFIG[order.status]
                   return (
-                    <Link
-                      key={order.id}
-                      href={`/orders/${order.id}`}
-                      className="flex items-center justify-between rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/10 group"
-                    >
+                    <Link key={order.id} href={`/orders/${order.id}`}>
+                      <motion.div
+                        whileHover={{ x: 4, backgroundColor: 'hsl(var(--muted) / 0.5)' }}
+                        className="flex items-center justify-between rounded-xl border p-3.5 transition-colors hover:border-primary/10 group"
+                      >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">
                           {order.type === 'trade_in' ? 'TI' : 'CPO'}
@@ -384,6 +450,7 @@ export default function DashboardPage() {
                           {statusConfig?.label || order.status}
                         </Badge>
                       </div>
+                      </motion.div>
                     </Link>
                   )
                 })}
@@ -391,13 +458,13 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
       {/* Activity Feed (internal only) */}
       {isInternal && recentOrders.length > 0 && (
-        <Card className="border-0 shadow-lg shadow-black/5">
+        <Card className="border border-white/5 dark:border-white/5 bg-card/80 dark:bg-card/60 backdrop-blur-sm shadow-lg shadow-black/5">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="text-base flex items-center gap-2 font-heading">
               <Activity className="h-4 w-4 text-emerald-500" />
               Activity Feed
             </CardTitle>
@@ -406,17 +473,31 @@ export default function DashboardPage() {
           <CardContent>
             <div className="relative">
               {/* Timeline line */}
-              <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
+              <motion.div
+                className="absolute left-[11px] top-2 bottom-2 w-px bg-border origin-top"
+                initial={{ scaleY: 0 }}
+                animate={{ scaleY: 1 }}
+                transition={{ duration: 0.8, delay: 0.5, ease: 'easeOut' }}
+              />
               <div className="space-y-4">
-                {recentOrders.map((order) => {
+                {recentOrders.map((order, idx) => {
                   const statusConfig = ORDER_STATUS_CONFIG[order.status]
                   const color = STATUS_COLORS[order.status] || '#94a3b8'
                   return (
-                    <div key={order.id} className="flex items-start gap-4 relative">
+                    <motion.div
+                      key={order.id}
+                      className="flex items-start gap-4 relative"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.6 + idx * 0.1 }}
+                    >
                       {/* Timeline dot */}
-                      <div
+                      <motion.div
                         className="relative z-10 mt-1 h-[10px] w-[10px] rounded-full ring-2 ring-background flex-shrink-0"
                         style={{ backgroundColor: color }}
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.7 + idx * 0.1, type: 'spring', stiffness: 400, damping: 15 }}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -434,7 +515,7 @@ export default function DashboardPage() {
                       <span className="text-xs text-muted-foreground flex-shrink-0">
                         {formatCurrency(order.total_amount || 0)}
                       </span>
-                    </div>
+                    </motion.div>
                   )
                 })}
               </div>
@@ -442,6 +523,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </motion.div>
   )
 }

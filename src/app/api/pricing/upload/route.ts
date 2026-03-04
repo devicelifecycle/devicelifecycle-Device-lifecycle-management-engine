@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { sanitizeCsvCell, safeErrorMessage } from '@/lib/utils'
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { parse } from 'csv-parse/sync'
 
 interface PricingRow {
@@ -21,6 +22,12 @@ interface PricingRow {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit file uploads: 10 per 15 min
+    const rl = checkRateLimit(`pricing-upload:${getClientIp(request)}`, RATE_LIMITS.auth)
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
+
     const supabase = createServerSupabaseClient()
 
     // Check authentication

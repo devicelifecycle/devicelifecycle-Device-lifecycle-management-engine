@@ -360,6 +360,50 @@ export class NotificationService {
     })
   }
 
+  /**
+   * Send SLA warning/breach via email (in addition to in-app).
+   * Looks up the user's email and sends a branded SLA alert email.
+   */
+  static async sendSLAEmailNotification(
+    userId: string,
+    orderId: string,
+    orderNumber: string,
+    severity: 'warning' | 'breach',
+    hoursRemaining?: number
+  ): Promise<void> {
+    try {
+      const supabase = createServerSupabaseClient()
+      const { data: user } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .eq('id', userId)
+        .single()
+
+      if (!user?.email) return
+
+      const subject = severity === 'breach'
+        ? `[URGENT] SLA Breach — Order #${orderNumber}`
+        : `SLA Warning — Order #${orderNumber}`
+
+      const message = severity === 'breach'
+        ? `Order #${orderNumber} has BREACHED its SLA deadline. Immediate action is required.`
+        : `Order #${orderNumber} is approaching its SLA deadline. ${hoursRemaining} hours remaining.`
+
+      await EmailService.sendOrderStatusEmail({
+        to: user.email,
+        recipientName: user.full_name || 'Team Member',
+        orderNumber,
+        orderId,
+        fromStatus: '',
+        toStatus: severity === 'breach' ? 'SLA Breach' : 'SLA Warning',
+        subject,
+        message,
+      })
+    } catch (err) {
+      console.error('[NotificationService] SLA email failed:', err)
+    }
+  }
+
   static async sendOrderShippedNotification(
     userId: string,
     orderId: string,

@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     // Role-based authorization: only sales, coe_manager, admin can upload CSVs
     const { data: userProfile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
@@ -68,13 +68,22 @@ export async function POST(request: NextRequest) {
     if (!uuidRegex.test(customer_id)) {
       return NextResponse.json({ error: 'Invalid customer_id format' }, { status: 400 })
     }
-    const { data: customerExists } = await supabase
+    const { data: customer } = await supabase
       .from('customers')
-      .select('id')
+      .select('id, organization_id, is_active')
       .eq('id', customer_id)
       .single()
-    if (!customerExists) {
+    if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    }
+    if (!customer.is_active) {
+      return NextResponse.json({ error: 'Customer is inactive' }, { status: 400 })
+    }
+    // Multi-tenant: sales can only create orders for customers in their org
+    if (userProfile.role === 'sales' && userProfile.organization_id && customer.organization_id) {
+      if (customer.organization_id !== userProfile.organization_id) {
+        return NextResponse.json({ error: 'Cannot create orders for customers in another organization' }, { status: 403 })
+      }
     }
 
     // Sanitize and validate rows

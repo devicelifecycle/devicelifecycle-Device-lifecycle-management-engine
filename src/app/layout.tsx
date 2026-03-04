@@ -3,12 +3,13 @@
 // ============================================================================
 
 import type { Metadata } from 'next'
-import { Outfit } from 'next/font/google'
+import { Outfit, Syne } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from '@/components/ui/toaster'
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
+const syne = Syne({ subsets: ['latin'], variable: '--font-syne' })
 
 export const metadata: Metadata = {
   title: 'DLM Engine — Device Lifecycle Management',
@@ -21,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={outfit.variable}>
+    <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${syne.variable}`}>
       <body className="font-sans antialiased">
         <Providers>
           {children}

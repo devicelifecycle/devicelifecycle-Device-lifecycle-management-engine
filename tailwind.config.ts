@@ -11,6 +11,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['var(--font-outfit)', 'system-ui', 'sans-serif'],
+        heading: ['var(--font-syne)', 'var(--font-outfit)', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: 'hsl(var(--border))',

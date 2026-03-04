@@ -6,6 +6,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -44,7 +45,7 @@ const navSections: NavSection[] = [
   {
     title: 'Overview',
     items: [
-      { title: 'Dashboard', href: '/', icon: LayoutDashboard },
+      { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { title: 'Notifications', href: '/notifications', icon: Bell },
     ],
   },
@@ -113,71 +114,116 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-[260px] flex-col bg-gradient-to-b from-[hsl(224,35%,8%)] via-[hsl(224,35%,6%)] to-[hsl(224,40%,4%)] text-white border-r border-white/5">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 shadow-lg shadow-teal-500/20">
+      <motion.div
+        className="flex h-16 items-center gap-3 px-6"
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+      >
+        <motion.div
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 shadow-lg shadow-teal-500/20"
+          whileHover={{ scale: 1.05, rotate: 5 }}
+          whileTap={{ scale: 0.98 }}
+        >
           <Package className="h-5 w-5 text-white" />
-        </div>
+        </motion.div>
         <div>
-          <span className="font-semibold text-sm tracking-tight">DLM Engine</span>
+          <span className="font-heading font-semibold text-sm tracking-tight">DLM Engine</span>
           <span className="block text-[10px] text-teal-400/90 font-medium tracking-wider uppercase">Lifecycle Platform</span>
         </div>
-      </div>
+      </motion.div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-        {filteredSections.map((section) => {
-          const isCollapsed = collapsedSections.includes(section.title)
-          return (
-            <div key={section.title}>
-              <button
-                onClick={() => toggleSection(section.title)}
-                className="flex w-full items-center justify-between px-3 mb-2"
+      <LayoutGroup>
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+          {filteredSections.map((section, sIdx) => {
+            const isCollapsed = collapsedSections.includes(section.title)
+            return (
+              <motion.div
+                key={section.title}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: sIdx * 0.05 }}
               >
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400/90">
-                  {section.title}
-                </span>
-                <ChevronDown className={cn(
-                  "h-3 w-3 text-slate-500 transition-transform",
-                  isCollapsed && "-rotate-90"
-                )} />
-              </button>
-              {!isCollapsed && (
-                <div className="space-y-0.5">
-                  {section.items.map((item) => {
-                    const isActive = pathname === item.href || 
-                      (item.href !== '/' && pathname.startsWith(`${item.href}/`))
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={cn(
-                          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                          isActive
-                            ? 'bg-teal-500/15 text-teal-300 shadow-sm'
-                            : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                        )}
-                      >
-                        <item.icon className={cn("h-4 w-4 shrink-0", isActive && "text-teal-400")} />
-                        {item.title}
-                        {isActive && (
-                          <div className="ml-auto h-2 w-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.5)]" />
-                        )}
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </nav>
+                <button
+                  onClick={() => toggleSection(section.title)}
+                  className="flex w-full items-center justify-between px-3 mb-2 group"
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400/90 group-hover:text-slate-300 transition-colors">
+                    {section.title}
+                  </span>
+                  <motion.div
+                    animate={{ rotate: isCollapsed ? -90 : 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ChevronDown className="h-3 w-3 text-slate-500" />
+                  </motion.div>
+                </button>
+                <AnimatePresence initial={false}>
+                  {!isCollapsed && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeInOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-0.5">
+                        {section.items.map((item) => {
+                          const isActive = pathname === item.href ||
+                            (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
+                          return (
+                            <Link key={item.href} href={item.href}>
+                              <motion.div
+                                className={cn(
+                                  'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200',
+                                  isActive
+                                    ? 'text-teal-300 shadow-sm'
+                                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                                )}
+                                whileHover={{ x: 4 }}
+                                whileTap={{ scale: 0.98 }}
+                              >
+                                {/* Sliding active background */}
+                                {isActive && (
+                                  <motion.div
+                                    layoutId="sidebar-active"
+                                    className="absolute inset-0 rounded-lg bg-teal-500/15"
+                                    transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                                  />
+                                )}
+                                <item.icon className={cn("relative z-10 h-4 w-4 shrink-0", isActive && "text-teal-400")} />
+                                <span className="relative z-10">{item.title}</span>
+                                {isActive && (
+                                  <motion.div
+                                    className="relative z-10 ml-auto h-2 w-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.5)]"
+                                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                                  />
+                                )}
+                              </motion.div>
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )
+          })}
+        </nav>
+      </LayoutGroup>
 
       {/* User section */}
       <div className="border-t border-white/10 p-3">
         <Link href="/profile" className="flex items-center gap-3 rounded-xl p-3 hover:bg-white/5 transition-all duration-200">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-white text-sm font-bold shadow-lg shadow-teal-500/25">
+          <motion.div
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-white text-sm font-bold shadow-lg shadow-teal-500/25"
+            whileHover={{ scale: 1.05 }}
+          >
             {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-          </div>
+          </motion.div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-200 truncate">{user?.full_name || 'User'}</p>
             <p className="text-[11px] text-slate-500 capitalize">{user?.role?.replace('_', ' ') || 'Role'}</p>

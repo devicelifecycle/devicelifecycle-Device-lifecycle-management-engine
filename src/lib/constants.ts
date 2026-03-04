@@ -250,8 +250,8 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 // ============================================================================
 
 export const DEFAULT_SLA_HOURS: Record<string, { warning: number; breach: number }> = {
-  quote_response: { warning: 4, breach: 8 },
-  customer_response: { warning: 24, breach: 48 },
+  quote_response: { warning: 24, breach: 48 },        // 24-48hr to quote after trade-in request
+  customer_response: { warning: 120, breach: 168 },    // 5-day warning, 7-day breach for customer to accept/reject
   sourcing: { warning: 8, breach: 24 },
   vendor_ship: { warning: 24, breach: 48 },
   coe_receiving: { warning: 4, breach: 8 },
@@ -259,6 +259,10 @@ export const DEFAULT_SLA_HOURS: Record<string, { warning: number; breach: number
   qc: { warning: 4, breach: 8 },
   final_ship: { warning: 4, breach: 8 },
 }
+
+// Reminder intervals for customer response (hours since quote was sent)
+// Reminders at day 2, day 4, day 6 if customer hasn't accepted/rejected
+export const CUSTOMER_REMINDER_INTERVALS_HOURS = [48, 96, 144]
 
 // ============================================================================
 // PAGINATION DEFAULTS

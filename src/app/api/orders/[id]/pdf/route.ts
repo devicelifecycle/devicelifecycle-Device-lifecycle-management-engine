@@ -27,6 +27,36 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
+    // Authorization: same as GET /api/orders/[id]
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!userProfile) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
+    }
+
+    const { role, organization_id } = userProfile
+    if (role === 'admin' || role === 'coe_manager' || role === 'coe_tech') {
+      // Internal roles have full access
+    } else if (role === 'sales') {
+      if (order.created_by_id !== user.id && order.assigned_to_id !== user.id) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
+    } else if (role === 'customer') {
+      if (order.customer?.organization_id !== organization_id) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
+    } else if (role === 'vendor') {
+      if (order.vendor?.organization_id !== organization_id) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
+    } else {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
     const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
     const docType = isQuote ? 'Quote' : 'Invoice'
     const filename = `${order.order_number}-${docType}.pdf`

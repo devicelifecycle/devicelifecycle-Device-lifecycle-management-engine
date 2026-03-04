@@ -7,19 +7,23 @@ import type { NextRequest } from 'next/server'
 import { createMiddlewareSupabaseClient } from '@/lib/supabase/middleware'
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password']
+const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/auth/callback', '/reset-password']
 
 // Routes that require specific roles
 const roleRoutes: Record<string, string[]> = {
   '/admin': ['admin'],
   '/coe': ['admin', 'coe_manager', 'coe_tech'],
+  '/customer': ['customer'],
+  '/vendor': ['vendor'],
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public routes
-  if (publicRoutes.some((route) => pathname.startsWith(route))) {
+  // Allow public routes (exact match for '/', prefix match for others)
+  if (publicRoutes.some((route) =>
+    route === '/' ? pathname === '/' : pathname.startsWith(route)
+  )) {
     return NextResponse.next()
   }
 
@@ -62,7 +66,7 @@ export async function middleware(request: NextRequest) {
         if (pathname.startsWith(route)) {
           if (!allowedRoles.includes(user.role)) {
             // Redirect to orders page if not authorized
-            return NextResponse.redirect(new URL('/', request.url))
+            return NextResponse.redirect(new URL('/dashboard', request.url))
           }
         }
       }

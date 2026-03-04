@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { ShipmentService } from '@/services/shipment.service'
+import { shipmentPatchSchema } from '@/lib/validations'
 
 export async function GET(
   request: NextRequest,
@@ -55,21 +56,29 @@ export async function PATCH(
     }
 
     const body = await request.json()
+    const validation = shipmentPatchSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validation.error.errors },
+        { status: 400 }
+      )
+    }
+    const data = validation.data
 
-    if (body.action === 'receive') {
+    if (data.action === 'receive') {
       const shipment = await ShipmentService.markAsReceived(
         params.id,
         user.id,
-        body.notes
+        data.notes
       )
       return NextResponse.json(shipment)
     }
 
-    if (body.status) {
+    if (data.status) {
       const shipment = await ShipmentService.updateShipmentStatus(
         params.id,
-        body.status,
-        body.metadata
+        data.status,
+        data.metadata
       )
       return NextResponse.json(shipment)
     }

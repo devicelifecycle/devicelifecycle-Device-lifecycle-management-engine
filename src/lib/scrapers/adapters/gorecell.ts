@@ -1,14 +1,21 @@
 // ============================================================================
 // GORECELL TRADE-IN SCRAPER
 // ============================================================================
-// GoRecell.ca - Canadian device buyback/trade-in
-// Quote flow: gorecell.ca/step-flow/ (device selection → condition → price)
+// GoRecell.ca — Canadian device buyback/trade-in
+// Uses their public WooCommerce Store API to search for device listings.
+// NOTE: GoRecell's actual trade-in prices are quote-based (dynamic widget).
+// For competitive pricing, use the CSV import via competitor-sync cron.
 
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from '../types'
-import { fetchWithRetry, parsePrice } from '../utils'
+import { fetchWithRetry, throttle } from '../utils'
 
-const BASE_URL = 'https://gorecell.ca'
-const SCRAPER_ID = 'gorecell'
+const STORE_API = 'https://gorecell.ca/wp-json/wc/store/v1/products'
+
+interface WooProduct {
+  name: string
+  slug: string
+  prices: { price: string; regular_price: string; sale_price: string }
+}
 
 export async function scrapeGoRecell(devices: DeviceToScrape[]): Promise<ScraperResult> {
   const start = Date.now()
@@ -16,58 +23,57 @@ export async function scrapeGoRecell(devices: DeviceToScrape[]): Promise<Scraper
   const now = new Date().toISOString()
 
   try {
-    // GoRecell uses a step-flow - device selection loads prices via JS.
-    // Fallback: fetch main quote page and look for price patterns.
-    // Customize URL/API per actual site structure when reverse-engineered.
-    const quoteUrl = `${BASE_URL}/step-flow/`
-
     for (const device of devices) {
       try {
-        // Build device slug (e.g. iphone-15-pro-max-256gb)
-        const slug = [device.make, device.model, device.storage]
-          .join('-')
-          .toLowerCase()
-          .replace(/\s+/g, '-')
-          .replace(/[^a-z0-9-]/g, '')
+        const searchTerm = `${device.model}`
+        const url = `${STORE_API}?search=${encodeURIComponent(searchTerm)}&per_page=5`
 
-        const res = await fetchWithRetry(quoteUrl, { method: 'GET' })
-        const html = await res.text()
+        const res = await fetchWithRetry(url, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        })
 
-        // Try to extract price from page - many SPAs embed data in script or data-* attributes
-        const priceMatch = html.match(/\$[\d,]+\.?\d*/)
-        const tradePrice = priceMatch ? parsePrice(priceMatch[0]) : null
+        let tradePrice: number | null = null
 
-        if (tradePrice != null || html.includes('trade') || html.includes('quote')) {
-          prices.push({
-            competitor_name: 'GoRecell',
-            make: device.make,
-            model: device.model,
-            storage: device.storage,
-            trade_in_price: tradePrice,
-            sell_price: null,
-            condition: device.condition ?? 'good',
-            scraped_at: now,
-            raw: { slug, found: !!priceMatch },
-          })
+        if (res.ok) {
+          const products: WooProduct[] = await res.json()
+          const modelLower = device.model.toLowerCase()
+
+          const match = products.find(p =>
+            p.name.toLowerCase().includes(modelLower)
+          )
+
+          if (match) {
+            // WooCommerce stores prices in minor units (cents)
+            const priceCents = parseInt(match.prices.regular_price || match.prices.price || '0', 10)
+            if (priceCents > 0) {
+              tradePrice = priceCents / 100
+            }
+          }
         }
+
+        prices.push({
+          competitor_name: 'GoRecell',
+          make: device.make, model: device.model, storage: device.storage,
+          trade_in_price: tradePrice, sell_price: null,
+          condition: device.condition ?? 'good', scraped_at: now,
+          raw: { matched: tradePrice != null, source: 'woocommerce-api' },
+        })
+        await throttle(500)
       } catch (e) {
-        console.warn(`[${SCRAPER_ID}] Skip ${device.make} ${device.model}:`, e)
+        console.warn(`[gorecell] Skip ${device.make} ${device.model}:`, e)
+        prices.push({
+          competitor_name: 'GoRecell',
+          make: device.make, model: device.model, storage: device.storage,
+          trade_in_price: null, sell_price: null,
+          condition: device.condition ?? 'good', scraped_at: now,
+          raw: { matched: false, error: e instanceof Error ? e.message : 'Unknown' },
+        })
       }
     }
 
-    return {
-      competitor_name: 'GoRecell',
-      prices,
-      success: true,
-      duration_ms: Date.now() - start,
-    }
+    return { competitor_name: 'GoRecell', prices, success: true, duration_ms: Date.now() - start }
   } catch (error) {
-    return {
-      competitor_name: 'GoRecell',
-      prices: [],
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      duration_ms: Date.now() - start,
-    }
+    return { competitor_name: 'GoRecell', prices: [], success: false, error: error instanceof Error ? error.message : 'Unknown error', duration_ms: Date.now() - start }
   }
 }

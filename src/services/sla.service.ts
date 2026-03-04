@@ -5,7 +5,8 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NotificationService } from './notification.service'
 import { addHours, isPast, sanitizeSearchInput } from '@/lib/utils'
-import type { Order, SLARule, OrderStatus } from '@/types'
+import { CUSTOMER_REMINDER_INTERVALS_HOURS } from '@/lib/constants'
+import type { Order, SLARule } from '@/types'
 
 export class SLAService {
   /**
@@ -16,6 +17,7 @@ export class SLAService {
     checked: number
     warnings: number
     breaches: number
+    reminders: number
   }> {
     const supabase = createServerSupabaseClient()
 
@@ -31,17 +33,25 @@ export class SLAService {
 
     let warnings = 0
     let breaches = 0
+    let reminders = 0
 
     for (const order of orders || []) {
       const result = await this.checkOrderSLA(order as Order)
       if (result.isWarning) warnings++
       if (result.isBreach) breaches++
+
+      // Check for customer reminder notifications (quoted orders waiting for acceptance)
+      if (order.status === 'quoted') {
+        const sent = await this.checkCustomerReminders(order as Order)
+        reminders += sent
+      }
     }
 
     return {
       checked: orders?.length || 0,
       warnings,
       breaches,
+      reminders,
     }
   }
 
@@ -103,10 +113,11 @@ export class SLAService {
   }
 
   /**
-   * Handle SLA breach
+   * Handle SLA breach. Uses service-role for DB writes (cron has no user session).
    */
   private static async handleBreach(order: Order, slaRule: SLARule): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const { createServiceRoleClient } = await import('@/lib/supabase/service-role')
+    const supabase = createServiceRoleClient()
 
     // Mark order as breached
     await supabase
@@ -122,12 +133,19 @@ export class SLAService {
       notification_sent: true,
     })
 
-    // Send notifications to escalation contacts
+    // Send notifications to escalation contacts (in-app + email)
     for (const userId of slaRule.escalation_user_ids) {
       await NotificationService.sendSLABreachNotification(
         userId,
         order.id,
         order.order_number
+      )
+      // Also send email
+      await NotificationService.sendSLAEmailNotification(
+        userId,
+        order.id,
+        order.order_number,
+        'breach'
       )
     }
 
@@ -138,6 +156,12 @@ export class SLAService {
         order.id,
         order.order_number
       )
+      await NotificationService.sendSLAEmailNotification(
+        order.assigned_to_id,
+        order.id,
+        order.order_number,
+        'breach'
+      )
     }
   }
 
@@ -145,7 +169,7 @@ export class SLAService {
    * Handle SLA warning
    */
   private static async handleWarning(
-    order: Order, 
+    order: Order,
     slaRule: SLARule,
     hoursRemaining: number
   ): Promise<void> {
@@ -162,12 +186,19 @@ export class SLAService {
 
     if (existingWarning) return // Already warned
 
-    // Send warning to assigned user
+    // Send warning to assigned user (in-app + email)
     if (order.assigned_to_id) {
       await NotificationService.sendSLAWarningNotification(
         order.assigned_to_id,
         order.id,
         order.order_number,
+        hoursRemaining
+      )
+      await NotificationService.sendSLAEmailNotification(
+        order.assigned_to_id,
+        order.id,
+        order.order_number,
+        'warning',
         hoursRemaining
       )
     }
@@ -180,7 +211,112 @@ export class SLAService {
         order.order_number,
         hoursRemaining
       )
+      await NotificationService.sendSLAEmailNotification(
+        userId,
+        order.id,
+        order.order_number,
+        'warning',
+        hoursRemaining
+      )
     }
+  }
+
+  /**
+   * Check and send recurring reminder notifications for orders in 'quoted' status.
+   * Customer has 7 days to accept/reject. We send reminders at day 2, 4, 6.
+   */
+  private static async checkCustomerReminders(order: Order): Promise<number> {
+    if (!order.quoted_at || !order.customer_id) return 0
+
+    const quotedAt = new Date(order.quoted_at)
+    const now = new Date()
+    const hoursSinceQuoted = (now.getTime() - quotedAt.getTime()) / (1000 * 60 * 60)
+    let sent = 0
+
+    const supabase = createServerSupabaseClient()
+
+    for (const intervalHours of CUSTOMER_REMINDER_INTERVALS_HOURS) {
+      if (hoursSinceQuoted < intervalHours) continue
+
+      // Check if we already sent a reminder for this interval
+      const reminderKey = `customer_reminder_${intervalHours}h`
+      const { data: existing } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('metadata->>order_id', order.id)
+        .eq('metadata->>type', reminderKey)
+        .limit(1)
+        .single()
+
+      if (existing) continue // Already sent this reminder
+
+      // Look up customer's user account to send notification
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('contact_email, contact_name, organization_id')
+        .eq('id', order.customer_id)
+        .single()
+
+      if (!customer) continue
+
+      // Find the user linked to this customer's org
+      const { data: customerUsers } = await supabase
+        .from('users')
+        .select('id, email, full_name')
+        .eq('organization_id', customer.organization_id)
+        .eq('role', 'customer')
+        .eq('is_active', true)
+
+      const daysRemaining = Math.max(0, Math.ceil((168 - hoursSinceQuoted) / 24))
+
+      // Send in-app notification to each customer user
+      for (const user of customerUsers || []) {
+        await NotificationService.createNotification({
+          user_id: user.id,
+          type: 'in_app',
+          title: 'Quote Awaiting Your Response',
+          message: `Order #${order.order_number} has a quote awaiting your acceptance. You have ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining to respond.`,
+          link: `/orders/${order.id}`,
+          metadata: {
+            order_id: order.id,
+            order_number: order.order_number,
+            type: reminderKey,
+          },
+        })
+        sent++
+      }
+
+      // Send email to customer contact
+      if (customer.contact_email) {
+        const { EmailService } = await import('@/services/email.service')
+        await EmailService.sendSLAReminderEmail({
+          to: customer.contact_email,
+          recipientName: customer.contact_name || 'Customer',
+          orderNumber: order.order_number,
+          orderId: order.id,
+          daysRemaining,
+        })
+        sent++
+      }
+
+      // Also notify admin/assigned user that customer hasn't responded
+      if (order.assigned_to_id) {
+        await NotificationService.createNotification({
+          user_id: order.assigned_to_id,
+          type: 'in_app',
+          title: 'Customer Not Responding',
+          message: `Customer has not responded to quote for Order #${order.order_number}. ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining before SLA breach.`,
+          link: `/orders/${order.id}`,
+          metadata: {
+            order_id: order.id,
+            order_number: order.order_number,
+            type: `internal_${reminderKey}`,
+          },
+        })
+      }
+    }
+
+    return sent
   }
 
   /**

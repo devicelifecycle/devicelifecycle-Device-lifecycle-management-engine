@@ -6,8 +6,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Bell, Menu, ChevronRight } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Bell, Menu, ChevronRight, Sparkles, Sun, Moon } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { useNotifications } from '@/hooks/useNotifications'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { snakeToTitle } from '@/lib/utils'
 
@@ -15,8 +18,17 @@ interface HeaderProps {
   onMenuClick?: () => void
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export function Header({ onMenuClick }: HeaderProps) {
   const { unreadCount } = useNotifications()
+  const { user } = useAuth()
+  const { theme, setTheme } = useTheme()
   const pathname = usePathname()
 
   // Generate breadcrumbs from pathname
@@ -31,7 +43,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   })
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border/60 bg-background/90 backdrop-blur-md px-6 sticky top-0 z-40">
+    <header className="relative flex h-14 items-center justify-between border-b border-border/60 bg-background/80 dark:bg-background/60 backdrop-blur-xl px-6 sticky top-0 z-40">
       {/* Left side */}
       <div className="flex items-center gap-4">
         <Button
@@ -42,10 +54,16 @@ export function Header({ onMenuClick }: HeaderProps) {
         >
           <Menu className="h-4 w-4" />
         </Button>
-        
+
         {/* Breadcrumbs */}
-        <nav className="hidden md:flex items-center gap-1 text-sm">
-          <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+        <motion.nav
+          key={pathname}
+          initial={{ opacity: 0, x: -8 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3 }}
+          className="hidden md:flex items-center gap-1 text-sm"
+        >
+          <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
             Home
           </Link>
           {breadcrumbs.map((crumb) => (
@@ -60,23 +78,73 @@ export function Header({ onMenuClick }: HeaderProps) {
               )}
             </span>
           ))}
-        </nav>
+        </motion.nav>
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-3">
+        {/* Greeting */}
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="hidden lg:flex items-center gap-1.5 text-sm text-muted-foreground"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-teal-500" />
+          <span>{getGreeting()}, <span className="font-medium text-foreground">{user?.full_name?.split(' ')[0] || 'User'}</span></span>
+        </motion.div>
+
+        {/* Divider */}
+        <div className="hidden lg:block h-5 w-px bg-border" />
+
+        {/* Dark Mode Toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={theme}
+              initial={{ y: -10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 10, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </motion.div>
+          </AnimatePresence>
+        </Button>
+
         {/* Notifications */}
         <Link href="/notifications">
           <Button variant="ghost" size="icon" className="relative h-9 w-9">
-            <Bell className="h-4 w-4" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-white ring-2 ring-background shadow-sm">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
+            <motion.div
+              animate={unreadCount > 0 ? { rotate: [0, -10, 10, -10, 0] } : {}}
+              transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 5 }}
+            >
+              <Bell className="h-4 w-4" />
+            </motion.div>
+            <AnimatePresence>
+              {unreadCount > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                  className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-white ring-2 ring-background shadow-sm"
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </motion.span>
+              )}
+            </AnimatePresence>
           </Button>
         </Link>
       </div>
+
+      {/* Bottom accent line */}
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
     </header>
   )
 }

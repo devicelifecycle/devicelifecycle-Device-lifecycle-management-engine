@@ -21,15 +21,26 @@ interface ShippoTrackWebhookPayload {
 }
 
 export async function POST(request: NextRequest) {
+  let rawBody: string
   try {
-    const rawBody = await request.text()
-    const signature = request.headers.get('shippo-signature') || request.headers.get('x-shippo-signature')
+    rawBody = await request.text()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
 
-    if (!ShippoService.validateWebhook(rawBody, signature)) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-    }
+  const signature = request.headers.get('shippo-signature') || request.headers.get('x-shippo-signature')
+  if (!ShippoService.validateWebhook(rawBody, signature)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+  }
 
-    const payload = JSON.parse(rawBody) as ShippoTrackWebhookPayload
+  let payload: ShippoTrackWebhookPayload
+  try {
+    payload = JSON.parse(rawBody) as ShippoTrackWebhookPayload
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 })
+  }
+
+  try {
     const trackingNumber = payload.data?.tracking_number
     const trackingStatus = payload.data?.tracking_status?.status || 'UNKNOWN'
 
@@ -37,27 +48,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true })
     }
 
-    const shipment = await ShipmentService.getShipmentByTrackingNumber(trackingNumber)
-    if (!shipment) {
-      return NextResponse.json({ ok: true, skipped: true, reason: 'shipment_not_found' })
-    }
-
-    const internalStatus = ShippoService.mapShippoTrackingStatusToInternal(trackingStatus)
-    await ShipmentService.updateShipmentStatus(shipment.id, internalStatus, {
-      exception_details: internalStatus === 'exception' ? (payload.data?.tracking_status?.status_details || 'Carrier exception') : undefined,
-    })
-
-    await ShipmentService.addTrackingEvent(shipment.id, {
-      status: trackingStatus,
-      description: payload.data?.tracking_status?.status_details || payload.event || 'Tracking update',
-      location: [payload.data?.tracking_status?.location?.city, payload.data?.tracking_status?.location?.state, payload.data?.tracking_status?.location?.country]
-        .filter(Boolean)
-        .join(', ') || 'N/A',
-      timestamp: payload.data?.tracking_status?.status_date || new Date().toISOString(),
-    })
-
-    await ShipmentService.updateShippoTrackingMeta(shipment.id, {
+    await ShipmentService.processShippoWebhook({
+      tracking_number: trackingNumber,
       shippo_tracking_status: trackingStatus,
+      status_details: payload.data?.tracking_status?.status_details,
+      status_date: payload.data?.tracking_status?.status_date,
+      location: payload.data?.tracking_status?.location,
+      event: payload.event,
     })
 
     return NextResponse.json({ ok: true })

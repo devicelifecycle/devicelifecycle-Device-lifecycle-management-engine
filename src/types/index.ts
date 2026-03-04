@@ -297,13 +297,20 @@ export interface Order extends BaseEntity {
   notes?: string;
   internal_notes?: string;
   metadata?: Record<string, unknown>;
-  
+
+  // Split order fields
+  parent_order_id?: string;
+  is_split_order?: boolean;
+  split_strategy?: 'quantity' | 'item' | 'custom';
+
   // Joined relations
   customer?: Customer;
   vendor?: Vendor;
   assigned_to?: User;
   created_by?: User;
   items?: OrderItem[];
+  parent_order?: Order;
+  sub_orders?: Order[];
 }
 
 export interface PricingMetadata {
@@ -327,7 +334,11 @@ export interface OrderItem extends BaseEntity {
   final_price?: number;
   notes?: string;
   pricing_metadata?: PricingMetadata | null;
-  
+
+  // Split order fields
+  parent_item_id?: string;
+  allocated_vendor_id?: string;
+
   // Joined relations
   device?: Device;
 }
@@ -798,6 +809,54 @@ export interface VendorBid extends BaseEntity {
   notes?: string;
   status: 'pending' | 'accepted' | 'rejected' | 'expired';
   expires_at?: string;
-  
+
+  // Split order fields
+  quantity_allocated?: number;
+  sub_order_id?: string;
+  is_finalized?: boolean;
+
   vendor?: Vendor;
+}
+
+// ============================================================================
+// ORDER SPLITTING TYPES
+// ============================================================================
+
+export interface OrderSplitItemAllocation {
+  order_item_id: string;
+  quantity: number;
+}
+
+export interface OrderSplitAllocation {
+  vendor_id: string;
+  items: OrderSplitItemAllocation[];
+}
+
+export interface OrderSplitConfig {
+  parent_order_id: string;
+  strategy: 'quantity' | 'item' | 'custom';
+  allocations: OrderSplitAllocation[];
+  notes?: string;
+}
+
+export interface OrderSplit {
+  id: string;
+  parent_order_id: string;
+  sub_order_id: string;
+  split_items: OrderSplitItemAllocation[];
+  split_by_user_id?: string;
+  split_at: string;
+  created_at: string;
+}
+
+// ============================================================================
+// AI CHAT TYPES
+// ============================================================================
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  toolCalls?: Array<{ name: string; result: string }>;
 }
