@@ -20,16 +20,18 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') || '/dashboard'
 
   // Strict whitelist to prevent open redirect (e.g. /%2f%2fevil.com)
-  const ALLOWED = ['/', '/dashboard', '/login', '/reset-password']
+  const ALLOWED_EXACT = ['/', '/dashboard', '/login', '/reset-password', '/orders', '/vendors', '/devices', '/customers', '/reports', '/notifications', '/profile']
+  const ALLOWED_PREFIXES = ['/dashboard/', '/vendor/', '/customer/', '/orders/', '/coe/', '/admin/', '/devices/', '/customers/', '/vendors/']
   let decoded = next
   try {
     decoded = decodeURIComponent(next)
   } catch {
     decoded = '/dashboard'
   }
+  const pathOnly = decoded.split('?')[0].split('#')[0]
   const isAllowed =
-    (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes(':')) &&
-    (ALLOWED.includes(decoded) || decoded.startsWith('/dashboard/') || decoded.startsWith('/login'))
+    pathOnly.startsWith('/') && !pathOnly.startsWith('//') && !pathOnly.includes(':') &&
+    (ALLOWED_EXACT.includes(pathOnly) || ALLOWED_PREFIXES.some(p => pathOnly.startsWith(p)))
   const safeNext = isAllowed ? decoded : '/dashboard'
 
   if (code) {

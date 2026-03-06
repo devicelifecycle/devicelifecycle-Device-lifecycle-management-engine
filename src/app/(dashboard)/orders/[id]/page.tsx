@@ -183,30 +183,38 @@ export default function OrderDetailPage() {
   const handleSavePrices = async () => {
     if (!order?.items) return
 
+    const itemsToSend = order.items.map(item => {
+      const raw = itemPrices[item.id] || '0'
+      const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ''))
+      const unit_price = Number.isFinite(num) ? num : 0
+      const payload: { id: string; unit_price: number; pricing_metadata?: PricingMetadata } = {
+        id: item.id,
+        unit_price,
+      }
+      if (item.id in itemMetadata) payload.pricing_metadata = itemMetadata[item.id]
+      return payload
+    })
+
     setIsSavingPrices(true)
     try {
-      const items = order.items.map(item => {
-        const payload: { id: string; unit_price: number; pricing_metadata?: PricingMetadata } = {
-          id: item.id,
-          unit_price: parseFloat(itemPrices[item.id] || '0'),
-        }
-        if (item.id in itemMetadata) payload.pricing_metadata = itemMetadata[item.id]
-        return payload
-      })
-
       const response = await fetch(`/api/orders/${params.id}/items`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items })
+        body: JSON.stringify({ items: itemsToSend })
       })
 
-      if (!response.ok) throw new Error('Failed to update prices')
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const msg = data.error || data.details?.[0]?.message || 'Failed to update prices'
+        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+      }
 
       toast.success('Prices updated successfully')
       setPricingDialogOpen(false)
       refetch()
     } catch (error) {
-      toast.error('Failed to update prices')
+      const message = error instanceof Error ? error.message : 'Failed to update prices'
+      toast.error(message)
     } finally {
       setIsSavingPrices(false)
     }

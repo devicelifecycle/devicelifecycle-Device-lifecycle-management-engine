@@ -5,7 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { DollarSign, Search, Plus, Trash2, Pencil, TrendingUp, Calculator, BarChart3, Settings } from 'lucide-react'
+import { DollarSign, Search, Plus, Trash2, Pencil, TrendingUp, Calculator, BarChart3, Settings, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +53,7 @@ export default function AdminPricingPage() {
   const [cpLoading, setCpLoading] = useState(true)
   const [cpDialogOpen, setCpDialogOpen] = useState(false)
   const [cpSaving, setCpSaving] = useState(false)
+  const [cpScraping, setCpScraping] = useState(false)
   const [cpDeleteTarget, setCpDeleteTarget] = useState<string | null>(null)
   const [cpForm, setCpForm] = useState({
     device_id: '', storage: '', competitor_name: '', trade_in_price: '', sell_price: '',
@@ -236,6 +237,23 @@ export default function AdminPricingPage() {
     } finally { setCpSaving(false) }
   }
 
+  const handleRunScraper = async () => {
+    setCpScraping(true)
+    try {
+      const res = await fetch('/api/pricing/scrape', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Scraper failed')
+      toast.success(`Scraper complete: ${data.total_upserted} prices updated${data.devices_created ? `, ${data.devices_created} new devices` : ''}`)
+      if (data.errors?.length) {
+        toast.warning(`${data.errors.length} warning(s) - check console`)
+        console.warn('Scraper warnings:', data.errors)
+      }
+      fetchCompetitorPrices()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Scraper failed')
+    } finally { setCpScraping(false) }
+  }
+
   // ============================================================================
   // CALCULATOR
   // ============================================================================
@@ -413,11 +431,17 @@ export default function AdminPricingPage() {
         {/* TAB 2: COMPETITOR PRICES */}
         {/* ============================================================ */}
         <TabsContent value="competitors" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <p className="text-sm text-muted-foreground">Track competitor trade-in and resale offers for competitive positioning</p>
-            <Button onClick={() => setCpDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />Add Competitor Price
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleRunScraper} disabled={cpScraping}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${cpScraping ? 'animate-spin' : ''}`} />
+                {cpScraping ? 'Running...' : 'Run Price Scraper'}
+              </Button>
+              <Button onClick={() => setCpDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />Add Competitor Price
+              </Button>
+            </div>
           </div>
 
           <Card>

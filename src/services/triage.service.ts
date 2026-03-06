@@ -356,17 +356,18 @@ export class TriageService {
       throw new Error(error.message)
     }
 
-    const total = data.length
-    const complete = data.filter(r => r.triage_status === 'complete').length
-    const pending = data.filter(r => r.triage_status === 'pending').length
-    const needsException = data.filter(r => r.triage_status === 'needs_exception').length
+    const records = data ?? []
+    const total = records.length
+    const complete = records.filter(r => r.triage_status === 'complete').length
+    const pending = records.filter(r => r.triage_status === 'pending').length
+    const needsException = records.filter(r => r.triage_status === 'needs_exception').length
 
     return {
       total,
       complete,
       pending,
       needsException,
-      isComplete: complete === total,
+      isComplete: total > 0 && complete === total,
     }
   }
 }

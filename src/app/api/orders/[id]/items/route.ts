@@ -30,7 +30,7 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { device_id, quantity, storage, color, condition, notes } = body
+    const { device_id, quantity, storage, color, colour, condition, notes } = body
 
     if (!device_id || !quantity) {
       return NextResponse.json(
@@ -70,8 +70,7 @@ export async function POST(
         order_id: params.id,
         device_id,
         quantity,
-        storage,
-        color,
+        colour: colour || color,
         claimed_condition: condition,
         notes,
       })
@@ -139,7 +138,9 @@ export async function PATCH(
       .eq('id', params.id)
       .single()
 
-    if (order) {
+    // Skip org check for admin and coe_manager — they can price any order
+    const isInternalPricer = userProfile.role === 'admin' || userProfile.role === 'coe_manager'
+    if (order && !isInternalPricer) {
       const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
       if (profile?.organization_id) {
         const cust = order.customer as { organization_id?: string } | null
@@ -154,28 +155,25 @@ export async function PATCH(
     // Validate input with Zod schema
     const validationResult = bulkUpdateOrderItemPricesSchema.safeParse(body)
     if (!validationResult.success) {
+      const firstError = validationResult.error.errors[0]
+      const message = firstError?.message || 'Validation failed'
       return NextResponse.json(
-        { error: 'Validation failed', details: validationResult.error.errors },
+        { error: message, details: validationResult.error.errors },
         { status: 400 }
       )
     }
 
     const { items } = validationResult.data
 
-    // Update each item's price and optional pricing_metadata
     const updates = items.map(async (item) => {
-      const updatePayload: Record<string, unknown> = {
-        unit_price: item.unit_price,
-        updated_at: new Date().toISOString(),
-      }
-      if (item.pricing_metadata !== undefined) {
-        updatePayload.pricing_metadata = item.pricing_metadata
-      }
       const { error } = await supabase
         .from('order_items')
-        .update(updatePayload)
+        .update({
+          unit_price: item.unit_price,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', item.id)
-        .eq('order_id', params.id) // Ensure item belongs to this order
+        .eq('order_id', params.id)
 
       if (error) throw error
     })
@@ -205,8 +203,9 @@ export async function PATCH(
     return NextResponse.json({ success: true, total_amount: totalAmount })
   } catch (error) {
     console.error('Error updating order item prices:', error)
+    const message = error instanceof Error ? error.message : 'Failed to update order item prices'
     return NextResponse.json(
-      { error: 'Failed to update order item prices' },
+      { error: message },
       { status: 500 }
     )
   }

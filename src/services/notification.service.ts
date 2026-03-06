@@ -387,7 +387,7 @@ export class NotificationService {
 
       const message = severity === 'breach'
         ? `Order #${orderNumber} has BREACHED its SLA deadline. Immediate action is required.`
-        : `Order #${orderNumber} is approaching its SLA deadline. ${hoursRemaining} hours remaining.`
+        : `Order #${orderNumber} is approaching its SLA deadline.${hoursRemaining != null ? ` ${hoursRemaining} hours remaining.` : ''}`
 
       await EmailService.sendOrderStatusEmail({
         to: user.email,

@@ -87,18 +87,18 @@ export default function DashboardPage() {
       value: total,
       description: isInternal ? 'All time orders' : 'Your orders',
       icon: ShoppingCart,
-      iconBg: 'bg-amber-500/12',
-      iconColor: 'text-amber-600 dark:text-amber-400',
-      gradient: 'from-amber-500/5 to-amber-600/5',
+      iconBg: 'bg-blue-500/12',
+      iconColor: 'text-blue-600 dark:text-blue-400',
+      gradient: 'from-blue-500/5 to-blue-600/5',
     },
     {
       title: 'Pending',
       value: pendingOrders,
       description: 'Awaiting action',
       icon: Clock,
-      iconBg: 'bg-amber-500/12',
-      iconColor: 'text-amber-600 dark:text-amber-400',
-      gradient: 'from-amber-500/5 to-orange-500/5',
+      iconBg: 'bg-slate-500/12',
+      iconColor: 'text-slate-600 dark:text-slate-400',
+      gradient: 'from-slate-500/5 to-slate-600/5',
     },
     ...(isInternal ? [
       {
@@ -106,18 +106,18 @@ export default function DashboardPage() {
         value: breachedOrders,
         description: 'Orders breaching SLA',
         icon: AlertTriangle,
-        iconBg: breachedOrders > 0 ? 'bg-red-500/12' : 'bg-amber-500/12',
-        iconColor: breachedOrders > 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400',
-        gradient: breachedOrders > 0 ? 'from-red-500/5 to-rose-500/5' : 'from-amber-500/5 to-amber-600/5',
+        iconBg: breachedOrders > 0 ? 'bg-red-500/12' : 'bg-slate-500/12',
+        iconColor: breachedOrders > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400',
+        gradient: breachedOrders > 0 ? 'from-red-500/5 to-red-600/5' : 'from-slate-500/5 to-slate-600/5',
       },
       {
         title: 'Revenue',
         value: formatCurrency(totalRevenue),
         description: 'From recent orders',
         icon: DollarSign,
-        iconBg: 'bg-amber-500/12',
-        iconColor: 'text-amber-600 dark:text-amber-400',
-        gradient: 'from-amber-500/5 to-amber-600/5',
+        iconBg: 'bg-blue-500/12',
+        iconColor: 'text-blue-600 dark:text-blue-400',
+        gradient: 'from-blue-500/5 to-blue-600/5',
       },
     ] : []),
   ]
@@ -152,18 +152,14 @@ export default function DashboardPage() {
         {isInternal && (
           <div className="flex gap-3">
             <Link href="/orders/new/trade-in">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button className="shadow-lg shadow-primary/25 btn-glow">
-                  <Plus className="mr-2 h-4 w-4" />New Trade-In
-                </Button>
-              </motion.div>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="mr-2 h-4 w-4" />New Trade-In
+              </Button>
             </Link>
             <Link href="/orders/new/cpo">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button variant="outline" className="border-2 hover:bg-muted/50">
+              <Button variant="outline" className="border-slate-600 hover:bg-slate-800/50">
                   <Plus className="mr-2 h-4 w-4" />New CPO
                 </Button>
-              </motion.div>
             </Link>
           </div>
         )}
@@ -180,19 +176,20 @@ export default function DashboardPage() {
             whileHover={{ y: -4, scale: 1.02 }}
             className="group"
           >
-            <Card className={`relative overflow-hidden border border-transparent bg-card/80 dark:bg-card/60 backdrop-blur-sm bg-gradient-to-br ${stat.gradient} transition-all duration-300 card-hover-lift card-glow animate-gradient-border`}>
+            <Card className={`relative overflow-hidden bg-gradient-to-br ${stat.gradient} ${i === 0 ? 'stat-glow-cyan' : i === 1 ? 'stat-glow-amber' : i === 2 ? 'stat-glow-violet' : 'stat-glow-emerald'}`}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                    <p className="text-2xl font-bold tracking-tight font-heading">{displayValue(stat)}</p>
-                    <p className="text-xs text-muted-foreground">{stat.description}</p>
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-medium text-muted-foreground/90">{stat.title}</p>
+                    <p className="text-3xl font-bold tracking-tight font-heading">{displayValue(stat)}</p>
+                    <p className="text-xs text-muted-foreground/70">{stat.description}</p>
                   </div>
                   <motion.div
-                    className={`flex h-12 w-12 items-center justify-center rounded-2xl ${stat.iconBg} ring-1 ring-black/5`}
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    animate={i === 0 ? { y: [0, -2, 0] } : undefined}
-                    transition={i === 0 ? { duration: 3, repeat: Infinity, ease: 'easeInOut' } : undefined}
+                    className={`flex h-14 w-14 items-center justify-center rounded-2xl ${stat.iconBg} backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_4px_12px_-4px_rgba(0,0,0,0.3)]`}
+                    whileHover={{ scale: 1.12, rotate: 8, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    animate={{ y: [0, -3, 0] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.5 }}
                   >
                     <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
                   </motion.div>
@@ -213,10 +210,15 @@ export default function DashboardPage() {
             transition={{ delay: 0.3 }}
             whileHover={{ y: -2 }}
           >
-            <Card className="border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 card-hover-lift cinematic-card cinematic-vignette">
+            <Card className="relative overflow-hidden stat-glow-cyan">
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2 font-heading">
-                <TrendingUp className="h-4 w-4 text-amber-500" />
+              <CardTitle className="text-base flex items-center gap-2.5 font-heading">
+                <motion.div
+                  animate={{ y: [0, -2, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <TrendingUp className="h-4.5 w-4.5 text-cyan-400" />
+                </motion.div>
                 Order Trend (7 days)
               </CardTitle>
               <CardDescription>New orders created per day</CardDescription>
@@ -266,10 +268,15 @@ export default function DashboardPage() {
             transition={{ delay: 0.35 }}
             whileHover={{ y: -2 }}
           >
-            <Card className="border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 card-hover-lift cinematic-card cinematic-vignette">
+            <Card className="relative overflow-hidden stat-glow-violet">
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2 font-heading">
-                <Activity className="h-4 w-4 text-violet-500" />
+              <CardTitle className="text-base flex items-center gap-2.5 font-heading">
+                <motion.div
+                  animate={{ rotate: [0, 5, 0, -5, 0] }}
+                  transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <Activity className="h-4.5 w-4.5 text-violet-400" />
+                </motion.div>
                 Order Pipeline
               </CardTitle>
               <CardDescription>Orders by current status</CardDescription>
@@ -318,81 +325,81 @@ export default function DashboardPage() {
         className="grid gap-6 lg:grid-cols-3"
       >
         {/* Quick Actions */}
-        <Card className="lg:col-span-1 border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 cinematic-card">
+        <Card className="lg:col-span-1 relative overflow-hidden stat-glow-amber">
           <CardHeader>
             <CardTitle className="text-base font-heading">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <Link href="/orders">
-              <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/12 group-hover:bg-amber-500/20 transition-colors">
-                <ShoppingCart className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/12">
+                <ShoppingCart className="h-5 w-5 text-blue-400" />
               </div>
               <div>
                 <p className="text-sm font-medium">{isInternal ? 'View All Orders' : 'My Orders'}</p>
                 <p className="text-xs text-muted-foreground">{isInternal ? 'Manage trade-in & CPO orders' : 'View your order history'}</p>
               </div>
-              </motion.div>
+              </div>
             </Link>
             {isInternal && (
               <>
                 <Link href="/orders/new/trade-in">
-                  <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/12 group-hover:bg-violet-500/20 transition-colors">
-                    <Package className="h-5 w-5 text-violet-600" />
+                  <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/12">
+                    <Package className="h-5 w-5 text-blue-400" />
                   </div>
                   <div>
                     <p className="text-sm font-medium">New Order</p>
                     <p className="text-xs text-muted-foreground">Create trade-in or CPO order</p>
                   </div>
-                  </motion.div>
+                  </div>
                 </Link>
                 {hasRole(['admin', 'coe_manager', 'sales']) && (
                   <Link href="/customers/new">
-                    <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/12 group-hover:bg-amber-500/20 transition-colors">
-                      <Users className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-600/20">
+                      <Users className="h-5 w-5 text-slate-400" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Add Customer</p>
                     <p className="text-xs text-muted-foreground">Register new customer</p>
                   </div>
-                    </motion.div>
+                    </div>
                   </Link>
                 )}
                 {hasRole(['admin', 'coe_manager', 'sales']) && (
                   <Link href="/vendors/new">
-                    <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/12 group-hover:bg-orange-500/20 transition-colors">
-                      <TrendingUp className="h-5 w-5 text-orange-600" />
+                    <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-600/20">
+                      <TrendingUp className="h-5 w-5 text-slate-400" />
                     </div>
                     <div>
                       <p className="text-sm font-medium">Add Vendor</p>
                     <p className="text-xs text-muted-foreground">Register new vendor</p>
                   </div>
-                    </motion.div>
+                    </div>
                   </Link>
                 )}
               </>
             )}
             {!isInternal && (
               <Link href="/notifications">
-                <motion.div whileHover={{ x: 4 }} className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-muted/50 hover:shadow-md hover:border-primary/20 group cursor-pointer">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/12 group-hover:bg-amber-500/20 transition-colors">
-                  <Clock className="h-5 w-5 text-amber-600" />
+                <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-600/20">
+                  <Clock className="h-5 w-5 text-slate-400" />
                 </div>
                 <div>
                   <p className="text-sm font-medium">Notifications</p>
                   <p className="text-xs text-muted-foreground">View updates and alerts</p>
                 </div>
-                </motion.div>
+                </div>
               </Link>
             )}
           </CardContent>
         </Card>
 
         {/* Recent Orders */}
-        <Card className="lg:col-span-2 border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 cinematic-card cinematic-vignette">
+        <Card className="lg:col-span-2 relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base font-heading">Recent Orders</CardTitle>
@@ -426,11 +433,12 @@ export default function DashboardPage() {
                   return (
                     <Link key={order.id} href={`/orders/${order.id}`}>
                       <motion.div
-                        whileHover={{ x: 4, backgroundColor: 'hsl(var(--muted) / 0.5)' }}
-                        className="flex items-center justify-between rounded-xl border p-3.5 transition-colors hover:border-primary/10 group"
+                        whileHover={{ x: 6, scale: 1.005 }}
+                        whileTap={{ scale: 0.998 }}
+                        className="flex items-center justify-between rounded-xl border border-white/[0.06] p-3.5 transition-all hover:bg-white/[0.04] hover:border-white/[0.12] hover:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.3)] group"
                       >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] ${order.type === 'trade_in' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-violet-500/15 text-violet-400'}`}>
                           {order.type === 'trade_in' ? 'TI' : 'CPO'}
                         </div>
                         <div className="min-w-0">
@@ -462,10 +470,15 @@ export default function DashboardPage() {
 
       {/* Activity Feed (internal only) */}
       {isInternal && recentOrders.length > 0 && (
-        <Card className="border border-white/5 dark:border-white/[0.06] bg-card/80 dark:bg-card/70 backdrop-blur-sm shadow-xl shadow-black/10 cinematic-card cinematic-vignette">
+        <Card className="relative overflow-hidden stat-glow-cyan">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2 font-heading">
-              <Activity className="h-4 w-4 text-amber-500" />
+            <CardTitle className="text-base flex items-center gap-2.5 font-heading">
+              <motion.div
+                animate={{ scale: [1, 1.15, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <Activity className="h-4.5 w-4.5 text-cyan-400" />
+              </motion.div>
               Activity Feed
             </CardTitle>
             <CardDescription>Recent order timeline</CardDescription>

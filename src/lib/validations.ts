@@ -226,7 +226,7 @@ export const bulkUpdateOrderItemPricesSchema = z.object({
       id: z.string().uuid('Invalid item ID'),
       unit_price: z.coerce
         .number()
-        .min(0.01, 'Unit price must be at least $0.01')
+        .min(0, 'Unit price cannot be negative')
         .max(100000, 'Unit price cannot exceed $100,000')
         .finite('Unit price must be a valid number'),
       pricing_metadata: pricingMetadataSchema.nullable().optional(),

@@ -112,26 +112,17 @@ export function Sidebar() {
     .filter(section => section.items.length > 0)
 
   return (
-    <aside className="flex h-full w-[260px] flex-col bg-[#050508] text-white border-r border-white/[0.06] shadow-[4px_0_24px_-8px_rgba(0,0,0,0.5)]">
+    <aside className="flex h-full w-[260px] flex-col bg-slate-950 text-white border-r border-slate-800/80">
       {/* Logo */}
-      <motion.div
-        className="flex h-16 items-center gap-3 px-6"
-        initial={{ opacity: 0, x: -10 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-      >
-        <motion.div
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-amber-500 shadow-lg shadow-cyan-500/25 ring-1 ring-white/10"
-          whileHover={{ scale: 1.05, rotate: 5 }}
-          whileTap={{ scale: 0.98 }}
-        >
+      <div className="flex h-16 items-center gap-3 px-6">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600">
           <Package className="h-5 w-5 text-white" />
-        </motion.div>
-        <div>
-          <span className="font-heading font-semibold text-sm tracking-tight text-white">DLM Engine</span>
-          <span className="block text-[10px] text-cyan-400/95 font-medium tracking-[0.2em] uppercase">Lifecycle Platform</span>
         </div>
-      </motion.div>
+        <div>
+          <span className="font-semibold text-sm tracking-tight text-white">DLM Engine</span>
+          <span className="block text-[10px] text-slate-500 font-medium tracking-wider uppercase">Lifecycle</span>
+        </div>
+      </div>
 
       {/* Navigation */}
       <LayoutGroup>
@@ -174,34 +165,28 @@ export function Sidebar() {
                             (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
                           return (
                             <Link key={item.href} href={item.href}>
-                              <motion.div
+                              <div
                                 className={cn(
                                   'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200',
                                     isActive
-                                    ? 'text-cyan-300 shadow-sm'
-                                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                                    ? 'text-blue-400'
+                                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                                 )}
-                                whileHover={{ x: 4 }}
-                                whileTap={{ scale: 0.98 }}
                               >
                                 {/* Sliding active background */}
                                 {isActive && (
                                   <motion.div
                                     layoutId="sidebar-active"
-                                    className="absolute inset-0 rounded-lg bg-cyan-500/15"
+                                    className="absolute inset-0 rounded-lg bg-blue-600/10"
                                     transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                                   />
                                 )}
-                                <item.icon className={cn("relative z-10 h-4 w-4 shrink-0", isActive && "text-cyan-400")} />
+                                <item.icon className={cn("relative z-10 h-4 w-4 shrink-0", isActive && "text-blue-400")} />
                                 <span className="relative z-10">{item.title}</span>
                                 {isActive && (
-                                  <motion.div
-                                    className="relative z-10 ml-auto h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]"
-                                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
-                                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                                  />
+                                  <div className="relative z-10 ml-auto h-2 w-2 rounded-full bg-blue-500" />
                                 )}
-                              </motion.div>
+                              </div>
                             </Link>
                           )
                         })}
@@ -216,14 +201,11 @@ export function Sidebar() {
       </LayoutGroup>
 
       {/* User section */}
-      <div className="border-t border-white/10 p-3">
-        <Link href="/profile" className="flex items-center gap-3 rounded-xl p-3 hover:bg-white/5 transition-all duration-200">
-          <motion.div
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-amber-500 text-black text-sm font-bold shadow-lg shadow-cyan-500/25"
-            whileHover={{ scale: 1.05 }}
-          >
+      <div className="border-t border-slate-800/80 p-3">
+        <Link href="/profile" className="flex items-center gap-3 rounded-lg p-3 hover:bg-slate-800/50 transition-colors">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-700 text-slate-200 text-sm font-semibold">
             {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-          </motion.div>
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-200 truncate">{user?.full_name || 'User'}</p>
             <p className="text-[11px] text-slate-500 capitalize">{user?.role?.replace('_', ' ') || 'Role'}</p>

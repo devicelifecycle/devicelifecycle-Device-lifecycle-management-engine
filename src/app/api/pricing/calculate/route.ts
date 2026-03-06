@@ -54,10 +54,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const version = body.version || 'v2'
-    // Prefer data_driven when setting is enabled (reduces third-party dependency)
-    const settings = await PricingService.getPricingSettings()
-    const preferDataDriven = (settings as unknown as Record<string, unknown>).prefer_data_driven === true || (settings as unknown as Record<string, unknown>).prefer_data_driven === 'true'
-    const modelId = body.model_id ?? (preferDataDriven ? 'data_driven' : undefined)
+    // Always prefer data_driven (self-learning model) unless explicitly overridden.
+    // The data-driven model ingests market + competitor data during training,
+    // so it carries its own intelligence without live third-party dependency.
+    const modelId = body.model_id ?? 'data_driven'
 
     // model_id: use pricing model (e.g. data_driven) instead of PricingService
     if (modelId) {
