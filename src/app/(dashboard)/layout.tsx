@@ -34,32 +34,18 @@ export default function DashboardLayout({
   // Show loading state while checking session
   if (isInitializing) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[#050508] cinematic-grain">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-violet-500 to-amber-500 shadow-2xl shadow-cyan-500/30"
-        >
-          <Package className="h-7 w-7 text-white" />
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="flex flex-col items-center gap-2"
-        >
-            <div className="h-1 w-24 overflow-hidden rounded-full bg-muted">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-violet-500 to-amber-500"
-              initial={{ x: '-100%' }}
-              animate={{ x: '100%' }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
-              style={{ width: '50%' }}
-            />
-          </div>
-          <p className="text-sm text-muted-foreground animate-pulse-soft">Loading...</p>
-        </motion.div>
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-slate-950">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600">
+          <Package className="h-6 w-6 text-white" />
+        </div>
+        <div className="h-1 w-20 overflow-hidden rounded-full bg-slate-800">
+          <motion.div
+            className="h-full w-1/2 rounded-full bg-blue-600"
+            animate={{ x: ['-100%', '100%'] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </div>
+        <p className="text-sm text-slate-500">Loading...</p>
       </div>
     )
   }
@@ -104,7 +90,7 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-[#050508] bg-mesh cinematic-grain p-6 sm:p-8">
+        <main className="flex-1 overflow-y-auto bg-slate-950 p-6 sm:p-8">
           <PageTransition key={pathname} className="mx-auto max-w-7xl">
             {children}
           </PageTransition>

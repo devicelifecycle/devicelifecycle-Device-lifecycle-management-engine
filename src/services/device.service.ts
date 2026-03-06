@@ -193,8 +193,7 @@ export class DeviceService {
       throw new Error(error.message)
     }
 
-    // Get unique makes
-    const makes = Array.from(new Set(data.map(d => d.make)))
+    const makes = Array.from(new Set((data || []).map(d => d.make)))
     return makes.sort()
   }
 

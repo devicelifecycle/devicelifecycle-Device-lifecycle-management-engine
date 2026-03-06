@@ -1,44 +1,35 @@
 // ============================================================================
-// PRICE SCRAPER PIPELINE CRON
+// ADMIN: MANUAL PRICE SCRAPER TRIGGER
 // ============================================================================
-// Runs scraper pipeline: GoRecell, Telus, Bell, Apple trade-in prices
+// Runs the price scraper pipeline. Requires admin or coe_manager.
+// Uses session auth (server client) — RLS allows writes for these roles.
 
-import { NextRequest, NextResponse } from 'next/server'
-import { timingSafeEqual } from 'crypto'
+import { NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { runScraperPipeline } from '@/lib/scrapers'
-import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
-const CRON_SECRET = process.env.CRON_SECRET
-const SCRAPER_ENABLED = process.env.PRICE_SCRAPER_ENABLED === 'true'
-
-function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b))
-}
-
-export async function GET(request: NextRequest) {
+export async function POST() {
   try {
-    if (!CRON_SECRET) {
-      return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
-    }
-    const authHeader = request.headers.get('authorization') || ''
-    if (!safeCompare(authHeader, `Bearer ${CRON_SECRET}`)) {
+    const supabase = createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!SCRAPER_ENABLED) {
-      return NextResponse.json({
-        success: true,
-        skipped: true,
-        reason: 'PRICE_SCRAPER_ENABLED is not true',
-        timestamp: new Date().toISOString(),
-      })
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const supabase = createServiceRoleClient()
     const result = await runScraperPipeline(undefined, supabase)
 
-    // Auto-train after scraping so scraped data feeds into the AI model
+    // Auto-train after scraping so new data feeds into the AI model immediately
     let trainingResult = null
     try {
       const { PricingTrainingService } = await import('@/services/pricing-training.service')
@@ -73,8 +64,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-export async function POST(request: NextRequest) {
-  return GET(request)
 }

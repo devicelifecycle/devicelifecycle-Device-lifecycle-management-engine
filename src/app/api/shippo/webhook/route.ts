@@ -29,7 +29,12 @@ export async function POST(request: NextRequest) {
   }
 
   const signature = request.headers.get('shippo-signature') || request.headers.get('x-shippo-signature')
-  if (!ShippoService.validateWebhook(rawBody, signature)) {
+  const webhookResult = ShippoService.validateWebhook(rawBody, signature)
+  if (webhookResult === 'not_configured') {
+    console.error('[Shippo Webhook] SHIPPO_WEBHOOK_SECRET not configured')
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
+  }
+  if (!webhookResult) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 

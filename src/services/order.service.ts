@@ -229,14 +229,9 @@ export class OrderService {
         type: input.type,
         status: 'draft',
         customer_id: input.customer_id,
-        organization_id: orgId,
         created_by_id: userId,
-        customer_notes: input.customer_notes,
+        notes: input.customer_notes,
         internal_notes: input.internal_notes,
-        subtotal: 0,
-        tax: 0,
-        shipping_cost: 0,
-        total: 0,
       })
       .select()
       .single()
@@ -249,13 +244,11 @@ export class OrderService {
     if (input.items && input.items.length > 0) {
       const items = input.items.map(item => ({
         order_id: order.id,
-        device_catalog_id: item.device_id || item.device_catalog_id,
+        device_id: item.device_id || item.device_catalog_id,
         quantity: item.quantity,
-        storage: item.storage,
-        color: item.color,
-        condition: item.condition,
-        unit_price: 0, // Will be set during pricing
-        total_price: 0,
+        colour: item.color,
+        claimed_condition: item.condition,
+        unit_price: 0,
         notes: item.notes,
       }))
 
@@ -266,6 +259,12 @@ export class OrderService {
       if (itemsError) {
         throw new Error(itemsError.message)
       }
+
+      const totalQty = input.items.reduce((sum, i) => sum + (i.quantity || 1), 0)
+      await supabase
+        .from('orders')
+        .update({ total_quantity: totalQty })
+        .eq('id', order.id)
     }
 
     // Create timeline event
@@ -602,12 +601,6 @@ export class OrderService {
 
     const monthAgo = new Date(today)
     monthAgo.setMonth(monthAgo.getMonth() - 1)
-
-    let query = supabase.from('orders').select('*', { count: 'exact' })
-    
-    if (orgId) {
-      query = query.eq('organization_id', orgId)
-    }
 
     // Get counts
     const [todayCount, weekCount, monthCount, pendingCount, breachedCount] = await Promise.all([

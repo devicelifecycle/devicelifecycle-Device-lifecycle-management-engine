@@ -158,9 +158,10 @@ export class OrderSplitService {
     // 10. Add timeline event
     await supabase.from('order_timeline').insert({
       order_id: parent_order_id,
-      title: 'Order Split',
+      event: 'Order Split',
       description: `Order split into ${subOrders.length} sub-orders across ${allocations.length} vendors`,
-      created_by_id: userId,
+      actor_id: userId,
+      timestamp: new Date().toISOString(),
     })
 
     return subOrders
@@ -177,7 +178,6 @@ export class OrderSplitService {
     suffix: string,
     userId: string
   ): Promise<Order> {
-    // Calculate total quantity and amount for this sub-order
     let totalQuantity = 0
     let totalAmount = 0
 
@@ -189,7 +189,6 @@ export class OrderSplitService {
       }
     }
 
-    // Create the sub-order
     const subOrderNumber = `${parentOrder.order_number}-${suffix}`
     const { data: subOrder, error: subOrderError } = await supabase
       .from('orders')
@@ -216,11 +215,11 @@ export class OrderSplitService {
       throw new Error(`Failed to create sub-order ${suffix}: ${subOrderError?.message}`)
     }
 
-    // Create order items for this sub-order
     const subItems = allocation.items
       .filter(allocItem => allocItem.quantity > 0)
       .map(allocItem => {
-        const parentItem = parentItems.find(pi => pi.id === allocItem.order_item_id)!
+        const parentItem = parentItems.find(pi => pi.id === allocItem.order_item_id)
+        if (!parentItem) throw new Error(`Parent item ${allocItem.order_item_id} not found`)
         return {
           order_id: subOrder.id,
           device_catalog_id: parentItem.device_catalog_id,
@@ -246,12 +245,12 @@ export class OrderSplitService {
       }
     }
 
-    // Add timeline event to sub-order
     await supabase.from('order_timeline').insert({
       order_id: subOrder.id,
-      title: 'Sub-order Created',
+      event: 'Sub-order Created',
       description: `Created as part of split from order ${parentOrder.order_number}`,
-      created_by_id: userId,
+      actor_id: userId,
+      timestamp: new Date().toISOString(),
     })
 
     return subOrder as Order
@@ -264,7 +263,6 @@ export class OrderSplitService {
     parentItems: Array<{ id: string; quantity: number }>,
     allocations: OrderSplitAllocation[]
   ): void {
-    // Build a map of item_id → total allocated quantity
     const allocatedQty: Record<string, number> = {}
     for (const alloc of allocations) {
       for (const item of alloc.items) {
@@ -272,7 +270,6 @@ export class OrderSplitService {
       }
     }
 
-    // Check each parent item is fully allocated
     for (const parentItem of parentItems) {
       const allocated = allocatedQty[parentItem.id] || 0
       if (allocated !== parentItem.quantity) {
@@ -283,7 +280,6 @@ export class OrderSplitService {
       }
     }
 
-    // Check no extra items were allocated
     for (const itemId of Object.keys(allocatedQty)) {
       if (!parentItems.find(pi => pi.id === itemId)) {
         throw new Error(`Allocation references unknown item ${itemId}`)
@@ -301,7 +297,6 @@ export class OrderSplitService {
   }> {
     const supabase = createServerSupabaseClient()
 
-    // Get parent order
     const { data: parent, error: parentError } = await supabase
       .from('orders')
       .select('*, customer:customers(*), vendor:vendors(*), items:order_items(*, device:device_catalog(*))')
@@ -312,7 +307,6 @@ export class OrderSplitService {
       throw new Error('Order not found')
     }
 
-    // Get sub-orders
     const { data: subOrders, error: subError } = await supabase
       .from('orders')
       .select('*, vendor:vendors(*), items:order_items(*, device:device_catalog(*))')
@@ -323,7 +317,6 @@ export class OrderSplitService {
       throw new Error('Failed to fetch sub-orders')
     }
 
-    // Get split audit records
     const { data: splits } = await supabase
       .from('order_splits')
       .select('sub_order_id, split_items, split_at')
@@ -343,7 +336,6 @@ export class OrderSplitService {
   static async undoSplit(parentOrderId: string, userId: string): Promise<void> {
     const supabase = createServerSupabaseClient()
 
-    // Get sub-orders
     const { data: subOrders, error: subError } = await supabase
       .from('orders')
       .select('id, status, order_number')
@@ -357,7 +349,6 @@ export class OrderSplitService {
       throw new Error('No sub-orders found to undo')
     }
 
-    // Check none have progressed past sourced
     const progressed = subOrders.filter(so => so.status !== 'sourced')
     if (progressed.length > 0) {
       throw new Error(
@@ -365,20 +356,16 @@ export class OrderSplitService {
       )
     }
 
-    // Delete sub-order items
     for (const subOrder of subOrders) {
       await supabase.from('order_items').delete().eq('order_id', subOrder.id)
       await supabase.from('order_timeline').delete().eq('order_id', subOrder.id)
     }
 
-    // Delete sub-orders
     const subOrderIds = subOrders.map(so => so.id)
     await supabase.from('orders').delete().in('id', subOrderIds)
 
-    // Clean up audit records
     await supabase.from('order_splits').delete().eq('parent_order_id', parentOrderId)
 
-    // Reset vendor bids
     await supabase
       .from('vendor_bids')
       .update({
@@ -388,7 +375,6 @@ export class OrderSplitService {
       })
       .eq('order_id', parentOrderId)
 
-    // Reset parent order
     await supabase
       .from('orders')
       .update({
@@ -399,12 +385,12 @@ export class OrderSplitService {
       })
       .eq('id', parentOrderId)
 
-    // Add timeline event
     await supabase.from('order_timeline').insert({
       order_id: parentOrderId,
-      title: 'Split Undone',
+      event: 'Split Undone',
       description: `Order split was reversed. ${subOrders.length} sub-orders removed.`,
-      created_by_id: userId,
+      actor_id: userId,
+      timestamp: new Date().toISOString(),
     })
   }
 
@@ -414,7 +400,6 @@ export class OrderSplitService {
   static async checkParentAutoTransition(subOrderId: string): Promise<void> {
     const supabase = createServerSupabaseClient()
 
-    // Get the sub-order to find the parent
     const { data: subOrder } = await supabase
       .from('orders')
       .select('parent_order_id')
@@ -423,7 +408,6 @@ export class OrderSplitService {
 
     if (!subOrder?.parent_order_id) return
 
-    // Get all sub-orders for this parent
     const { data: allSubOrders } = await supabase
       .from('orders')
       .select('status')
@@ -433,7 +417,6 @@ export class OrderSplitService {
 
     const statuses = allSubOrders.map(so => so.status)
 
-    // Auto-transition parent based on sub-order consensus
     let parentStatus: string | null = null
 
     if (statuses.every(s => s === 'closed')) {
@@ -490,9 +473,10 @@ export class OrderSplitService {
 
       await supabase.from('order_timeline').insert({
         order_id: subOrder.id,
-        title: 'Cancelled',
+        event: 'Cancelled',
         description: 'Cancelled due to parent order cancellation',
-        created_by_id: userId,
+        actor_id: userId,
+        timestamp: new Date().toISOString(),
       })
     }
   }

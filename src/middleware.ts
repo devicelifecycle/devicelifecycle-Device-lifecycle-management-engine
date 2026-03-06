@@ -13,8 +13,8 @@ const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/auth/cal
 const roleRoutes: Record<string, string[]> = {
   '/admin': ['admin'],
   '/coe': ['admin', 'coe_manager', 'coe_tech'],
-  '/customer': ['customer'],
-  '/vendor': ['vendor'],
+  '/customer/': ['customer'],
+  '/vendor/': ['vendor'],
 }
 
 export async function middleware(request: NextRequest) {

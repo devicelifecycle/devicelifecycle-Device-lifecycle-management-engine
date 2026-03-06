@@ -27,11 +27,12 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams
+    const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)
     const filters = {
       search: searchParams.get('search') || undefined,
       is_active: searchParams.get('is_active') === 'true' ? true :
                  searchParams.get('is_active') === 'false' ? false : undefined,
-      organization_id: profile.organization_id,
+      organization_id: isInternal ? undefined : profile.organization_id,
       page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
       page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '20'), 1), 100),
     }

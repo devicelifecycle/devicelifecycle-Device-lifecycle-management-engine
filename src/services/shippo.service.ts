@@ -265,9 +265,9 @@ export class ShippoService {
     }
   }
 
-  static validateWebhook(requestBody: string, signatureHeader: string | null): boolean {
+  static validateWebhook(requestBody: string, signatureHeader: string | null): boolean | 'not_configured' {
     const secret = process.env.SHIPPO_WEBHOOK_SECRET
-    if (!secret) return true
+    if (!secret) return 'not_configured'
     if (!signatureHeader) return false
 
     const computed = createHmac('sha256', secret).update(requestBody).digest('hex')

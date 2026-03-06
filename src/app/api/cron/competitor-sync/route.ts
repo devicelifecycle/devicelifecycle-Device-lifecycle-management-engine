@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { timingSafeEqual } from 'crypto'
 
 const CRON_SECRET = process.env.CRON_SECRET
@@ -73,7 +73,8 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const supabase = createServerSupabaseClient()
+    // Use service-role client to bypass RLS (cron has no user session)
+    const supabase = createServiceRoleClient()
     let imported = 0
     const errors: string[] = []
 

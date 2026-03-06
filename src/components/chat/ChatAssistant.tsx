@@ -114,7 +114,7 @@ export function ChatAssistant() {
       {/* Chat Panel */}
       <div
         className={cn(
-          'fixed bottom-20 right-4 z-50 flex flex-col rounded-2xl border bg-background shadow-2xl transition-all duration-300 ease-out',
+          'fixed bottom-20 right-4 z-50 flex flex-col rounded-2xl border border-white/[0.08] bg-[#0a0a12]/95 backdrop-blur-2xl shadow-[0_24px_64px_-16px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.04),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-300 ease-out',
           isOpen
             ? 'h-[520px] w-[380px] scale-100 opacity-100'
             : 'pointer-events-none h-0 w-0 scale-90 opacity-0'
@@ -210,10 +210,10 @@ export function ChatAssistant() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          'fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl',
+          'fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300 hover:scale-110 hover:translate-y-[-2px]',
           isOpen
-            ? 'bg-muted text-muted-foreground rotate-0'
-            : 'bg-gradient-to-r from-amber-600 to-amber-500 text-white'
+            ? 'bg-white/[0.06] text-muted-foreground shadow-[0_4px_16px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]'
+            : 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_8px_32px_-6px_rgba(34,211,238,0.4),inset_0_1px_0_rgba(255,255,255,0.2)]'
         )}
       >
         {isOpen ? (

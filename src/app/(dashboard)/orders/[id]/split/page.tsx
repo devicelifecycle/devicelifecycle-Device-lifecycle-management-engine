@@ -98,8 +98,9 @@ export default function OrderSplitPage() {
         fetch(`/api/vendors/bids?order_id=${orderId}`),
       ])
 
+      let orderData: any = null
       if (orderRes.ok) {
-        const orderData = await orderRes.json()
+        orderData = await orderRes.json()
         setOrder(orderData)
       }
 
@@ -117,8 +118,7 @@ export default function OrderSplitPage() {
         const accepted = bids.filter(
           (b: VendorBid) => b.status === 'accepted' || (b as any).is_accepted
         )
-        if (accepted.length >= 2 && orderRes.ok) {
-          const orderData = await orderRes.json().catch(() => null)
+        if (accepted.length >= 2 && orderData) {
           const items = orderData?.items || []
           const preAllocations = buildPrefilledAllocations(accepted, items)
           if (preAllocations.length > 0) {
