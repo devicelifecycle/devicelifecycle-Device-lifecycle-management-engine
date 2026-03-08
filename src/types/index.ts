@@ -189,10 +189,12 @@ export interface CompetitorPrice extends BaseEntity {
   device_id: string;
   storage: string;
   competitor_name: string;
+  condition?: 'excellent' | 'good' | 'fair' | 'broken';
   trade_in_price?: number;
   sell_price?: number;
   source: 'manual' | 'scraped' | 'api';
   scraped_at?: string;
+  retrieved_at?: string;
   device?: Device;
 }
 
@@ -223,6 +225,7 @@ export interface PriceCalculationResultV2 {
   success: boolean;
   trade_price: number;
   cpo_price: number;
+  margin_target_percent?: number;
   wholesale_c_stock?: number;
   marketplace_price?: number;
   marketplace_net?: number;

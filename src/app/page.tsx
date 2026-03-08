@@ -145,7 +145,7 @@ export default function LandingPage() {
             <span className="text-blue-400">for enterprise.</span>
           </h1>
           <p className="mt-5 text-slate-400 text-base max-w-lg mx-auto">
-            Trade-in to delivery. AI-powered pricing. Built for financial institutions.
+            Trade-in to delivery. AI-powered pricing. Built for enterprise teams.
           </p>
           <div className="mt-10 flex items-center justify-center gap-3">
             <Link href="/login">

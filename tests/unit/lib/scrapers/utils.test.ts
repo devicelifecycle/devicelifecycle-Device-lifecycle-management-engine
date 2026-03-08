@@ -30,5 +30,21 @@ describe('scraper utils', () => {
 
       vi.unstubAllGlobals()
     })
+
+    it('retries on transient 5xx and eventually succeeds', async () => {
+      const errorRes = { ok: false, status: 503 }
+      const okRes = { ok: true, status: 200, text: () => Promise.resolve('ok') }
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(errorRes)
+        .mockResolvedValueOnce(okRes)
+      vi.stubGlobal('fetch', fetchMock)
+
+      const res = await fetchWithRetry('https://example.com', { method: 'GET' }, 2)
+      expect(res).toBe(okRes)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+
+      vi.unstubAllGlobals()
+    })
   })
 })

@@ -15,6 +15,10 @@ const roleRoutes: Record<string, string[]> = {
   '/coe': ['admin', 'coe_manager', 'coe_tech'],
   '/customer/': ['customer'],
   '/vendor/': ['vendor'],
+  '/customers': ['admin', 'coe_manager', 'sales'],
+  '/vendors': ['admin', 'coe_manager', 'sales'],
+  '/orders/new': ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer'],
+  '/orders': ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor'],
 }
 
 export async function middleware(request: NextRequest) {
@@ -66,7 +70,7 @@ export async function middleware(request: NextRequest) {
         if (pathname.startsWith(route)) {
           if (!allowedRoles.includes(user.role)) {
             // Redirect to orders page if not authorized
-            return NextResponse.redirect(new URL('/dashboard', request.url))
+            return NextResponse.redirect(new URL('/', request.url))
           }
         }
       }

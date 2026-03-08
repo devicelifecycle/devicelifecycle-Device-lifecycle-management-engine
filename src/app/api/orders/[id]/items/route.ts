@@ -25,7 +25,7 @@ export async function POST(
       .eq('id', user.id)
       .single()
 
-    if (itemProfile && ['customer', 'vendor'].includes(itemProfile.role)) {
+    if (itemProfile && ['customer', 'vendor', 'coe_tech'].includes(itemProfile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -49,10 +49,10 @@ export async function POST(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
-    if (userProfile?.organization_id) {
+    const { data: userProfile } = await supabase.from('users').select('role, organization_id').eq('id', user.id).single()
+    if (userProfile?.role === 'sales') {
       const cust = order.customer as { organization_id?: string } | null
-      if (cust?.organization_id && cust.organization_id !== userProfile.organization_id) {
+      if (userProfile.organization_id && cust?.organization_id && cust.organization_id !== userProfile.organization_id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     }
@@ -70,6 +70,7 @@ export async function POST(
         order_id: params.id,
         device_id,
         quantity,
+        storage,
         colour: colour || color,
         claimed_condition: condition,
         notes,
@@ -134,9 +135,20 @@ export async function PATCH(
 
     const { data: order } = await supabase
       .from('orders')
-      .select('id, customer:customers(organization_id)')
+      .select('id, type, customer:customers(organization_id)')
       .eq('id', params.id)
       .single()
+
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    }
+
+    if (order.type === 'cpo' && userProfile.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only administrators can set CPO pricing' },
+        { status: 403 }
+      )
+    }
 
     // Skip org check for admin and coe_manager — they can price any order
     const isInternalPricer = userProfile.role === 'admin' || userProfile.role === 'coe_manager'
@@ -165,20 +177,57 @@ export async function PATCH(
 
     const { items } = validationResult.data
 
-    const updates = items.map(async (item) => {
+    if (order.type === 'cpo') {
+      const hasSuggestedPricing = items.some(
+        (item) => item.pricing_metadata?.suggested_by_calc === true
+      )
+
+      if (hasSuggestedPricing) {
+        return NextResponse.json(
+          { error: 'CPO pricing must be entered manually; suggested pricing is disabled for CPO orders' },
+          { status: 400 }
+        )
+      }
+    }
+
+    const errors: string[] = []
+    for (const item of items) {
+      // Build update payload — only include fields that exist
+      const updatePayload: Record<string, unknown> = {
+        unit_price: item.unit_price,
+      }
+      if (item.pricing_metadata) {
+        updatePayload.pricing_metadata = item.pricing_metadata
+      }
+
       const { error } = await supabase
         .from('order_items')
-        .update({
-          unit_price: item.unit_price,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq('id', item.id)
         .eq('order_id', params.id)
 
-      if (error) throw error
-    })
+      if (error) {
+        console.error(`Error updating item ${item.id}:`, error.message)
+        // If pricing_metadata column doesn't exist, retry without it
+        if (error.message.includes('pricing_metadata')) {
+          const { error: retryError } = await supabase
+            .from('order_items')
+            .update({ unit_price: item.unit_price })
+            .eq('id', item.id)
+            .eq('order_id', params.id)
+          if (retryError) errors.push(`Item ${item.id}: ${retryError.message}`)
+        } else {
+          errors.push(`Item ${item.id}: ${error.message}`)
+        }
+      }
+    }
 
-    await Promise.all(updates)
+    if (errors.length > 0) {
+      return NextResponse.json(
+        { error: `Some items failed: ${errors.join('; ')}` },
+        { status: 500 }
+      )
+    }
 
     // Calculate and update order total
     const { data: orderItems } = await supabase

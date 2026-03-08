@@ -25,6 +25,60 @@ export const TRIAGE_DECISION_VALUES = ['accept', 'reject', 'recondition', 'excep
 export const NOTIFICATION_TYPE_VALUES = ['in_app', 'email', 'sms'] as const
 export const AUDIT_ACTION_VALUES = ['create', 'update', 'delete', 'status_change', 'login', 'logout', 'price_change', 'assignment'] as const
 
+function normalizeConditionToken(input: unknown): string {
+  return String(input ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z]/g, '')
+}
+
+function normalizeConditionBase(input: unknown): 'new' | 'excellent' | 'good' | 'fair' | 'poor' | 'broken' | undefined {
+  const token = normalizeConditionToken(input)
+  if (!token) return undefined
+
+  if (token === 'new' || token.startsWith('brandnew')) return 'new'
+  if (
+    token === 'excellent' ||
+    token === 'excellant' ||
+    token === 'exacellent' ||
+    token === 'exacellen' ||
+    token === 'exellent' ||
+    token === 'excelent' ||
+    token === 'like' ||
+    token.startsWith('likenew') ||
+    token.startsWith('excel') ||
+    token.startsWith('excell')
+  ) return 'excellent'
+  if (token === 'good' || token === 'gud' || token === 'gd') return 'good'
+  if (token === 'fair' || token === 'fr' || token === 'average') return 'fair'
+  if (
+    token === 'poor' ||
+    token === 'broken' ||
+    token === 'brokn' ||
+    token === 'broke' ||
+    token.startsWith('damag') ||
+    token.startsWith('crack') ||
+    token.startsWith('defect')
+  ) return token === 'poor' ? 'poor' : 'broken'
+
+  return undefined
+}
+
+export function normalizePricingConditionInput(input: unknown): 'new' | 'excellent' | 'good' | 'fair' | 'poor' {
+  const normalized = normalizeConditionBase(input)
+  if (!normalized) return 'good'
+  if (normalized === 'broken') return 'poor'
+  return normalized
+}
+
+export function normalizeCompetitorConditionInput(input: unknown): 'excellent' | 'good' | 'fair' | 'broken' {
+  const normalized = normalizeConditionBase(input)
+  if (!normalized) return 'good'
+  if (normalized === 'new') return 'excellent'
+  if (normalized === 'poor') return 'broken'
+  return normalized
+}
+
 // ============================================================================
 // COMMON SCHEMAS
 // ============================================================================
@@ -404,7 +458,7 @@ export const updatePricingTableSchema = createPricingTableSchema.partial()
 export const priceCalculationSchema = z.object({
   device_id: z.string().uuid(),
   storage: z.string().min(1),
-  condition: z.enum(DEVICE_CONDITION_VALUES),
+  condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)),
   carrier: z.string().default('Unlocked'),
   issues: z.array(z.string()).default([]),
   quantity: z.coerce.number().min(1).max(100000).default(1),
@@ -437,6 +491,7 @@ export const createCompetitorPriceSchema = z.object({
   device_id: z.string().uuid(),
   storage: z.string().min(1),
   competitor_name: z.string().min(1),
+  condition: z.preprocess(normalizeCompetitorConditionInput, z.enum(['excellent', 'good', 'fair', 'broken']).default('good')),
   trade_in_price: z.coerce.number().min(0).optional(),
   sell_price: z.coerce.number().min(0).optional(),
   source: z.enum(['manual', 'scraped', 'api']).default('manual'),
@@ -448,7 +503,7 @@ export const priceCalculationV2Schema = z.object({
   device_id: z.string().uuid(),
   storage: z.string().min(1),
   carrier: z.string().default('Unlocked'),
-  condition: z.enum(DEVICE_CONDITION_VALUES),
+  condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)),
   issues: z.array(z.string()).default([]),
   quantity: z.coerce.number().min(1).max(100000).default(1),
   risk_mode: z.enum(['retail', 'enterprise']).default('retail'),

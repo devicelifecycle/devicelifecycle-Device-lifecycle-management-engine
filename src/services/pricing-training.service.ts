@@ -68,6 +68,24 @@ interface PriceEntry {
   age_days: number
 }
 
+function trimOutlierEntries(entries: PriceEntry[]): PriceEntry[] {
+  if (entries.length < 5) return entries
+
+  const prices = entries.map((entry) => entry.price).sort((a, b) => a - b)
+  const q1 = percentile(prices, 25)
+  const q3 = percentile(prices, 75)
+  const iqr = q3 - q1
+
+  if (iqr <= 0) return entries
+
+  const lower = q1 - 1.5 * iqr
+  const upper = q3 + 1.5 * iqr
+  const filtered = entries.filter((entry) => entry.price >= lower && entry.price <= upper)
+
+  // Keep enough samples; otherwise fall back to original set
+  return filtered.length >= 3 ? filtered : entries
+}
+
 export class PricingTrainingService {
   /**
    * Run full training: ingest all pricing signals, compute weighted baselines.
@@ -304,14 +322,16 @@ export class PricingTrainingService {
       if (entries.length === 0) continue
       const [deviceId, storage, condition] = key.split('|')
 
+      const effectiveEntries = trimOutlierEntries(entries)
+
       // Weighted median for robustness against outliers
-      const wMedian = weightedMedian(entries.map(e => ({ value: e.price, weight: e.weight })))
-      const prices = entries.map(e => e.price)
+      const wMedian = weightedMedian(effectiveEntries.map(e => ({ value: e.price, weight: e.weight })))
+      const prices = effectiveEntries.map(e => e.price)
       const p25 = percentile(prices, 25)
       const p75 = percentile(prices, 75)
 
-      const sources = Array.from(new Set(entries.map(e => e.source)))
-      const totalWeight = entries.reduce((s, e) => s + e.weight, 0)
+      const sources = Array.from(new Set(effectiveEntries.map(e => e.source)))
+      const totalWeight = effectiveEntries.reduce((s, e) => s + e.weight, 0)
 
       const { error } = await supabase.from('trained_pricing_baselines').upsert(
         {
@@ -322,7 +342,7 @@ export class PricingTrainingService {
           median_trade_price: Math.round(wMedian * 100) / 100,
           p25_trade_price: Math.round(p25 * 100) / 100,
           p75_trade_price: Math.round(p75 * 100) / 100,
-          sample_count: entries.length,
+          sample_count: effectiveEntries.length,
           last_trained_at: nowIso,
           data_sources: sources,
           updated_at: nowIso,

@@ -4,10 +4,21 @@
 
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let resendClient: Resend | null = null
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'DLM Engine <onboarding@resend.dev>'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'DLM Engine'
+
+function getResendClient(): Resend | null {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey || apiKey === 're_placeholder') return null
+
+  if (!resendClient) {
+    resendClient = new Resend(apiKey)
+  }
+
+  return resendClient
+}
 
 export class EmailService {
   /**
@@ -18,7 +29,8 @@ export class EmailService {
     subject: string,
     html: string
   ): Promise<boolean> {
-    if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_placeholder') {
+    const resend = getResendClient()
+    if (!resend) {
       console.warn('[EmailService] RESEND_API_KEY not configured, skipping email')
       return false
     }

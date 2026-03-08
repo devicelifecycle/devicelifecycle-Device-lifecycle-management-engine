@@ -582,7 +582,7 @@ export const MARGIN_TIER_CONFIG: Record<MarginTier, {
   },
 }
 
-export const COMPETITORS = ['Telus', 'Bell', 'Gazelle', 'Decluttr', 'Back Market'] as const
+export const COMPETITORS = ['Telus', 'Bell', 'GoRecell', 'UniverCell'] as const
 
 // ============================================================================
 // ORDER EMAIL NOTIFICATION CONFIG

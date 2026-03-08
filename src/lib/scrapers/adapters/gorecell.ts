@@ -240,6 +240,13 @@ function inferCategory(name: string): string {
   return 'phone'
 }
 
+const DISCOVERY_CONDITIONS: Array<{ key: 'excellent' | 'good' | 'fair' | 'broken'; sourceLabel: string }> = [
+  { key: 'excellent', sourceLabel: 'Like New' },
+  { key: 'good', sourceLabel: 'Good' },
+  { key: 'fair', sourceLabel: 'Fair' },
+  { key: 'broken', sourceLabel: 'Defective' },
+]
+
 /** Extract all storage + price pairs from query_data (good condition) */
 function extractAllStoragePrices(queryData: QueryData, condition: string): Array<{ storage: string; price: number }> {
   const results: Array<{ storage: string; price: number }> = []
@@ -285,7 +292,8 @@ export async function scrapeGoRecellFullCatalog(limitProducts = 150): Promise<Sc
     while (fetched < limitProducts) {
       const url = `${STORE_API}?page=${page}&per_page=${perPage}`
       const res = await fetchWithRetry(url, { method: 'GET', headers: { Accept: 'application/json' } })
-      const products: WooProduct[] = res.ok && Array.isArray(await res.json()) ? (await res.json()) as WooProduct[] : []
+      const raw = res.ok ? await res.json() : []
+      const products: WooProduct[] = Array.isArray(raw) ? raw : []
       if (products.length === 0) break
 
       for (const p of products) {
@@ -305,21 +313,22 @@ export async function scrapeGoRecellFullCatalog(limitProducts = 150): Promise<Sc
 
           const make = inferMake(p.name)
           const model = p.name.trim()
-          const cond = 'good'
-          const storagePrices = extractAllStoragePrices(queryData, cond)
+          for (const condition of DISCOVERY_CONDITIONS) {
+            const storagePrices = extractAllStoragePrices(queryData, condition.sourceLabel)
 
-          for (const { storage, price } of storagePrices) {
-            prices.push({
-              competitor_name: 'GoRecell',
-              make,
-              model,
-              storage,
-              trade_in_price: price,
-              sell_price: null,
-              condition: cond,
-              scraped_at: now,
-              raw: { source: 'discovery' },
-            })
+            for (const { storage, price } of storagePrices) {
+              prices.push({
+                competitor_name: 'GoRecell',
+                make,
+                model,
+                storage,
+                trade_in_price: price,
+                sell_price: null,
+                condition: condition.key,
+                scraped_at: now,
+                raw: { source: 'discovery' },
+              })
+            }
           }
           fetched++
           await throttle(350)

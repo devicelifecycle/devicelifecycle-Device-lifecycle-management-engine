@@ -35,11 +35,30 @@ import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import type { OrderStatus, OrderItem, PricingMetadata } from '@/types'
 
+function mapOrderConditionToCompetitorCondition(condition?: string): 'excellent' | 'good' | 'fair' | 'broken' {
+  if (condition === 'new' || condition === 'excellent') return 'excellent'
+  if (condition === 'fair') return 'fair'
+  if (condition === 'poor' || condition === 'broken') return 'broken'
+  return 'good'
+}
+
+function competitorConditionOrder(condition: string): number {
+  if (condition === 'excellent') return 0
+  if (condition === 'good') return 1
+  if (condition === 'fair') return 2
+  if (condition === 'broken') return 3
+  return 4
+}
+
 export default function OrderDetailPage() {
   const params = useParams()
   const { user } = useAuth()
   const isCustomer = user?.role === 'customer'
+  const isVendor = user?.role === 'vendor'
+  const canSetPricingByRole = user?.role === 'admin' || user?.role === 'coe_manager'
   const { order, isLoading, transition, isTransitioning, refetch } = useOrder(params.id as string)
+  const isCpoOrder = order?.type === 'cpo'
+  const canSetPricing = isCpoOrder ? user?.role === 'admin' : canSetPricingByRole
   const { shipments: orderShipments } = useOrderShipments(params.id as string)
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({})
@@ -48,9 +67,67 @@ export default function OrderDetailPage() {
   const [isSavingPrices, setIsSavingPrices] = useState(false)
   const [isSendingQuote, setIsSendingQuote] = useState(false)
   const [suggestingItemId, setSuggestingItemId] = useState<string | null>(null)
-  const [suggestingAll, setSuggestingAll] = useState(false)
   const [transitionTarget, setTransitionTarget] = useState<OrderStatus | null>(null)
   const [transitionNotes, setTransitionNotes] = useState('')
+  // Market context: competitor prices for each device in pricing dialog
+  const [marketContext, setMarketContext] = useState<Record<string, {
+    loading: boolean
+    conditions: { condition: string; avg_trade: number; avg_cpo: number; competitors: { name: string; trade: number | null; sell: number | null }[] }[]
+  }>>({})
+
+  const fetchMarketContext = async (items: OrderItem[]) => {
+    const uniqueDevices = new Map<string, { device_id: string; storage: string }>()
+    items.forEach(item => {
+      if (item.device_id) {
+        const key = `${item.device_id}_${getStorageForItem(item)}`
+        uniqueDevices.set(key, { device_id: item.device_id, storage: getStorageForItem(item) })
+      }
+    })
+
+    const newCtx: typeof marketContext = {}
+    uniqueDevices.forEach((_, key) => {
+      newCtx[key] = { loading: true, conditions: [] }
+    })
+    setMarketContext(newCtx)
+
+    for (const [key, { device_id, storage }] of Array.from(uniqueDevices.entries())) {
+      try {
+        const res = await fetch(`/api/pricing/competitors?device_id=${device_id}`)
+        if (res.ok) {
+          const data = await res.json()
+          const allRows = data.data || data || []
+          // Filter by storage
+          const rows = allRows.filter((r: Record<string, unknown>) => !r.storage || r.storage === storage)
+          // Group by condition
+          const byCondition = new Map<string, { name: string; trade: number | null; sell: number | null }[]>()
+          for (const row of rows) {
+            const cond = mapOrderConditionToCompetitorCondition(String(row.condition || 'good'))
+            if (!byCondition.has(cond)) byCondition.set(cond, [])
+            byCondition.get(cond)!.push({
+              name: String(row.competitor_name || row.source || 'Unknown'),
+              trade: row.trade_in_price ?? null,
+              sell: row.sell_price ?? null,
+            })
+          }
+          const conditions = Array.from(byCondition.entries()).map(([condition, competitors]) => {
+            const trades = competitors.filter(c => c.trade != null).map(c => c.trade!)
+            const sells = competitors.filter(c => c.sell != null).map(c => c.sell!)
+            return {
+              condition,
+              avg_trade: trades.length ? trades.reduce((a, b) => a + b, 0) / trades.length : 0,
+              avg_cpo: sells.length ? sells.reduce((a, b) => a + b, 0) / sells.length : 0,
+              competitors,
+            }
+          }).sort((left, right) => competitorConditionOrder(left.condition) - competitorConditionOrder(right.condition))
+          setMarketContext(prev => ({ ...prev, [key]: { loading: false, conditions } }))
+        } else {
+          setMarketContext(prev => ({ ...prev, [key]: { loading: false, conditions: [] } }))
+        }
+      } catch {
+        setMarketContext(prev => ({ ...prev, [key]: { loading: false, conditions: [] } }))
+      }
+    }
+  }
 
   const handleTransition = async (newStatus: OrderStatus) => {
     try {
@@ -73,6 +150,8 @@ export default function OrderDetailPage() {
     setItemPrices(prices)
     setItemMetadata(metadata)
     setPricingDialogOpen(true)
+    // Fetch competitor market context for all devices
+    if (order?.items) fetchMarketContext(order.items)
   }
 
   const getStorageForItem = (item: OrderItem): string => {
@@ -135,51 +214,6 @@ export default function OrderDetailPage() {
     }
   }
 
-  const handleSuggestAll = async () => {
-    if (!order?.items?.length) return
-    setSuggestingAll(true)
-    let successCount = 0
-    for (const item of order.items) {
-      if (!item.device_id) continue
-      try {
-        const res = await fetch('/api/pricing/calculate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            version: 'v2',
-            device_id: item.device_id,
-            storage: getStorageForItem(item),
-            carrier: 'Unlocked',
-            condition: item.claimed_condition || 'good',
-            risk_mode: getRiskMode(),
-            quantity: item.quantity,
-          }),
-        })
-        if (!res.ok) continue
-        const result = await res.json()
-        if (result.success && result.trade_price != null) {
-          const unitPrice = result.quantity ? result.trade_price / result.quantity : result.trade_price
-          setItemPrices(prev => ({ ...prev, [item.id]: unitPrice.toFixed(2) }))
-          setItemMetadata(prev => ({
-            ...prev,
-            [item.id]: {
-              suggested_by_calc: true,
-              confidence: result.confidence,
-              margin_tier: result.channel_decision?.margin_tier,
-              anchor_price: result.breakdown?.anchor_price,
-              channel_decision: result.channel_decision?.recommended_channel,
-            },
-          }))
-          successCount++
-        }
-      } catch {
-        // continue to next item
-      }
-    }
-    setSuggestingAll(false)
-    toast.success(`Suggested prices for ${successCount} of ${order.items.length} items`)
-  }
-
   const handleSavePrices = async () => {
     if (!order?.items) return
 
@@ -223,7 +257,10 @@ export default function OrderDetailPage() {
   const handleSendQuote = async () => {
     setIsSendingQuote(true)
     try {
-      // Transition order to "quoted" status and create notification
+      // If order is draft, first transition to submitted, then to quoted
+      if (order?.status === 'draft') {
+        await transition({ status: 'submitted' as OrderStatus, notes: 'Auto-submitted for quoting' })
+      }
       await transition({ status: 'quoted' as OrderStatus, notes: 'Quote sent to customer' })
       toast.success('Quote sent to customer')
     } catch {
@@ -251,7 +288,14 @@ export default function OrderDetailPage() {
   }
 
   const statusConfig = ORDER_STATUS_CONFIG[order.status]
-  const availableTransitions = VALID_ORDER_TRANSITIONS[order.status] || []
+  const rawTransitions = VALID_ORDER_TRANSITIONS[order.status] || []
+  // Customer can only: submit (draft->submitted), cancel draft, accept/reject quote
+  const customerAllowedTransitions: OrderStatus[] =
+    order.status === 'draft' ? ['submitted', 'cancelled'] :
+    order.status === 'quoted' ? ['accepted', 'rejected'] : []
+  const availableTransitions = isCustomer
+    ? rawTransitions.filter((s: OrderStatus) => customerAllowedTransitions.includes(s))
+    : rawTransitions
 
   // Build timeline from order timestamps
   const timeline = [
@@ -288,6 +332,18 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* Quote ready — customer accepts or rejects */}
+      {isCustomer && order.status === 'quoted' && (
+        <Card className="border-green-200 bg-green-50/50 dark:border-green-900/30 dark:bg-green-950/20">
+          <CardContent className="py-4">
+            <p className="font-medium text-green-800 dark:text-green-200">Quote ready for your review</p>
+            <p className="text-sm text-green-700 dark:text-green-300/90 mt-1">
+              Your quote total is {formatCurrency(order.quoted_amount || order.total_amount || 0)}. Accept to proceed or reject if you&apos;d like to decline.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Parent order banner (shown for sub-orders, hidden from customers) */}
       {!isCustomer && order.parent_order_id && order.parent_order && (
         <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
@@ -311,10 +367,12 @@ export default function OrderDetailPage() {
             <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Customer</p>
-                  <p className="font-medium">{order.customer?.company_name || '—'}</p>
-                </div>
+                {!isCustomer && !isVendor && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Customer</p>
+                    <p className="font-medium">{order.customer?.company_name || '—'}</p>
+                  </div>
+                )}
                 {!isCustomer && (
                   <div>
                     <p className="text-sm text-muted-foreground">Vendor</p>
@@ -601,8 +659,8 @@ export default function OrderDetailPage() {
                 </span>
               </Button>
 
-              {/* Pricing and Quote Actions */}
-              {order.status !== 'cancelled' && order.status !== 'closed' && (
+              {/* Pricing and Quote Actions — admin and coe_manager only */}
+              {canSetPricing && order.status !== 'cancelled' && order.status !== 'closed' && (
                 <>
                   <Button
                     variant="outline"
@@ -614,24 +672,25 @@ export default function OrderDetailPage() {
                       Set Pricing
                     </span>
                   </Button>
-                  {(order.status === 'quoted' || order.quoted_amount) && (
+                  {/* Show Send Quote when prices are set and order can be moved to quoted */}
+                  {(order.status === 'draft' || order.status === 'submitted') && (order.quoted_amount || order.total_amount) && (order.quoted_amount || order.total_amount || 0) > 0 && (
                     <Button
                       variant="default"
                       className="w-full justify-between"
-                      disabled={isSendingQuote}
+                      disabled={isSendingQuote || isTransitioning}
                       onClick={handleSendQuote}
                     >
                       <span className="flex items-center gap-2">
                         <Send className="h-4 w-4" />
-                        Send Quote
+                        {isSendingQuote ? 'Sending...' : 'Send Quote'}
                       </span>
                     </Button>
                   )}
                 </>
               )}
 
-              {/* Split Order Button */}
-              {order.status === 'sourcing' && !order.is_split_order && !order.parent_order_id && (
+              {/* Split Order Button — admin and coe_manager only */}
+              {canSetPricing && order.status === 'sourcing' && !order.is_split_order && !order.parent_order_id && (
                 <>
                   <Separator className="my-2" />
                   <Link href={`/orders/${order.id}/split`}>
@@ -650,10 +709,17 @@ export default function OrderDetailPage() {
               {availableTransitions.length > 0 && (
                 <>
                   <Separator className="my-2" />
-                  <p className="text-xs text-muted-foreground font-medium mb-1">Move to:</p>
+                  <p className="text-xs text-muted-foreground font-medium mb-1">
+                    {isCustomer && order.status === 'quoted' ? 'Your decision:' : 'Move to:'}
+                  </p>
                   {availableTransitions.map(nextStatus => {
                     const nextConfig = ORDER_STATUS_CONFIG[nextStatus]
                     const isDestructive = nextStatus === 'cancelled' || nextStatus === 'rejected'
+                    const label = isCustomer && order.status === 'quoted' && nextStatus === 'accepted'
+                      ? 'Accept Quote'
+                      : isCustomer && order.status === 'quoted' && nextStatus === 'rejected'
+                        ? 'Reject Quote'
+                        : nextConfig?.label || snakeToTitle(nextStatus)
                     return (
                       <Button
                         key={nextStatus}
@@ -662,7 +728,7 @@ export default function OrderDetailPage() {
                         disabled={isTransitioning}
                         onClick={() => setTransitionTarget(nextStatus)}
                       >
-                        {nextConfig?.label || snakeToTitle(nextStatus)}
+                        {label}
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     )
@@ -711,63 +777,142 @@ export default function OrderDetailPage() {
           <DialogHeader>
             <DialogTitle>Set Item Pricing</DialogTitle>
             <DialogDescription>
-              Set the unit price for each item. Use &quot;Suggest Price&quot; to get market-based recommendations, or enter manually.
+              {isCpoOrder
+                ? 'Set the unit price for each item manually. Suggested pricing is disabled for CPO orders.'
+                : 'Set the unit price for each item. Use "Suggest Price" to get market-based recommendations, or enter manually.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={suggestingAll || !order?.items?.length}
-                onClick={handleSuggestAll}
-              >
-                {suggestingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                <span className="ml-2">{suggestingAll ? 'Suggesting...' : 'Suggest All'}</span>
-              </Button>
-            </div>
-            {order?.items?.map(item => (
-              <div key={item.id} className="grid grid-cols-[1fr_auto_140px] gap-4 items-end">
-                <div>
-                  <Label className="text-sm font-medium">
-                    {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Qty: {item.quantity} | {item.claimed_condition ? (CONDITION_CONFIG[item.claimed_condition]?.label || item.claimed_condition) : '—'}
-                    {getStorageForItem(item) !== '128GB' && ` | ${getStorageForItem(item)}`}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor={`price-${item.id}`} className="text-xs text-muted-foreground">
-                    Unit Price
-                  </Label>
-                  <Input
-                    id={`price-${item.id}`}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={itemPrices[item.id] || ''}
-                    onChange={(e) => setItemPrices(prev => ({ ...prev, [item.id]: e.target.value }))}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={suggestingAll || !item.device_id || !!suggestingItemId}
-                  onClick={() => handleSuggestPrice(item)}
-                >
-                  {suggestingItemId === item.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4" />
+          <div className="space-y-6 py-4">
+            {order?.items?.map(item => {
+              const ctxKey = `${item.device_id}_${getStorageForItem(item)}`
+              const ctx = marketContext[ctxKey]
+              const itemCondition = mapOrderConditionToCompetitorCondition(item.claimed_condition || 'good')
+              const conditionSnapshot = ctx?.conditions.find(c => c.condition === itemCondition)
+              return (
+                <div key={item.id} className="rounded-lg border p-4 space-y-3">
+                  {/* Item header + price input */}
+                  <div className={`grid ${isCpoOrder ? 'grid-cols-[1fr_auto]' : 'grid-cols-[1fr_auto_140px]'} gap-4 items-end`}>
+                    <div>
+                      <Label className="text-sm font-medium">
+                        {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Qty: {item.quantity} | {item.claimed_condition ? (CONDITION_CONFIG[item.claimed_condition]?.label || item.claimed_condition) : '—'}
+                        {getStorageForItem(item) !== '128GB' && ` | ${getStorageForItem(item)}`}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor={`price-${item.id}`} className="text-xs text-muted-foreground">
+                        Unit Price
+                      </Label>
+                      <Input
+                        id={`price-${item.id}`}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={itemPrices[item.id] || ''}
+                        onChange={(e) => setItemPrices(prev => ({ ...prev, [item.id]: e.target.value }))}
+                      />
+                    </div>
+                    {!isCpoOrder && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!item.device_id || !!suggestingItemId}
+                        onClick={() => handleSuggestPrice(item)}
+                      >
+                        {suggestingItemId === item.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                        <span className="ml-1">{suggestingItemId === item.id ? '...' : 'Suggest'}</span>
+                      </Button>
+                    )}
+                  </div>
+
+                  {!!conditionSnapshot && (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium">Market reference</span>
+                          <span className="mx-1">•</span>
+                          <span className="capitalize">{conditionSnapshot.condition}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span>
+                            Trade-In Avg:{' '}
+                            <span className="font-mono font-medium text-blue-600">
+                              {conditionSnapshot.avg_trade > 0 ? formatCurrency(conditionSnapshot.avg_trade) : '—'}
+                            </span>
+                          </span>
+                          <span>
+                            CPO Avg:{' '}
+                            <span className="font-mono font-medium text-green-600">
+                              {conditionSnapshot.avg_cpo > 0 ? formatCurrency(conditionSnapshot.avg_cpo) : '—'}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                      {!isCpoOrder && conditionSnapshot.avg_trade > 0 && (
+                        <div className="mt-2 flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setItemPrices(prev => ({ ...prev, [item.id]: conditionSnapshot.avg_trade.toFixed(2) }))}
+                          >
+                            Use Market Trade-In Avg
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <span className="ml-1">{suggestingItemId === item.id ? '...' : 'Suggest'}</span>
-                </Button>
-              </div>
-            ))}
+
+                  {/* Market context — competitor prices for all conditions */}
+                  {ctx && !ctx.loading && ctx.conditions.length > 0 && (
+                    <div className="mt-2 rounded-md bg-muted/40 p-3">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Competitor Market Prices — {getStorageForItem(item)}</p>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs py-1">Condition</TableHead>
+                            <TableHead className="text-xs py-1 text-right">Avg Trade-In</TableHead>
+                            <TableHead className="text-xs py-1 text-right">Avg CPO/Sell</TableHead>
+                            <TableHead className="text-xs py-1 text-right">Sources</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {ctx.conditions.map(c => (
+                            <TableRow key={c.condition} className={c.condition === itemCondition ? 'bg-primary/5 font-medium' : ''}>
+                              <TableCell className="text-xs py-1 capitalize">
+                                {c.condition === itemCondition ? `→ ${c.condition}` : c.condition}
+                              </TableCell>
+                              <TableCell className="text-xs py-1 text-right font-mono">
+                                {c.avg_trade > 0 ? formatCurrency(c.avg_trade) : '—'}
+                              </TableCell>
+                              <TableCell className="text-xs py-1 text-right font-mono">
+                                {c.avg_cpo > 0 ? formatCurrency(c.avg_cpo) : '—'}
+                              </TableCell>
+                              <TableCell className="text-xs py-1 text-right text-muted-foreground">
+                                {Array.from(new Set(c.competitors.map(comp => comp.name))).join(', ')}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                  {ctx?.loading && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Loading market data...
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPricingDialogOpen(false)}>

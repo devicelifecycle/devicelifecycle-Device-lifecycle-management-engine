@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS competitor_prices (
     device_id UUID REFERENCES device_catalog(id) ON DELETE CASCADE,
     storage VARCHAR(50) NOT NULL,
     competitor_name VARCHAR(100) NOT NULL,
+    condition VARCHAR(20) NOT NULL DEFAULT 'good' CHECK (condition IN ('excellent', 'good', 'fair', 'broken')),
     trade_in_price DECIMAL(10,2),
     sell_price DECIMAL(10,2),
     source VARCHAR(50) DEFAULT 'manual',
@@ -65,7 +66,8 @@ CREATE TABLE IF NOT EXISTS competitor_prices (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_competitor_prices_device ON competitor_prices(device_id);
-CREATE INDEX IF NOT EXISTS idx_competitor_prices_lookup ON competitor_prices(device_id, storage, competitor_name);
+CREATE INDEX IF NOT EXISTS idx_competitor_prices_condition ON competitor_prices(condition);
+CREATE INDEX IF NOT EXISTS idx_competitor_prices_lookup ON competitor_prices(device_id, storage, competitor_name, condition);
 
 -- ============================================================================
 -- REPAIR COSTS TABLE

@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { EmailService } from '@/services/email.service'
 import { ORDER_EMAIL_CONFIG } from '@/lib/constants'
 import type {
@@ -71,7 +72,13 @@ export class NotificationService {
     link?: string
     metadata?: Record<string, unknown>
   }): Promise<Notification> {
-    const supabase = createServerSupabaseClient()
+    // Try server client (user session), fallback to service-role (cron/webhook context)
+    let supabase: ReturnType<typeof createServerSupabaseClient>
+    try {
+      supabase = createServerSupabaseClient()
+    } catch {
+      supabase = createServiceRoleClient() as unknown as ReturnType<typeof createServerSupabaseClient>
+    }
 
     const { data, error } = await supabase
       .from('notifications')
@@ -372,7 +379,13 @@ export class NotificationService {
     hoursRemaining?: number
   ): Promise<void> {
     try {
-      const supabase = createServerSupabaseClient()
+      // Use service-role — this may be called from cron context
+      let supabase: ReturnType<typeof createServerSupabaseClient>
+      try {
+        supabase = createServerSupabaseClient()
+      } catch {
+        supabase = createServiceRoleClient() as unknown as ReturnType<typeof createServerSupabaseClient>
+      }
       const { data: user } = await supabase
         .from('users')
         .select('email, full_name')
@@ -418,5 +431,65 @@ export class NotificationService {
       link: `/orders/${orderId}`,
       metadata: { order_id: orderId, order_number: orderNumber, tracking_number: trackingNumber },
     })
+  }
+
+  /**
+   * Notify all admins about competitor price updates.
+   * Called from scraper cron, competitor-sync cron, and manual price entry.
+   */
+  static async sendPriceUpdateNotification(input: {
+    source: 'scraper' | 'csv_sync' | 'manual'
+    total_updated: number
+    total_new?: number
+    failed_scrapers?: string[]
+    details?: string
+  }): Promise<void> {
+    try {
+      const supabase = createServiceRoleClient()
+
+      // Find all active admins
+      const { data: admins } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'admin')
+        .eq('is_active', true)
+
+      if (!admins || admins.length === 0) return
+
+      const sourceLabel =
+        input.source === 'scraper' ? 'Price Scraper'
+        : input.source === 'csv_sync' ? 'CSV Import'
+        : 'Manual Entry'
+
+      const title = `Pricing Updated — ${sourceLabel}`
+      const parts: string[] = []
+      if (input.total_updated > 0) parts.push(`${input.total_updated} prices updated`)
+      if (input.total_new && input.total_new > 0) parts.push(`${input.total_new} new devices added`)
+      if (input.failed_scrapers && input.failed_scrapers.length > 0) {
+        parts.push(`Failed: ${input.failed_scrapers.join(', ')}`)
+      }
+      if (input.details) parts.push(input.details)
+      const message = parts.length > 0 ? parts.join(' · ') : 'Competitor prices have been refreshed'
+
+      // Notify each admin
+      for (const admin of admins) {
+        await this.createNotification({
+          user_id: admin.id,
+          type: 'in_app',
+          title,
+          message,
+          link: '/admin/pricing',
+          metadata: {
+            source: input.source,
+            total_updated: input.total_updated,
+            total_new: input.total_new,
+            failed_scrapers: input.failed_scrapers,
+            timestamp: new Date().toISOString(),
+          },
+        })
+      }
+    } catch (err) {
+      console.error('Failed to send price update notification:', err)
+    }
   }
 }

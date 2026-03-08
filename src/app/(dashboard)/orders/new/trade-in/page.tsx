@@ -4,17 +4,17 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download } from 'lucide-react'
+import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import Papa from 'papaparse'
 import { useOrders } from '@/hooks/useOrders'
-import { useCustomers } from '@/hooks/useCustomers'
+import { useCustomers, useMyCustomer } from '@/hooks/useCustomers'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
@@ -23,6 +23,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
+import { formatCurrency } from '@/lib/utils'
 import type { Device, DeviceCondition } from '@/types'
 
 interface CSVRow {
@@ -43,10 +44,48 @@ interface LineItem {
   notes: string
 }
 
+interface ItemPrice {
+  unit_price: number
+  cpo_unit_price: number
+  loading: boolean
+  error: string | null
+  source: string
+  competitor_count: number
+}
+
+function mapCondition(c: DeviceCondition): 'excellent' | 'good' | 'fair' | 'broken' {
+  if (c === 'new' || c === 'excellent') return 'excellent'
+  if (c === 'fair') return 'fair'
+  if (c === 'poor') return 'broken'
+  return 'good'
+}
+
+function getStorageOptionsForDevice(device?: Device): string[] {
+  if (!device) return STORAGE_OPTIONS
+
+  const model = (device.model || '').toLowerCase()
+  const specs = (device.specifications || {}) as { storage_options?: string[] }
+  const storageOptions = specs.storage_options?.filter(Boolean)
+
+  if (storageOptions && storageOptions.length > 0) {
+    return storageOptions
+  }
+
+  if (model.includes('iphone 15')) {
+    return ['128GB', '256GB', '512GB', '1TB']
+  }
+
+  return STORAGE_OPTIONS
+}
+
 export default function NewTradeInPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const { create, isCreating } = useOrders()
   const { customers } = useCustomers()
+  const { customer: myCustomer, isLoading: myCustomerLoading, error: myCustomerError } = useMyCustomer()
+  const isCustomer = user?.role === 'customer'
+  const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
   const [devices, setDevices] = useState<Device[]>([])
   const [customerId, setCustomerId] = useState('')
   const [items, setItems] = useState<LineItem[]>([])
@@ -56,23 +95,122 @@ export default function NewTradeInPage() {
   const [csvErrors, setCsvErrors] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Pricing state (internal roles only)
+  const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
+
   useEffect(() => {
-    fetch('/api/devices').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    fetch('/api/devices?page_size=500').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
+
+  // For customer role: auto-set their org's customer (no selection needed)
+  useEffect(() => {
+    if (isCustomer && myCustomer?.id) setCustomerId(myCustomer.id)
+  }, [isCustomer, myCustomer?.id])
+
+  // Price lookup for internal staff
+  const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, condition: DeviceCondition) => {
+    if (!deviceId || !storage || !isInternal) return
+
+    setItemPrices(prev => ({ ...prev, [index]: { unit_price: 0, cpo_unit_price: 0, loading: true, error: null, source: '', competitor_count: 0 } }))
+
+    try {
+      const res = await fetch('/api/pricing/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          version: 'v2',
+          device_id: deviceId,
+          storage,
+          carrier: 'Unlocked',
+          condition,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.trade_price > 0) {
+          setItemPrices(prev => ({
+            ...prev,
+            [index]: {
+              unit_price: data.trade_price,
+              cpo_unit_price: data.cpo_price || 0,
+              loading: false,
+              error: null,
+              source: data.price_source || 'Pricing Engine V2',
+              competitor_count: data.competitors?.length || 0,
+            },
+          }))
+          return
+        }
+      }
+
+      setItemPrices(prev => ({
+        ...prev,
+        [index]: { unit_price: 0, cpo_unit_price: 0, loading: false, error: 'No price data', source: '', competitor_count: 0 },
+      }))
+    } catch {
+      setItemPrices(prev => ({
+        ...prev,
+        [index]: { unit_price: 0, cpo_unit_price: 0, loading: false, error: 'Lookup failed', source: '', competitor_count: 0 },
+      }))
+    }
+  }, [isInternal])
 
   // Manual entry helpers
   const addItem = () => {
     setItems([...items, { device_id: '', device_label: '', quantity: 1, condition: 'good', storage: '', notes: '' }])
   }
-  const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i))
+  const removeItem = (i: number) => {
+    setItems(items.filter((_, idx) => idx !== i))
+    setItemPrices(prev => {
+      const next = { ...prev }
+      delete next[i]
+      // Re-index prices after removal
+      const reindexed: Record<number, ItemPrice> = {}
+      Object.keys(next).forEach(key => {
+        const k = parseInt(key)
+        reindexed[k > i ? k - 1 : k] = next[k]
+      })
+      return reindexed
+    })
+  }
   const updateItem = (index: number, field: string, value: string | number) => {
-    setItems(items.map((item, i) => {
+    const newItems = items.map((item, i) => {
       if (i !== index) return item
       if (field === 'device_id') {
         const dev = devices.find(d => d.id === value)
-        return { ...item, device_id: value as string, device_label: dev ? `${dev.make} ${dev.model}` : '' }
+        const storageOptions = getStorageOptionsForDevice(dev)
+        const defaultStorage = storageOptions.includes('128GB') ? '128GB' : storageOptions[0] || ''
+        return {
+          ...item,
+          device_id: value as string,
+          device_label: dev ? `${dev.make} ${dev.model}` : '',
+          storage: defaultStorage,
+        }
       }
       return { ...item, [field]: value }
+    })
+
+    setItems(newItems)
+
+    // Trigger price lookup when device, storage, or condition changes
+    if (isInternal && ['device_id', 'storage', 'condition'].includes(field)) {
+      const updatedItem = newItems[index]
+      if (updatedItem) {
+        setTimeout(() => {
+          lookupPrice(index, updatedItem.device_id, updatedItem.storage, updatedItem.condition)
+        }, 100)
+      }
+    }
+  }
+
+  const updateUnitPrice = (index: number, price: number) => {
+    setItemPrices(prev => ({
+      ...prev,
+      [index]: {
+        ...(prev[index] || { unit_price: 0, cpo_unit_price: 0, loading: false, error: null, source: 'manual', competitor_count: 0 }),
+        unit_price: price,
+      },
     }))
   }
 
@@ -131,7 +269,7 @@ export default function NewTradeInPage() {
     e.preventDefault()
     if (!customerId) { toast.error('Please select a customer'); return }
 
-    let orderItems: any[]
+    let orderItems: Record<string, unknown>[]
 
     if (tab === 'csv' && csvData.length > 0) {
       // Match CSV rows to devices
@@ -150,12 +288,13 @@ export default function NewTradeInPage() {
       })
     } else {
       if (items.length === 0) { toast.error('Please add at least one item'); return }
-      orderItems = items.map(i => ({
+      orderItems = items.map((i, idx) => ({
         device_id: i.device_id,
         quantity: i.quantity,
         storage: i.storage || '128GB',
         condition: i.condition,
         notes: i.notes,
+        ...(itemPrices[idx]?.unit_price > 0 ? { quoted_price: itemPrices[idx].unit_price } : {}),
       }))
     }
 
@@ -165,7 +304,7 @@ export default function NewTradeInPage() {
         customer_id: customerId,
         items: orderItems,
         notes,
-      } as any)
+      } as Record<string, unknown>)
       toast.success('Trade-in order created successfully')
       router.push(`/orders/${result.id}`)
     } catch {
@@ -173,10 +312,16 @@ export default function NewTradeInPage() {
     }
   }
 
+  // Calculate quote totals
+  const quoteTotalItems = items.filter((_, i) => itemPrices[i]?.unit_price > 0)
+  const grandTotal = items.reduce((sum, item, i) => sum + ((itemPrices[i]?.unit_price || 0) * item.quantity), 0)
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/orders"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+        <Link href={isCustomer ? '/customer/requests' : '/orders'}>
+          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+        </Link>
         <div>
           <h1 className="text-2xl font-bold">New Trade-In Order</h1>
           <p className="text-muted-foreground">Create a device trade-in / buyback order</p>
@@ -184,18 +329,40 @@ export default function NewTradeInPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Customer */}
-        <Card>
-          <CardHeader><CardTitle>Customer</CardTitle></CardHeader>
-          <CardContent>
-            <Select value={customerId} onValueChange={setCustomerId}>
-              <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
-              <SelectContent>
-                {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+        {/* Customer — only for internal staff (admin, sales, etc.). Customers use their own org automatically. */}
+        {!isCustomer && (
+          <Card>
+            <CardHeader><CardTitle>Customer</CardTitle><CardDescription>Who is this order for?</CardDescription></CardHeader>
+            <CardContent>
+              <Select value={customerId} onValueChange={setCustomerId}>
+                <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
+                <SelectContent>
+                  {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        )}
+
+        {isCustomer && myCustomer && (
+          <Card>
+            <CardHeader><CardTitle>Order for</CardTitle><CardDescription>This request will be linked to your organization</CardDescription></CardHeader>
+            <CardContent>
+              <p className="font-medium">{myCustomer.company_name}</p>
+              <p className="text-sm text-muted-foreground">You can track this order in My Orders once submitted.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {isCustomer && !myCustomerLoading && myCustomerError && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="py-4">
+              <p className="text-sm text-destructive">
+                Unable to load your organization profile. Please contact support to set up your account.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Devices - Manual or CSV */}
         <Card>
@@ -217,35 +384,81 @@ export default function NewTradeInPage() {
                 {items.length === 0 ? (
                   <p className="text-center py-6 text-muted-foreground">No items added yet.</p>
                 ) : (
-                  items.map((item, index) => (
-                    <div key={index}>
-                      {index > 0 && <Separator className="mb-3" />}
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1 grid gap-2 sm:grid-cols-4">
-                          <Select value={item.device_id} onValueChange={v => updateItem(index, 'device_id', v)}>
-                            <SelectTrigger><SelectValue placeholder="Device" /></SelectTrigger>
-                            <SelectContent>
-                              {devices.map(d => <SelectItem key={d.id} value={d.id}>{d.make} {d.model}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
-                          <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(CONDITION_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <Select value={item.storage} onValueChange={v => updateItem(index, 'storage', v)}>
-                            <SelectTrigger><SelectValue placeholder="Storage" /></SelectTrigger>
-                            <SelectContent>
-                              {STORAGE_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                  items.map((item, index) => {
+                    const selectedDevice = devices.find(d => d.id === item.device_id)
+                    const storageOptions = getStorageOptionsForDevice(selectedDevice)
+                    const price = itemPrices[index]
+
+                    return (
+                      <div key={index}>
+                        {index > 0 && <Separator className="mb-3" />}
+                        <div className="flex items-start gap-3">
+                          <div className={`flex-1 grid gap-2 ${isInternal ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
+                            <Select value={item.device_id} onValueChange={v => updateItem(index, 'device_id', v)}>
+                              <SelectTrigger><SelectValue placeholder="Device" /></SelectTrigger>
+                              <SelectContent>
+                                {devices.map(d => <SelectItem key={d.id} value={d.id}>{d.make} {d.model}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
+                            <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(CONDITION_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Select value={item.storage} onValueChange={v => updateItem(index, 'storage', v)}>
+                              <SelectTrigger><SelectValue placeholder="Storage" /></SelectTrigger>
+                              <SelectContent>
+                                {storageOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            {/* Unit Price (internal only) */}
+                            {isInternal && (
+                              <div className="flex flex-col">
+                                {price?.loading ? (
+                                  <div className="flex items-center h-10 px-3">
+                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                  </div>
+                                ) : price?.unit_price > 0 ? (
+                                  <div className="space-y-0.5">
+                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                      <span>Trade-In</span>
+                                      <span>CPO</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1">
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      className="text-right font-mono"
+                                      value={price.unit_price}
+                                      onChange={e => updateUnitPrice(index, parseFloat(e.target.value) || 0)}
+                                    />
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        className="text-right font-mono"
+                                        value={price.cpo_unit_price || 0}
+                                        disabled
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground">{price.source}</span>
+                                  </div>
+                                ) : price?.error ? (
+                                  <span className="text-xs text-muted-foreground h-10 flex items-center">No price data</span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground h-10 flex items-center">Unit price</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)}><X className="h-4 w-4" /></Button>
                         </div>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)}><X className="h-4 w-4" /></Button>
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </TabsContent>
 
@@ -307,6 +520,57 @@ export default function NewTradeInPage() {
           </CardContent>
         </Card>
 
+        {/* Quote Summary (internal staff only) */}
+        {isInternal && tab === 'manual' && quoteTotalItems.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Quote Summary</CardTitle>
+              <CardDescription>Review pricing before submitting. Unit prices are editable above.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Device</TableHead>
+                    <TableHead>Condition</TableHead>
+                    <TableHead>Storage</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Trade-In Unit</TableHead>
+                    <TableHead className="text-right">CPO Unit</TableHead>
+                    <TableHead className="text-right">Trade-In Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((item, i) => {
+                    const price = itemPrices[i]
+                    if (!price || price.unit_price <= 0) return null
+                    return (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{item.device_label || '—'}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="capitalize">{item.condition}</Badge>
+                        </TableCell>
+                        <TableCell>{item.storage}</TableCell>
+                        <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell className="text-right font-mono">{formatCurrency(price.unit_price)}</TableCell>
+                        <TableCell className="text-right font-mono">{price.cpo_unit_price > 0 ? formatCurrency(price.cpo_unit_price) : '—'}</TableCell>
+                        <TableCell className="text-right font-mono font-medium">{formatCurrency(price.unit_price * item.quantity)}</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-right font-semibold">Grand Total (Trade-In)</TableCell>
+                    <TableCell className="text-right font-mono font-bold text-lg">{formatCurrency(grandTotal)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+              <p className="text-xs text-muted-foreground mt-3">
+                Prices based on current competitor data. You can edit unit prices above before submitting.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Notes */}
         <Card>
           <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
@@ -316,8 +580,15 @@ export default function NewTradeInPage() {
         </Card>
 
         <div className="flex gap-2">
-          <Button type="submit" disabled={isCreating}>{isCreating ? 'Creating...' : 'Create Trade-In Order'}</Button>
-          <Link href="/orders"><Button variant="outline" type="button">Cancel</Button></Link>
+          <Button
+            type="submit"
+            disabled={isCreating || (isCustomer && (myCustomerLoading || !myCustomer || !!myCustomerError))}
+          >
+            {isCreating ? 'Creating...' : isCustomer && (myCustomerLoading || !myCustomer) ? 'Loading...' : 'Create Trade-In Order'}
+          </Button>
+          <Link href={isCustomer ? '/customer/requests' : '/orders'}>
+            <Button variant="outline" type="button">Cancel</Button>
+          </Link>
         </div>
       </form>
     </div>

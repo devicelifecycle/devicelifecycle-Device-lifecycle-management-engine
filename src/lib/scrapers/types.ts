@@ -6,7 +6,7 @@ export interface DeviceToScrape {
   make: string
   model: string
   storage: string
-  condition?: 'good' | 'excellent' | 'fair'
+  condition?: 'excellent' | 'good' | 'fair' | 'broken'
 }
 
 export interface ScrapedPrice {
@@ -16,7 +16,7 @@ export interface ScrapedPrice {
   storage: string
   trade_in_price: number | null
   sell_price?: number | null
-  condition?: string
+  condition?: 'excellent' | 'good' | 'fair' | 'broken'
   scraped_at: string
   raw?: unknown
 }

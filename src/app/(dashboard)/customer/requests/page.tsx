@@ -14,13 +14,17 @@ export default function CustomerRequestsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Requests</h1>
-        <p className="text-muted-foreground mt-1">Create and monitor trade-in requests</p>
+        <p className="text-muted-foreground mt-1">
+          Submit trade-in requests. We&apos;ll send you a quote — then accept or reject in My Orders.
+        </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Create New Request</CardTitle>
-          <CardDescription>Submit devices for trade-in pricing and processing</CardDescription>
+          <CardDescription>
+            Submit devices for trade-in. Once quoted, go to My Orders to accept or reject.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
           <Link href="/orders/new/trade-in">

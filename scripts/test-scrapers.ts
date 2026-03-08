@@ -4,9 +4,14 @@
 // ============================================================================
 
 import { scrapeBell } from '../src/lib/scrapers/adapters/bell'
+import { scrapeBellFullCatalog } from '../src/lib/scrapers/adapters/bell'
 import { scrapeTelus } from '../src/lib/scrapers/adapters/telus'
+import { scrapeTelusFullCatalog } from '../src/lib/scrapers/adapters/telus'
 import { scrapeGoRecell } from '../src/lib/scrapers/adapters/gorecell'
+import { scrapeGoRecellFullCatalog } from '../src/lib/scrapers/adapters/gorecell'
 import { scrapeApple } from '../src/lib/scrapers/adapters/apple'
+import { scrapeUniversal } from '../src/lib/scrapers/adapters/universal'
+import { scrapeUniversalFullCatalog } from '../src/lib/scrapers/adapters/universal'
 import type { DeviceToScrape, ScraperResult } from '../src/lib/scrapers/types'
 
 // Test devices — current-gen + older models for comparison
@@ -72,9 +77,71 @@ async function runScraper(name: string, fn: (devices: DeviceToScrape[]) => Promi
   }
 }
 
+async function runCatalogScraper(name: string, fn: () => Promise<ScraperResult>) {
+  console.log(`\n${'='.repeat(60)}`)
+  console.log(`  ${name}`)
+  console.log('='.repeat(60))
+
+  try {
+    const result = await fn()
+
+    console.log(`  Status:   ${result.success ? '✅ SUCCESS' : '❌ FAILED'}`)
+    console.log(`  Duration: ${result.duration_ms}ms`)
+    if (result.error) console.log(`  Error:    ${result.error}`)
+
+    const matched = result.prices.filter((p) => p.trade_in_price != null)
+    const uniqueModels = new Set(result.prices.map((p) => `${p.make}|${p.model}`)).size
+    console.log(`  Prices:   ${matched.length}`)
+    console.log(`  Models:   ${uniqueModels}`)
+
+    const sample = matched.slice(0, 12)
+    if (sample.length > 0) {
+      console.log('')
+      console.log('  Sample (first 12):')
+      for (const p of sample) {
+        console.log(`  - ${p.make} ${p.model} ${p.storage} => $${p.trade_in_price}`)
+      }
+    }
+
+    return result
+  } catch (err) {
+    console.log(`  ❌ CRASHED: ${err instanceof Error ? err.message : err}`)
+    return null
+  }
+}
+
 async function main() {
+  const isFullCatalogMode = process.argv.includes('--full')
+
+  if (isFullCatalogMode) {
+    console.log('\n🔍 PRICE SCRAPER FULL CATALOG TEST')
+    console.log('   Running full catalog discovery scrapers')
+    console.log(`   Time: ${new Date().toISOString()}\n`)
+
+    const results: (ScraperResult | null)[] = []
+    results.push(await runCatalogScraper('BELL FULL CATALOG', scrapeBellFullCatalog))
+    results.push(await runCatalogScraper('TELUS FULL CATALOG', scrapeTelusFullCatalog))
+    results.push(await runCatalogScraper('UNIVERCELL FULL CATALOG', scrapeUniversalFullCatalog))
+    results.push(await runCatalogScraper('GORECELL FULL CATALOG', scrapeGoRecellFullCatalog))
+
+    console.log(`\n${'='.repeat(60)}`)
+    console.log('  SUMMARY')
+    console.log('='.repeat(60))
+
+    for (const r of results) {
+      if (!r) continue
+      const matched = r.prices.filter((p) => p.trade_in_price != null).length
+      const uniqueModels = new Set(r.prices.map((p) => `${p.make}|${p.model}`)).size
+      const status = r.success ? '✅' : '❌'
+      console.log(`  ${status} ${r.competitor_name.padEnd(20)} prices=${String(matched).padEnd(6)} models=${String(uniqueModels).padEnd(6)} ${r.duration_ms}ms`)
+    }
+
+    console.log('\n✅ Full catalog test complete.\n')
+    return
+  }
+
   console.log('\n🔍 PRICE SCRAPER DRY TEST')
-  console.log(`   Testing ${TEST_DEVICES.length} devices across 4 scrapers`)
+  console.log(`   Testing ${TEST_DEVICES.length} devices across 5 scrapers`)
   console.log(`   Time: ${new Date().toISOString()}\n`)
 
   const results: (ScraperResult | null)[] = []
@@ -83,6 +150,7 @@ async function main() {
   results.push(await runScraper('APPLE TRADE-IN', scrapeApple))
   results.push(await runScraper('BELL TRADE-IN', scrapeBell))
   results.push(await runScraper('TELUS TRADE-IN', scrapeTelus))
+  results.push(await runScraper('UNIVERCELL TRADE-IN', scrapeUniversal))
   results.push(await runScraper('GORECELL', scrapeGoRecell))
 
   // Summary
@@ -110,9 +178,10 @@ async function main() {
     'Apple'.padEnd(10) +
     'Bell'.padEnd(10) +
     'Telus'.padEnd(10) +
+    'UniverC'.padEnd(10) +
     'GoRecell'.padEnd(10)
   )
-  console.log('  ' + '-'.repeat(68))
+  console.log('  ' + '-'.repeat(78))
 
   for (const device of TEST_DEVICES) {
     const name = `${device.make} ${device.model}`
@@ -128,7 +197,8 @@ async function main() {
       (prices[0] || '—').padEnd(10) +
       (prices[1] || '—').padEnd(10) +
       (prices[2] || '—').padEnd(10) +
-      (prices[3] || '—').padEnd(10)
+      (prices[3] || '—').padEnd(10) +
+      (prices[4] || '—').padEnd(10)
     )
   }
 

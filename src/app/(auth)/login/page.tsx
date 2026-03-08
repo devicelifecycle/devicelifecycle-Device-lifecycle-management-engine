@@ -72,7 +72,7 @@ export default function LoginPage() {
                 Device Lifecycle Management
               </h1>
               <p className="text-slate-400 max-w-md leading-relaxed">
-                Enterprise platform for trade-in to delivery. AI-powered pricing. Built for financial institutions.
+                Enterprise platform for trade-in to delivery. AI-powered pricing. Built for enterprise teams.
               </p>
             </div>
 

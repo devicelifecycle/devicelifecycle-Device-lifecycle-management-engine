@@ -30,7 +30,7 @@ export default function CustomerOrdersPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">My Orders</h1>
-        <p className="text-muted-foreground mt-1">Track all orders for your organization</p>
+        <p className="text-muted-foreground mt-1">Track orders and accept or reject quotes sent to you</p>
       </div>
 
       <div className="relative">

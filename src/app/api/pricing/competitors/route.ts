@@ -28,8 +28,21 @@ export async function GET(request: NextRequest) {
     }
 
     const deviceId = request.nextUrl.searchParams.get('device_id') || undefined
-    const data = await PricingService.getCompetitorPrices(deviceId)
-    return NextResponse.json({ data })
+    const conditionParam = request.nextUrl.searchParams.get('condition')
+    const condition = conditionParam === 'excellent' || conditionParam === 'good' || conditionParam === 'fair' || conditionParam === 'broken'
+      ? conditionParam
+      : undefined
+
+    const data = await PricingService.getCompetitorPrices(deviceId, condition)
+    const rowsWithRetrievalTime = data.map((row) => ({
+      ...row,
+      retrieved_at: row.scraped_at || row.updated_at || row.created_at,
+    }))
+
+    return NextResponse.json({
+      data: rowsWithRetrievalTime,
+      retrieved_at: new Date().toISOString(),
+    })
   } catch (error) {
     console.error('Error fetching competitor prices:', error)
     return NextResponse.json({ error: 'Failed to fetch competitor prices' }, { status: 500 })
@@ -65,6 +78,15 @@ export async function POST(request: NextRequest) {
     }
 
     const entry = await PricingService.createCompetitorPrice(validation.data as any)
+
+    // Notify admins about manual price entry
+    const { NotificationService } = await import('@/services/notification.service')
+    NotificationService.sendPriceUpdateNotification({
+      source: 'manual',
+      total_updated: 1,
+      details: `${validation.data.competitor_name} — ${validation.data.condition}`,
+    }).catch(err => console.error('Price notification error:', err))
+
     return NextResponse.json(entry, { status: 201 })
   } catch (error) {
     console.error('Error creating competitor price:', error)

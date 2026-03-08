@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { ShipmentService } from '@/services/shipment.service'
 import { ShippoService } from '@/services/shippo.service'
 
@@ -26,7 +25,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = createServerSupabaseClient()
+    // Use service-role — cron has no user session
+    const { createServiceRoleClient } = await import('@/lib/supabase/service-role')
+    const supabase = createServiceRoleClient()
     const { data: shipments, error } = await supabase
       .from('shipments')
       .select('id, carrier, tracking_number, status')

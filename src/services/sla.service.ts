@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { NotificationService } from './notification.service'
 import { addHours, isPast, sanitizeSearchInput } from '@/lib/utils'
 import { CUSTOMER_REMINDER_INTERVALS_HOURS } from '@/lib/constants'
@@ -19,7 +20,8 @@ export class SLAService {
     breaches: number
     reminders: number
   }> {
-    const supabase = createServerSupabaseClient()
+    // Use service-role client — this runs from cron with no user session
+    const supabase = createServiceRoleClient()
 
     // Get all open orders (not closed or cancelled)
     const { data: orders, error } = await supabase
@@ -116,7 +118,6 @@ export class SLAService {
    * Handle SLA breach. Uses service-role for DB writes (cron has no user session).
    */
   private static async handleBreach(order: Order, slaRule: SLARule): Promise<void> {
-    const { createServiceRoleClient } = await import('@/lib/supabase/service-role')
     const supabase = createServiceRoleClient()
 
     // Mark order as breached
@@ -174,7 +175,7 @@ export class SLAService {
     hoursRemaining: number
   ): Promise<void> {
     // Check if we already sent a warning for this order/status
-    const supabase = createServerSupabaseClient()
+    const supabase = createServiceRoleClient()
 
     const { data: existingWarning } = await supabase
       .from('notifications')
