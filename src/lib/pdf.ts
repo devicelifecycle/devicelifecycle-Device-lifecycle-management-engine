@@ -30,6 +30,7 @@ interface OrderPDFData {
   items?: {
     device?: { make?: string; model?: string; variant?: string }
     quantity: number
+    storage?: string
     claimed_condition?: string
     unit_price?: number
   }[]
@@ -120,9 +121,10 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
 
   // --- Line Items Table ---
   const tableBody = (order.items || []).map(item => {
-    const device = item.device
+    const deviceName = item.device
       ? `${item.device.make || ''} ${item.device.model || ''}${item.device.variant ? ` (${item.device.variant})` : ''}`
       : 'Unknown Device'
+    const device = item.storage ? `${deviceName} — ${item.storage}` : deviceName
     const condition = item.claimed_condition
       ? item.claimed_condition.charAt(0).toUpperCase() + item.claimed_condition.slice(1)
       : '—'

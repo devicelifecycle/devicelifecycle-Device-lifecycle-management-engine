@@ -27,6 +27,18 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await DeviceService.getDevices(filters)
+
+    // Strip sensitive pricing fields for external roles
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile && ['customer', 'vendor'].includes(profile.role) && result.data) {
+      result.data = (result.data as unknown as Record<string, unknown>[]).map(({ base_price: _bp, cost_price: _cp, internal_notes: _in, ...safe }) => safe) as unknown as typeof result.data
+    }
+
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching devices:', error)

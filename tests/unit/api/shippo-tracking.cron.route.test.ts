@@ -25,6 +25,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: createServerSupabaseClientMock,
 }))
 
+vi.mock('@/lib/supabase/service-role', () => ({
+  createServiceRoleClient: createServerSupabaseClientMock,
+}))
+
 function makeShipmentsQuery(shipments: Array<{ id: string; carrier: string; tracking_number: string; status: string }>) {
   return {
     select: vi.fn().mockReturnThis(),

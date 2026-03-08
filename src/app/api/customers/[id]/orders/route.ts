@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { CustomerService } from '@/services/customer.service'
 
-const INTERNAL_ROLES = ['admin', 'coe_manager', 'sales']
+const INTERNAL_ROLES = ['admin', 'coe_manager', 'coe_tech', 'sales']
 
 export async function GET(
   request: NextRequest,
@@ -29,6 +29,10 @@ export async function GET(
     const customer = await CustomerService.getCustomerById(params.id)
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    }
+
+    if (profile?.role === 'vendor') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     if (!INTERNAL_ROLES.includes(profile?.role || '')) {

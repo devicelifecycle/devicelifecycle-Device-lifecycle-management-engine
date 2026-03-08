@@ -79,7 +79,7 @@ export class OrderService {
         .select('id')
         .eq('organization_id', requester_organization_id)
 
-      const allowedVendorIds = (vendors || []).map((vendor) => vendor.id)
+      const allowedVendorIds = (vendors || []).map((v) => v.id)
       if (allowedVendorIds.length === 0) {
         return {
           data: [],
@@ -90,6 +90,23 @@ export class OrderService {
         }
       }
       query = query.in('vendor_id', allowedVendorIds)
+
+      // Vendors only see orders assigned via split by admin or coe_manager (not sales)
+      const { data: adminCoeUsers } = await supabase
+        .from('users')
+        .select('id')
+        .in('role', ['admin', 'coe_manager'])
+      const allowedCreatorIds = (adminCoeUsers || []).map((u) => u.id)
+      if (allowedCreatorIds.length === 0) return { data: [], total: 0, page, page_size, total_pages: 0 }
+
+      const { data: splits } = await supabase
+        .from('order_splits')
+        .select('sub_order_id')
+        .in('split_by_user_id', allowedCreatorIds)
+      const allowedSubOrderIds = (splits || []).map((s) => s.sub_order_id).filter(Boolean)
+      if (allowedSubOrderIds.length === 0) return { data: [], total: 0, page, page_size, total_pages: 0 }
+
+      query = query.in('id', allowedSubOrderIds)
     }
 
     // Apply filters
@@ -246,6 +263,7 @@ export class OrderService {
         order_id: order.id,
         device_id: item.device_id || item.device_catalog_id,
         quantity: item.quantity,
+        storage: item.storage,
         colour: item.color,
         claimed_condition: item.condition,
         unit_price: 0,

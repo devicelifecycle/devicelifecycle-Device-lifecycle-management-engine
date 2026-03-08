@@ -28,7 +28,12 @@ export async function GET(
       .select('role, organization_id')
       .eq('id', user.id)
       .single()
-    if (userProfile?.role === 'coe_tech' && userProfile.organization_id) {
+    // Only internal roles with IMEI responsibility can access
+    if (!userProfile || !['admin', 'coe_manager', 'coe_tech'].includes(userProfile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (userProfile.role === 'coe_tech' && userProfile.organization_id) {
       let hasAccess = false
       if (record.source_vendor_id) {
         const { data: v } = await supabase.from('vendors').select('organization_id').eq('id', record.source_vendor_id).single()

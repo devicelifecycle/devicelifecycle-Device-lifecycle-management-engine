@@ -25,14 +25,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Only internal roles can transition orders
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
-    if (!profile || !['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+    if (!profile) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -51,6 +50,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const currentOrder = await OrderService.getOrderById(params.id)
     if (!currentOrder) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    }
+
+    // Customer can only transition their own orders, and only: submit, cancel, accept/reject quote
+    if (profile.role === 'customer') {
+      const customerOrg = (currentOrder.customer as { organization_id?: string } | null)?.organization_id
+      if (customerOrg !== profile.organization_id) {
+        return NextResponse.json({ error: 'You can only manage your own orders' }, { status: 403 })
+      }
+      const customerAllowed = new Set<string>(['submitted', 'cancelled', 'accepted', 'rejected'])
+      if (!customerAllowed.has(newStatus)) {
+        return NextResponse.json(
+          { error: 'Customers can only submit, cancel, or accept/reject quotes' },
+          { status: 403 }
+        )
+      }
+    } else if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Validate transition

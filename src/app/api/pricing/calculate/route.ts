@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PricingService } from '@/services/pricing.service'
 import { PricingModelRegistry } from '@/models/pricing'
-import { priceCalculationSchema, priceCalculationV2Schema } from '@/lib/validations'
+import { normalizeCompetitorConditionInput, priceCalculationSchema, priceCalculationV2Schema } from '@/lib/validations'
 
 /** Adapt model result to V2-compatible shape for UI */
 function adaptModelToV2(modelResult: { success: boolean; final_price: number; trade_price?: number; cpo_price?: number; confidence: number; breakdown: Record<string, unknown>; error?: string }, quantity: number) {
@@ -54,12 +54,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const version = body.version || 'v2'
-    // Always prefer data_driven (self-learning model) unless explicitly overridden.
-    // The data-driven model ingests market + competitor data during training,
-    // so it carries its own intelligence without live third-party dependency.
-    const modelId = body.model_id ?? 'data_driven'
+    // If model_id is explicitly provided, use the pricing model (e.g. data_driven).
+    // Otherwise, fall through to V1/V2 PricingService.
+    const modelId = body.model_id || undefined
 
-    // model_id: use pricing model (e.g. data_driven) instead of PricingService
     if (modelId) {
       const validation = priceCalculationV2Schema.safeParse(body)
       if (!validation.success) {
@@ -89,8 +87,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(adaptModelToV2(modelResult, qty))
     }
 
+    if (version === 'competitor_avg') {
+      const { device_id, storage, condition } = body
+      if (!device_id || !storage || !condition) {
+        return NextResponse.json({ error: 'device_id, storage, and condition are required' }, { status: 400 })
+      }
+      const mappedCondition = normalizeCompetitorConditionInput(condition)
+      const result = await PricingService.calculateTradeInFromCompetitors({ device_id, storage, condition: mappedCondition })
+      return NextResponse.json(result)
+    }
+
     if (!['v1', 'v2'].includes(version)) {
-      return NextResponse.json({ error: 'Invalid version. Use v1 or v2.' }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid version. Use v1, v2, or competitor_avg.' }, { status: 400 })
     }
 
     if (version === 'v2') {

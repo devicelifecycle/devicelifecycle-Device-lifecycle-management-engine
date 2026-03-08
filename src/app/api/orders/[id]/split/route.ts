@@ -25,6 +25,36 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Role-based access control
+    const { data: profile } = await supabase
+      .from('users')
+      .select('role, organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Customers cannot view split details
+    if (profile.role === 'customer') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Vendors can only see splits for orders assigned to their org
+    if (profile.role === 'vendor' && profile.organization_id) {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('vendor_id, vendors:vendor_id(organization_id)')
+        .eq('id', params.id)
+        .single()
+      const vendorOrg = (order?.vendors as { organization_id?: string } | null)?.organization_id
+      if (!vendorOrg || vendorOrg !== profile.organization_id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    // Internal roles (admin, coe_manager, coe_tech, sales) have full access
     const splitStatus = await OrderSplitService.getSplitStatus(params.id)
     return NextResponse.json(splitStatus)
   } catch (error) {

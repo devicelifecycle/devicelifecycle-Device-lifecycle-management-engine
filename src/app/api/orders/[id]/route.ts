@@ -47,9 +47,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json(order)
     }
 
-    // Sales can access orders they created or are assigned to
+    // Sales can access orders they created or are assigned to (same org only)
     if (role === 'sales') {
       if (order.created_by_id === user.id || order.assigned_to_id === user.id) {
+        if (organization_id && order.customer?.organization_id && order.customer.organization_id !== organization_id) {
+          return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+        }
         return NextResponse.json(order)
       }
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -63,10 +66,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Vendor can only access orders for their organization
+    // Vendor can only access orders for their organization — and must not see customer names
     if (role === 'vendor') {
       if (order.vendor?.organization_id === organization_id) {
-        return NextResponse.json(order)
+        const sanitized = { ...order }
+        if (sanitized.customer) {
+          sanitized.customer = {
+            ...sanitized.customer,
+            company_name: '—',
+            contact_name: '—',
+            contact_email: '—',
+          }
+        }
+        return NextResponse.json(sanitized)
       }
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
@@ -118,6 +130,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (!canUpdate) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Sales org-boundary check on updates
+    if (role === 'sales' && userProfile.organization_id && order.customer?.organization_id) {
+      if (order.customer.organization_id !== userProfile.organization_id) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
     }
 
     const body = await request.json()

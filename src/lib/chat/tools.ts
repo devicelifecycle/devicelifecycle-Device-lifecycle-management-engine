@@ -169,11 +169,19 @@ async function searchOrders(args: Record<string, unknown>, ctx: ToolContext): Pr
     .order('created_at', { ascending: false })
     .limit(limit)
 
-  // Role scoping
-  if (ctx.role === 'customer') {
-    query = query.eq('customer_id', ctx.organizationId || ctx.userId)
-  } else if (ctx.role === 'vendor') {
-    query = query.eq('vendor_id', ctx.organizationId || ctx.userId)
+  // Role scoping — look up entity IDs from organization, not use org ID directly
+  if (ctx.role === 'customer' && ctx.organizationId) {
+    const { data: customers } = await supabase
+      .from('customers').select('id').eq('organization_id', ctx.organizationId)
+    const customerIds = (customers || []).map((c: { id: string }) => c.id)
+    if (customerIds.length === 0) return JSON.stringify({ message: 'No orders found.' })
+    query = query.in('customer_id', customerIds)
+  } else if (ctx.role === 'vendor' && ctx.organizationId) {
+    const { data: vendors } = await supabase
+      .from('vendors').select('id').eq('organization_id', ctx.organizationId)
+    const vendorIds = (vendors || []).map((v: { id: string }) => v.id)
+    if (vendorIds.length === 0) return JSON.stringify({ message: 'No orders found.' })
+    query = query.in('vendor_id', vendorIds)
   }
 
   if (args.status) query = query.eq('status', args.status)
@@ -225,10 +233,20 @@ async function getOrderDetails(args: Record<string, unknown>, ctx: ToolContext):
   const { data, error } = await query.single()
   if (error) return JSON.stringify({ error: 'Order not found.' })
 
-  // Role scoping check
+  // Role scoping check — verify ownership via organization, not direct ID comparison
   const order = data as Record<string, unknown>
-  if (ctx.role === 'customer' && order.customer_id !== ctx.organizationId) {
-    return JSON.stringify({ error: 'You do not have access to this order.' })
+  if (ctx.role === 'customer' && ctx.organizationId) {
+    const { data: cust } = await supabase
+      .from('customers').select('organization_id').eq('id', order.customer_id).single()
+    if (!cust || cust.organization_id !== ctx.organizationId) {
+      return JSON.stringify({ error: 'You do not have access to this order.' })
+    }
+  } else if (ctx.role === 'vendor' && ctx.organizationId) {
+    const { data: vend } = await supabase
+      .from('vendors').select('organization_id').eq('id', order.vendor_id).single()
+    if (!vend || vend.organization_id !== ctx.organizationId) {
+      return JSON.stringify({ error: 'You do not have access to this order.' })
+    }
   }
 
   const items = (order.items as Array<Record<string, unknown>> || []).map(item => ({
@@ -261,6 +279,10 @@ async function getDevicePrice(args: Record<string, unknown>, ctx: ToolContext): 
   const condition = String(args.condition || 'good')
   const storage = String(args.storage || '128GB')
 
+  // Map user-friendly conditions to DB conditions
+  const condMap: Record<string, string> = { new: 'excellent', excellent: 'excellent', good: 'good', fair: 'fair', poor: 'broken' }
+  const dbCondition = condMap[condition] || 'good'
+
   // Search device catalog
   const { data: devices } = await supabase
     .from('device_catalog')
@@ -274,32 +296,13 @@ async function getDevicePrice(args: Record<string, unknown>, ctx: ToolContext): 
 
   const device = devices[0]
 
-  // Check market_prices
-  const { data: mp } = await supabase
-    .from('market_prices')
-    .select('wholesale_c_stock, trade_price, marketplace_price, cpo_price')
+  // Fetch competitor prices (primary source of truth)
+  const { data: competitorRows } = await supabase
+    .from('competitor_prices')
+    .select('competitor_name, condition, storage, trade_in_price, sell_price, scraped_at, updated_at')
     .eq('device_id', device.id)
     .eq('storage', storage)
-    .eq('is_active', true)
-    .order('effective_date', { ascending: false })
-    .limit(1)
-    .single()
-
-  // Check pricing_tables as fallback
-  const { data: pt } = await supabase
-    .from('pricing_tables')
-    .select('base_price')
-    .eq('device_id', device.id)
-    .eq('storage', storage)
-    .eq('condition', 'new')
-    .eq('is_active', true)
-    .order('effective_date', { ascending: false })
-    .limit(1)
-    .single()
-
-  // Condition multipliers
-  const condMult: Record<string, number> = { new: 1.0, excellent: 0.95, good: 0.85, fair: 0.70, poor: 0.50 }
-  const mult = condMult[condition] ?? 0.85
+    .order('updated_at', { ascending: false })
 
   const result: Record<string, unknown> = {
     device: `${device.make} ${device.model}`,
@@ -308,21 +311,46 @@ async function getDevicePrice(args: Record<string, unknown>, ctx: ToolContext): 
     condition,
   }
 
-  if (mp) {
-    const tradePrice = mp.trade_price ? Number(mp.trade_price) * mult : null
-    result.trade_in_price = tradePrice ? `$${tradePrice.toFixed(2)}` : 'N/A'
-    result.cpo_price = mp.cpo_price ? `$${mp.cpo_price}` : 'N/A'
-    if (INTERNAL_ROLES.includes(ctx.role)) {
-      result.wholesale_c_stock = `$${mp.wholesale_c_stock}`
-      result.marketplace_price = mp.marketplace_price ? `$${mp.marketplace_price}` : 'N/A'
+  if (competitorRows && competitorRows.length > 0) {
+    // Filter for the requested condition
+    const conditionRows = competitorRows.filter(r => r.condition === dbCondition)
+    const allConditions = Array.from(new Set(competitorRows.map(r => r.condition)))
+
+    if (conditionRows.length > 0) {
+      const trades = conditionRows.filter(r => r.trade_in_price != null).map(r => Number(r.trade_in_price))
+      const sells = conditionRows.filter(r => r.sell_price != null).map(r => Number(r.sell_price))
+
+      result.avg_trade_in_price = trades.length ? `$${(trades.reduce((a, b) => a + b, 0) / trades.length).toFixed(2)}` : 'N/A'
+      result.avg_cpo_sell_price = sells.length ? `$${(sells.reduce((a, b) => a + b, 0) / sells.length).toFixed(2)}` : 'N/A'
+      result.highest_trade_in = trades.length ? `$${Math.max(...trades).toFixed(2)}` : 'N/A'
+      result.competitors = conditionRows.map(r => ({
+        name: r.competitor_name,
+        trade_in: r.trade_in_price ? `$${r.trade_in_price}` : 'N/A',
+        sell: r.sell_price ? `$${r.sell_price}` : 'N/A',
+        last_updated: r.scraped_at || r.updated_at,
+      }))
+    } else {
+      result.message = `No data for "${condition}" condition. Available conditions: ${allConditions.join(', ')}`
     }
-    result.source = 'market_prices'
-  } else if (pt) {
-    const basePrice = Number(pt.base_price)
-    result.estimated_trade_price = `$${(basePrice * mult * 0.8).toFixed(2)}`
-    result.source = 'pricing_table (estimate)'
+
+    // Summary for all conditions (helpful for quoting)
+    if (INTERNAL_ROLES.includes(ctx.role)) {
+      const summary: Record<string, { avg_trade: string; avg_sell: string }> = {}
+      for (const cond of allConditions) {
+        const rows = competitorRows.filter(r => r.condition === cond)
+        const t = rows.filter(r => r.trade_in_price != null).map(r => Number(r.trade_in_price))
+        const s = rows.filter(r => r.sell_price != null).map(r => Number(r.sell_price))
+        summary[cond] = {
+          avg_trade: t.length ? `$${(t.reduce((a, b) => a + b, 0) / t.length).toFixed(2)}` : 'N/A',
+          avg_sell: s.length ? `$${(s.reduce((a, b) => a + b, 0) / s.length).toFixed(2)}` : 'N/A',
+        }
+      }
+      result.all_conditions = summary
+    }
+
+    result.source = 'competitor_prices'
   } else {
-    result.message = 'No pricing data available for this device/storage combination.'
+    result.message = 'No competitor pricing data available for this device/storage combination. Try running the price scraper from the admin panel.'
   }
 
   return JSON.stringify(result)
@@ -385,7 +413,7 @@ async function getShipmentTracking(args: Record<string, unknown>, ctx: ToolConte
   const identifier = String(args.order_identifier || '')
 
   // Find order first
-  let orderQuery = supabase.from('orders').select('id, order_number, status')
+  let orderQuery = supabase.from('orders').select('id, order_number, status, customer_id, vendor_id')
   if (identifier.startsWith('ORD-') || identifier.startsWith('ord-')) {
     orderQuery = orderQuery.ilike('order_number', identifier)
   } else {
@@ -394,6 +422,21 @@ async function getShipmentTracking(args: Record<string, unknown>, ctx: ToolConte
 
   const { data: order } = await orderQuery.single()
   if (!order) return JSON.stringify({ error: 'Order not found.' })
+
+  // Ownership check for external roles
+  if (ctx.role === 'customer' && ctx.organizationId) {
+    const { data: cust } = await supabase
+      .from('customers').select('organization_id').eq('id', order.customer_id).single()
+    if (!cust || cust.organization_id !== ctx.organizationId) {
+      return JSON.stringify({ error: 'Access denied.' })
+    }
+  } else if (ctx.role === 'vendor' && ctx.organizationId) {
+    const { data: vend } = await supabase
+      .from('vendors').select('organization_id').eq('id', order.vendor_id).single()
+    if (!vend || vend.organization_id !== ctx.organizationId) {
+      return JSON.stringify({ error: 'Access denied.' })
+    }
+  }
 
   // Find shipments for this order
   const { data: shipments } = await supabase

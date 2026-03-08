@@ -16,6 +16,84 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(a), Buffer.from(b))
 }
 
+function parseCsvRow(line: string): string[] {
+  const values: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index]
+    if (char === '"') {
+      if (inQuotes && line[index + 1] === '"') {
+        current += '"'
+        index++
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+
+    if (char === ',' && !inQuotes) {
+      values.push(current.trim())
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  values.push(current.trim())
+  return values
+}
+
+type CompetitorRow = {
+  device_id: string
+  storage: string
+  competitor_name: string
+  condition: 'excellent' | 'good' | 'fair' | 'broken'
+  trade_in_price: number | null
+  sell_price: number | null
+  source: 'scraped'
+  scraped_at: string
+  updated_at: string
+}
+
+async function upsertCompetitorRow(supabase: ReturnType<typeof createServiceRoleClient>, row: CompetitorRow) {
+  const { error: upsertError } = await supabase
+    .from('competitor_prices')
+    .upsert(row, {
+      onConflict: 'device_id,storage,competitor_name,condition',
+      ignoreDuplicates: false,
+    })
+
+  if (!upsertError) return { success: true as const }
+
+  const code = (upsertError as { code?: string } | null)?.code
+  if (code !== '42P10') {
+    return { success: false as const, error: upsertError.message }
+  }
+
+  const { data: existing } = await supabase
+    .from('competitor_prices')
+    .select('id')
+    .eq('device_id', row.device_id)
+    .eq('storage', row.storage)
+    .eq('competitor_name', row.competitor_name)
+    .eq('condition', row.condition)
+    .limit(1)
+    .single()
+
+  if (existing?.id) {
+    const { error } = await supabase.from('competitor_prices').update(row).eq('id', existing.id)
+    if (error) return { success: false as const, error: error.message }
+    return { success: true as const }
+  }
+
+  const { error } = await supabase.from('competitor_prices').insert(row)
+  if (error) return { success: false as const, error: error.message }
+  return { success: true as const }
+}
+
 export async function GET(request: NextRequest) {
   try {
     if (!CRON_SECRET) {
@@ -44,7 +122,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const res = await fetch(CSV_URL)
+    const res = await fetch(CSV_URL, { cache: 'no-store' })
     if (!res.ok) throw new Error(`Failed to fetch CSV: ${res.status}`)
     const csvText = await res.text()
 
@@ -58,10 +136,11 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const headers = lines[0].toLowerCase().replace(/\s/g, '_').split(',')
+    const headers = parseCsvRow(lines[0].toLowerCase().replace(/\s/g, '_'))
     const deviceIdIdx = headers.indexOf('device_id')
     const storageIdx = headers.indexOf('storage')
     const competitorIdx = headers.indexOf('competitor_name')
+    const conditionIdx = headers.indexOf('condition')
     const tradeIdx = headers.indexOf('trade_in_price')
     const sellIdx = headers.indexOf('sell_price')
 
@@ -79,47 +158,45 @@ export async function GET(request: NextRequest) {
     const errors: string[] = []
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim())
+      const values = parseCsvRow(lines[i])
       const deviceId = values[deviceIdIdx]
       const storage = values[storageIdx]
       const competitorName = values[competitorIdx]
-      const tradeInPrice = tradeIdx >= 0 ? parseFloat(values[tradeIdx] || '0') : undefined
-      const sellPrice = sellIdx >= 0 ? parseFloat(values[sellIdx] || '0') : undefined
+      const conditionRaw = conditionIdx >= 0 ? (values[conditionIdx] || 'good').toLowerCase() : 'good'
+      const condition = conditionRaw === 'excellent' || conditionRaw === 'fair' || conditionRaw === 'broken' ? conditionRaw : 'good'
+      const tradeInPrice = tradeIdx >= 0 ? parseFloat(values[tradeIdx] || '0') : null
+      const sellPrice = sellIdx >= 0 ? parseFloat(values[sellIdx] || '0') : null
 
       if (!deviceId || !storage || !competitorName) {
         errors.push(`Row ${i + 1}: missing required fields`)
         continue
       }
 
-      const { data: existing } = await supabase
-        .from('competitor_prices')
-        .select('id')
-        .eq('device_id', deviceId)
-        .eq('storage', storage)
-        .eq('competitor_name', competitorName)
-        .limit(1)
-        .single()
-
-      const row = {
+      const row: CompetitorRow = {
         device_id: deviceId,
         storage,
         competitor_name: competitorName,
-        trade_in_price: Number.isNaN(tradeInPrice) ? null : tradeInPrice,
-        sell_price: Number.isNaN(sellPrice) ? null : sellPrice,
+        condition,
+        trade_in_price: tradeInPrice !== null && Number.isNaN(tradeInPrice) ? null : tradeInPrice,
+        sell_price: sellPrice !== null && Number.isNaN(sellPrice) ? null : sellPrice,
         source: 'scraped',
         scraped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
 
-      if (existing?.id) {
-        const { error } = await supabase.from('competitor_prices').update(row).eq('id', existing.id)
-        if (error) errors.push(`Row ${i + 1}: ${error.message}`)
-        else imported++
-      } else {
-        const { error } = await supabase.from('competitor_prices').insert(row)
-        if (error) errors.push(`Row ${i + 1}: ${error.message}`)
-        else imported++
-      }
+      const result = await upsertCompetitorRow(supabase, row)
+      if (!result.success) errors.push(`Row ${i + 1}: ${result.error}`)
+      else imported++
+    }
+
+    // Notify admins about CSV sync
+    if (imported > 0) {
+      const { NotificationService } = await import('@/services/notification.service')
+      NotificationService.sendPriceUpdateNotification({
+        source: 'csv_sync',
+        total_updated: imported,
+        details: errors.length > 0 ? `${errors.length} rows had errors` : undefined,
+      }).catch(err => console.error('Price notification error:', err))
     }
 
     return NextResponse.json({

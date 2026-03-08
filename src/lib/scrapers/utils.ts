@@ -5,13 +5,17 @@
 export async function fetchWithRetry(
   url: string,
   options?: RequestInit,
-  retries = 3
+  retries = 3,
+  timeoutMs = 15000
 ): Promise<Response> {
   let lastError: Error | null = null
   for (let i = 0; i < retries; i++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
     try {
       const res = await fetch(url, {
         ...options,
+        signal: options?.signal ?? controller.signal,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -19,10 +23,24 @@ export async function fetchWithRetry(
           ...options?.headers,
         },
       })
-      return res
+
+      if (res.ok) {
+        clearTimeout(timeout)
+        return res
+      }
+
+      const shouldRetry = res.status === 408 || res.status === 429 || res.status >= 500
+      if (!shouldRetry || i === retries - 1) {
+        clearTimeout(timeout)
+        return res
+      }
+
+      await sleep(1000 * (i + 1) + Math.floor(Math.random() * 300))
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e))
-      if (i < retries - 1) await sleep(1000 * (i + 1))
+      if (i < retries - 1) await sleep(1000 * (i + 1) + Math.floor(Math.random() * 300))
+    } finally {
+      clearTimeout(timeout)
     }
   }
   throw lastError

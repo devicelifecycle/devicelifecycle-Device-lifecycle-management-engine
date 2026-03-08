@@ -51,6 +51,17 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await OrderService.getOrders(scopedFilters as Parameters<typeof OrderService.getOrders>[0])
+
+    // Vendors must not see customer names — redact customer PII
+    if (profile?.role === 'vendor' && result.data?.length) {
+      result.data = result.data.map((o) => ({
+        ...o,
+        customer: o.customer
+          ? { ...o.customer, company_name: '—', contact_name: '—', contact_email: '—' }
+          : o.customer,
+      }))
+    }
+
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching orders:', error)
@@ -70,10 +81,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user's organization
+    // Get user's role and organization
     const { data: profile } = await supabase
       .from('users')
-      .select('organization_id')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
@@ -92,7 +103,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const orderData = validationResult.data
+    let orderData = validationResult.data
+
+    // Customer role: must create order for their own org only — verify customer_id matches
+    if (profile.role === 'customer') {
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id, organization_id')
+        .eq('id', orderData.customer_id)
+        .single()
+      if (!customer || customer.organization_id !== profile.organization_id) {
+        return NextResponse.json(
+          { error: 'You can only create orders for your own organization' },
+          { status: 403 }
+        )
+      }
+    }
     const order = await OrderService.createOrder(
       orderData as Parameters<typeof OrderService.createOrder>[0],
       user.id,

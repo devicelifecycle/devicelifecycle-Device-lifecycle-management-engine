@@ -30,6 +30,24 @@ interface LineItem {
   notes: string
 }
 
+function getStorageOptionsForDevice(device?: Device): string[] {
+  if (!device) return STORAGE_OPTIONS
+
+  const model = (device.model || '').toLowerCase()
+  const specs = (device.specifications || {}) as { storage_options?: string[] }
+  const storageOptions = specs.storage_options?.filter(Boolean)
+
+  if (storageOptions && storageOptions.length > 0) {
+    return storageOptions
+  }
+
+  if (model.includes('iphone 15')) {
+    return ['128GB', '256GB', '512GB', '1TB']
+  }
+
+  return STORAGE_OPTIONS
+}
+
 export default function NewCPOOrderPage() {
   const router = useRouter()
   const { create, isCreating } = useOrders()
@@ -56,7 +74,14 @@ export default function NewCPOOrderPage() {
       if (i !== index) return item
       if (field === 'device_id') {
         const dev = devices.find(d => d.id === value)
-        return { ...item, device_id: value as string, device_label: dev ? `${dev.make} ${dev.model}` : '' }
+        const storageOptions = getStorageOptionsForDevice(dev)
+        const defaultStorage = storageOptions.includes('128GB') ? '128GB' : storageOptions[0] || ''
+        return {
+          ...item,
+          device_id: value as string,
+          device_label: dev ? `${dev.make} ${dev.model}` : '',
+          storage: defaultStorage,
+        }
       }
       return { ...item, [field]: value }
     }))
@@ -123,6 +148,10 @@ export default function NewCPOOrderPage() {
               <p className="text-center py-6 text-muted-foreground">No items added. Click &quot;Add Item&quot; to start.</p>
             ) : (
               items.map((item, index) => (
+                (() => {
+                  const selectedDevice = devices.find(d => d.id === item.device_id)
+                  const storageOptions = getStorageOptionsForDevice(selectedDevice)
+                  return (
                 <div key={index}>
                   {index > 0 && <Separator className="mb-4" />}
                   <div className="flex items-start gap-4">
@@ -159,7 +188,7 @@ export default function NewCPOOrderPage() {
                           <Select value={item.storage} onValueChange={v => updateItem(index, 'storage', v)}>
                             <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                             <SelectContent>
-                              {STORAGE_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                              {storageOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
@@ -174,6 +203,8 @@ export default function NewCPOOrderPage() {
                     </Button>
                   </div>
                 </div>
+                  )
+                })()
               ))
             )}
           </CardContent>

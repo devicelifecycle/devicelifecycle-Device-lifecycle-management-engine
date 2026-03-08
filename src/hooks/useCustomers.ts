@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/hooks/useAuth'
 import type { Customer } from '@/types'
 
 interface CustomerFilters {
@@ -124,6 +125,36 @@ export function useCustomers(filters: CustomerFilters = {}) {
     
     remove: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
+  }
+}
+
+async function fetchMyCustomer(): Promise<Customer | null> {
+  const response = await fetch('/api/customers/me')
+  if (!response.ok) {
+    if (response.status === 404) return null
+    throw new Error('Failed to fetch my customer')
+  }
+  return response.json()
+}
+
+/**
+ * Hook for customer role: returns the customer record for the current user's organization.
+ * Use when creating orders — the customer doesn't need to select themselves.
+ * Only fetches when user has customer role.
+ */
+export function useMyCustomer() {
+  const { user } = useAuth()
+  const isCustomer = user?.role === 'customer'
+  const query = useQuery({
+    queryKey: ['customers', 'me'],
+    queryFn: fetchMyCustomer,
+    enabled: !!isCustomer,
+  })
+  return {
+    customer: query.data,
+    isLoading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
   }
 }
 

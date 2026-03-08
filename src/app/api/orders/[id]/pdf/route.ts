@@ -53,6 +53,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       if (order.vendor?.organization_id !== organization_id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
       }
+      // Vendors must not see customer PII — use placeholders for PDF
+      order.customer = order.customer ? {
+        ...order.customer,
+        company_name: '—',
+        contact_name: '—',
+        contact_email: '—',
+        contact_phone: undefined,
+        billing_address: undefined,
+        shipping_address: undefined,
+      } : order.customer
     } else {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
@@ -84,6 +94,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       items: order.items?.map((item) => ({
         device: item.device,
         quantity: item.quantity,
+        storage: item.storage,
         claimed_condition: item.claimed_condition,
         unit_price: item.unit_price,
       })),
