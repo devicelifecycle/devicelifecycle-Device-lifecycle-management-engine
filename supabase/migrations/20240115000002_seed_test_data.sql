@@ -110,7 +110,7 @@ insert into vendors (id, company_name, contact_name, contact_email, contact_phon
 -- Uncomment and update after creating users:
 
 insert into orders (id, order_number, type, customer_id, status, total_quantity,
-                    customer_notes, internal_notes, created_by_id) values
+                    notes, internal_notes, created_by_id) values
   ('30000000-0000-0000-0000-000000000001',
    'ORD-2024-0001', 'trade_in', '10000000-0000-0000-0000-000000000001',
    'draft', 10,
@@ -129,7 +129,7 @@ insert into order_items (order_id, device_id, quantity, storage, color, claimed_
 
 -- CPO order example
 insert into orders (id, order_number, type, customer_id, vendor_id, status, total_quantity,
-                    customer_notes, internal_notes, created_by_id) values
+                    notes, internal_notes, created_by_id) values
   ('30000000-0000-0000-0000-000000000002',
    'ORD-2024-0002', 'cpo', '10000000-0000-0000-0000-000000000002',
    '20000000-0000-0000-0000-000000000001', 'submitted', 15,
