@@ -3,9 +3,11 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { VALID_ORDER_TRANSITIONS } from '@/lib/constants'
 import { generateOrderNumber, sanitizeSearchInput } from '@/lib/utils'
 import { OrderSplitService } from './order-split.service'
+import { PricingService } from './pricing.service'
 import type {
   Order,
   OrderStatus,
@@ -144,7 +146,25 @@ export class OrderService {
 
     if (search) {
       const safeSearch = sanitizeSearchInput(search)
-      if (safeSearch) query = query.ilike('order_number', `%${safeSearch}%`)
+      if (safeSearch) {
+        // Also check order_items for matching IMEI or serial_number
+        const { data: matchingItems } = await supabase
+          .from('order_items')
+          .select('order_id')
+          .or(`imei.ilike.%${safeSearch}%,serial_number.ilike.%${safeSearch}%`)
+          .limit(200)
+
+        const matchingOrderIds = [
+          ...new Set((matchingItems || []).map((i: { order_id: string }) => i.order_id).filter(Boolean)),
+        ]
+
+        if (matchingOrderIds.length > 0) {
+          // Match on order number OR on orders that contain a device with that IMEI/serial
+          query = query.or(`order_number.ilike.%${safeSearch}%,id.in.(${matchingOrderIds.join(',')})`)
+        } else {
+          query = query.ilike('order_number', `%${safeSearch}%`)
+        }
+      }
     }
 
     if (is_sla_breached !== undefined) {
@@ -234,7 +254,8 @@ export class OrderService {
    * Create a new order
    */
   static async createOrder(input: CreateOrderInput, userId: string, orgId: string): Promise<Order> {
-    const supabase = createServerSupabaseClient()
+    // Use service role to bypass RLS - API has already validated permissions
+    const supabase = createServiceRoleClient()
 
     const orderNumber = generateOrderNumber()
 
@@ -307,12 +328,17 @@ export class OrderService {
       .eq('id', id)
       .single()
 
+    // Map API field customer_notes -> DB column notes (orders table has notes, not customer_notes)
+    const { customer_notes, ...rest } = input
+    const dbPayload: Record<string, unknown> = {
+      ...rest,
+      updated_at: new Date().toISOString(),
+    }
+    if (customer_notes !== undefined) dbPayload.notes = customer_notes
+
     const { data, error } = await supabase
       .from('orders')
-      .update({
-        ...input,
-        updated_at: new Date().toISOString(),
-      })
+      .update(dbPayload)
       .eq('id', id)
       .select()
       .single()
@@ -332,12 +358,12 @@ export class OrderService {
   // ============================================================================
 
   /**
-   * Delete an order (soft delete or hard delete based on status)
+   * Delete an order. Soft-deletes by setting status to cancelled (hard delete
+   * would require cascading order_timeline, shipments, etc.).
    */
   static async deleteOrder(id: string, userId: string): Promise<void> {
     const supabase = createServerSupabaseClient()
 
-    // Get current order
     const { data: order, error: fetchError } = await supabase
       .from('orders')
       .select('*')
@@ -348,17 +374,14 @@ export class OrderService {
       throw new Error('Order not found')
     }
 
-    // Only allow deletion of draft or cancelled orders
     if (!['draft', 'cancelled'].includes(order.status)) {
       throw new Error('Only draft or cancelled orders can be deleted')
     }
 
-    // Soft delete by setting status to cancelled and adding a deleted flag
     const { error } = await supabase
       .from('orders')
       .update({
         status: 'cancelled',
-        cancelled_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -367,7 +390,6 @@ export class OrderService {
       throw new Error(error.message)
     }
 
-    // Log to audit
     await this.logAudit(userId, 'delete', 'order', id, order, null)
   }
 
@@ -394,12 +416,14 @@ export class OrderService {
    * Transition order to a new status
    */
   static async transitionOrder(
-    id: string, 
-    toStatus: OrderStatus, 
+    id: string,
+    toStatus: OrderStatus,
     userId: string,
     notes?: string
   ): Promise<Order> {
-    const supabase = createServerSupabaseClient()
+    // Use service role to bypass RLS — the API route has already validated permissions
+    // (customers are allowed to accept/reject quotes but RLS only grants UPDATE to internal users)
+    const supabase = createServiceRoleClient()
 
     // Get current order
     const { data: order, error: fetchError } = await supabase
@@ -461,6 +485,15 @@ export class OrderService {
       throw new Error(updateError.message)
     }
 
+    // Auto-create quote when order is submitted (trade_in only): run pricing for all items
+    if (toStatus === 'submitted' && order.type === 'trade_in') {
+      try {
+        await this.autoQuoteOrderItems(id)
+      } catch (err) {
+        console.error('[OrderService] Auto-quote failed:', err)
+      }
+    }
+
     // Populate sales_history when order closes (for pricing model training)
     if (toStatus === 'closed') {
       await this.recordSalesHistory(supabase, id, order.type as 'trade_in' | 'cpo')
@@ -488,6 +521,103 @@ export class OrderService {
     }
 
     return updatedOrder as Order
+  }
+
+  /**
+   * Auto-generate quote (prices) for all order items when order is submitted.
+   * Runs pricing calculation for each trade_in item and updates order_items.
+   */
+  static async autoQuoteOrderItems(orderId: string): Promise<void> {
+    const supabase = createServerSupabaseClient()
+
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .select('id, type, customer_id, customer:customers(default_risk_mode)')
+      .eq('id', orderId)
+      .single()
+
+    if (orderErr || !order || order.type !== 'trade_in') return
+
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('id, device_id, quantity, storage, claimed_condition')
+      .eq('order_id', orderId)
+
+    if (!items?.length) return
+
+    const riskMode = (order.customer as { default_risk_mode?: 'retail' | 'enterprise' } | null)?.default_risk_mode || 'retail'
+    const STORAGE_OPTIONS = ['128GB', '256GB', '512GB', '1TB']
+    const mapCondition = (c?: string): 'new' | 'excellent' | 'good' | 'fair' | 'poor' => {
+      if (!c) return 'good'
+      const s = String(c).toLowerCase()
+      if (s === 'new') return 'new'
+      if (['excellent', 'excellant'].some(x => s.includes(x))) return 'excellent'
+      if (s === 'good') return 'good'
+      if (s === 'fair') return 'fair'
+      if (['poor', 'broken'].some(x => s.includes(x))) return 'poor'
+      return 'good'
+    }
+
+    for (const item of items) {
+      if (!item.device_id) continue
+      const storage = (item.storage || '128GB').replace(/\s+/g, '').toUpperCase()
+      const condition = mapCondition(item.claimed_condition)
+      const qty = Math.max(1, item.quantity || 1)
+
+      try {
+        const result = await PricingService.calculatePriceV2({
+          device_id: item.device_id,
+          storage: STORAGE_OPTIONS.includes(storage) ? storage : '128GB',
+          carrier: 'Unlocked',
+          condition,
+          quantity: qty,
+          risk_mode: riskMode,
+        })
+        if (!result.success || result.trade_price == null || result.trade_price <= 0) continue
+
+        const unitPrice = result.trade_price / qty
+        const metadata = {
+          suggested_by_calc: true,
+          pricing_source: 'auto' as const,
+          confidence: result.confidence,
+          margin_tier: result.channel_decision?.margin_tier,
+          anchor_price: result.breakdown?.anchor_price,
+        }
+
+        await supabase
+          .from('order_items')
+          .update({
+            unit_price: unitPrice,
+            quoted_price: unitPrice,
+            pricing_metadata: metadata,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', item.id)
+          .eq('order_id', orderId)
+      } catch {
+        // Skip item on error
+      }
+    }
+
+    // Recalculate order totals
+    const { data: updatedItems } = await supabase
+      .from('order_items')
+      .select('unit_price, quantity')
+      .eq('order_id', orderId)
+
+    const totalAmount = (updatedItems || []).reduce(
+      (sum, i) => sum + ((i.unit_price ?? 0) * (i.quantity ?? 1)),
+      0
+    )
+
+    await supabase
+      .from('orders')
+      .update({
+        total_amount: totalAmount,
+        quoted_amount: totalAmount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
   }
 
   /**
@@ -559,7 +689,7 @@ export class OrderService {
     description: string,
     actorId: string
   ) {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServiceRoleClient()
 
     // Get actor name
     const { data: user } = await supabase
@@ -589,7 +719,7 @@ export class OrderService {
     oldValues: any,
     newValues: any
   ) {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServiceRoleClient()
 
     await supabase.from('audit_logs').insert({
       user_id: userId,

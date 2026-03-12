@@ -11,10 +11,24 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:smoke": "vitest run --reporter=verbose",
+    "test:pricing:100": "vitest run tests/unit/models/pricing/simple-margin-100-trials.test.ts",
     "format": "prettier --write .",
     "create-admin": "node --env-file=.env.local scripts/create-admin-user.mjs",
+    "seed-test-users": "node --env-file=.env.local scripts/seed-test-users.mjs",
+    "seed-acme": "node --env-file=.env.local scripts/seed-acme-user.mjs",
+    "cleanup-users": "node --env-file=.env.local scripts/cleanup-duplicate-users.mjs",
     "db:push": "supabase db push",
-    "db:migrate": "supabase migration up"
+    "db:migrate": "supabase migration up",
+    "db:reset": "./scripts/db-reset-clean.sh",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "agent:1": "npx tsx scripts/agents/agent1-full-catalog.ts",
+    "agent:2": "npx tsx scripts/agents/agent2-condition-matrix.ts",
+    "agent:3": "npx tsx scripts/agents/agent3-input-normalization.ts",
+    "agent:4": "npx tsx scripts/agents/agent4-regression.ts",
+    "agent:health": "npx tsx scripts/agents/integrator.ts",
+    "scrape:prices": "npx tsx scripts/run-price-scraper.ts",
+    "send-test-email": "npx tsx --env-file=.env.local scripts/send-test-email.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",
@@ -60,6 +74,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^20.10.6",
     "@types/papaparse": "^5.3.14",
     "@types/react": "^18.2.46",
