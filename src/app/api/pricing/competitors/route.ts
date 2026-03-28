@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PricingService } from '@/services/pricing.service'
 import { createCompetitorPriceSchema } from '@/lib/validations'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,12 +30,13 @@ export async function GET(request: NextRequest) {
     }
 
     const deviceId = request.nextUrl.searchParams.get('device_id') || undefined
+    const search = request.nextUrl.searchParams.get('search')?.trim() || undefined
     const conditionParam = request.nextUrl.searchParams.get('condition')
     const condition = conditionParam === 'excellent' || conditionParam === 'good' || conditionParam === 'fair' || conditionParam === 'broken'
       ? conditionParam
       : undefined
 
-    const data = await PricingService.getCompetitorPrices(deviceId, condition)
+    const data = await PricingService.getCompetitorPrices(deviceId, condition, search)
     const rowsWithRetrievalTime = data.map((row) => ({
       ...row,
       retrieved_at: row.scraped_at || row.updated_at || row.created_at,
@@ -41,6 +44,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: rowsWithRetrievalTime,
+      total_count: rowsWithRetrievalTime.length,
       retrieved_at: new Date().toISOString(),
     })
   } catch (error) {

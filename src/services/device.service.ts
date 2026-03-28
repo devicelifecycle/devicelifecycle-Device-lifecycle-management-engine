@@ -53,7 +53,9 @@ export class DeviceService {
       query = query.eq('make', make)
     }
 
-    query = query.order(sort_by || 'make', { ascending: sort_order === 'asc' })
+    const ALLOWED_SORT = ['make', 'model', 'category', 'created_at', 'updated_at', 'base_price'] as const
+    const safeSortBy = ALLOWED_SORT.includes((sort_by || 'make') as (typeof ALLOWED_SORT)[number]) ? (sort_by || 'make') : 'make'
+    query = query.order(safeSortBy, { ascending: sort_order === 'asc' })
 
     const from = (page - 1) * (page_size || 20)
     const to = from + (page_size || 20) - 1

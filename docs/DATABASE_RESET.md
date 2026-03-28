@@ -11,22 +11,26 @@ This guide explains how to get a clean database without errors.
 
 ```bash
 # 1. Start Docker Desktop
-# 2. Run:
+# 2. Run (FAST by default: schema only, ~1 min):
 ./scripts/db-reset-clean.sh
+
+# Or full reset with device/pricing seed (~2–4 min):
+./scripts/db-reset-clean.sh --full
 ```
 
-Or directly:
+Or via npm:
 
 ```bash
-supabase db reset
+npm run db:reset              # Fast (default)
+npm run db:reset -- --full    # Full with seed
 ```
 
-This will:
+The script will:
 
-1. Drop the local database
-2. Recreate it
+1. Check Docker is running (fails fast with clear error)
+2. Drop the local database and recreate it
 3. Run all migrations in order
-4. Run seed data (`supabase/seed/pricing-data.sql`)
+4. **Fast (default)**: Skip seed. **Full (--full)**: Run seed data
 
 ## Remote Database Reset
 
@@ -66,11 +70,24 @@ After reset, you can verify the schema:
 supabase db dump --schema public -f schema-check.sql
 ```
 
+## Why It Takes 2–5 Minutes
+
+| Step | Time |
+|------|------|
+| Docker containers start (Postgres, Auth, Kong, etc.) | 30–90 sec |
+| 31 migrations run sequentially | 30–60 sec |
+| Seed (~400 device/pricing rows) | 20–40 sec |
+| **Total** | **2–5 min** |
+
+**First run** can take longer if Docker images need to be pulled. Default is now fast (schema only); use `--full` for complete reset with seed.
+
 ## Troubleshooting
 
 | Error | Fix |
 |-------|-----|
-| Docker not running | Start Docker Desktop |
+| Docker not running | Start Docker Desktop and wait until it’s ready |
+| Takes very long / hangs | Run `supabase start` first, wait for it to finish, then run `supabase db reset` |
 | Port 54321/54322 in use | Stop other Supabase instances or change ports in `supabase/config.toml` |
 | Migration fails | Check the failing migration file; fix and run `supabase migration repair` |
 | Seed fails | Ensure `supabase/seed/pricing-data.sql` matches current schema |
+| `no space left on device` | Free disk space (Docker images and DB need several GB) |

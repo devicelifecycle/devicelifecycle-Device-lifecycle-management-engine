@@ -51,7 +51,8 @@ async function createVendor(data: Partial<Vendor>): Promise<Vendor> {
     body: JSON.stringify(data),
   })
   if (!response.ok) {
-    throw new Error('Failed to create vendor')
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || 'Failed to create vendor')
   }
   return response.json()
 }

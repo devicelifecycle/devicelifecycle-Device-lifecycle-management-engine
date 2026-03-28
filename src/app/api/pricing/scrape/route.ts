@@ -2,13 +2,18 @@
 // ADMIN: MANUAL PRICE SCRAPER TRIGGER
 // ============================================================================
 // Runs the price scraper pipeline. Requires admin or coe_manager.
-// Uses session auth (server client) — RLS allows writes for these roles.
+// Uses service-role client to bypass RLS and ensure scraper can always write
+// to competitor_prices and device_catalog (auth is checked first).
 
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { runScraperPipeline } from '@/lib/scrapers'
+export const dynamic = 'force-dynamic'
 
-export async function POST() {
+
+export async function POST(request: NextRequest) {
   try {
     const supabase = createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -27,15 +32,26 @@ export async function POST() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const result = await runScraperPipeline(undefined, supabase)
+    const serviceSupabase = createServiceRoleClient()
+    const result = await runScraperPipeline(undefined, serviceSupabase)
 
-    // Auto-train after scraping so new data feeds into the AI model immediately
     let trainingResult = null
-    try {
-      const { PricingTrainingService } = await import('@/services/pricing-training.service')
-      trainingResult = await PricingTrainingService.train()
-    } catch (trainErr) {
-      console.warn('Post-scrape training failed:', trainErr)
+    const shouldTrainInline =
+      request.nextUrl.searchParams.get('include_training') === 'true' ||
+      process.env.MANUAL_PRICE_SCRAPER_AUTO_TRAINING === 'true'
+
+    if (shouldTrainInline) {
+      try {
+        const { PricingTrainingService } = await import('@/services/pricing-training.service')
+        trainingResult = await PricingTrainingService.train()
+      } catch (trainErr) {
+        console.warn('Post-scrape training failed:', trainErr)
+      }
+    } else {
+      trainingResult = {
+        skipped: true,
+        reason: 'Manual scrape skips synchronous training. Run training from the Training Data tab or POST /api/pricing/train.',
+      }
     }
 
     return NextResponse.json({
@@ -50,8 +66,12 @@ export async function POST() {
         duration_ms: r.duration_ms,
       })),
       training: trainingResult ? {
-        baselines_upserted: trainingResult.baselines_upserted,
-        sample_counts: trainingResult.sample_counts,
+        ...(trainingResult && 'baselines_upserted' in trainingResult
+          ? {
+              baselines_upserted: trainingResult.baselines_upserted,
+              sample_counts: trainingResult.sample_counts,
+            }
+          : trainingResult),
       } : null,
       errors: result.errors,
       timestamp: new Date().toISOString(),

@@ -8,6 +8,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PricingService } from '@/services/pricing.service'
 import { PricingModelRegistry } from '@/models/pricing'
 import { normalizeCompetitorConditionInput, priceCalculationSchema, priceCalculationV2Schema } from '@/lib/validations'
+export const dynamic = 'force-dynamic'
+
 
 /** Adapt model result to V2-compatible shape for UI */
 function adaptModelToV2(modelResult: { success: boolean; final_price: number; trade_price?: number; cpo_price?: number; confidence: number; breakdown: Record<string, unknown>; error?: string }, quantity: number) {

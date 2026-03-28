@@ -5,6 +5,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { updateUserSchema } from '@/lib/validations'
+import { isValidUUID } from '@/lib/utils'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(
   request: NextRequest,
@@ -16,6 +19,9 @@ export async function GET(
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!isValidUUID(params.id)) {
+      return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
     }
 
     const { data: profile } = await supabase
@@ -75,6 +81,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!isValidUUID(params.id)) {
+      return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
+    }
     const supabase = createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -137,6 +146,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!isValidUUID(params.id)) {
+      return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
+    }
     const supabase = createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 

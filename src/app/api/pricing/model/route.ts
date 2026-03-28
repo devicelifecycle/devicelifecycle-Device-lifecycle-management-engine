@@ -7,8 +7,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { safeErrorMessage } from '@/lib/utils'
 import { PricingModelRegistry } from '@/models/pricing'
 import { z } from 'zod'
+export const dynamic = 'force-dynamic'
+
 
 const modelCalculateSchema = z.object({
   model_id: z.string().min(1),
@@ -132,7 +135,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Pricing model calculate error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Calculation failed' },
+      { error: safeErrorMessage(error, 'Calculation failed') },
       { status: 500 }
     )
   }

@@ -6,6 +6,7 @@ import cheerio from 'cheerio'
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from '../types'
 import { extractPricesFromHtml, fetchWithRetry, parsePrice, throttle } from '../utils'
 import { convertConditionPrice, expandPriceByConditions } from '../condition-pricing'
+import { runBellScraperPilot } from './bell-scrapling'
 
 const TRADE_IN_URL = process.env.BELL_TRADE_IN_URL || 'https://www.bell.ca/Mobility/Trade-in-program'
 const BELL_PROXY_AUTH_URL = process.env.BELL_PROXY_AUTH_URL || 'https://www.bell.ca/ajax/toolbox/CorsProxyAuthenticate'
@@ -146,7 +147,7 @@ function selectBestBellProduct(
   return scored[0]?.product || null
 }
 
-export async function scrapeBell(devices: DeviceToScrape[]): Promise<ScraperResult> {
+async function scrapeBellTypeScript(devices: DeviceToScrape[]): Promise<ScraperResult> {
   const start = Date.now()
   const prices: ScrapedPrice[] = []
   const now = new Date().toISOString()
@@ -182,15 +183,31 @@ export async function scrapeBell(devices: DeviceToScrape[]): Promise<ScraperResu
         }
       }
 
-      if (tradePrice == null && allDomPrices.length > 0) {
-        const match = allDomPrices.find(item => {
+      // Try to reconcile with on-page Bell trade-in value (closer to what users see)
+      if (allDomPrices.length > 0) {
+        const domMatch = allDomPrices.find(item => {
           const contextToken = normalizeText(item.context)
           const contextStorage = normalizeStorage(item.context)
           const hasModel = contextToken.includes(modelToken)
           const hasStorage = !storageToken || contextStorage.includes(storageToken)
           return hasModel && hasStorage
         })
-        if (match) tradePrice = match.price
+
+        if (domMatch) {
+          const domPrice = domMatch.price
+          if (tradePrice == null) {
+            // No API value — fall back to the DOM price directly
+            tradePrice = domPrice
+          } else {
+            // If API value is far off from the website value (e.g. promo/mismatch),
+            // prefer the website-visible price the user actually sees.
+            const diff = Math.abs(tradePrice - domPrice)
+            const rel = domPrice > 0 ? diff / domPrice : 0
+            if (rel > 0.3) {
+              tradePrice = domPrice
+            }
+          }
+        }
       }
 
       const requestedCondition = device.condition ?? 'good'
@@ -201,7 +218,7 @@ export async function scrapeBell(devices: DeviceToScrape[]): Promise<ScraperResu
         trade_in_price: adjustedTradePrice, sell_price: null, condition: requestedCondition,
         scraped_at: now, raw: { matched: tradePrice != null, source: products.length > 0 ? 'bell-api' : 'bell-dom' },
       })
-      await throttle(300)
+      await throttle(120)
     }
 
     const matchedCount = prices.filter((price) => price.trade_in_price != null).length
@@ -218,7 +235,7 @@ export async function scrapeBell(devices: DeviceToScrape[]): Promise<ScraperResu
   }
 }
 
-export async function scrapeBellFullCatalog(limitProducts = 450): Promise<ScraperResult> {
+async function scrapeBellFullCatalogTypeScript(limitProducts = 450): Promise<ScraperResult> {
   const start = Date.now()
   const now = new Date().toISOString()
 
@@ -294,6 +311,21 @@ export async function scrapeBellFullCatalog(limitProducts = 450): Promise<Scrape
       duration_ms: Date.now() - start,
     }
   }
+}
+
+export async function scrapeBell(devices: DeviceToScrape[]): Promise<ScraperResult> {
+  return runBellScraperPilot({
+    devices,
+    runTypeScript: () => scrapeBellTypeScript(devices),
+  })
+}
+
+export async function scrapeBellFullCatalog(limitProducts = 450): Promise<ScraperResult> {
+  return runBellScraperPilot({
+    devices: [],
+    discovery: true,
+    runTypeScript: () => scrapeBellFullCatalogTypeScript(limitProducts),
+  })
 }
 
 function extractEmbeddedJson($: $Root): Array<{ name: string; price: number; storage?: string }> {

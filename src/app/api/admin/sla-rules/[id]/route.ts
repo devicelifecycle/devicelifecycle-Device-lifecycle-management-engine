@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { SLAService } from '@/services/sla.service'
 import { updateSLARuleSchema } from '@/lib/validations'
+export const dynamic = 'force-dynamic'
+
 
 export async function PATCH(
   request: NextRequest,

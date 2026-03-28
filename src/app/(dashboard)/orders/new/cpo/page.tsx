@@ -4,11 +4,12 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, X } from 'lucide-react'
+import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download } from 'lucide-react'
 import { toast } from 'sonner'
+import Papa from 'papaparse'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers } from '@/hooks/useCustomers'
 import { Button } from '@/components/ui/button'
@@ -17,9 +18,26 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Separator } from '@/components/ui/separator'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
+import { matchDeviceFromCsv } from '@/lib/device-match'
+import {
+  CPO_CSV_HEADERS,
+  CPO_CSV_SAMPLE,
+  CSV_COLUMN_ALIASES,
+  buildCsvContent,
+} from '@/lib/csv-templates'
 import type { Device, DeviceCondition } from '@/types'
+
+interface CSVRow {
+  device_make: string
+  device_model: string
+  quantity: string
+  storage: string
+  notes: string
+}
 
 interface LineItem {
   device_id: string
@@ -56,9 +74,13 @@ export default function NewCPOOrderPage() {
   const [customerId, setCustomerId] = useState('')
   const [items, setItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
+  const [tab, setTab] = useState<'manual' | 'csv'>('manual')
+  const [csvData, setCsvData] = useState<CSVRow[]>([])
+  const [csvErrors, setCsvErrors] = useState<string[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetch('/api/devices').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
 
   const addItem = () => {
@@ -87,29 +109,115 @@ export default function NewCPOOrderPage() {
     }))
   }
 
+  const handleDownloadCpoTemplate = () => {
+    const headers = ['device_make', 'device_model', 'quantity', 'storage', 'notes']
+    const sampleData = [
+      ['Apple', 'iPhone 15', '150', '128GB', 'CPO bulk - corporate devices'],
+      ['Apple', 'iPhone 15 Pro', '100', '256GB', ''],
+      ['Samsung', 'Galaxy S24 Ultra', '50', '512GB', 'CPO bulk purchase'],
+    ]
+    const csvContent = [headers.join(','), ...sampleData.map(row => row.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'cpo-template.csv'
+    a.click()
+    URL.revokeObjectURL(a.href)
+    toast.success('CPO template downloaded')
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const errors: string[] = []
+        const rawRows = results.data as Record<string, string>[]
+        const normalizeRow = (r: Record<string, string>): CSVRow => {
+          const out: Partial<CSVRow> = {}
+          for (const [k, v] of Object.entries(r)) {
+            const key = k.toLowerCase().trim().replace(/\s+/g, '_')
+            const mapped = CSV_COLUMN_ALIASES[key] ?? (key === 'device_make' || key === 'device_model' ? key : null)
+            if (mapped) {
+              out[mapped as keyof CSVRow] = String(v ?? '').trim()
+            }
+          }
+          return {
+            device_make: out.device_make ?? '',
+            device_model: out.device_model ?? '',
+            quantity: out.quantity ?? '',
+            storage: out.storage ?? '',
+            notes: out.notes ?? '',
+          }
+        }
+        const rows = rawRows.map(normalizeRow)
+        rows.forEach((row, i) => {
+          if (!row.device_make) errors.push(`Row ${i + 1}: Missing device_make`)
+          if (!row.device_model) errors.push(`Row ${i + 1}: Missing device_model`)
+          if (!row.quantity || isNaN(Number(row.quantity))) errors.push(`Row ${i + 1}: Invalid quantity`)
+        })
+        setCsvErrors(errors)
+        setCsvData(rows)
+        if (errors.length === 0) toast.success(`${rows.length} rows parsed successfully`)
+      },
+      error: () => toast.error('Failed to parse CSV file'),
+    })
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!customerId) { toast.error('Please select a customer'); return }
-    if (items.length === 0) { toast.error('Please add at least one item'); return }
-    if (items.some(i => !i.device_id)) { toast.error('Please select a device for all items'); return }
+
+    let orderItems: { device_id: string; quantity: number; storage: string; condition: DeviceCondition; notes: string }[]
+    if (tab === 'csv' && csvData.length > 0) {
+      const rows = csvData.map(row => {
+        const device = matchDeviceFromCsv(devices, row.device_make, row.device_model)
+        return {
+          device_id: device?.id || '',
+          quantity: parseInt(row.quantity) || 1,
+          storage: row.storage || '128GB',
+          condition: 'good' as DeviceCondition,
+          notes: row.notes || '',
+          _row: row,
+        }
+      })
+      const invalid = rows.filter(r => !r.device_id)
+      if (invalid.length > 0) {
+        const examples = invalid.slice(0, 3).map(r => `"${(r as { _row?: CSVRow })._row?.device_make || '?'} ${(r as { _row?: CSVRow })._row?.device_model || '?'}"`).join(', ')
+        toast.error(`Could not match ${invalid.length} row(s): ${examples}. Use exact make/model from catalog (e.g. Apple, iPhone 15 Pro).`)
+        return
+      }
+      if (csvErrors.length > 0) {
+        toast.error('Please fix CSV errors before submitting')
+        return
+      }
+      orderItems = rows.map(({ _row, ...r }) => r)
+    } else {
+      if (items.length === 0) { toast.error('Please add at least one item'); return }
+      if (items.some(i => !i.device_id)) { toast.error('Please select a device for all items'); return }
+      orderItems = items.map(i => ({
+        device_id: i.device_id,
+        quantity: i.quantity,
+        storage: i.storage || '128GB',
+        condition: i.condition,
+        notes: i.notes,
+      }))
+    }
 
     try {
       const result = await create({
         type: 'cpo',
         customer_id: customerId,
-        items: items.map(i => ({
-          device_id: i.device_id,
-          quantity: i.quantity,
-          storage: i.storage || '128GB',
-          condition: i.condition,
-          notes: i.notes,
-        })),
+        items: orderItems,
         notes,
       } as any)
       toast.success('CPO order created successfully')
       router.push(`/orders/${result.id}`)
-    } catch {
-      toast.error('Failed to create order')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create order')
     }
   }
 
@@ -140,10 +248,17 @@ export default function NewCPOOrderPage() {
         {/* Line Items */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <div><CardTitle>Devices</CardTitle><CardDescription>Add devices to this order</CardDescription></div>
-            <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="mr-2 h-3 w-3" />Add Item</Button>
+            <div><CardTitle>Devices</CardTitle><CardDescription>Add devices manually or upload a CPO CSV</CardDescription></div>
+            <Button type="button" variant="outline" size="sm" onClick={addItem} className={tab === 'manual' ? '' : 'hidden'}><Plus className="mr-2 h-3 w-3" />Add Item</Button>
           </CardHeader>
           <CardContent className="space-y-4">
+            <Tabs value={tab} onValueChange={v => setTab(v as 'manual' | 'csv')} className="w-full">
+              <TabsList className="mb-4">
+                <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+                <TabsTrigger value="csv">CSV Upload</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="manual" className="space-y-4">
             {items.length === 0 ? (
               <p className="text-center py-6 text-muted-foreground">No items added. Click &quot;Add Item&quot; to start.</p>
             ) : (
@@ -207,6 +322,60 @@ export default function NewCPOOrderPage() {
                 })()
               ))
             )}
+              </TabsContent>
+
+              <TabsContent value="csv" className="space-y-4">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-4">
+                  <p className="font-semibold text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
+                  <p className="text-xs text-muted-foreground mt-1">Use this template for Certified Pre-Owned bulk purchases. Columns: device_make, device_model, quantity, storage, notes (Make/Model also accepted). Download template to ensure correct format.</p>
+                </div>
+                <div className="rounded-lg border-2 border-dashed p-6 text-center">
+                  <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground mb-3">Download the CPO template or upload your own CSV</p>
+                  <input ref={fileRef} type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <Button type="button" variant="outline" onClick={handleDownloadCpoTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
+                      <Download className="mr-2 h-4 w-4" />Download CPO Template
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+                      <Upload className="mr-2 h-4 w-4" />Upload Your Own CSV
+                    </Button>
+                  </div>
+                </div>
+                {csvErrors.length > 0 && (
+                  <div className="rounded-md bg-destructive/10 p-3 space-y-1">
+                    <p className="text-sm font-medium text-destructive">Validation Errors:</p>
+                    {csvErrors.slice(0, 5).map((err, i) => <p key={i} className="text-xs text-destructive">{err}</p>)}
+                  </div>
+                )}
+                {csvData.length > 0 && csvErrors.length === 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Preview ({csvData.length} rows)</p>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Make</TableHead>
+                          <TableHead>Model</TableHead>
+                          <TableHead>Qty</TableHead>
+                          <TableHead>Storage</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {csvData.slice(0, 10).map((row, i) => (
+                          <TableRow key={i}>
+                            <TableCell>{row.device_make}</TableCell>
+                            <TableCell>{row.device_model}</TableCell>
+                            <TableCell>{row.quantity}</TableCell>
+                            <TableCell>{row.storage || '—'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {csvData.length > 10 && <p className="text-xs text-muted-foreground mt-2">Showing 10 of {csvData.length} rows</p>}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 

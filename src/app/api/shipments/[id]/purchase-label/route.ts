@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { ShipmentService } from '@/services/shipment.service'
-import { ShippoService } from '@/services/shippo.service'
+import { safeErrorMessage } from '@/lib/utils'
+import { ShipmentService, isShippingConfigured } from '@/services/shipment.service'
+import { StallionService } from '@/services/stallion.service'
+import type { AddressInput } from '@/services/shipment.service'
+export const dynamic = 'force-dynamic'
+
 
 export async function POST(
   request: NextRequest,
@@ -22,10 +26,17 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    if (!isShippingConfigured()) {
+      return NextResponse.json(
+        { error: 'Stallion Express is not configured. Set STALLION_API_TOKEN in environment.' },
+        { status: 503 }
+      )
+    }
+
     const shipment = await ShipmentService.getShipmentById(params.id)
     if (!shipment) return NextResponse.json({ error: 'Shipment not found' }, { status: 404 })
     if (shipment.direction !== 'outbound') {
-      return NextResponse.json({ error: 'Shippo label purchase is only supported for outbound shipments' }, { status: 400 })
+      return NextResponse.json({ error: 'Stallion Express label purchase is only supported for outbound shipments' }, { status: 400 })
     }
 
     const body = await request.json().catch(() => ({})) as {
@@ -47,28 +58,48 @@ export async function POST(
       width: body.parcel?.width ?? dimensions?.width ?? 8,
       height: body.parcel?.height ?? dimensions?.height ?? 4,
       weight: body.parcel?.weight ?? shipment.weight ?? 2,
-      distanceUnit: body.parcel?.distanceUnit || 'in',
-      massUnit: body.parcel?.massUnit || 'lb',
+      distanceUnit: body.parcel?.distanceUnit || ('in' as const),
+      massUnit: body.parcel?.massUnit || ('lb' as const),
     }
 
-    const purchased = await ShippoService.purchaseLabel({
-      fromAddress: shipment.from_address as unknown as import('@/services/shipment.service').AddressInput,
-      toAddress: shipment.to_address as unknown as import('@/services/shipment.service').AddressInput,
+    const fromAddress = shipment.from_address as unknown as AddressInput
+    const toAddress = shipment.to_address as unknown as AddressInput
+
+    // Get order number for reference
+    const orderId = shipment.order_id
+      ? (await supabase.from('orders').select('order_number').eq('id', shipment.order_id).single()).data?.order_number
+      : undefined
+
+    // Purchase label via Stallion Express
+    const result = await StallionService.purchaseLabel({
+      fromAddress,
+      toAddress,
       parcel,
       preferredCarrier: body.preferredCarrier,
       preferredServiceLevelToken: body.preferredServiceLevelToken,
+      orderId,
     })
 
-    const updated = await ShipmentService.attachShippoPurchase(params.id, {
-      ...purchased,
+    // Attach label data to shipment
+    const updated = await ShipmentService.attachLabelPurchase(params.id, {
+      stallion_shipment_id: result.stallion_shipment_id,
+      tracking_number: result.tracking_number,
+      carrier: result.carrier,
+      tracking_status: result.tracking_status,
+      label_url: result.label_url,
+      label_pdf_url: result.label_pdf_url,
+      rate_amount: result.rate_amount,
+      rate_currency: result.rate_currency,
+      estimated_delivery: result.estimated_delivery,
+      raw_response: result.stallion_raw,
       purchased_by_id: user.id,
     })
 
-    return NextResponse.json(updated)
+    return NextResponse.json({ ...updated, provider: 'stallion' })
   } catch (error) {
-    console.error('Error purchasing Shippo label:', error)
+    console.error('Error purchasing label:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to purchase label' },
+      { error: safeErrorMessage(error, 'Failed to purchase label') },
       { status: 500 }
     )
   }

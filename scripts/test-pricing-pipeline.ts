@@ -340,7 +340,7 @@ async function testDataDrivenCalculation(device: { id: string; make: string; mod
   }
 }
 
-async function testPipelineSummary(dataCount: number) {
+async function testPipelineSummary(dataCount: number, baselineCount: number) {
   console.log(`\n${SEP}`)
   console.log('  PIPELINE HEALTH SUMMARY')
   console.log(SEP)
@@ -348,7 +348,13 @@ async function testPipelineSummary(dataCount: number) {
   console.log(`\n  Results: ${passed} passed, ${failed} failed`)
   console.log('')
 
-  if (dataCount === 0) {
+  if (baselineCount > 0) {
+    console.log('  🟢 PIPELINE STATUS: READY')
+    console.log(`  ${baselineCount} trained baselines exist and can drive the data-driven model.`)
+    if (dataCount === 0) {
+      console.log('  Internal historical sources are still thin, but external bootstrap data is in place.')
+    }
+  } else if (dataCount === 0) {
     console.log('  🔴 PIPELINE STATUS: NOT READY')
     console.log('  No training data exists. To enable fully automated pricing:')
     console.log('    1. Process some orders (accept, quote, close)')
@@ -399,7 +405,7 @@ async function main() {
 
   const dataCount = await testTrainingDataSources()
   const device = await testDeviceCatalog()
-  await testTrainedBaselines()
+  const baselineCount = await testTrainedBaselines()
   const trainingSamples = await testTrainingCronDirect()
   await testMarketPrices()
   await testPricingSettings()
@@ -408,7 +414,7 @@ async function main() {
     await testDataDrivenCalculation(device)
   }
 
-  await testPipelineSummary(trainingSamples)
+  await testPipelineSummary(trainingSamples, baselineCount)
 
   console.log('\n✅ Pipeline verification complete.\n')
 }

@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { CustomerService } from '@/services/customer.service'
+export const dynamic = 'force-dynamic'
+
 
 const INTERNAL_ROLES = ['admin', 'coe_manager', 'coe_tech', 'sales']
 

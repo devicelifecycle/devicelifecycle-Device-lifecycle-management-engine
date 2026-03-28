@@ -63,7 +63,8 @@ async function createOrder(data: Partial<Order>): Promise<Order> {
     body: JSON.stringify(data),
   })
   if (!response.ok) {
-    throw new Error('Failed to create order')
+    const err = await response.json().catch(() => ({}))
+    throw new Error(typeof err?.error === 'string' ? err.error : 'Failed to create order')
   }
   return response.json()
 }
@@ -87,7 +88,9 @@ async function transitionOrder(id: string, newStatus: OrderStatus, notes?: strin
     body: JSON.stringify({ to_status: newStatus, notes }),
   })
   if (!response.ok) {
-    throw new Error('Failed to transition order')
+    const err = await response.json().catch(() => ({}))
+    const msg = typeof err?.error === 'string' ? err.error : Array.isArray(err?.details) ? err.details.map((d: { message?: string }) => d.message).filter(Boolean).join('; ') || 'Failed to transition order' : 'Failed to transition order'
+    throw new Error(msg)
   }
   return response.json()
 }

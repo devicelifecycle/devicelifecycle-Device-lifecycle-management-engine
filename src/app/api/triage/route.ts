@@ -6,6 +6,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { TriageService } from '@/services/triage.service'
 import { triageSubmitSchema } from '@/lib/validations'
+import { z } from 'zod'
+export const dynamic = 'force-dynamic'
+
+// Schema for manually adding a device to triage
+const addDeviceSchema = z.object({
+  action: z.literal('add_device'),
+  imei: z.string().min(1, 'IMEI is required'),
+  device_id: z.string().uuid('Invalid device ID'),
+  claimed_condition: z.enum(['new', 'excellent', 'good', 'fair', 'poor']),
+  storage: z.string().optional(),
+  color: z.string().optional(),
+  notes: z.string().optional(),
+  order_id: z.string().uuid().optional(), // Optional - can add without order
+})
 
 export async function GET(request: NextRequest) {
   try {
@@ -68,6 +82,65 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+
+    // Handle manual device addition
+    if (body.action === 'add_device') {
+      const validation = addDeviceSchema.safeParse(body)
+      if (!validation.success) {
+        return NextResponse.json(
+          { error: 'Validation failed', details: validation.error.errors },
+          { status: 400 }
+        )
+      }
+
+      const { imei, device_id, claimed_condition, storage, color, notes, order_id } = validation.data
+
+      // Check if IMEI already exists
+      const { data: existing } = await supabase
+        .from('imei_records')
+        .select('id, imei')
+        .eq('imei', imei)
+        .single()
+
+      if (existing) {
+        return NextResponse.json(
+          { error: `Device with IMEI ${imei} already exists in the system` },
+          { status: 409 }
+        )
+      }
+
+      // Create IMEI record with pending triage status
+      const { data: imeiRecord, error: insertError } = await supabase
+        .from('imei_records')
+        .insert({
+          imei,
+          device_id,
+          claimed_condition,
+          metadata: {
+            storage,
+            color,
+            added_by_id: user.id,
+            added_manually: true,
+            notes: notes || `Manually added by ${profile.role}`,
+          },
+          triage_status: 'pending',
+          order_id: order_id || null,
+        })
+        .select(`
+          *,
+          device:device_catalog(make, model)
+        `)
+        .single()
+
+      if (insertError) {
+        console.error('Error adding device:', insertError)
+        return NextResponse.json({ error: 'Failed to add device' }, { status: 500 })
+      }
+
+      return NextResponse.json({ data: imeiRecord, message: 'Device added to triage queue' }, { status: 201 })
+    }
+
+    // Handle regular triage submission
     const validation = triageSubmitSchema.safeParse(body)
     if (!validation.success) {
       return NextResponse.json(

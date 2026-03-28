@@ -4,6 +4,7 @@
 // These tools let the AI query the platform's data via Supabase.
 // Each tool maps to a DB query scoped by user role.
 
+import 'server-only'
 import { createClient } from '@supabase/supabase-js'
 import type { UserRole } from '@/types'
 
@@ -11,9 +12,17 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 function getSupabase() {
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Chat tools require NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY')
+  }
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+}
+
+/** Sanitize search input for PostgREST .or() filters — strip chars that break filter syntax */
+function sanitizeSearch(input: string): string {
+  return input.replace(/[(),."'\\%_]/g, '').trim().slice(0, 100)
 }
 
 interface ToolContext {
@@ -186,7 +195,7 @@ async function searchOrders(args: Record<string, unknown>, ctx: ToolContext): Pr
 
   if (args.status) query = query.eq('status', args.status)
   if (args.search) {
-    query = query.ilike('order_number', `%${args.search}%`)
+    query = query.ilike('order_number', `%${sanitizeSearch(String(args.search))}%`)
   }
 
   const { data, error } = await query
@@ -216,10 +225,10 @@ async function getOrderDetails(args: Record<string, unknown>, ctx: ToolContext):
     .from('orders')
     .select(`
       id, order_number, type, status, total_amount, created_at, updated_at,
-      customer_notes, internal_notes,
-      customer:customers(company_name, email),
+      customer_id, vendor_id, customer_notes, internal_notes,
+      customer:customers(company_name, contact_email),
       vendor:vendors(company_name),
-      items:order_items(device_id, quantity, storage, claimed_condition, quoted_price, final_price,
+      items:order_items(device_id, quantity, storage, claimed_condition, unit_price,
         device:device_catalog(make, model))
     `)
 
@@ -254,8 +263,7 @@ async function getOrderDetails(args: Record<string, unknown>, ctx: ToolContext):
     quantity: item.quantity,
     storage: item.storage || 'N/A',
     condition: item.claimed_condition,
-    quoted_price: item.quoted_price ? `$${item.quoted_price}` : 'Pending',
-    final_price: item.final_price ? `$${item.final_price}` : 'Pending',
+    unit_price: item.unit_price ? `$${item.unit_price}` : 'Pending',
   }))
 
   return JSON.stringify({
@@ -287,7 +295,7 @@ async function getDevicePrice(args: Record<string, unknown>, ctx: ToolContext): 
   const { data: devices } = await supabase
     .from('device_catalog')
     .select('id, make, model, category')
-    .or(`model.ilike.%${deviceName}%,make.ilike.%${deviceName}%`)
+    .or(`model.ilike.%${sanitizeSearch(deviceName)}%,make.ilike.%${sanitizeSearch(deviceName)}%`)
     .limit(3)
 
   if (!devices || devices.length === 0) {
@@ -296,12 +304,13 @@ async function getDevicePrice(args: Record<string, unknown>, ctx: ToolContext): 
 
   const device = devices[0]
 
-  // Fetch competitor prices (primary source of truth)
+  // Fetch competitor prices (primary source of truth; exclude Bell)
   const { data: competitorRows } = await supabase
     .from('competitor_prices')
     .select('competitor_name, condition, storage, trade_in_price, sell_price, scraped_at, updated_at')
     .eq('device_id', device.id)
     .eq('storage', storage)
+    .neq('competitor_name', 'Bell')
     .order('updated_at', { ascending: false })
 
   const result: Record<string, unknown> = {
@@ -390,7 +399,7 @@ async function searchDevices(args: Record<string, unknown>): Promise<string> {
   const { data, error } = await supabase
     .from('device_catalog')
     .select('id, make, model, category')
-    .or(`model.ilike.%${query}%,make.ilike.%${query}%`)
+    .or(`model.ilike.%${sanitizeSearch(query)}%,make.ilike.%${sanitizeSearch(query)}%`)
     .limit(8)
 
   if (error) return JSON.stringify({ error: error.message })

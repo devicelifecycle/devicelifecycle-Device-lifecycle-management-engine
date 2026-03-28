@@ -9,6 +9,8 @@ import autoTable from 'jspdf-autotable'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PricingService } from '@/services/pricing.service'
 
+export const dynamic = 'force-dynamic'
+
 function escapeHtml(input: string): string {
   return input
     .replace(/&/g, '&amp;')

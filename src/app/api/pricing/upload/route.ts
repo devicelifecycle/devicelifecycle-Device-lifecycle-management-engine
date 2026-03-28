@@ -7,6 +7,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { sanitizeCsvCell, safeErrorMessage } from '@/lib/utils'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { parse } from 'csv-parse/sync'
+export const dynamic = 'force-dynamic'
+
 
 interface PricingRow {
   make: string

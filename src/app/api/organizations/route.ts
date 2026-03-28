@@ -5,8 +5,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrganizationService } from '@/services/organization.service'
+import { CustomerService } from '@/services/customer.service'
+import { VendorService } from '@/services/vendor.service'
 import { createOrganizationSchema } from '@/lib/validations'
+import { UserProvisioningService } from '@/services/user-provisioning.service'
 import type { OrganizationType } from '@/types'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -85,6 +90,10 @@ export async function POST(request: NextRequest) {
 
     const { address, city, state, zip_code, country, phone, email, website, ...rest } = validationResult.data
 
+    if ((validationResult.data.type === 'customer' || validationResult.data.type === 'vendor') && email) {
+      await UserProvisioningService.assertEmailAvailable(email)
+    }
+
     const organization = await OrganizationService.createOrganization({
       ...rest,
       address: { street: address, city, state, zip_code, country },
@@ -92,12 +101,79 @@ export async function POST(request: NextRequest) {
       contact_phone: phone,
     })
 
-    return NextResponse.json(organization, { status: 201 })
+    // When type is 'customer', create linked Customer record for orders
+    if (organization.type === 'customer') {
+      const defaultEmail = `contact@${organization.name.toLowerCase().replace(/\s+/g, '')}.local`
+      await CustomerService.createCustomer(
+        {
+          company_name: organization.name,
+          contact_name: organization.name,
+          contact_email: organization.contact_email || defaultEmail,
+          contact_phone: organization.contact_phone,
+          billing_address: organization.address as Record<string, unknown> | undefined,
+          shipping_address: organization.address as Record<string, unknown> | undefined,
+        },
+        organization.id
+      )
+    }
+
+    if (organization.type === 'vendor') {
+      await VendorService.createVendor(
+        {
+          company_name: organization.name,
+          contact_name: organization.name,
+          contact_email: organization.contact_email || `contact@${organization.name.toLowerCase().replace(/\s+/g, '')}.local`,
+          contact_phone: organization.contact_phone,
+          address: (organization.address as {
+            street?: string
+            city?: string
+            state?: string
+            zip?: string
+            zip_code?: string
+            country?: string
+          }) && {
+            street: String((organization.address as { street?: string }).street || ''),
+            city: String((organization.address as { city?: string }).city || ''),
+            state: String((organization.address as { state?: string }).state || ''),
+            zip: String(
+              (organization.address as { zip?: string; zip_code?: string }).zip ||
+              (organization.address as { zip?: string; zip_code?: string }).zip_code ||
+              ''
+            ),
+            country: String((organization.address as { country?: string }).country || 'USA'),
+          },
+        },
+        organization.id
+      )
+    }
+
+    const shouldProvisionPortalUser = organization.type === 'customer' || organization.type === 'vendor'
+    const provisioned = shouldProvisionPortalUser
+      ? await UserProvisioningService.provisionUser({
+          fullName: organization.name,
+          email: organization.contact_email!,
+          role: organization.type === 'customer' ? 'customer' : 'vendor',
+          organizationId: organization.id,
+          oneUserPerRolePerOrganization: true,
+        })
+      : null
+
+    return NextResponse.json(
+      {
+        ...organization,
+        portal_account_created: provisioned?.created ?? false,
+        welcome_email_sent_to: provisioned?.emailSentTo ?? null,
+        welcome_email_sent: provisioned?.emailSent ?? false,
+        portal_account_skipped_reason: provisioned?.skippedReason ?? null,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error creating organization:', error)
+    const message = error instanceof Error ? error.message : 'Failed to create organization'
     return NextResponse.json(
-      { error: 'Failed to create organization' },
-      { status: 500 }
+      { error: message },
+      { status: message.includes('exists') || message.includes('Email') ? 400 : 500 }
     )
   }
 }

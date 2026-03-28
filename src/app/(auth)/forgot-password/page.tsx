@@ -7,7 +7,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Mail, ArrowLeft, Package } from 'lucide-react'
-import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
@@ -24,15 +23,15 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      const supabase = createBrowserSupabaseClient()
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
       })
-
-      if (resetError) {
-        throw resetError
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok && data.error) {
+        throw new Error(data.error)
       }
-
       setSuccess(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to send reset email')
@@ -43,7 +42,7 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#050508] bg-mesh cinematic-grain px-4">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 bg-mesh cinematic-grain px-4">
         <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in bg-card">
           <CardContent className="pt-8 pb-6 text-center space-y-4">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-amber-500/10">
@@ -69,18 +68,18 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050508] bg-mesh cinematic-grain px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 bg-mesh cinematic-grain px-4">
       <Link href="/" className="mb-8 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-          <Package className="h-6 w-6" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 shadow-lg shadow-blue-500/25">
+          <Package className="h-6 w-6 text-white" />
         </div>
-        <span className="text-xl font-bold tracking-tight">Enterprise Engine</span>
+        <span className="text-xl font-bold tracking-tight">DLM Engine</span>
       </Link>
       <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in bg-card">
       <CardHeader className="text-center pb-2">
         <CardTitle className="text-2xl font-bold">Reset Password</CardTitle>
         <CardDescription>
-          Enter your email address and we&apos;ll send you a reset link
+          Enter your email or organization Login ID and we&apos;ll send you a reset link
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -94,12 +93,12 @@ export default function ForgotPasswordPage() {
 
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
-              Email
+              Email or Login ID
             </label>
             <Input
               id="email"
-              type="email"
-              placeholder="you@example.com"
+              type="text"
+              placeholder="you@example.com or your-login-id"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

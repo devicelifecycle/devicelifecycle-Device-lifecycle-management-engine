@@ -1,14 +1,10 @@
-// ============================================================================
-// ORDERS PAGE
-// ============================================================================
-
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Search, ShoppingCart, X, Trash2, ArrowRightLeft, Download } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowRightLeft, Download, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -16,16 +12,18 @@ import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Pagination } from '@/components/ui/pagination'
+import { PageHero } from '@/components/ui/page-hero'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
-import { Pagination } from '@/components/ui/pagination'
 import type { OrderStatus, OrderType } from '@/types'
 
 export default function OrdersPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -35,12 +33,20 @@ export default function OrdersPage() {
   const [bulkStatus, setBulkStatus] = useState<OrderStatus | ''>('')
   const debouncedSearch = useDebounce(search)
   const { hasRole } = useAuth()
+
   const isAdmin = hasRole(['admin'])
   const isInternal = hasRole(['admin', 'coe_manager', 'coe_tech', 'sales'])
   const isCustomer = hasRole(['customer'])
   const canCreateTradeIn = isInternal || isCustomer
   const canCreateCpo = isInternal
   const canBulkTransition = isInternal
+
+  const customerIdFromUrl = searchParams.get('customer_id') || undefined
+  const vendorIdFromUrl = searchParams.get('vendor_id') || undefined
+
+  useEffect(() => {
+    if (isCustomer) router.replace('/customer/orders')
+  }, [isCustomer, router])
 
   useEffect(() => {
     const statusFromUrl = searchParams.get('status')
@@ -54,29 +60,49 @@ export default function OrdersPage() {
     }
   }, [searchParams])
 
-  const { orders, isLoading, total, totalPages, bulkTransition, isBulkTransitioning, bulkDelete, isBulkDeleting } = useOrders({
+  const {
+    orders,
+    isLoading,
+    total,
+    totalPages,
+    bulkTransition,
+    isBulkTransitioning,
+    bulkDelete,
+    isBulkDeleting,
+  } = useOrders({
     search: debouncedSearch,
     page,
     ...(statusFilter && { status: statusFilter }),
     ...(typeFilter && { type: typeFilter }),
+    ...(customerIdFromUrl && { customer_id: customerIdFromUrl }),
+    ...(vendorIdFromUrl && { vendor_id: vendorIdFromUrl }),
   })
 
-  const hasFilters = statusFilter || typeFilter
-  const clearFilters = () => { setStatusFilter(''); setTypeFilter(''); setPage(1) }
-
-  const allSelected = orders.length > 0 && orders.every(o => selectedIds.has(o.id))
+  const hasFilters = statusFilter || typeFilter || customerIdFromUrl || vendorIdFromUrl
+  const allSelected = orders.length > 0 && orders.every((order) => selectedIds.has(order.id))
   const someSelected = selectedIds.size > 0
+  const deletableSelectedCount = orders.filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled'].includes(order.status)).length
 
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(orders.map(o => o.id)))
-    }
+  const stats = useMemo(() => {
+    const active = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
+    const delivered = orders.filter((order) => ['delivered', 'closed'].includes(order.status)).length
+    const totalValue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
+    return { active, delivered, totalValue }
+  }, [orders])
+
+  function clearFilters() {
+    setStatusFilter('')
+    setTypeFilter('')
+    setPage(1)
+    if (customerIdFromUrl || vendorIdFromUrl) router.replace('/orders')
   }
 
-  const toggleOne = (id: string) => {
-    setSelectedIds(prev => {
+  function toggleAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(orders.map((order) => order.id)))
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -84,7 +110,7 @@ export default function OrdersPage() {
     })
   }
 
-  const handleBulkTransition = async () => {
+  async function handleBulkTransition() {
     if (!bulkStatus || selectedIds.size === 0) return
     try {
       const result = await bulkTransition({ orderIds: Array.from(selectedIds), toStatus: bulkStatus as OrderStatus })
@@ -96,238 +122,255 @@ export default function OrdersPage() {
     }
   }
 
-  const handleBulkDelete = async () => {
+  async function handleBulkDelete() {
     if (selectedIds.size === 0) return
+    const deletableIds = orders
+      .filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled'].includes(order.status))
+      .map((order) => order.id)
+    if (deletableIds.length === 0) {
+      toast.error('Only draft or cancelled orders can be deleted.')
+      return
+    }
     try {
-      const result = await bulkDelete(Array.from(selectedIds))
-      toast.success(`${result.succeeded} order(s) deleted${result.failed > 0 ? `, ${result.failed} failed (only draft/cancelled can be deleted)` : ''}`)
+      const result = await bulkDelete(deletableIds)
+      const skipped = selectedIds.size - deletableIds.length
+      if (result.succeeded > 0) {
+        toast.success(`${result.succeeded} order(s) deleted${skipped > 0 ? `, ${skipped} skipped` : ''}`)
+      }
+      if (result.failed > 0) {
+        const firstError = result.results?.find((row) => !row.success && row.error)?.error
+        toast.error(`${result.failed} order(s) could not be deleted${firstError ? `: ${firstError}` : ''}`)
+      }
       setSelectedIds(new Set())
     } catch {
       toast.error('Bulk delete failed')
     }
   }
 
-  const handleExportCSV = () => {
-    const selected = orders.filter(o => selectedIds.has(o.id))
+  function handleExportCSV() {
+    const selected = orders.filter((order) => selectedIds.has(order.id))
     const rows = [
       ['Order #', 'Type', 'Customer/Vendor', 'Status', 'Qty', 'Amount', 'Created'].join(','),
-      ...selected.map(o =>
+      ...selected.map((order) =>
         [
-          o.order_number,
-          o.type === 'trade_in' ? 'Trade-In' : 'CPO',
-          `"${(o.type === 'trade_in' ? o.customer?.company_name : o.vendor?.company_name) || ''}"`,
-          o.status,
-          o.total_quantity,
-          o.total_amount || 0,
-          o.created_at,
+          order.order_number,
+          order.type === 'trade_in' ? 'Trade-In' : 'CPO',
+          `"${(order.type === 'trade_in' ? order.customer?.company_name : order.vendor?.company_name) || ''}"`,
+          order.status,
+          order.total_quantity,
+          order.total_amount || 0,
+          order.created_at,
         ].join(',')
       ),
     ].join('\n')
+
     const blob = new Blob([rows], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`
+    anchor.click()
     URL.revokeObjectURL(url)
     toast.success(`Exported ${selected.length} order(s)`)
   }
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Orders</h1>
-          <p className="text-muted-foreground mt-1">
-            {isInternal ? 'Manage trade-in and CPO orders' : isCustomer ? 'Track your submitted orders' : 'Track vendor order workflow'}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {canCreateTradeIn && (
-            <Link href="/orders/new/trade-in">
-              <Button className="shadow-md shadow-primary/20">
-                <Plus className="mr-2 h-4 w-4" />
-                New Trade-In
+      <PageHero
+        eyebrow="Order Operations"
+        title="Move trade-in and CPO work through one visible queue."
+        description={
+          isInternal
+            ? 'Search, filter, bulk-transition, and track operational throughput without losing context between teams.'
+            : 'Track the orders relevant to your role and keep momentum visible.'
+        }
+        actions={
+          <>
+            {canCreateTradeIn && (
+              <Link href="/orders/new/trade-in">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Trade-In
+                </Button>
+              </Link>
+            )}
+            {canCreateCpo && (
+              <Link href="/orders/new/cpo">
+                <Button variant="outline">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New CPO
+                </Button>
+              </Link>
+            )}
+          </>
+        }
+        stats={[
+          { label: 'Visible orders', value: total },
+          { label: 'Active queue', value: stats.active },
+          { label: 'Closed / delivered', value: stats.delivered },
+          { label: 'Visible value', value: formatCurrency(stats.totalValue) },
+        ]}
+      />
+
+      {organizationIdBanner({
+        customerIdFromUrl,
+        vendorIdFromUrl,
+        clearFilters,
+      })}
+
+      <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <CardTitle className="text-2xl text-stone-100">Filters and controls</CardTitle>
+              <CardDescription className="mt-2 text-stone-400">
+                Search the queue, narrow by status or type, and prepare bulk actions.
+              </CardDescription>
+            </div>
+            {hasFilters && (
+              <Button variant="outline" onClick={clearFilters}>
+                <X className="mr-2 h-4 w-4" />
+                Clear filters
               </Button>
-            </Link>
-          )}
-          {canCreateCpo && (
-            <Link href="/orders/new/cpo">
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                New CPO
-              </Button>
-            </Link>
-          )}
-        </div>
-      </motion.div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_160px]">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
+              <Input
+                placeholder="Search by order number, IMEI, or serial number..."
+                className="pl-11"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value)
+                  setPage(1)
+                }}
+              />
+            </div>
+            <Select value={statusFilter || 'all'} onValueChange={(value) => { setStatusFilter(value === 'all' ? '' : (value as OrderStatus)); setPage(1) }}>
+              <SelectTrigger>
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {Object.entries(ORDER_STATUS_CONFIG).map(([key, config]) => (
+                  <SelectItem key={key} value={key}>
+                    {config.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter || 'all'} onValueChange={(value) => { setTypeFilter(value === 'all' ? '' : (value as OrderType)); setPage(1) }}>
+              <SelectTrigger>
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="trade_in">Trade-In</SelectItem>
+                <SelectItem value="cpo">CPO</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.3 }}
-        className="flex gap-3"
-      >
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search by order number, customer, or vendor..." className="pl-10 bg-background" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
-        </div>
-        <Select value={statusFilter || 'all'} onValueChange={v => { setStatusFilter(v === 'all' ? '' : v as OrderStatus); setPage(1) }}>
-          <SelectTrigger className="w-[160px] bg-background">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {Object.entries(ORDER_STATUS_CONFIG).map(([key, config]) => (
-              <SelectItem key={key} value={key}>{config.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={typeFilter || 'all'} onValueChange={v => { setTypeFilter(v === 'all' ? '' : v as OrderType); setPage(1) }}>
-          <SelectTrigger className="w-[140px] bg-background">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="trade_in">Trade-In</SelectItem>
-            <SelectItem value="cpo">CPO</SelectItem>
-          </SelectContent>
-        </Select>
-        {hasFilters && (
-          <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </motion.div>
+          <AnimatePresence>
+            {someSelected && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="rounded-[1.4rem] border border-white/8 bg-white/[0.04] px-4 py-4"
+              >
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge variant="secondary">{selectedIds.size} selected</Badge>
 
-      {/* Bulk Action Bar */}
-      <AnimatePresence>
-        {someSelected && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
-              <span className="text-sm font-medium">{selectedIds.size} selected</span>
-              <div className="h-4 w-px bg-border" />
+                  {canBulkTransition && (
+                    <>
+                      <Select value={bulkStatus || 'pick'} onValueChange={(value) => setBulkStatus(value === 'pick' ? '' : (value as OrderStatus))}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Move to..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pick">Move to...</SelectItem>
+                          {Object.entries(ORDER_STATUS_CONFIG).map(([key, config]) => (
+                            <SelectItem key={key} value={key}>
+                              {config.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" disabled={!bulkStatus || isBulkTransitioning} onClick={handleBulkTransition}>
+                        <ArrowRightLeft className="mr-2 h-3.5 w-3.5" />
+                        {isBulkTransitioning ? 'Updating...' : 'Apply'}
+                      </Button>
+                    </>
+                  )}
 
-              {/* Bulk Transition */}
-              {canBulkTransition && (
-                <>
-                  <Select value={bulkStatus || 'pick'} onValueChange={v => setBulkStatus(v === 'pick' ? '' : v as OrderStatus)}>
-                    <SelectTrigger className="w-[160px] h-8 text-xs">
-                      <SelectValue placeholder="Move to..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pick">Move to...</SelectItem>
-                      {Object.entries(ORDER_STATUS_CONFIG).map(([key, config]) => (
-                        <SelectItem key={key} value={key}>{config.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    disabled={!bulkStatus || isBulkTransitioning}
-                    onClick={handleBulkTransition}
-                  >
-                    <ArrowRightLeft className="mr-1 h-3 w-3" />
-                    {isBulkTransitioning ? 'Updating...' : 'Apply'}
+                  <Button size="sm" variant="outline" onClick={handleExportCSV}>
+                    <Download className="mr-2 h-3.5 w-3.5" />
+                    Export CSV
                   </Button>
 
-                  <div className="h-4 w-px bg-border" />
-                </>
-              )}
+                  {isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={isBulkDeleting || deletableSelectedCount === 0}
+                      onClick={handleBulkDelete}
+                    >
+                      <Trash2 className="mr-2 h-3.5 w-3.5" />
+                      {isBulkDeleting ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  )}
 
-              {/* Export CSV */}
-              <Button size="sm" variant="outline" onClick={handleExportCSV}>
-                <Download className="mr-1 h-3 w-3" />
-                Export CSV
-              </Button>
+                  <div className="flex-1" />
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+                    Clear selection
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </CardContent>
+      </Card>
 
-              {/* Bulk Delete (admin only) */}
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={isBulkDeleting}
-                  onClick={handleBulkDelete}
-                >
-                  <Trash2 className="mr-1 h-3 w-3" />
-                  {isBulkDeleting ? 'Deleting...' : 'Delete'}
-                </Button>
-              )}
-
-              <div className="flex-1" />
-              <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-                Clear
-              </Button>
+      <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <CardTitle className="text-2xl text-stone-100">Order index</CardTitle>
+            <CardDescription className="mt-2 text-stone-400">{total} total orders in the current view.</CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="h-16 rounded-[1rem] bg-white/[0.04] animate-pulse" />
+              ))}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Orders List */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.99 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.15, duration: 0.3 }}
-      >
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-4">
-            <div>
-              <CardTitle className="text-base">All Orders</CardTitle>
-              <CardDescription>{total} total orders</CardDescription>
+          ) : orders.length === 0 ? (
+            <div className="rounded-[1.6rem] border border-dashed border-white/10 bg-white/[0.025] px-6 py-16 text-center">
+              <ShoppingCart className="mx-auto h-10 w-10 text-stone-600" />
+              <p className="mt-4 text-lg font-semibold text-stone-200">No orders match this view.</p>
+              <p className="mt-2 text-sm text-stone-500">
+                {canCreateTradeIn ? 'Create an order or relax the filters to bring the queue back into view.' : 'Orders will appear here when work is assigned.'}
+              </p>
+              {canCreateTradeIn && (
+                <Link href="/orders/new/trade-in">
+                  <Button className="mt-5">Create order</Button>
+                </Link>
+              )}
             </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex items-center gap-4 h-14 px-4 rounded-lg" style={{ animationDelay: `${i * 80}ms` }}>
-                    <div className="h-4 w-16 rounded skeleton-shimmer" />
-                    <div className="h-4 w-14 rounded skeleton-shimmer" />
-                    <div className="h-4 w-32 rounded skeleton-shimmer" />
-                    <div className="h-4 w-16 rounded skeleton-shimmer" />
-                    <div className="h-4 w-12 rounded skeleton-shimmer" />
-                    <div className="h-4 w-20 rounded skeleton-shimmer" />
-                  </div>
-                ))}
-              </div>
-            ) : orders.length === 0 ? (
-              <div className="text-center py-16">
-                <motion.div
-                  animate={{ y: [0, -4, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  <ShoppingCart className="mx-auto h-10 w-10 text-muted-foreground/40" />
-                </motion.div>
-                <p className="mt-3 text-sm font-medium text-muted-foreground">No orders found</p>
-                <p className="mt-1 text-xs text-muted-foreground">{canCreateTradeIn ? 'Create your first order to get started.' : 'Orders will appear here as they are assigned.'}</p>
-                {canCreateTradeIn && (
-                  <Link href="/orders/new/trade-in">
-                    <Button size="sm" className="mt-4">Create Order</Button>
-                  </Link>
-                )}
-              </div>
-            ) : (
+          ) : (
+            <>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">
                       <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                     </TableHead>
-                    <TableHead>Order #</TableHead>
+                    <TableHead>Order</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Customer / Vendor</TableHead>
                     <TableHead>Status</TableHead>
@@ -341,54 +384,74 @@ export default function OrdersPage() {
                     const statusConfig = ORDER_STATUS_CONFIG[order.status]
                     const isSelected = selectedIds.has(order.id)
                     return (
-                      <TableRow key={order.id} className={`group ${isSelected ? 'bg-muted/40' : ''}`}>
+                      <TableRow key={order.id} data-state={isSelected ? 'selected' : undefined}>
                         <TableCell>
                           <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(order.id)} />
                         </TableCell>
                         <TableCell>
-                          <Link
-                            href={`/orders/${order.id}`}
-                            className="font-medium text-primary hover:underline"
-                          >
+                          <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
                             {order.order_number}
                           </Link>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-[11px] font-normal">
-                            {order.type === 'trade_in' ? 'Trade-In' : 'CPO'}
-                          </Badge>
+                          <Badge variant="outline">{order.type === 'trade_in' ? 'Trade-In' : 'CPO'}</Badge>
+                        </TableCell>
+                        <TableCell className="text-stone-300">
+                          {order.type === 'trade_in' ? order.customer?.company_name : order.vendor?.company_name}
                         </TableCell>
                         <TableCell>
-                          <span className="text-sm">
-                            {order.type === 'trade_in'
-                              ? order.customer?.company_name
-                              : order.vendor?.company_name}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={
-                            order.status === 'delivered' || order.status === 'closed' ? 'default' :
-                            order.status === 'cancelled' || order.status === 'rejected' ? 'destructive' :
-                            'secondary'
-                          } className="text-[11px]">
+                          <Badge
+                            variant={
+                              order.status === 'delivered' || order.status === 'closed'
+                                ? 'default'
+                                : order.status === 'cancelled' || order.status === 'rejected'
+                                  ? 'destructive'
+                                  : 'secondary'
+                            }
+                          >
                             {statusConfig?.label || order.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{order.total_quantity}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">{formatCurrency(order.total_amount || 0)}</TableCell>
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">{formatRelativeTime(order.created_at)}</span>
+                        <TableCell className="text-right tabular-nums font-medium">
+                          {formatCurrency(order.total_amount || 0)}
                         </TableCell>
+                        <TableCell className="text-stone-400">{formatRelativeTime(order.created_at)}</TableCell>
                       </TableRow>
                     )
                   })}
                 </TableBody>
               </Table>
-            )}
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-          </CardContent>
-        </Card>
-      </motion.div>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function organizationIdBanner({
+  customerIdFromUrl,
+  vendorIdFromUrl,
+  clearFilters,
+}: {
+  customerIdFromUrl?: string
+  vendorIdFromUrl?: string
+  clearFilters: () => void
+}) {
+  if (!customerIdFromUrl && !vendorIdFromUrl) return null
+
+  return (
+    <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.04] px-5 py-4 text-sm text-stone-300">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-stone-500">Scoped view active.</span>
+        {customerIdFromUrl ? <span>Showing orders for a selected customer.</span> : null}
+        {vendorIdFromUrl ? <span>Showing orders for a selected vendor.</span> : null}
+        <button className="ml-auto text-primary hover:text-amber-200" onClick={clearFilters}>
+          Clear scope
+        </button>
+      </div>
     </div>
   )
 }

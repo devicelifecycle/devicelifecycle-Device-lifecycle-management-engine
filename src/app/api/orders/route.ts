@@ -4,9 +4,13 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
+import { NotificationService } from '@/services/notification.service'
 import { orderSchema, orderFiltersSchema } from '@/lib/validations'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,6 +46,10 @@ export async function GET(request: NextRequest) {
       .select('role, organization_id')
       .eq('id', user.id)
       .single()
+
+    if (!profile) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
+    }
 
     const scopedFilters = {
       ...safeFilters,
@@ -88,8 +96,8 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (!profile?.organization_id) {
-      return NextResponse.json({ error: 'User has no organization' }, { status: 400 })
+    if (!profile) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -97,41 +105,55 @@ export async function POST(request: NextRequest) {
     // Validate input
     const validationResult = orderSchema.safeParse(body)
     if (!validationResult.success) {
+      const first = validationResult.error.errors[0]
+      const msg = first?.message || 'Validation failed'
       return NextResponse.json(
-        { error: 'Validation failed', details: validationResult.error.errors },
+        { error: msg, details: validationResult.error.errors },
         { status: 400 }
       )
     }
 
     let orderData = validationResult.data
 
-    // Customer role: must create order for their own org only — verify customer_id matches
+    // Resolve organization: user's org or customer's org (for internal users without org)
+    let orgId = profile.organization_id
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('id, organization_id')
+      .eq('id', orderData.customer_id)
+      .single()
+
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 400 })
+    }
+
     if (profile.role === 'customer') {
-      const { data: customer } = await supabase
-        .from('customers')
-        .select('id, organization_id')
-        .eq('id', orderData.customer_id)
-        .single()
-      if (!customer || customer.organization_id !== profile.organization_id) {
+      if (customer.organization_id !== profile.organization_id) {
         return NextResponse.json(
           { error: 'You can only create orders for your own organization' },
           { status: 403 }
         )
       }
+      orgId = profile.organization_id ?? customer.organization_id ?? ''
+    } else {
+      orgId = profile.organization_id ?? customer.organization_id ?? ''
     }
+
     const order = await OrderService.createOrder(
       orderData as Parameters<typeof OrderService.createOrder>[0],
       user.id,
-      profile.organization_id
+      orgId
     )
 
     // Send order confirmation email to customer (fire-and-forget)
     ;(async () => {
       const { data: customer } = await supabase
         .from('customers')
-        .select('contact_email, contact_name')
+        .select('contact_email, contact_name, contact_phone')
         .eq('id', orderData.customer_id)
         .single()
+
+      const orderTypeLabel = orderData.type === 'cpo' ? 'CPO' : 'Trade-In'
 
       if (customer?.contact_email) {
         await EmailService.sendOrderConfirmationEmail({
@@ -143,13 +165,78 @@ export async function POST(request: NextRequest) {
           itemCount: orderData.items.length,
         })
       }
+
+      if (customer?.contact_phone && EmailService.isTwilioConfigured()) {
+        await EmailService.sendSMS(
+          customer.contact_phone,
+          `[DLM] Order #${order.order_number} confirmed. Your ${orderTypeLabel} order was received and is now being reviewed.`.slice(0, 160)
+        )
+      }
     })().catch(err => console.error('Order confirmation email error:', err))
+
+    // Notify admins when an organization creates an order (fire-and-forget)
+    ;(async () => {
+      const svc = createServiceRoleClient()
+      const { data: admins } = await svc.from('users').select('id').eq('role', 'admin').eq('is_active', true)
+      const orderLink = `/orders/${order.id}`
+      const title = `New Order #${order.order_number} Created`
+      const message = `A new order #${order.order_number} has been created${order.status === 'submitted' ? ' and is awaiting pricing.' : '.'}`
+      for (const admin of admins || []) {
+        await NotificationService.createNotification({
+          user_id: admin.id,
+          type: 'in_app',
+          title,
+          message,
+          link: orderLink,
+          metadata: { order_id: order.id, order_number: order.order_number, status: order.status, audience: 'admin' },
+        }).catch(() => {})
+      }
+    })().catch(err => console.error('Admin order notification error:', err))
+
+    // Notify the customer org users (in-app) that their order was received (fire-and-forget)
+    ;(async () => {
+      if (!orderData.customer_id) return
+      const svc = createServiceRoleClient()
+      const { data: customerRecord } = await svc
+        .from('customers')
+        .select('organization_id, company_name')
+        .eq('id', orderData.customer_id)
+        .single()
+      if (!customerRecord?.organization_id) return
+      const { data: orgUsers } = await svc
+        .from('users')
+        .select('id')
+        .eq('organization_id', customerRecord.organization_id)
+        .eq('role', 'customer')
+        .eq('is_active', true)
+      const orderTypeLabel = orderData.type === 'cpo' ? 'CPO' : 'Trade-In'
+      const customerTitle = `Order #${order.order_number} Received`
+      const customerMessage = `Your ${orderTypeLabel} order has been received and is being processed. We'll notify you as soon as a quote is ready.`
+      const orderLink = `/customer/orders`
+      for (const orgUser of orgUsers || []) {
+        await NotificationService.createNotification({
+          user_id: orgUser.id,
+          type: 'in_app',
+          title: customerTitle,
+          message: customerMessage,
+          link: orderLink,
+          metadata: {
+            order_id: order.id,
+            order_number: order.order_number,
+            status: order.status,
+            audience: 'customer',
+            event: 'order_created',
+          },
+        }).catch(() => {})
+      }
+    })().catch(err => console.error('Customer order notification error:', err))
 
     return NextResponse.json(order, { status: 201 })
   } catch (error) {
     console.error('Error creating order:', error)
+    const message = error instanceof Error ? error.message : 'Failed to create order'
     return NextResponse.json(
-      { error: 'Failed to create order' },
+      { error: message },
       { status: 500 }
     )
   }

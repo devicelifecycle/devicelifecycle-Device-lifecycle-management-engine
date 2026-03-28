@@ -8,7 +8,10 @@ import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
 import { NotificationService } from '@/services/notification.service'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { isValidUUID } from '@/lib/utils'
 import type { OrderStatus } from '@/types'
+export const dynamic = 'force-dynamic'
+
 
 const MAX_BATCH_SIZE = 50
 
@@ -48,6 +51,9 @@ export async function POST(request: NextRequest) {
     if (!to_status || typeof to_status !== 'string') {
       return NextResponse.json({ error: 'to_status is required' }, { status: 400 })
     }
+    if (order_ids.some((id: unknown) => typeof id !== 'string' || !isValidUUID(id))) {
+      return NextResponse.json({ error: 'All order_ids must be valid UUIDs' }, { status: 400 })
+    }
 
     const results: { id: string; success: boolean; error?: string }[] = []
 
@@ -65,6 +71,12 @@ export async function POST(request: NextRequest) {
         )
         if (!canTransition) {
           results.push({ id: orderId, success: false, error: `Cannot transition from ${currentOrder.status} to ${to_status}` })
+          continue
+        }
+
+        // Sourcing is CPO-only
+        if (to_status === 'sourcing' && currentOrder.type !== 'cpo') {
+          results.push({ id: orderId, success: false, error: 'Only CPO orders can be moved to sourcing' })
           continue
         }
 

@@ -9,6 +9,8 @@ import { AuditService } from '@/services/audit.service'
 import { NotificationService } from '@/services/notification.service'
 import { orderTransitionSchema } from '@/lib/validations'
 import type { OrderStatus } from '@/types'
+export const dynamic = 'force-dynamic'
+
 
 interface RouteParams {
   params: {
@@ -78,6 +80,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
+    // Sourcing is only applicable to CPO orders
+    if (newStatus === 'sourcing' && currentOrder.type !== 'cpo') {
+      return NextResponse.json(
+        { error: 'Only CPO orders can be moved to sourcing' },
+        { status: 400 }
+      )
+    }
+
+    // CPO: accepted → sourced only when vendor already assigned (bid was accepted during sourcing)
+    if (newStatus === 'sourced' && currentOrder.status === 'accepted' && !currentOrder.vendor_id) {
+      return NextResponse.json(
+        { error: 'Cannot move to sourced — no vendor assigned. Move to sourcing first.' },
+        { status: 400 }
+      )
+    }
+
     // Split order constraints: parent can't ship/deliver/close unless all sub-orders reach that state
     if (currentOrder.is_split_order && currentOrder.sub_orders && currentOrder.sub_orders.length > 0) {
       const gateStatuses = ['shipped', 'delivered', 'closed'] as const
@@ -120,6 +138,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       {
         id: params.id,
         order_number: currentOrder.order_number,
+        type: currentOrder.type,
         customer_id: currentOrder.customer_id,
         vendor_id: currentOrder.vendor_id,
         assigned_to_id: currentOrder.assigned_to_id,

@@ -4,7 +4,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { safeErrorMessage } from '@/lib/utils'
 import { IMEIService } from '@/services/imei.service'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -68,7 +71,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: records })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to search IMEI records' },
+      { error: safeErrorMessage(error, 'Failed to search IMEI records') },
       { status: 500 }
     )
   }
@@ -105,8 +108,8 @@ export async function POST(request: NextRequest) {
     const record = await IMEIService.createIMEIRecord(body, authUser.id)
     return NextResponse.json(record, { status: 201 })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create IMEI record'
-    const status = message.includes('already exists') ? 409 : 500
-    return NextResponse.json({ error: message }, { status })
+    const safeMsg = safeErrorMessage(error, 'Failed to create IMEI record')
+    const isConflict = error instanceof Error && error.message.includes('already exists')
+    return NextResponse.json({ error: safeMsg }, { status: isConflict ? 409 : 500 })
   }
 }

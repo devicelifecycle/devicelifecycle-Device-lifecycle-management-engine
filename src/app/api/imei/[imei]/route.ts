@@ -4,7 +4,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { safeErrorMessage } from '@/lib/utils'
 import { IMEIService } from '@/services/imei.service'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(
   request: NextRequest,
@@ -51,7 +54,7 @@ export async function GET(
     return NextResponse.json(record)
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch IMEI record' },
+      { error: safeErrorMessage(error, 'Failed to fetch IMEI record') },
       { status: 500 }
     )
   }
@@ -111,7 +114,7 @@ export async function PATCH(
     return NextResponse.json(updated)
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to update IMEI record' },
+      { error: safeErrorMessage(error, 'Failed to update IMEI record') },
       { status: 500 }
     )
   }

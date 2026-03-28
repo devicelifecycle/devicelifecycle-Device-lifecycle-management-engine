@@ -5,7 +5,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Building2, Search } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Building2, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,8 +16,24 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { formatDate } from '@/lib/utils'
 import type { Organization, OrganizationType } from '@/types'
+
+type OrganizationCreateResult = Organization & {
+  portal_account_created?: boolean
+  welcome_email_sent_to?: string | null
+  welcome_email_sent?: boolean
+  portal_account_skipped_reason?: string | null
+}
 
 const orgTypes: OrganizationType[] = ['internal', 'customer', 'vendor']
 
@@ -34,6 +51,7 @@ export default function AdminOrganizationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
+  const [deletingOrg, setDeletingOrg] = useState<Organization | null>(null)
   const [form, setForm] = useState({
     name: '',
     type: 'customer' as OrganizationType,
@@ -79,13 +97,23 @@ export default function AdminOrganizationsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      if (!res.ok) throw new Error()
-      toast.success('Organization created')
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload.error || 'Failed to create organization')
+      const result = payload as OrganizationCreateResult
+      if (result.portal_account_created && result.welcome_email_sent_to && result.welcome_email_sent) {
+        toast.success(`Organization created and login details emailed to ${result.welcome_email_sent_to}`)
+      } else if (result.portal_account_created && result.welcome_email_sent_to && result.welcome_email_sent === false) {
+        toast.warning(`Organization created, but the welcome email could not be sent to ${result.welcome_email_sent_to}. Please retry or create the user manually.`)
+      } else if (result.portal_account_skipped_reason) {
+        toast.success(`Organization created. ${result.portal_account_skipped_reason}.`)
+      } else {
+        toast.success('Organization created')
+      }
       setDialogOpen(false)
       resetForm()
       fetchOrganizations()
-    } catch {
-      toast.error('Failed to create organization')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create organization')
     } finally {
       setCreating(false)
     }
@@ -135,6 +163,22 @@ export default function AdminOrganizationsPage() {
     setDialogOpen(true)
   }
 
+  const handleDelete = async () => {
+    if (!deletingOrg) return
+    try {
+      const res = await fetch(`/api/organizations/${deletingOrg.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to delete')
+      }
+      toast.success('Organization deleted. All related orders, customers, and vendors were removed.')
+      setDeletingOrg(null)
+      fetchOrganizations()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete organization')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -166,7 +210,7 @@ export default function AdminOrganizationsPage() {
               </div>
               <div className="grid gap-4 grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Email</Label>
+                  <Label>Email{form.type !== 'internal' ? ' *' : ''}</Label>
                   <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="contact@company.com" />
                 </div>
                 <div className="space-y-2">
@@ -174,6 +218,11 @@ export default function AdminOrganizationsPage() {
                   <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 (555) 000-0000" />
                 </div>
               </div>
+              {form.type !== 'internal' && (
+                <p className="text-xs text-muted-foreground">
+                  Creating a {form.type} organization also creates its portal login and emails the temporary password to this address.
+                </p>
+              )}
               <div className="space-y-2">
                 <Label>Street Address</Label>
                 <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St" />
@@ -197,7 +246,7 @@ export default function AdminOrganizationsPage() {
               <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Cancel</Button>
               <Button
                 onClick={editingOrg ? handleUpdate : handleCreate}
-                disabled={creating || !form.name}
+                disabled={creating || !form.name || (!editingOrg && form.type !== 'internal' && !form.email)}
               >
                 {creating ? 'Saving...' : editingOrg ? 'Update' : 'Create Organization'}
               </Button>
@@ -237,8 +286,10 @@ export default function AdminOrganizationsPage() {
                   <TableHead>Type</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
+                  <TableHead>Linked Customer</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -257,12 +308,32 @@ export default function AdminOrganizationsPage() {
                     <TableCell>{org.contact_email || '—'}</TableCell>
                     <TableCell>{org.contact_phone || '—'}</TableCell>
                     <TableCell>
+                      {org.type === 'customer' ? (
+                        <Link href={`/customers?organization_id=${org.id}`} className="text-primary hover:underline" onClick={e => e.stopPropagation()}>
+                          View customer(s)
+                        </Link>
+                      ) : (
+                        '—'
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Badge variant={org.is_active ? 'default' : 'secondary'}>
                         {org.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(org.created_at)}
+                    </TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeletingOrg(org)}
+                        title="Delete organization"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -271,6 +342,24 @@ export default function AdminOrganizationsPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deletingOrg} onOpenChange={(open) => !open && setDeletingOrg(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete organization?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{deletingOrg?.name}</strong> and all related orders, customers, and vendors.
+              Users linked to this organization will be unlinked. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={handleDelete}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

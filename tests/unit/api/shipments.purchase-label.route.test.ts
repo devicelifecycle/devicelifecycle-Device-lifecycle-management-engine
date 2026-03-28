@@ -3,19 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const getShipmentByIdMock = vi.fn()
-const attachShippoPurchaseMock = vi.fn()
+const attachLabelPurchaseMock = vi.fn()
+const isShippingConfiguredMock = vi.fn()
 const purchaseLabelMock = vi.fn()
 const createServerSupabaseClientMock = vi.fn()
 
 vi.mock('@/services/shipment.service', () => ({
+  isShippingConfigured: isShippingConfiguredMock,
   ShipmentService: {
     getShipmentById: getShipmentByIdMock,
-    attachShippoPurchase: attachShippoPurchaseMock,
+    attachLabelPurchase: attachLabelPurchaseMock,
   },
 }))
 
-vi.mock('@/services/shippo.service', () => ({
-  ShippoService: {
+vi.mock('@/services/stallion.service', () => ({
+  StallionService: {
     purchaseLabel: purchaseLabelMock,
   },
 }))
@@ -45,6 +47,7 @@ function makeSupabase({ user, role = 'coe_manager' }: { user: { id: string } | n
 describe('POST /api/shipments/[id]/purchase-label', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    isShippingConfiguredMock.mockReturnValue(true)
     getShipmentByIdMock.mockResolvedValue({
       id: 'shipment-1',
       direction: 'outbound',
@@ -54,14 +57,13 @@ describe('POST /api/shipments/[id]/purchase-label', () => {
       weight: 2,
     })
     purchaseLabelMock.mockResolvedValue({
-      shippo_shipment_id: 'shp_1',
-      shippo_rate_id: 'rate_1',
-      shippo_transaction_id: 'tx_1',
+      stallion_shipment_id: 'stallion_1',
       tracking_number: 'TRACK123',
       carrier: 'FedEx',
-      shippo_raw: {},
+      tracking_status: 'label_created',
+      stallion_raw: {},
     })
-    attachShippoPurchaseMock.mockResolvedValue({ id: 'shipment-1', tracking_number: 'TRACK123' })
+    attachLabelPurchaseMock.mockResolvedValue({ id: 'shipment-1', tracking_number: 'TRACK123' })
   })
 
   it('returns 401 without authenticated user', async () => {
@@ -94,7 +96,7 @@ describe('POST /api/shipments/[id]/purchase-label', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Shippo label purchase is only supported for outbound shipments',
+      error: 'Stallion Express label purchase is only supported for outbound shipments',
     })
   })
 
@@ -112,8 +114,8 @@ describe('POST /api/shipments/[id]/purchase-label', () => {
 
     expect(response.status).toBe(200)
     expect(purchaseLabelMock).toHaveBeenCalledTimes(1)
-    expect(attachShippoPurchaseMock).toHaveBeenCalledWith('shipment-1', expect.objectContaining({
-      shippo_transaction_id: 'tx_1',
+    expect(attachLabelPurchaseMock).toHaveBeenCalledWith('shipment-1', expect.objectContaining({
+      stallion_shipment_id: 'stallion_1',
       purchased_by_id: 'u1',
     }))
   })

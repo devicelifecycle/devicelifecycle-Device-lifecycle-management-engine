@@ -5,6 +5,6 @@
     {"path": "/api/cron/price-scraper", "schedule": "0 6 * * *"},
     {"path": "/api/cron/pricing-staleness", "schedule": "15 */4 * * *"},
     {"path": "/api/cron/pricing-training", "schedule": "0 4 * * 0"},
-    {"path": "/api/cron/shippo-tracking", "schedule": "*/30 * * * *"}
+    {"path": "/api/cron/stallion-tracking", "schedule": "*/30 * * * *"}
   ]
 }

@@ -6,6 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { VendorService } from '@/services/vendor.service'
 import { vendorSchema } from '@/lib/validations'
+import { isValidUUID } from '@/lib/utils'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(
   request: NextRequest,
@@ -17,6 +20,9 @@ export async function GET(
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!isValidUUID(params.id)) {
+      return NextResponse.json({ error: 'Invalid vendor ID format' }, { status: 400 })
     }
 
     // Only internal roles can view vendor details

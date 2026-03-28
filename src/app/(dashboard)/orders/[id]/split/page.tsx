@@ -38,7 +38,7 @@ function buildPrefilledAllocations(
   if (acceptedBids.length === 0 || orderItems.length === 0) return []
 
   const totalBidQty = acceptedBids.reduce(
-    (sum, b) => sum + ((b as any).quantity_offered || b.quantity || 0), 0
+    (sum, b) => sum + (b.quantity || 0), 0
   )
   if (totalBidQty === 0) return []
 
@@ -50,7 +50,7 @@ function buildPrefilledAllocations(
 
   for (const item of orderItems) {
     const shares = acceptedBids.map(bid => {
-      const bidQty = (bid as any).quantity_offered || bid.quantity || 0
+      const bidQty = bid.quantity || 0
       const exactShare = (bidQty / totalBidQty) * item.quantity
       return {
         vendor_id: bid.vendor_id,
@@ -116,7 +116,7 @@ export default function OrderSplitPage() {
 
         // Pre-populate allocations from accepted vendor bids with proportional quantities
         const accepted = bids.filter(
-          (b: VendorBid) => b.status === 'accepted' || (b as any).is_accepted
+          (b: VendorBid) => b.status === 'accepted'
         )
         if (accepted.length >= 2 && orderData) {
           const items = orderData?.items || []
@@ -360,7 +360,7 @@ export default function OrderSplitPage() {
       </Card>
 
       {/* Pre-filled banner */}
-      {vendorBids.filter(b => b.status === 'accepted' || (b as any).is_accepted).length >= 2 && allocations.length >= 2 && (
+      {vendorBids.filter(b => b.status === 'accepted').length >= 2 && allocations.length >= 2 && (
         <Card className="border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20">
           <CardContent className="flex items-center gap-3 py-3">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -376,12 +376,12 @@ export default function OrderSplitPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Vendor Allocations</h2>
           <div className="flex gap-2">
-            {vendorBids.filter(b => b.status === 'accepted' || (b as any).is_accepted).length >= 2 && (
+            {vendorBids.filter(b => b.status === 'accepted').length >= 2 && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const accepted = vendorBids.filter(b => b.status === 'accepted' || (b as any).is_accepted)
+                  const accepted = vendorBids.filter(b => b.status === 'accepted')
                   if (order?.items) {
                     const prefilled = buildPrefilledAllocations(accepted, order.items)
                     if (prefilled.length > 0) {

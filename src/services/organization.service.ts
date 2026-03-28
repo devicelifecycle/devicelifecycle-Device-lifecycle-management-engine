@@ -43,7 +43,9 @@ export class OrganizationService {
       query = query.eq('type', type)
     }
 
-    query = query.order(sort_by, { ascending: sort_order === 'asc' })
+    const ALLOWED_SORT = ['name', 'type', 'contact_email', 'created_at', 'updated_at'] as const
+    const safeSortBy = ALLOWED_SORT.includes(sort_by as (typeof ALLOWED_SORT)[number]) ? sort_by : 'name'
+    query = query.order(safeSortBy, { ascending: sort_order === 'asc' })
 
     const from = (page - 1) * page_size
     const to = from + page_size - 1

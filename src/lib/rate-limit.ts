@@ -56,6 +56,9 @@ export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitR
 
 /**
  * Get client IP from request headers.
+ * NOTE: x-forwarded-for and x-real-ip can be spoofed if not behind a trusted proxy.
+ * Ensure your reverse proxy (Vercel, nginx, etc.) overwrites these; otherwise attackers
+ * could bypass rate limits by spoofing IPs.
  */
 export function getClientIp(request: Request): string {
   return (

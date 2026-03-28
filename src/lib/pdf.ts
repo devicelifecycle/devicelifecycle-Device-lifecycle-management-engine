@@ -33,6 +33,9 @@ interface OrderPDFData {
     storage?: string
     claimed_condition?: string
     unit_price?: number
+    guaranteed_buyback_price?: number
+    buyback_condition?: string
+    buyback_valid_until?: string
   }[]
 }
 
@@ -43,6 +46,7 @@ function formatCurrency(amount: number): string {
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
+    timeZone: 'America/New_York',
   })
 }
 
@@ -200,6 +204,38 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     doc.text('Total:', totalsX, y)
     doc.text(formatCurrency(displayAmount), pageWidth - 14, y, { align: 'right' })
     y += 10
+  }
+
+  // --- Buyback Guarantee (CPO orders with buyback set) ---
+  const buybackItems = (order.items || []).filter(
+    (item) => item.guaranteed_buyback_price != null && item.guaranteed_buyback_price > 0
+  )
+  if (order.type === 'cpo' && buybackItems.length > 0) {
+    y += 10
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(24, 24, 27)
+    doc.text('Buyback Guarantee', 14, y)
+    y += 6
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(63, 63, 70)
+    for (const item of buybackItems) {
+      const deviceName = item.device
+        ? `${item.device.make || ''} ${item.device.model || ''}${item.storage ? ` (${item.storage})` : ''}`
+        : 'Unknown'
+      const condition = item.buyback_condition
+        ? item.buyback_condition.charAt(0).toUpperCase() + item.buyback_condition.slice(1)
+        : 'Good'
+      const validUntil = item.buyback_valid_until
+        ? formatDate(item.buyback_valid_until)
+        : '24 months from quote'
+      const line = `• ${deviceName}: We guarantee to buy back at ${formatCurrency(item.guaranteed_buyback_price!)} per unit if returned in ${condition} condition (valid until ${validUntil}).`
+      const lines = doc.splitTextToSize(line, pageWidth - 28)
+      doc.text(lines, 14, y)
+      y += 6 * lines.length
+    }
+    y += 4
   }
 
   // --- Notes ---

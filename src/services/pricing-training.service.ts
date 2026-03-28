@@ -6,7 +6,7 @@
 // competitor_prices from scrapers). Builds self-sufficient baselines so
 // the data-driven model doesn't need live market lookups at calculation time.
 
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import type { DeviceCondition } from '@/types'
 
 const CONDITION_ORDER: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
@@ -17,6 +17,16 @@ const CONDITION_MULTIPLIERS: Record<string, number> = {
   good: 0.85,
   fair: 0.70,
   poor: 0.50,
+}
+
+function normalizeTrainingCondition(condition: string | null | undefined): DeviceCondition {
+  const normalized = (condition || 'good').toLowerCase().trim()
+  if (normalized === 'new') return 'new'
+  if (normalized === 'excellent' || normalized === 'like_new') return 'excellent'
+  if (normalized === 'good') return 'good'
+  if (normalized === 'fair') return 'fair'
+  if (normalized === 'broken' || normalized === 'poor' || normalized === 'defective') return 'poor'
+  return 'good'
 }
 
 function median(arr: number[]): number {
@@ -57,6 +67,7 @@ export interface TrainingResult {
     sales_history: number
     market_prices: number
     competitor_prices: number
+    training_data: number
   }
   errors: string[]
 }
@@ -87,6 +98,43 @@ function trimOutlierEntries(entries: PriceEntry[]): PriceEntry[] {
 }
 
 export class PricingTrainingService {
+  private static readonly PAGE_SIZE = 1000
+  private static readonly ORDER_ID_CHUNK_SIZE = 500
+
+  private static async fetchAllRows<T>(
+    table: string,
+    selectClause: string,
+    configure?: (query: any) => any
+  ): Promise<T[]> {
+    const supabase = createServiceRoleClient()
+    const rows: T[] = []
+    let page = 0
+
+    while (true) {
+      let query = supabase
+        .from(table)
+        .select(selectClause)
+        .range(page * this.PAGE_SIZE, (page + 1) * this.PAGE_SIZE - 1)
+
+      if (configure) {
+        query = configure(query)
+      }
+
+      const { data, error } = await query
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      const batch = (data || []) as T[]
+      rows.push(...batch)
+
+      if (batch.length < this.PAGE_SIZE) break
+      page++
+    }
+
+    return rows
+  }
+
   /**
    * Run full training: ingest all pricing signals, compute weighted baselines.
    * 
@@ -100,7 +148,7 @@ export class PricingTrainingService {
    * Recency decay: prices older than 90 days get reduced weight.
    */
   static async train(): Promise<TrainingResult> {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServiceRoleClient()
     const errors: string[] = []
     const sampleCounts = {
       order_items: 0,
@@ -108,6 +156,7 @@ export class PricingTrainingService {
       sales_history: 0,
       market_prices: 0,
       competitor_prices: 0,
+      training_data: 0,
     }
 
     // Key: "device_id|storage|condition" -> weighted price entries
@@ -150,27 +199,36 @@ export class PricingTrainingService {
     // SOURCE 1: Our completed orders (highest trust — real transactions)
     // ------------------------------------------------------------------
     try {
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('id, updated_at')
-        .in('status', ['accepted', 'quoted', 'closed', 'delivered', 'shipped', 'qc_complete', 'ready_to_ship'])
+      const orders = await this.fetchAllRows<{ id: string; updated_at: string }>(
+        'orders',
+        'id, updated_at',
+        (query) => query.in('status', ['accepted', 'quoted', 'closed', 'delivered', 'shipped', 'qc_complete', 'ready_to_ship'])
+      )
 
-      if (orders?.length) {
+      if (orders.length) {
         const orderIds = orders.map(o => o.id)
         const orderDates: Record<string, string> = {}
         for (const o of orders) orderDates[o.id] = o.updated_at
 
-        const { data: items } = await supabase
-          .from('order_items')
-          .select('device_id, claimed_condition, actual_condition, quoted_price, final_price, unit_price, order_id')
-          .in('order_id', orderIds)
+        for (let index = 0; index < orderIds.length; index += this.ORDER_ID_CHUNK_SIZE) {
+          const orderIdChunk = orderIds.slice(index, index + this.ORDER_ID_CHUNK_SIZE)
+          const { data: items, error: itemsError } = await supabase
+            .from('order_items')
+            .select('device_id, storage, claimed_condition, actual_condition, quoted_price, final_price, unit_price, order_id')
+            .in('order_id', orderIdChunk)
 
-        for (const it of items || []) {
-          const price = it.final_price ?? it.quoted_price ?? it.unit_price
-          const cond = (it.actual_condition ?? it.claimed_condition ?? 'good') as string
-          if (price != null && Number(price) > 0) {
-            addPrice(it.device_id, '128GB', cond, Number(price), 1.0, 'order_items', orderDates[it.order_id])
-            sampleCounts.order_items++
+          if (itemsError) {
+            throw new Error(itemsError.message)
+          }
+
+          for (const it of items || []) {
+            const price = it.final_price ?? it.quoted_price ?? it.unit_price
+            const cond = normalizeTrainingCondition(it.actual_condition ?? it.claimed_condition ?? 'good')
+            const storage = it.storage || '128GB'
+            if (price != null && Number(price) > 0) {
+              addPrice(it.device_id, storage, cond, Number(price), 1.0, 'order_items', orderDates[it.order_id])
+              sampleCounts.order_items++
+            }
           }
         }
       }
@@ -182,16 +240,26 @@ export class PricingTrainingService {
     // SOURCE 2: IMEI records (high trust — per-device level)
     // ------------------------------------------------------------------
     try {
-      const { data: imeis } = await supabase
-        .from('imei_records')
-        .select('device_id, claimed_condition, actual_condition, quoted_price, final_price, updated_at')
-        .limit(5000)
+      const imeis = await this.fetchAllRows<{
+        device_id: string
+        claimed_condition: string | null
+        actual_condition: string | null
+        quoted_price: number | null
+        final_price: number | null
+        metadata: Record<string, unknown> | null
+        updated_at: string | null
+      }>(
+        'imei_records',
+        'device_id, claimed_condition, actual_condition, quoted_price, final_price, metadata, updated_at'
+      )
 
-      for (const ir of imeis || []) {
+      for (const ir of imeis) {
         const price = ir.final_price ?? ir.quoted_price
-        const cond = (ir.actual_condition ?? ir.claimed_condition ?? 'good') as string
+        const cond = normalizeTrainingCondition(ir.actual_condition ?? ir.claimed_condition ?? 'good')
+        const meta = (ir.metadata || {}) as Record<string, unknown>
+        const storage = (typeof meta.storage === 'string' && meta.storage) ? meta.storage : '128GB'
         if (price != null && Number(price) > 0) {
-          addPrice(ir.device_id, '128GB', cond, Number(price), 0.9, 'imei_records', ir.updated_at)
+          addPrice(ir.device_id, storage, cond, Number(price), 0.9, 'imei_records', ir.updated_at)
           sampleCounts.imei_records++
         }
       }
@@ -203,15 +271,22 @@ export class PricingTrainingService {
     // SOURCE 3: Sales history (high trust — confirmed sales)
     // ------------------------------------------------------------------
     try {
-      const { data: sales } = await supabase
-        .from('sales_history')
-        .select('device_id, storage, condition, sold_price, sold_date')
-        .not('sold_price', 'is', null)
-        .gte('sold_date', new Date(now - 365 * 24 * 60 * 60 * 1000).toISOString())
-        .limit(5000)
+      const sales = await this.fetchAllRows<{
+        device_id: string
+        storage: string | null
+        condition: string | null
+        sold_price: number
+        sold_date: string
+      }>(
+        'sales_history',
+        'device_id, storage, condition, sold_price, sold_date',
+        (query) => query
+          .not('sold_price', 'is', null)
+          .gte('sold_date', new Date(now - 365 * 24 * 60 * 60 * 1000).toISOString())
+      )
 
-      for (const s of sales || []) {
-        const cond = s.condition ?? 'good'
+      for (const s of sales) {
+        const cond = normalizeTrainingCondition(s.condition ?? 'good')
         const storage = s.storage ?? '128GB'
         addPrice(s.device_id, storage, cond, Number(s.sold_price), 0.85, 'sales_history', s.sold_date)
         sampleCounts.sales_history++
@@ -226,12 +301,23 @@ export class PricingTrainingService {
     // to the wholesale C-stock price (which represents ~"good" condition).
     // ------------------------------------------------------------------
     try {
-      const { data: marketPrices } = await supabase
-        .from('market_prices')
-        .select('device_id, storage, carrier, wholesale_c_stock, wholesale_b_minus, marketplace_price, trade_price, effective_date, updated_at')
-        .eq('is_active', true)
+      const marketPrices = await this.fetchAllRows<{
+        device_id: string
+        storage: string | null
+        carrier: string | null
+        wholesale_c_stock: number | null
+        wholesale_b_minus: number | null
+        marketplace_price: number | null
+        trade_price: number | null
+        effective_date: string | null
+        updated_at: string | null
+      }>(
+        'market_prices',
+        'device_id, storage, carrier, wholesale_c_stock, wholesale_b_minus, marketplace_price, trade_price, effective_date, updated_at',
+        (query) => query.eq('is_active', true)
+      )
 
-      for (const mp of marketPrices || []) {
+      for (const mp of marketPrices) {
         const basePrice = mp.wholesale_c_stock || mp.wholesale_b_minus || 0
         if (basePrice <= 0) continue
         const storage = mp.storage || '128GB'
@@ -273,43 +359,121 @@ export class PricingTrainingService {
     // These are trade-in prices competitors offer — we learn from them.
     // ------------------------------------------------------------------
     try {
-      const { data: compPrices } = await supabase
-        .from('competitor_prices')
-        .select('device_id, storage, competitor_name, trade_in_price, sell_price, scraped_at, updated_at')
-        .not('trade_in_price', 'is', null)
+      const compPrices = await this.fetchAllRows<{
+        device_id: string
+        storage: string | null
+        condition: string | null
+        competitor_name: string
+        trade_in_price: number | null
+        sell_price: number | null
+        scraped_at: string | null
+        updated_at: string | null
+      }>(
+        'competitor_prices',
+        'device_id, storage, condition, competitor_name, trade_in_price, sell_price, scraped_at, updated_at',
+        (query) => query.not('trade_in_price', 'is', null)
+      )
 
-      for (const cp of compPrices || []) {
+      // Group competitor prices by device+storage to build a full condition map
+      const compByDevice = new Map<string, Record<string, { price: number; date: string | null; competitor: string }>>()
+      for (const cp of compPrices) {
+        const tradePrice = Number(cp.trade_in_price) || 0
+        if (tradePrice <= 0) continue
+        const storage = cp.storage || '128GB'
+        const dateStr = cp.updated_at || cp.scraped_at
+        const rawCond = normalizeTrainingCondition(cp.condition || 'good')
+        const key = `${cp.device_id}|${storage}`
+        if (!compByDevice.has(key)) compByDevice.set(key, {})
+        const condMap = compByDevice.get(key)!
+        // Keep the highest price per condition
+        if (!condMap[rawCond] || tradePrice > condMap[rawCond].price) {
+          condMap[rawCond] = { price: tradePrice, date: dateStr, competitor: cp.competitor_name }
+        }
+      }
+
+      for (const cp of compPrices) {
         const tradePrice = Number(cp.trade_in_price) || 0
         if (tradePrice <= 0) continue
         const storage = cp.storage || '128GB'
         const dateStr = cp.updated_at || cp.scraped_at
         const days = ageDays(dateStr)
+        const rawCond = normalizeTrainingCondition(cp.condition || 'good')
 
-        // Competitor trade-in prices represent what market pays for "good" condition
         // Fresh scraped data is more valuable
         const freshness = days <= 3 ? 0.65 : days <= 7 ? 0.6 : 0.5
-        addPrice(cp.device_id, storage, 'good', tradePrice, freshness, `competitor:${cp.competitor_name}`, dateStr)
 
-        // Derive other conditions
+        // Add the price at its actual scraped condition
+        addPrice(cp.device_id, storage, rawCond, tradePrice, freshness, `competitor:${cp.competitor_name}`, dateStr)
+
+        // Also fill ALL conditions using multipliers so every condition has a price
         for (const cond of CONDITION_ORDER) {
-          if (cond === 'good') continue
-          const mult = CONDITION_MULTIPLIERS[cond] / CONDITION_MULTIPLIERS['good']
+          if (cond === rawCond) continue
+          const mult = CONDITION_MULTIPLIERS[cond] / CONDITION_MULTIPLIERS[rawCond as keyof typeof CONDITION_MULTIPLIERS]
           const derivedPrice = tradePrice * mult
           if (derivedPrice > 0) {
-            addPrice(cp.device_id, storage, cond, derivedPrice, freshness * 0.8, `competitor_derived:${cp.competitor_name}`, dateStr)
+            addPrice(cp.device_id, storage, cond, derivedPrice, freshness * 0.6, `competitor_derived:${cp.competitor_name}`, dateStr)
           }
         }
 
         // Sell price (if available) gives retail reference
         if (cp.sell_price && Number(cp.sell_price) > 0) {
           const sellTradeEquiv = Number(cp.sell_price) * 0.75
-          addPrice(cp.device_id, storage, 'good', sellTradeEquiv, 0.4, `competitor_sell:${cp.competitor_name}`, dateStr)
+          addPrice(cp.device_id, storage, rawCond, sellTradeEquiv, 0.4, `competitor_sell:${cp.competitor_name}`, dateStr)
         }
 
         sampleCounts.competitor_prices++
       }
     } catch (e) {
       errors.push(`competitor_prices: ${e instanceof Error ? e.message : 'Unknown'}`)
+    }
+
+    // ------------------------------------------------------------------
+    // SOURCE 6: Generated training data (validated samples for ML training)
+    // These are synthetic but validated samples based on real market patterns.
+    // ------------------------------------------------------------------
+    try {
+      const trainingData = await this.fetchAllRows<{
+        device_id: string
+        storage: string | null
+        condition: string | null
+        trade_in_price: number | null
+        cpo_price: number | null
+        wholesale_price: number | null
+        was_accepted: boolean | null
+        validation_score: number | null
+        created_at: string | null
+      }>(
+        'pricing_training_data',
+        'device_id, storage, condition, trade_in_price, cpo_price, wholesale_price, was_accepted, validation_score, created_at',
+        (query) => query.eq('is_validated', true)
+      )
+
+      for (const td of trainingData) {
+        const tradePrice = Number(td.trade_in_price) || 0
+        if (tradePrice <= 0) continue
+        const storage = td.storage || '128GB'
+        const cond = normalizeTrainingCondition(td.condition || 'good')
+        const dateStr = td.created_at
+        
+        // Weight based on validation score (0.7-1.0) and acceptance
+        const validationWeight = td.validation_score ?? 0.8
+        const acceptanceBonus = td.was_accepted ? 0.1 : 0
+        const baseWeight = 0.75 // Training data is synthetic but validated
+        const finalWeight = baseWeight * validationWeight + acceptanceBonus
+        
+        addPrice(td.device_id, storage, cond, tradePrice, finalWeight, 'training_data', dateStr)
+        
+        // Also add wholesale price if available (different source for triangulation)
+        if (td.wholesale_price && Number(td.wholesale_price) > 0) {
+          // Wholesale to trade-in ratio is typically ~1.15-1.25x
+          const derivedTrade = Number(td.wholesale_price) * 1.18
+          addPrice(td.device_id, storage, cond, derivedTrade, finalWeight * 0.7, 'training_data_wholesale', dateStr)
+        }
+        
+        sampleCounts.training_data++
+      }
+    } catch (e) {
+      errors.push(`training_data: ${e instanceof Error ? e.message : 'Unknown'}`)
     }
 
     // ------------------------------------------------------------------
@@ -402,7 +566,7 @@ export class PricingTrainingService {
     return {
       baselines_upserted: baselinesUpserted,
       condition_multipliers_updated: multipliersUpdated,
-      data_sources_used: ['order_items', 'imei_records', 'sales_history', 'market_prices', 'competitor_prices'],
+      data_sources_used: ['order_items', 'imei_records', 'sales_history', 'market_prices', 'competitor_prices', 'training_data'],
       sample_counts: sampleCounts,
       errors,
     }

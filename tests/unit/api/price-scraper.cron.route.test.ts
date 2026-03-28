@@ -69,7 +69,7 @@ describe('GET /api/cron/price-scraper', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
   })
 
-  it('runs scraper and persists universal source health', async () => {
+  it('runs scraper and persists rollout metadata with current provider defaults', async () => {
     const { GET } = await import('@/app/api/cron/price-scraper/route')
     const response = await GET(new NextRequest('http://localhost/api/cron/price-scraper', {
       headers: { authorization: 'Bearer secret123' },
@@ -87,14 +87,25 @@ describe('GET /api/cron/price-scraper', () => {
       from: ReturnType<typeof vi.fn>
     }
     const upsertMock = (supabase.from.mock.results[0].value as { upsert: ReturnType<typeof vi.fn> }).upsert
-    expect(upsertMock).toHaveBeenCalledTimes(1)
+    expect(upsertMock).toHaveBeenCalledTimes(2)
 
-    const [payload] = upsertMock.mock.calls[0]
-    expect(payload).toEqual(
+    const [universalPayload] = upsertMock.mock.calls[0]
+    expect(universalPayload).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ setting_key: 'last_universal_source_url', setting_value: 'https://univercell.ai/' }),
         expect.objectContaining({ setting_key: 'last_universal_source_status', setting_value: 'success' }),
         expect.objectContaining({ setting_key: 'last_universal_source_fallback_used', setting_value: 'false' }),
+      ])
+    )
+
+    const [rolloutPayload] = upsertMock.mock.calls[1]
+    expect(rolloutPayload).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ setting_key: 'last_scraper_rollout_partial_failure', setting_value: 'false' }),
+        expect.objectContaining({ setting_key: 'last_bell_scraper_status', setting_value: 'failed' }),
+        expect.objectContaining({ setting_key: 'last_universal_scraper_status', setting_value: 'success' }),
+        expect.objectContaining({ setting_key: 'last_universal_scraper_persisted_impl', setting_value: 'scrapling' }),
+        expect.objectContaining({ setting_key: 'last_universal_scraper_configured_impl', setting_value: 'scrapling' }),
       ])
     )
   })
