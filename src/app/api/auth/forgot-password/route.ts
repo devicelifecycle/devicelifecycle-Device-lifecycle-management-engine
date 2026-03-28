@@ -6,11 +6,10 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getAppPath } from '@/lib/app-url'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { EmailService } from '@/services/email.service'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,7 +34,7 @@ export async function POST(request: NextRequest) {
       type: 'recovery',
       email,
       options: {
-        redirectTo: `${APP_URL}/auth/callback?next=/reset-password`,
+        redirectTo: getAppPath('/auth/callback?next=/reset-password', request),
       },
     })
 

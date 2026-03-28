@@ -4,6 +4,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { getAppPath } from '@/lib/app-url'
 import { EmailService } from '@/services/email.service'
 import { ORDER_EMAIL_CONFIG } from '@/lib/constants'
 import type {
@@ -630,10 +631,11 @@ export class NotificationService {
 
       // Also send email to primary contact
       if (customer.contact_email) {
+        const orderUrl = getAppPath(`/orders/${input.order_id}`)
         await EmailService.sendEmail(
           customer.contact_email,
           title,
-          `Hello ${customer.contact_name || customer.company_name || 'Customer'},\n\n${message}\n\nView order: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.example.com'}/orders/${input.order_id}\n\nThank you.`
+          `Hello ${customer.contact_name || customer.company_name || 'Customer'},\n\n${message}\n\nView order: ${orderUrl}\n\nThank you.`
         )
       }
 
@@ -708,10 +710,11 @@ export class NotificationService {
       }
 
       if (customer.contact_email) {
+        const orderUrl = getAppPath(`/orders/${input.order_id}`)
         await EmailService.sendEmail(
           customer.contact_email,
           title,
-          `Hello ${customer.contact_name || customer.company_name || 'Customer'},\n\n${message}\n\nView order: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.example.com'}/orders/${input.order_id}\n\nThank you.`
+          `Hello ${customer.contact_name || customer.company_name || 'Customer'},\n\n${message}\n\nView order: ${orderUrl}\n\nThank you.`
         )
       }
 

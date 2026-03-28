@@ -5,6 +5,7 @@
 import { Resend } from 'resend'
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
+import { getAppPath } from '@/lib/app-url'
 import { getTwilioClient, getTwilioConfig, isTwilioConfigured } from '@/lib/twilio/server'
 
 if (typeof window !== 'undefined') {
@@ -13,7 +14,6 @@ if (typeof window !== 'undefined') {
 
 let resendClient: Resend | null = null
 let gmailTransporter: Transporter | null = null
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'DLM Engine'
 
 function getFromEmail(): string {
@@ -161,7 +161,7 @@ export class EmailService {
     message: string
   }): Promise<boolean> {
     const { to, recipientName, orderNumber, orderId, fromStatus, toStatus, subject, message } = params
-    const orderUrl = `${APP_URL}/orders/${orderId}`
+    const orderUrl = getAppPath(`/orders/${orderId}`)
     const statusLabel = toStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
     const html = `
@@ -239,7 +239,7 @@ export class EmailService {
     loginId?: string
   }): Promise<boolean> {
     const { to, recipientName, role, tempPassword, loginId } = params
-    const loginUrl = `${APP_URL}/login`
+    const loginUrl = getAppPath('/login')
     const roleLabel = role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     const credentialLabel = loginId ? 'Username (Login ID)' : 'Username (Email)'
     const credentialValue = loginId ?? to
@@ -424,7 +424,7 @@ export class EmailService {
     itemCount: number
   }): Promise<boolean> {
     const { to, recipientName, orderNumber, orderId, orderType, itemCount } = params
-    const orderUrl = `${APP_URL}/orders/${orderId}`
+    const orderUrl = getAppPath(`/orders/${orderId}`)
     const typeLabel = orderType === 'cpo' ? 'CPO (Certified Pre-Owned)' : 'Trade-In'
 
     const html = `
@@ -497,7 +497,7 @@ export class EmailService {
     daysRemaining: number
   }): Promise<boolean> {
     const { to, recipientName, orderNumber, orderId, daysRemaining } = params
-    const orderUrl = `${APP_URL}/orders/${orderId}`
+    const orderUrl = getAppPath(`/orders/${orderId}`)
 
     const urgencyColor = daysRemaining <= 2 ? '#ef4444' : daysRemaining <= 4 ? '#f59e0b' : '#3b82f6'
     const urgencyText = daysRemaining <= 2 ? 'Urgent: ' : ''

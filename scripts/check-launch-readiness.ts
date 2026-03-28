@@ -101,8 +101,9 @@ const checks: Check[] = [
   {
     area: 'env',
     label: 'App base URL configured',
-    pass: hasEnv('NEXT_PUBLIC_APP_URL'),
+    pass: hasEnv('NEXT_PUBLIC_APP_URL') || hasEnv('VERCEL_PROJECT_PRODUCTION_URL') || hasEnv('VERCEL_URL'),
     blocking: true,
+    note: 'NEXT_PUBLIC_APP_URL is recommended locally. On Vercel, deployment URLs can be inferred automatically.',
   },
   {
     area: 'env',
