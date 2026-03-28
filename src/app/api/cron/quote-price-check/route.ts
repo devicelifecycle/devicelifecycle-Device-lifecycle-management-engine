@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getAppPath } from '@/lib/app-url'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { PRICE_CHANGE_NOTIFICATION_THRESHOLD } from '@/lib/constants'
@@ -18,7 +19,6 @@ import { timingSafeEqual } from 'crypto'
 export const dynamic = 'force-dynamic'
 
 const CRON_SECRET = process.env.CRON_SECRET
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -215,6 +215,7 @@ async function notifyCustomer(
   reminderThreshold?: number,
 ) {
   if (!order.customer_id) return
+  const orderUrl = getAppPath(`/orders/${order.id}`)
 
   const { data: customer } = await supabase
     .from('customers')
@@ -247,7 +248,7 @@ async function notifyCustomer(
 <p>Hi${customer.contact_name ? ` ${customer.contact_name}` : ''},</p>
 <p>This is a friendly reminder that your trade-in quote for order <b>#${order.order_number}</b> will expire in <b>${d} day${d === 1 ? '' : 's'}</b>.</p>
 <p>After expiry, you'll need to request a new quote and market prices may have changed.</p>
-<p><a href="${APP_URL}/orders/${order.id}" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review &amp; Accept Quote</a></p>
+<p><a href="${orderUrl}" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review &amp; Accept Quote</a></p>
 <p style="color:#6b7280;font-size:12px;margin-top:24px">If you have questions, reply to this email or contact our team.</p>`
     smsText = `[DLM] Your quote for order #${order.order_number} expires in ${d} days. Log in to accept before it expires.`
 
