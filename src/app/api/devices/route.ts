@@ -7,6 +7,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { DeviceService } from '@/services/device.service'
 import { createDeviceSchema } from '@/lib/validations'
 import type { DeviceCategory } from '@/types'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,23 +20,25 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams
-    const filters = {
-      search: searchParams.get('search') || undefined,
-      category: (searchParams.get('category') as DeviceCategory) || undefined,
-      make: searchParams.get('make') || undefined,
-      page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
-      page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '50'), 1), 100),
-    }
-
-    const result = await DeviceService.getDevices(filters)
-
-    // Strip sensitive pricing fields for external roles
     const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single()
+    const isInternal = profile && ['admin', 'coe_manager', 'sales', 'coe_tech'].includes(profile.role)
+    const forOrderCreation = searchParams.get('for_order_creation') === '1'
+    const maxPageSize = isInternal ? 5000 : forOrderCreation ? 500 : 100
+    const filters = {
+      search: searchParams.get('search') || undefined,
+      category: (searchParams.get('category') as DeviceCategory) || undefined,
+      make: searchParams.get('make') || undefined,
+      page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
+      page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '50'), 1), maxPageSize),
+    }
 
+    const result = await DeviceService.getDevices(filters)
+
+    // Strip sensitive pricing fields for external roles
     if (profile && ['customer', 'vendor'].includes(profile.role) && result.data) {
       result.data = (result.data as unknown as Record<string, unknown>[]).map(({ base_price: _bp, cost_price: _cp, internal_notes: _in, ...safe }) => safe) as unknown as typeof result.data
     }

@@ -91,24 +91,8 @@ export class OrderService {
           total_pages: 0,
         }
       }
+      // Vendors see all orders assigned to them: directly assigned OR sub-orders from split
       query = query.in('vendor_id', allowedVendorIds)
-
-      // Vendors only see orders assigned via split by admin or coe_manager (not sales)
-      const { data: adminCoeUsers } = await supabase
-        .from('users')
-        .select('id')
-        .in('role', ['admin', 'coe_manager'])
-      const allowedCreatorIds = (adminCoeUsers || []).map((u) => u.id)
-      if (allowedCreatorIds.length === 0) return { data: [], total: 0, page, page_size, total_pages: 0 }
-
-      const { data: splits } = await supabase
-        .from('order_splits')
-        .select('sub_order_id')
-        .in('split_by_user_id', allowedCreatorIds)
-      const allowedSubOrderIds = (splits || []).map((s) => s.sub_order_id).filter(Boolean)
-      if (allowedSubOrderIds.length === 0) return { data: [], total: 0, page, page_size, total_pages: 0 }
-
-      query = query.in('id', allowedSubOrderIds)
     }
 
     // Apply filters
@@ -453,9 +437,14 @@ export class OrderService {
       case 'submitted':
         updateData.submitted_at = new Date().toISOString()
         break
-      case 'quoted':
-        updateData.quoted_at = new Date().toISOString()
+      case 'quoted': {
+        const now = new Date()
+        updateData.quoted_at = now.toISOString()
+        // Trade-in quotes valid for 30 days
+        const expiryDays = 30
+        updateData.quote_expires_at = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000).toISOString()
         break
+      }
       case 'accepted':
         updateData.accepted_at = new Date().toISOString()
         break

@@ -7,6 +7,9 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PricingTrainingService } from '@/services/pricing-training.service'
+import { safeErrorMessage } from '@/lib/utils'
+export const dynamic = 'force-dynamic'
+
 
 export async function POST() {
   try {
@@ -40,7 +43,7 @@ export async function POST() {
   } catch (error) {
     console.error('Pricing train error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Training failed' },
+      { error: safeErrorMessage(error, 'Training failed') },
       { status: 500 }
     )
   }

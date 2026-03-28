@@ -81,6 +81,7 @@ export interface User extends BaseEntity {
   organization_id?: string;
   phone?: string;
   avatar_url?: string;
+  notification_email?: string | null;
   is_active: boolean;
   last_login_at?: string;
 }
@@ -105,6 +106,7 @@ export interface Customer extends BaseEntity {
   contact_name: string;
   contact_email: string;
   contact_phone?: string;
+  mobile_carrier?: string;
   billing_address?: Record<string, unknown>;
   shipping_address?: Record<string, unknown>;
   payment_terms?: string;
@@ -192,7 +194,7 @@ export interface CompetitorPrice extends BaseEntity {
   condition?: 'excellent' | 'good' | 'fair' | 'broken';
   trade_in_price?: number;
   sell_price?: number;
-  source: 'manual' | 'scraped' | 'api';
+  source: 'manual' | 'scraped' | 'api' | 'international_upload';
   scraped_at?: string;
   retrieved_at?: string;
   device?: Device;
@@ -289,6 +291,7 @@ export interface Order extends BaseEntity {
   
   submitted_at?: string;
   quoted_at?: string;
+  quote_expires_at?: string;
   accepted_at?: string;
   shipped_at?: string;
   received_at?: string;
@@ -300,6 +303,9 @@ export interface Order extends BaseEntity {
   notes?: string;
   internal_notes?: string;
   metadata?: Record<string, unknown>;
+
+  /** Per-order override for annual depreciation % (CPO buyback). When null, uses global setting. */
+  depreciation_rate_override?: number | null;
 
   // Split order fields
   parent_order_id?: string;
@@ -322,6 +328,8 @@ export interface PricingMetadata {
   margin_tier?: string;
   anchor_price?: number;
   channel_decision?: string;
+  /** 'auto' = from auto-quote on submit; 'manual' = admin-adjusted */
+  pricing_source?: 'auto' | 'manual';
   [key: string]: unknown;
 }
 
@@ -355,6 +363,11 @@ export interface OrderItem extends BaseEntity {
   // Split order fields
   parent_item_id?: string;
   allocated_vendor_id?: string;
+
+  // Buyback guarantee (CPO orders)
+  guaranteed_buyback_price?: number;
+  buyback_condition?: DeviceCondition;
+  buyback_valid_until?: string;
 
   // Joined relations
   device?: Device;
@@ -465,9 +478,10 @@ export interface Shipment extends BaseEntity {
   
   received_by_id?: string;
   receiving_notes?: string;
-  
+
   tracking_events?: unknown[];
 
+  // Shipping provider data (named shippo_* for DB backward compatibility, now stores Stallion data)
   shippo_shipment_id?: string;
   shippo_rate_id?: string;
   shippo_transaction_id?: string;
@@ -789,6 +803,10 @@ export interface UpdateOrderInput {
   assigned_to_id?: string;
   notes?: string;
   internal_notes?: string;
+  /** API field mapped to notes */
+  customer_notes?: string;
+  /** Per-order override for CPO buyback depreciation % (0–50). null = use global. */
+  depreciation_rate_override?: number | null;
 }
 
 // ============================================================================

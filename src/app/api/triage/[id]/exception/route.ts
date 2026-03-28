@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { TriageService } from '@/services/triage.service'
+export const dynamic = 'force-dynamic'
+
 
 export async function POST(
   request: NextRequest,
@@ -17,12 +19,29 @@ export async function POST(
 
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
-    // Only admin and coe_manager can approve/reject exceptions
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
+    if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    // Resolve triage result and verify order ownership for customer
+    const { data: triage } = await supabase
+      .from('triage_results')
+      .select('*, order:orders(id, customer_id, customer:customers(organization_id))')
+      .eq('id', params.id)
+      .single()
+
+    if (!triage) return NextResponse.json({ error: 'Exception not found' }, { status: 404 })
+
+    const order = triage.order as { customer_id?: string; customer?: { organization_id?: string } } | null
+    const orderCustomerOrg = order?.customer?.organization_id
+
+    const canApprove =
+      ['admin', 'coe_manager'].includes(profile.role) ||
+      (profile.role === 'customer' && orderCustomerOrg === profile.organization_id)
+
+    if (!canApprove) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

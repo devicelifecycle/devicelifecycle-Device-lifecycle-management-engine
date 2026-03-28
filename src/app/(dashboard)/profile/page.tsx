@@ -5,9 +5,10 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Mail, Shield, Clock, Save } from 'lucide-react'
+import { User, Mail, Shield, Clock, Save, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,20 +17,125 @@ import { Badge } from '@/components/ui/badge'
 import { USER_ROLE_CONFIG } from '@/lib/constants'
 import { formatDateTime } from '@/lib/utils'
 
+function ChangePasswordCard({ authEmail }: { authEmail: string }) {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isChanging, setIsChanging] = useState(false)
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match')
+      return
+    }
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters')
+      return
+    }
+    setIsChanging(true)
+    try {
+      const supabase = createBrowserSupabaseClient()
+      // Verify current password by re-signing in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: currentPassword,
+      })
+      if (signInError) {
+        toast.error('Current password is incorrect')
+        return
+      }
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+      if (updateError) throw updateError
+      // Send confirmation email (fire-and-forget; only sent for real emails, not @login.local)
+      fetch('/api/users/password-change-confirmation', { method: 'POST' }).catch(() => {})
+      toast.success('Password changed successfully')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to change password')
+    } finally {
+      setIsChanging(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Lock className="h-4 w-4" /> Change Password
+        </CardTitle>
+        <CardDescription>Update your password. You will need your current password.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>Current password</Label>
+          <Input
+            type="password"
+            value={currentPassword}
+            onChange={e => setCurrentPassword(e.target.value)}
+            placeholder="Enter current password"
+            autoComplete="current-password"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>New password</Label>
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            placeholder="At least 8 characters"
+            autoComplete="new-password"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Confirm new password</Label>
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+            autoComplete="new-password"
+          />
+        </div>
+        <Button
+          onClick={handleChangePassword}
+          disabled={
+            isChanging ||
+            !currentPassword ||
+            !newPassword ||
+            !confirmPassword ||
+            newPassword.length < 8
+          }
+        >
+          {isChanging ? 'Changing...' : 'Change Password'}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function ProfilePage() {
   const { user, refetch } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [fullName, setFullName] = useState(user?.full_name || '')
+  const [notificationEmail, setNotificationEmail] = useState(user?.notification_email ?? '')
+
+  const isLoginIdUser = user?.email?.endsWith('@login.local')
 
   const handleSave = async () => {
     if (!user) return
     setIsSaving(true)
     try {
+      const payload: Record<string, string | null> = { full_name: fullName }
+      if (isLoginIdUser) {
+        payload.notification_email = notificationEmail.trim() || null
+      }
       const res = await fetch(`/api/users/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName }),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error()
       toast.success('Profile updated')
@@ -65,7 +171,9 @@ export default function ProfilePage() {
           </div>
           <div className="flex-1">
             <CardTitle>{user.full_name}</CardTitle>
-            <CardDescription>{user.email}</CardDescription>
+            <CardDescription>
+            {user.email?.endsWith('@login.local') ? user.email.slice(0, -12) : user.email}
+          </CardDescription>
           </div>
           <Badge variant="outline" className="capitalize">
             {roleConfig?.label || user.role}
@@ -81,7 +189,15 @@ export default function ProfilePage() {
             <CardDescription>Your personal information</CardDescription>
           </div>
           {!isEditing && (
-            <Button variant="outline" size="sm" onClick={() => { setFullName(user.full_name || ''); setIsEditing(true) }}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setFullName(user.full_name || '')
+                setNotificationEmail(user.notification_email ?? '')
+                setIsEditing(true)
+              }}
+            >
               Edit
             </Button>
           )}
@@ -100,9 +216,12 @@ export default function ProfilePage() {
             </div>
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5 text-muted-foreground">
-                <Mail className="h-3.5 w-3.5" />Email
+                <Mail className="h-3.5 w-3.5" />
+                {user.email?.endsWith('@login.local') ? 'Login ID' : 'Email'}
               </Label>
-              <p className="font-medium">{user.email}</p>
+              <p className="font-medium">
+                {user.email?.endsWith('@login.local') ? user.email.slice(0, -12) : user.email}
+              </p>
             </div>
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5 text-muted-foreground">
@@ -116,6 +235,28 @@ export default function ProfilePage() {
               </Label>
               <p className="font-medium">{user.last_login_at ? formatDateTime(user.last_login_at) : 'N/A'}</p>
             </div>
+            {isLoginIdUser && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="flex items-center gap-1.5 text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5" />Notification Email
+                </Label>
+                {isEditing ? (
+                  <Input
+                    type="email"
+                    placeholder="your@email.com"
+                    value={notificationEmail}
+                    onChange={e => setNotificationEmail(e.target.value)}
+                  />
+                ) : (
+                  <p className="font-medium">{user.notification_email || '— Not set (emails will not be sent)'}</p>
+                )}
+                {isLoginIdUser && (
+                  <p className="text-xs text-muted-foreground">
+                    Add your real email to receive order updates, password reset, and other notifications.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {isEditing && (
@@ -128,6 +269,9 @@ export default function ProfilePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Change Password */}
+      <ChangePasswordCard authEmail={user.email!} />
 
       {/* Account Info */}
       <Card>

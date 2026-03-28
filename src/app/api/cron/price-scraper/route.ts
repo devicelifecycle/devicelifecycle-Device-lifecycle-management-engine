@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { runScraperPipeline } from '@/lib/scrapers'
+import { SCRAPER_PROVIDERS, getPersistedScraperImplementation } from '@/lib/scrapers/rollout-metadata'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 const CRON_SECRET = process.env.CRON_SECRET
@@ -48,6 +49,71 @@ async function persistUniversalSourceHealth(
     ], { onConflict: 'setting_key' })
 }
 
+async function persistScraperRolloutHealth(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  result: Awaited<ReturnType<typeof runScraperPipeline>>
+) {
+  const now = new Date().toISOString()
+  const settingsPayload = [
+    {
+      setting_key: 'last_scraper_rollout_at',
+      setting_value: now,
+      description: 'Last time scraper rollout health metadata was updated',
+    },
+    {
+      setting_key: 'last_scraper_rollout_partial_failure',
+      setting_value: result.results.some((item) => !item.success) || result.errors.length > 0 ? 'true' : 'false',
+      description: 'Whether the last scraper rollout run had any provider failures',
+    },
+  ]
+
+  for (const provider of SCRAPER_PROVIDERS) {
+    const providerResult = result.results.find((item) => item.competitor_name.toLowerCase() === provider.name.toLowerCase())
+    const configuredImpl = provider.getConfiguredImpl()
+    const persistedImpl = getPersistedScraperImplementation(provider.id)
+
+    settingsPayload.push(
+      {
+        setting_key: `last_${provider.settingsPrefix}_scraper_at`,
+        setting_value: now,
+        description: `Last time ${provider.name} scraper metadata was updated`,
+      },
+      {
+        setting_key: `last_${provider.settingsPrefix}_scraper_status`,
+        setting_value: providerResult?.success ? 'success' : 'failed',
+        description: `Last ${provider.name} scraper run status`,
+      },
+      {
+        setting_key: `last_${provider.settingsPrefix}_scraper_count`,
+        setting_value: String(providerResult?.prices.length ?? 0),
+        description: `Last ${provider.name} scraper row count`,
+      },
+      {
+        setting_key: `last_${provider.settingsPrefix}_scraper_duration_ms`,
+        setting_value: String(providerResult?.duration_ms ?? 0),
+        description: `Last ${provider.name} scraper duration in milliseconds`,
+      },
+      {
+        setting_key: `last_${provider.settingsPrefix}_scraper_configured_impl`,
+        setting_value: configuredImpl,
+        description: `Configured ${provider.name} scraper implementation during the last run`,
+      },
+      {
+        setting_key: `last_${provider.settingsPrefix}_scraper_persisted_impl`,
+        setting_value: persistedImpl,
+        description: `Implementation whose rows were persisted for ${provider.name} during the last run`,
+      },
+      {
+        setting_key: `last_${provider.settingsPrefix}_scraper_error`,
+        setting_value: providerResult?.error || '',
+        description: `Last ${provider.name} scraper error, if any`,
+      }
+    )
+  }
+
+  await supabase.from('pricing_settings').upsert(settingsPayload, { onConflict: 'setting_key' })
+}
+
 export async function GET(request: NextRequest) {
   try {
     if (!CRON_SECRET) {
@@ -70,6 +136,7 @@ export async function GET(request: NextRequest) {
     const supabase = createServiceRoleClient()
     const result = await runScraperPipeline(undefined, supabase)
     await persistUniversalSourceHealth(supabase, result)
+    await persistScraperRolloutHealth(supabase, result)
 
     // Optional auto-train after scraping so scraped data feeds into the AI model
     let trainingResult = null

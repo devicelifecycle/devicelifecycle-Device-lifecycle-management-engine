@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { Loader2, CheckCircle2, Eye, EyeOff, Package } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -30,7 +31,7 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const supabase = createBrowserSupabaseClient()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (event === 'PASSWORD_RECOVERY') {
         setIsValidSession(true)
       } else if (event === 'SIGNED_IN' && session) {
@@ -39,7 +40,7 @@ export default function ResetPasswordPage() {
       setSessionChecked(true)
     })
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       if (session) {
         setIsValidSession(true)
       }
@@ -79,6 +80,9 @@ export default function ResetPasswordPage() {
       if (updateError) {
         throw updateError
       }
+
+      // Send confirmation email before signing out (fire-and-forget)
+      fetch('/api/users/password-change-confirmation', { method: 'POST' }).catch(() => {})
 
       await supabase.auth.signOut()
 

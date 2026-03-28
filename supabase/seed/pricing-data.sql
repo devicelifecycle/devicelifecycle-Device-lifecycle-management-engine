@@ -1,6 +1,10 @@
 -- ============================================================================
 -- SEED DATA: DEVICE CATALOG & PRICING
 -- Run this after migrations to populate initial data
+-- Wrapped in a single transaction for speed
+-- ============================================================================
+
+BEGIN;
 
 -- ============================================================================
 -- DEVICE CATALOG - Popular Devices
@@ -378,56 +382,94 @@ ON CONFLICT DO NOTHING;
 -- COMPETITOR PRICES - Telus, Bell trade-in offers (CAD)
 -- ============================================================================
 
-INSERT INTO competitor_prices (device_id, storage, competitor_name, trade_in_price, sell_price, source) VALUES
--- iPhone 15 Pro Max - Telus & Bell
-('d0010000-0000-0000-0000-000000000001', '256GB', 'Telus', 680.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000001', '256GB', 'Bell', 650.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000001', '512GB', 'Telus', 780.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000001', '512GB', 'Bell', 750.00, NULL, 'manual'),
+INSERT INTO competitor_prices (device_id, storage, condition, competitor_name, trade_in_price, sell_price, source) VALUES
+-- iPhone 15 Pro Max - Multi-condition pricing
+('d0010000-0000-0000-0000-000000000001', '256GB', 'excellent', 'Telus', 680.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '256GB', 'good', 'Telus', 580.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '256GB', 'fair', 'Telus', 440.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '256GB', 'excellent', 'Bell', 650.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '256GB', 'good', 'Bell', 550.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '256GB', 'fair', 'Bell', 410.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '512GB', 'excellent', 'Telus', 780.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '512GB', 'good', 'Telus', 660.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '512GB', 'excellent', 'Bell', 750.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000001', '512GB', 'good', 'Bell', 640.00, NULL, 'manual'),
 
 -- iPhone 15 Pro
-('d0010000-0000-0000-0000-000000000002', '128GB', 'Telus', 530.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000002', '128GB', 'Bell', 510.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000002', '256GB', 'Telus', 600.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000002', '256GB', 'Bell', 580.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '128GB', 'excellent', 'Telus', 530.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '128GB', 'good', 'Telus', 450.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '128GB', 'fair', 'Telus', 340.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '128GB', 'excellent', 'Bell', 510.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '128GB', 'good', 'Bell', 430.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '128GB', 'fair', 'Bell', 320.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '256GB', 'excellent', 'Telus', 600.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '256GB', 'good', 'Telus', 510.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '256GB', 'excellent', 'Bell', 580.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000002', '256GB', 'good', 'Bell', 490.00, NULL, 'manual'),
 
 -- iPhone 15
-('d0010000-0000-0000-0000-000000000004', '128GB', 'Telus', 400.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000004', '128GB', 'Bell', 380.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000004', '128GB', 'excellent', 'Telus', 400.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000004', '128GB', 'good', 'Telus', 340.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000004', '128GB', 'fair', 'Telus', 250.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000004', '128GB', 'excellent', 'Bell', 380.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000004', '128GB', 'good', 'Bell', 320.00, NULL, 'manual'),
 
 -- iPhone 14 Pro Max
-('d0010000-0000-0000-0000-000000000005', '128GB', 'Telus', 450.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000005', '128GB', 'Bell', 430.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000005', '256GB', 'Telus', 510.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000005', '256GB', 'Bell', 490.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '128GB', 'excellent', 'Telus', 450.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '128GB', 'good', 'Telus', 380.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '128GB', 'fair', 'Telus', 280.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '128GB', 'excellent', 'Bell', 430.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '128GB', 'good', 'Bell', 360.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '256GB', 'excellent', 'Telus', 510.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '256GB', 'good', 'Telus', 430.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '256GB', 'excellent', 'Bell', 490.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000005', '256GB', 'good', 'Bell', 410.00, NULL, 'manual'),
 
 -- iPhone 14 Pro
-('d0010000-0000-0000-0000-000000000006', '128GB', 'Telus', 380.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000006', '128GB', 'Bell', 360.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000006', '128GB', 'excellent', 'Telus', 380.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000006', '128GB', 'good', 'Telus', 320.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000006', '128GB', 'fair', 'Telus', 240.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000006', '128GB', 'excellent', 'Bell', 360.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000006', '128GB', 'good', 'Bell', 300.00, NULL, 'manual'),
 
 -- iPhone 14
-('d0010000-0000-0000-0000-000000000007', '128GB', 'Telus', 310.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000007', '128GB', 'Bell', 290.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000007', '128GB', 'excellent', 'Telus', 310.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000007', '128GB', 'good', 'Telus', 260.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000007', '128GB', 'fair', 'Telus', 190.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000007', '128GB', 'excellent', 'Bell', 290.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000007', '128GB', 'good', 'Bell', 240.00, NULL, 'manual'),
 
 -- iPhone 13 Pro Max
-('d0010000-0000-0000-0000-000000000008', '128GB', 'Telus', 290.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000008', '128GB', 'Bell', 270.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000008', '128GB', 'excellent', 'Telus', 290.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000008', '128GB', 'good', 'Telus', 240.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000008', '128GB', 'excellent', 'Bell', 270.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000008', '128GB', 'good', 'Bell', 220.00, NULL, 'manual'),
 
 -- iPhone 13
-('d0010000-0000-0000-0000-000000000010', '128GB', 'Telus', 190.00, NULL, 'manual'),
-('d0010000-0000-0000-0000-000000000010', '128GB', 'Bell', 170.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000010', '128GB', 'excellent', 'Telus', 190.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000010', '128GB', 'good', 'Telus', 160.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000010', '128GB', 'excellent', 'Bell', 170.00, NULL, 'manual'),
+('d0010000-0000-0000-0000-000000000010', '128GB', 'good', 'Bell', 140.00, NULL, 'manual'),
 
 -- Samsung Galaxy S24 Ultra
-('d0020000-0000-0000-0000-000000000001', '256GB', 'Telus', 700.00, NULL, 'manual'),
-('d0020000-0000-0000-0000-000000000001', '256GB', 'Bell', 670.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000001', '256GB', 'excellent', 'Telus', 700.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000001', '256GB', 'good', 'Telus', 590.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000001', '256GB', 'fair', 'Telus', 440.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000001', '256GB', 'excellent', 'Bell', 670.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000001', '256GB', 'good', 'Bell', 560.00, NULL, 'manual'),
 
 -- Samsung Galaxy S23 Ultra
-('d0020000-0000-0000-0000-000000000004', '256GB', 'Telus', 480.00, NULL, 'manual'),
-('d0020000-0000-0000-0000-000000000004', '256GB', 'Bell', 460.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000004', '256GB', 'excellent', 'Telus', 480.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000004', '256GB', 'good', 'Telus', 400.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000004', '256GB', 'excellent', 'Bell', 460.00, NULL, 'manual'),
+('d0020000-0000-0000-0000-000000000004', '256GB', 'good', 'Bell', 380.00, NULL, 'manual'),
 
 -- Google Pixel 8 Pro
-('d0030000-0000-0000-0000-000000000001', '128GB', 'Telus', 490.00, NULL, 'manual'),
-('d0030000-0000-0000-0000-000000000001', '128GB', 'Bell', 470.00, NULL, 'manual')
+('d0030000-0000-0000-0000-000000000001', '128GB', 'excellent', 'Telus', 490.00, NULL, 'manual'),
+('d0030000-0000-0000-0000-000000000001', '128GB', 'good', 'Telus', 410.00, NULL, 'manual'),
+('d0030000-0000-0000-0000-000000000001', '128GB', 'fair', 'Telus', 310.00, NULL, 'manual'),
+('d0030000-0000-0000-0000-000000000001', '128GB', 'excellent', 'Bell', 470.00, NULL, 'manual'),
+('d0030000-0000-0000-0000-000000000001', '128GB', 'good', 'Bell', 390.00, NULL, 'manual')
 
 ON CONFLICT DO NOTHING;
 
@@ -478,6 +520,8 @@ INSERT INTO repair_costs (repair_type, device_category, cost, description, is_ac
 ('speaker_replacement', 'phone', 25.00, 'Speaker module replacement', true)
 
 ON CONFLICT DO NOTHING;
+
+COMMIT;
 
 -- ============================================================================
 -- Done! Pricing data seeded successfully (V1 + V2)

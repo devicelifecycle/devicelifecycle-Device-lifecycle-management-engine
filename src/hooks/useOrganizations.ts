@@ -51,7 +51,8 @@ async function createOrganization(data: Partial<Organization>): Promise<Organiza
     body: JSON.stringify(data),
   })
   if (!response.ok) {
-    throw new Error('Failed to create organization')
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || 'Failed to create organization')
   }
   return response.json()
 }

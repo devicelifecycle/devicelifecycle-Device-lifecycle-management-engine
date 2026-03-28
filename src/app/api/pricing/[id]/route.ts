@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PricingService } from '@/services/pricing.service'
 import { updatePricingTableSchema } from '@/lib/validations'
+export const dynamic = 'force-dynamic'
+
 
 export async function PATCH(
   request: NextRequest,

@@ -12,12 +12,12 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 
 export default function RegisterPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050508] bg-mesh cinematic-grain px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 bg-mesh cinematic-grain px-4">
       <Link href="/" className="mb-8 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-          <Package className="h-6 w-6" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 shadow-lg shadow-blue-500/25">
+          <Package className="h-6 w-6 text-white" />
         </div>
-        <span className="text-xl font-bold tracking-tight">Enterprise Engine</span>
+        <span className="text-xl font-bold tracking-tight">DLM Engine</span>
       </Link>
       <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in">
         <CardHeader className="text-center pb-2">

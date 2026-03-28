@@ -2,7 +2,7 @@
 // SUPABASE MIDDLEWARE CLIENT
 // ============================================================================
 
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -21,42 +21,21 @@ export async function updateSession(request: NextRequest) {
     supabaseAnonKey,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
+        getAll() {
+          return request.cookies.getAll()
         },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+        setAll(cookiesToSet) {
+          for (const { name, value, ...options } of cookiesToSet) {
+            request.cookies.set({ name, value, ...options })
+          }
           response = NextResponse.next({
             request: {
               headers: request.headers,
             },
           })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          for (const { name, value, ...options } of cookiesToSet) {
+            response.cookies.set({ name, value, ...options })
+          }
         },
       },
     }
@@ -80,42 +59,21 @@ export function createMiddlewareSupabaseClient(request: NextRequest) {
     supabaseAnonKey,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
+        getAll() {
+          return request.cookies.getAll()
         },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+        setAll(cookiesToSet) {
+          for (const { name, value, ...options } of cookiesToSet) {
+            request.cookies.set({ name, value, ...options })
+          }
           response = NextResponse.next({
             request: {
               headers: request.headers,
             },
           })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          for (const { name, value, ...options } of cookiesToSet) {
+            response.cookies.set({ name, value, ...options })
+          }
         },
       },
     }

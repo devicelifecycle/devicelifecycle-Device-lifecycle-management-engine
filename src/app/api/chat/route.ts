@@ -10,6 +10,8 @@ import { getSystemPrompt } from '@/lib/chat/prompts'
 import { getToolsForRole, executeTool } from '@/lib/chat/tools'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import type { UserRole } from '@/types'
+export const dynamic = 'force-dynamic'
+
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 const MODEL = 'llama-3.3-70b-versatile'
@@ -115,8 +117,15 @@ export async function POST(request: NextRequest) {
       })
 
       for (const toolCall of message.tool_calls) {
-        const args = JSON.parse(toolCall.function.arguments || '{}')
-        const result = await executeTool(toolCall.function.name, args, toolCtx)
+        const fn = toolCall.function
+        if (!fn?.name) continue
+        let args: Record<string, unknown> = {}
+        try {
+          args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments || '{}') : (fn.arguments ?? {})
+        } catch {
+          args = {}
+        }
+        const result = await executeTool(fn.name, args, toolCtx)
         groqMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,

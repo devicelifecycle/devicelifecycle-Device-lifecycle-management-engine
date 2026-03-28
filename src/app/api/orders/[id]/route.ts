@@ -5,7 +5,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrderService } from '@/services/order.service'
+import { NotificationService } from '@/services/notification.service'
 import { updateOrderSchema } from '@/lib/validations'
+import { isValidUUID } from '@/lib/utils'
+export const dynamic = 'force-dynamic'
+
 
 interface RouteParams {
   params: {
@@ -15,6 +19,9 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    if (!isValidUUID(params.id)) {
+      return NextResponse.json({ error: 'Invalid order ID format' }, { status: 400 })
+    }
     const supabase = createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -148,10 +155,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Transform null to undefined for assigned_to_id
+    // Transform null to undefined for nullable fields
     const updateData = {
       ...validationResult.data,
-      assigned_to_id: validationResult.data.assigned_to_id === null ? undefined : validationResult.data.assigned_to_id
+      vendor_id: validationResult.data.vendor_id === null ? undefined : validationResult.data.vendor_id,
+      assigned_to_id: validationResult.data.assigned_to_id === null ? undefined : validationResult.data.assigned_to_id,
     }
 
     const updatedOrder = await OrderService.updateOrder(params.id, updateData, user.id)

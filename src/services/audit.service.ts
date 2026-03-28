@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { sanitizeCsvCell } from '@/lib/utils'
 import type { AuditLog, AuditAction } from '@/types'
 
 export interface AuditLogInput {
@@ -53,14 +54,19 @@ export class AuditService {
       .single()
 
     if (error) {
-      // Don't throw - audit logging shouldn't break the main flow
-      // But do log the full error for debugging
       console.error('Failed to create audit log:', error.message, error.details, {
         action: input.action,
         entity_type: input.entity_type,
         entity_id: input.entity_id,
       })
-      return null as unknown as AuditLog
+      return {
+        id: '',
+        user_id: input.user_id,
+        action: input.action,
+        entity_type: input.entity_type,
+        entity_id: input.entity_id,
+        timestamp: new Date().toISOString(),
+      } as AuditLog
     }
 
     return data as AuditLog
@@ -353,16 +359,18 @@ export class AuditService {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
 
-    const { error, count } = await supabase
+    // Supabase delete() does not support count option; use select() to get deleted row count
+    const { data, error } = await supabase
       .from('audit_logs')
-      .delete({ count: 'exact' })
+      .delete()
       .lt('timestamp', cutoffDate.toISOString())
+      .select('id')
 
     if (error) {
       throw new Error(error.message)
     }
 
-    return count || 0
+    return data?.length ?? 0
   }
 
   /**
@@ -383,14 +391,14 @@ export class AuditService {
     ]
 
     const rows = data.map((log) => [
-      log.timestamp,
-      log.user_id,
-      log.action,
-      log.entity_type,
-      log.entity_id,
-      JSON.stringify(log.old_values || {}),
-      JSON.stringify(log.new_values || {}),
-      log.ip_address || '',
+      sanitizeCsvCell(log.timestamp),
+      sanitizeCsvCell(log.user_id),
+      sanitizeCsvCell(log.action),
+      sanitizeCsvCell(log.entity_type),
+      sanitizeCsvCell(log.entity_id),
+      sanitizeCsvCell(JSON.stringify(log.old_values || {})),
+      sanitizeCsvCell(JSON.stringify(log.new_values || {})),
+      sanitizeCsvCell(log.ip_address || ''),
     ])
 
     const csv = [

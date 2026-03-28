@@ -1,13 +1,22 @@
 // ============================================================================
-// SHIPMENT SERVICE
+// SHIPMENT SERVICE — Stallion Express Integration
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { ShippoService } from '@/services/shippo.service'
+import { StallionService } from '@/services/stallion.service'
 import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
 import type { Shipment } from '@/types'
+
+/** Check if Stallion Express is configured */
+export function isShippingConfigured(): boolean {
+  return Boolean(process.env.STALLION_API_TOKEN)
+}
+
+export function getActiveShippingProvider(): 'stallion' | 'manual' {
+  return isShippingConfigured() ? 'stallion' : 'manual'
+}
 
 export interface CreateShipmentInput {
   order_id: string
@@ -45,7 +54,8 @@ export class ShipmentService {
    * Create a new shipment
    */
   static async createShipment(input: CreateShipmentInput): Promise<Shipment> {
-    const supabase = createServerSupabaseClient()
+    // Use service role to bypass RLS — the API route has already validated permissions
+    const supabase = createServiceRoleClient()
 
     const { data, error } = await supabase
       .from('shipments')
@@ -83,8 +93,7 @@ export class ShipmentService {
       .from('shipments')
       .select(`
         *,
-        order:orders(*),
-        created_by:users(*)
+        order:orders(*)
       `)
       .eq('id', id)
       .single()
@@ -105,10 +114,7 @@ export class ShipmentService {
 
     const { data, error } = await supabase
       .from('shipments')
-      .select(`
-        *,
-        created_by:users(*)
-      `)
+      .select('*')
       .eq('order_id', orderId)
       .order('created_at', { ascending: false })
 
@@ -191,21 +197,23 @@ export class ShipmentService {
     return data as Shipment
   }
 
-  static async attachShippoPurchase(
+  /**
+   * Attach purchased label data to shipment
+   * Note: DB columns are named shippo_* for backward compatibility
+   */
+  static async attachLabelPurchase(
     shipmentId: string,
     input: {
-      shippo_shipment_id: string
-      shippo_rate_id: string
-      shippo_transaction_id: string
+      stallion_shipment_id: string
       tracking_number: string
       carrier: string
-      shippo_tracking_status?: string
+      tracking_status?: string
       label_url?: string
       label_pdf_url?: string
       rate_amount?: number
       rate_currency?: string
       estimated_delivery?: string
-      shippo_raw: Record<string, unknown>
+      raw_response: Record<string, unknown>
       purchased_by_id: string
     }
   ): Promise<Shipment> {
@@ -216,16 +224,17 @@ export class ShipmentService {
       .update({
         carrier: input.carrier,
         tracking_number: input.tracking_number,
-        shippo_shipment_id: input.shippo_shipment_id,
-        shippo_rate_id: input.shippo_rate_id,
-        shippo_transaction_id: input.shippo_transaction_id,
-        shippo_tracking_status: input.shippo_tracking_status,
+        // Store in shippo_* columns for backward compatibility
+        shippo_shipment_id: input.stallion_shipment_id,
+        shippo_rate_id: `stallion_${input.stallion_shipment_id}`,
+        shippo_transaction_id: `stallion_txn_${input.stallion_shipment_id}`,
+        shippo_tracking_status: input.tracking_status,
         label_url: input.label_url,
         label_pdf_url: input.label_pdf_url,
         rate_amount: input.rate_amount,
         rate_currency: input.rate_currency,
         estimated_delivery: input.estimated_delivery,
-        shippo_raw: input.shippo_raw,
+        shippo_raw: { ...input.raw_response, provider: 'stallion' },
         status: 'label_created',
         purchased_by_id: input.purchased_by_id,
         updated_at: new Date().toISOString(),
@@ -242,11 +251,11 @@ export class ShipmentService {
   }
 
   /**
-   * Process Shippo webhook updates. Uses service-role client (no user session).
+   * Process tracking webhook updates. Uses service-role client (no user session).
    */
-  static async processShippoWebhook(input: {
+  static async processTrackingWebhook(input: {
     tracking_number: string
-    shippo_tracking_status: string
+    tracking_status: string
     status_details?: string
     status_date?: string
     location?: { city?: string; state?: string; country?: string }
@@ -262,13 +271,13 @@ export class ShipmentService {
 
     if (!shipment) return
 
-    const internalStatus = ShippoService.mapShippoTrackingStatusToInternal(input.shippo_tracking_status)
+    const internalStatus = StallionService.mapTrackingStatusToInternal(input.tracking_status)
 
     await supabase
       .from('shipments')
       .update({
         status: internalStatus,
-        shippo_tracking_status: input.shippo_tracking_status,
+        shippo_tracking_status: input.tracking_status,
         ...(internalStatus === 'exception' && {
           exception_details: input.status_details || 'Carrier exception',
           exception_at: new Date().toISOString(),
@@ -284,7 +293,7 @@ export class ShipmentService {
     const locationStr = [loc?.city, loc?.state, loc?.country].filter(Boolean).join(', ') || 'N/A'
     const currentEvents = (shipment.tracking_events as unknown[]) || []
     const newEvent = {
-      status: input.shippo_tracking_status,
+      status: input.tracking_status,
       description: input.status_details || input.event || 'Tracking update',
       location: locationStr,
       timestamp: input.status_date || new Date().toISOString(),
@@ -336,17 +345,20 @@ export class ShipmentService {
     }
   }
 
-  static async updateShippoTrackingMeta(
+  /**
+   * Update tracking status metadata
+   */
+  static async updateTrackingMeta(
     shipmentId: string,
     updates: {
-      shippo_tracking_status?: string
+      tracking_status?: string
     }
   ): Promise<void> {
     const supabase = createServerSupabaseClient()
     const { error } = await supabase
       .from('shipments')
       .update({
-        shippo_tracking_status: updates.shippo_tracking_status,
+        shippo_tracking_status: updates.tracking_status,
         updated_at: new Date().toISOString(),
       })
       .eq('id', shipmentId)
@@ -565,23 +577,23 @@ export class ShipmentService {
     const inbound = shipments.filter((s: { direction: string }) => s.direction === 'inbound').length
     const outbound = shipments.filter((s: { direction: string }) => s.direction === 'outbound').length
     const delivered = shipments.filter((s: { status: string }) => s.status === 'delivered').length
-    const inTransit = shipments.filter((s: { status: string }) => 
+    const inTransit = shipments.filter((s: { status: string }) =>
       ['picked_up', 'in_transit', 'out_for_delivery'].includes(s.status)
     ).length
     const exceptions = shipments.filter((s: { status: string }) => s.status === 'exception').length
 
     // Calculate average delivery days
-    const deliveredShipments = shipments.filter((s: { 
+    const deliveredShipments = shipments.filter((s: {
       status: string
       created_at: string
-      delivered_at: string | null 
+      delivered_at: string | null
     }) => s.status === 'delivered' && s.delivered_at)
-    
+
     let avgDeliveryDays = 0
     if (deliveredShipments.length > 0) {
-      const totalDays = deliveredShipments.reduce((sum: number, s: { 
+      const totalDays = deliveredShipments.reduce((sum: number, s: {
         created_at: string
-        delivered_at: string 
+        delivered_at: string
       }) => {
         const created = new Date(s.created_at)
         const delivered = new Date(s.delivered_at)

@@ -1,46 +1,48 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Clean Database Reset Script
+# Clean Database Reset Script (FAST by default)
 # =============================================================================
-# Resets the database to a clean state by:
-# 1. Dropping all tables and data
-# 2. Re-running all migrations in order
-# 3. Running seed data (device catalog, pricing)
+# Default: Schema only (~1 min) - migrations, no seed
+# Use --full for complete reset with device catalog + pricing (~2–4 min)
 #
-# Requirements:
-#   - Docker Desktop running (Supabase local uses Docker)
-#   - Supabase CLI installed
+# Requirements: Docker Desktop running, Supabase CLI
 #
 # Usage:
-#   ./scripts/db-reset-clean.sh           # Reset LOCAL database only
-#   ./scripts/db-reset-clean.sh --remote   # Reset REMOTE database (prompts for confirmation)
+#   ./scripts/db-reset-clean.sh              # FAST: schema only (default)
+#   ./scripts/db-reset-clean.sh --full       # Full: migrations + seed data
+#   ./scripts/db-reset-clean.sh --remote     # Reset REMOTE (prompts confirm)
 # =============================================================================
 
 set -e
 cd "$(dirname "$0")/.."
 
-echo "=== Device Lifecycle Management - Database Reset ==="
+echo "=== Device Lifecycle - Database Reset ==="
 echo ""
+
+# Quick Docker check - fail fast with clear message
+if ! docker info >/dev/null 2>&1; then
+  echo "ERROR: Docker is not running. Start Docker Desktop and try again."
+  exit 1
+fi
 
 if [[ "$1" == "--remote" ]]; then
   echo "WARNING: This will RESET the REMOTE database."
-  echo "All data will be destroyed and migrations will be re-applied."
-  echo ""
   read -p "Type 'yes' to continue: " confirm
-  if [[ "$confirm" != "yes" ]]; then
-    echo "Aborted."
-    exit 1
-  fi
+  [[ "$confirm" == "yes" ]] || { echo "Aborted."; exit 1; }
   supabase db reset --linked
   echo ""
   echo "Remote database reset complete."
+elif [[ "$1" == "--full" ]]; then
+  echo "Full reset (migrations + seed)... ~2–4 min"
+  echo ""
+  supabase db reset ${SUPABASE_DEBUG:+--debug}
+  echo ""
+  echo "Done. API: http://localhost:54321  DB: localhost:54322"
 else
-  echo "Resetting LOCAL database..."
-  echo "(Ensure Docker Desktop is running)"
+  echo "Fast reset (schema only, no seed)... ~1 min"
   echo ""
-  supabase db reset
+  supabase db reset --no-seed ${SUPABASE_DEBUG:+--debug}
   echo ""
-  echo "Local database reset complete."
-  echo "  API URL: http://localhost:54321"
-  echo "  DB URL:  postgresql://postgres:postgres@localhost:54322/postgres"
+  echo "Done. API: http://localhost:54321  DB: localhost:54322"
+  echo "Tip: Use --full for complete reset with device/pricing data."
 fi

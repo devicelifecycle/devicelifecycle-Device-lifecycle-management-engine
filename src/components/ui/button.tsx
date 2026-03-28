@@ -8,26 +8,26 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-2xl text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
         default:
-          'bg-primary text-primary-foreground shadow-[0_4px_14px_-3px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:bg-primary/90 hover:shadow-[0_6px_20px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.2)] hover:translate-y-[-1px] active:translate-y-[1px] active:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.1)]',
+          'bg-primary text-primary-foreground shadow-[0_18px_40px_-24px_rgba(139,67,28,0.75),inset_0_1px_0_rgba(255,248,239,0.22)] hover:bg-primary/90 hover:translate-y-[-1px] hover:shadow-[0_24px_50px_-24px_rgba(139,67,28,0.9),inset_0_1px_0_rgba(255,248,239,0.28)] active:translate-y-0',
         destructive:
-          'bg-destructive text-destructive-foreground shadow-[0_4px_14px_-3px_rgba(239,68,68,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] hover:bg-destructive/90 hover:translate-y-[-1px]',
+          'bg-destructive text-destructive-foreground shadow-[0_18px_40px_-24px_rgba(127,29,29,0.8)] hover:bg-destructive/90 hover:translate-y-[-1px]',
         outline:
-          'border border-white/[0.08] bg-white/[0.03] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] hover:bg-white/[0.06] hover:border-white/[0.12] hover:translate-y-[-1px] hover:text-accent-foreground',
+          'border border-white/10 bg-white/[0.035] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:bg-white/[0.07] hover:border-primary/35 hover:text-primary-foreground/90 hover:translate-y-[-1px]',
         secondary:
-          'bg-secondary text-secondary-foreground shadow-[0_2px_8px_-2px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-secondary/80 hover:translate-y-[-1px]',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
+          'bg-secondary text-secondary-foreground shadow-[0_18px_40px_-28px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.28)] hover:bg-secondary/90 hover:translate-y-[-1px]',
+        ghost: 'hover:bg-accent/70 hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-lg px-3 text-xs',
-        lg: 'h-11 rounded-xl px-8',
-        icon: 'h-9 w-9',
+        default: 'h-10 px-4 py-2.5',
+        sm: 'h-8 rounded-xl px-3 text-xs',
+        lg: 'h-12 rounded-2xl px-8',
+        icon: 'h-10 w-10',
       },
     },
     defaultVariants: {

@@ -11,6 +11,7 @@ interface CustomerFilters {
   is_active?: boolean
   page?: number
   limit?: number
+  organization_id?: string
 }
 
 interface CustomersResponse {
@@ -52,7 +53,8 @@ async function createCustomer(data: Partial<Customer>): Promise<Customer> {
     body: JSON.stringify(data),
   })
   if (!response.ok) {
-    throw new Error('Failed to create customer')
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || 'Failed to create customer')
   }
   return response.json()
 }
@@ -175,6 +177,14 @@ export function useCustomer(id: string | null) {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteCustomer(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer', id] })
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+    },
+  })
+
   return {
     customer: customerQuery.data,
     isLoading: customerQuery.isLoading,
@@ -183,5 +193,8 @@ export function useCustomer(id: string | null) {
     
     update: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
+    
+    remove: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
   }
 }

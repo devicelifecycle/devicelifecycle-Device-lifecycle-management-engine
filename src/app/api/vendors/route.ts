@@ -6,6 +6,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { VendorService } from '@/services/vendor.service'
 import { vendorSchema } from '@/lib/validations'
+import { OrganizationService } from '@/services/organization.service'
+import { UserProvisioningService } from '@/services/user-provisioning.service'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,13 +67,9 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    // Only admin/coe_manager/sales can create vendors
-    if (!profile || !['admin', 'coe_manager', 'sales'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    if (!profile.organization_id) {
-      return NextResponse.json({ error: 'User has no organization' }, { status: 400 })
+    // Vendor creation now provisions login credentials, so keep it admin-only
+    if (profile?.role !== 'admin') {
+      return NextResponse.json({ error: 'Only admin can create vendors and vendor login IDs' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -83,13 +83,82 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const vendor = await VendorService.createVendor(validationResult.data, profile.organization_id)
-    return NextResponse.json(vendor, { status: 201 })
+    const input = validationResult.data
+
+    const { data: existingVendorOrgByEmail, error: existingVendorOrgByEmailError } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('type', 'vendor')
+      .eq('contact_email', input.contact_email)
+      .maybeSingle()
+
+    if (existingVendorOrgByEmailError) {
+      throw new Error(existingVendorOrgByEmailError.message)
+    }
+
+    const { data: existingVendorOrgByName, error: existingVendorOrgByNameError } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('type', 'vendor')
+      .eq('name', input.company_name)
+      .maybeSingle()
+
+    if (existingVendorOrgByNameError) {
+      throw new Error(existingVendorOrgByNameError.message)
+    }
+
+    const vendorOrganization = existingVendorOrgByEmail || existingVendorOrgByName || await OrganizationService.createOrganization({
+      name: input.company_name,
+      type: 'vendor',
+      contact_email: input.contact_email,
+      contact_phone: input.contact_phone,
+      address: input.address,
+    })
+
+    const { data: existingVendor, error: existingVendorError } = await supabase
+      .from('vendors')
+      .select('*')
+      .eq('organization_id', vendorOrganization.id)
+      .maybeSingle()
+
+    if (existingVendorError) {
+      throw new Error(existingVendorError.message)
+    }
+
+    if (existingVendor) {
+      return NextResponse.json(
+        { error: 'A vendor profile already exists for this organization' },
+        { status: 400 }
+      )
+    }
+
+    await UserProvisioningService.assertEmailAvailable(input.contact_email)
+
+    const vendor = await VendorService.createVendor(input, vendorOrganization.id)
+    const provisioned = await UserProvisioningService.provisionUser({
+      fullName: input.contact_name,
+      email: input.contact_email,
+      role: 'vendor',
+      organizationId: vendorOrganization.id,
+      oneUserPerRolePerOrganization: true,
+    })
+
+    return NextResponse.json(
+      {
+        ...vendor,
+        portal_account_created: provisioned.created,
+        welcome_email_sent_to: provisioned.emailSentTo ?? null,
+        welcome_email_sent: provisioned.emailSent ?? false,
+        portal_account_skipped_reason: provisioned.skippedReason ?? null,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error creating vendor:', error)
+    const message = error instanceof Error ? error.message : 'Failed to create vendor'
     return NextResponse.json(
-      { error: 'Failed to create vendor' },
-      { status: 500 }
+      { error: message },
+      { status: message.includes('exists') ? 400 : 500 }
     )
   }
 }

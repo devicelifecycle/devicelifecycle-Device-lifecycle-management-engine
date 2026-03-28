@@ -2,6 +2,7 @@ import {
   sanitizeSearchInput,
   sanitizeCsvCell,
   safeErrorMessage,
+  isValidUUID,
   percentage,
   clamp,
   snakeToTitle,
@@ -51,5 +52,13 @@ describe('utils helpers', () => {
     expect(isValidIMEI('123456789012345')).toBe(true)
     expect(isValidIMEI('12345678901234')).toBe(false)
     expect(isValidIMEI('12345678901234A')).toBe(false)
+  })
+
+  it('isValidUUID validates UUID format', () => {
+    expect(isValidUUID('550e8400-e29b-41d4-a716-446655440000')).toBe(true)
+    expect(isValidUUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')).toBe(true)
+    expect(isValidUUID('invalid')).toBe(false)
+    expect(isValidUUID("'; DROP TABLE orders--")).toBe(false)
+    expect(isValidUUID('')).toBe(false)
   })
 })

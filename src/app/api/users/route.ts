@@ -5,7 +5,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createUserSchema } from '@/lib/validations'
-import { EmailService } from '@/services/email.service'
+import { UserProvisioningService } from '@/services/user-provisioning.service'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -69,62 +71,29 @@ export async function POST(request: NextRequest) {
     // Validate input with Zod (enforces valid role enum, email format, etc.)
     const validationResult = createUserSchema.safeParse(body)
     if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: validationResult.error.errors },
-        { status: 400 }
-      )
+      const first = validationResult.error.errors[0]
+      const message = first?.message ?? 'Validation failed'
+      return NextResponse.json({ error: message }, { status: 400 })
     }
 
-    const { full_name, email, role, password, organization_id } = validationResult.data
+    const { full_name, email, role, password, organization_id, notification_email } = validationResult.data
 
-    // Create auth user
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    const provisioned = await UserProvisioningService.provisionUser({
+      fullName: full_name,
       email,
+      role,
       password,
-      email_confirm: true,
-      user_metadata: { full_name },
+      organizationId: organization_id,
+      notificationEmail: notification_email,
     })
 
-    if (authError) throw authError
-
-    const rolesRequiringOrg = ['sales', 'customer', 'vendor']
-    if (rolesRequiringOrg.includes(role) && !organization_id) {
-      return NextResponse.json(
-        { error: 'organization_id is required for sales, customer, and vendor roles' },
-        { status: 400 }
-      )
-    }
-
-    // Create user profile
-    const { data: newUser, error: profileError } = await supabase
-      .from('users')
-      .insert({
-        id: authData.user.id,
-        full_name,
-        email,
-        role,
-        organization_id: organization_id || undefined,
-        is_active: true,
-      })
-      .select()
-      .single()
-
-    if (profileError) throw profileError
-
-    // Send welcome email with login credentials (fire-and-forget)
-    EmailService.sendWelcomeEmail({
-      to: email,
-      recipientName: full_name,
-      role,
-      tempPassword: password,
-    }).catch(err => console.error('Welcome email error:', err))
-
-    return NextResponse.json(newUser, { status: 201 })
+    return NextResponse.json(provisioned.user, { status: 201 })
   } catch (error) {
     console.error('Error creating user:', error)
+    const message = error instanceof Error ? error.message : 'Failed to create user'
     return NextResponse.json(
-      { error: 'Failed to create user' },
-      { status: 500 }
+      { error: message },
+      { status: message.includes('exists') || message.includes('required') ? 400 : 500 }
     )
   }
 }

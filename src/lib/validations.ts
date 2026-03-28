@@ -146,25 +146,44 @@ export const resetPasswordSchema = z.object({
 // USER SCHEMAS
 // ============================================================================
 
-export const createUserSchema = z.object({
-  email: emailSchema,
-  full_name: z.string().min(2, 'Name must be at least 2 characters'),
-  role: z.enum(USER_ROLE_VALUES),
-  organization_id: z.string().uuid().optional(),
-  password: z.string().min(8, 'Password must be at least 8 characters').max(128),
-})
+const loginIdSchema = z.string()
+  .min(2, 'Login ID must be at least 2 characters')
+  .max(64)
+  .regex(/^[a-zA-Z0-9._-]+$/, 'Login ID: letters, numbers, dots, dashes, underscores only')
+
+export const createUserSchema = z
+  .object({
+    email: z.string().min(1, 'Login ID is required').refine((val) => {
+      if (val.includes('@')) return z.string().email().safeParse(val).success
+      return loginIdSchema.safeParse(val).success
+    }, { message: 'Use a Login ID (e.g. acme-corp) or a full email address' }),
+    full_name: z.string().min(2, 'Name must be at least 2 characters'),
+    role: z.enum(USER_ROLE_VALUES),
+    organization_id: z.string().uuid().optional(),
+    password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+    notification_email: z.string().email().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.email.includes('@')) return true
+      return !!data.notification_email
+    },
+    { message: 'Notification email is required when using a Login ID (so we can send credentials)', path: ['notification_email'] }
+  )
 
 export const updateUserSchema = z.object({
   full_name: z.string().min(2).optional(),
   role: z.enum(USER_ROLE_VALUES).optional(),
   is_active: z.boolean().optional(),
+  /** For Login ID users: real email for notifications, forgot-password */
+  notification_email: z.string().email().optional().nullable(),
 })
 
 // ============================================================================
 // ORGANIZATION SCHEMAS
 // ============================================================================
 
-export const createOrganizationSchema = z.object({
+const baseOrganizationSchema = z.object({
   name: z.string().min(2, 'Organization name must be at least 2 characters'),
   type: z.enum(ORGANIZATION_TYPE_VALUES),
   address: z.string().optional(),
@@ -177,7 +196,17 @@ export const createOrganizationSchema = z.object({
   website: z.string().url().optional().or(z.literal('')),
 })
 
-export const updateOrganizationSchema = createOrganizationSchema.partial()
+export const createOrganizationSchema = baseOrganizationSchema.superRefine((data, ctx) => {
+  if ((data.type === 'customer' || data.type === 'vendor') && !data.email) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['email'],
+      message: 'Email is required for customer and vendor organizations so we can send login details',
+    })
+  }
+})
+
+export const updateOrganizationSchema = baseOrganizationSchema.partial()
 
 // ============================================================================
 // CUSTOMER SCHEMAS
@@ -194,6 +223,7 @@ export const customerSchema = z.object({
   credit_limit: z.number().optional(),
   notes: z.string().optional(),
   default_risk_mode: z.enum(['retail', 'enterprise']).optional(),
+  organization_id: z.string().uuid().optional(),
 })
 
 export const createCustomerSchema = customerSchema
@@ -208,7 +238,13 @@ export const vendorSchema = z.object({
   contact_name: z.string().min(2, 'Contact name must be at least 2 characters'),
   contact_email: emailSchema,
   contact_phone: phoneSchema.optional(),
-  address: z.record(z.unknown()).optional(),
+  address: z.object({
+    street: z.string().min(1, 'Street is required'),
+    city: z.string().min(1, 'City is required'),
+    state: z.string().min(1, 'State/Province is required'),
+    zip: z.string().min(1, 'ZIP/Postal code is required'),
+    country: z.string().min(1, 'Country is required'),
+  }),
   payment_terms: z.string().optional(),
   warranty_period_days: z.coerce.number().min(0).optional(),
   notes: z.string().optional(),
@@ -245,20 +281,43 @@ export const orderItemSchema = z.object({
   notes: z.string().optional(),
 })
 
+/** Schema for adding a single order item via POST /api/orders/[id]/items */
+export const addOrderItemSchema = z.object({
+  device_id: z.string().uuid('Invalid device ID').optional().nullable(),
+  quantity: z.coerce.number().min(1, 'Quantity must be at least 1').max(100000, 'Quantity too large'),
+  storage: z.string().min(1, 'Storage is required').max(100),
+  color: z.string().max(50).optional(),
+  colour: z.string().max(50).optional(),
+  condition: z.enum(DEVICE_CONDITION_VALUES).optional().default('good'),
+  notes: z.string().max(2000).optional(),
+})
+
 export const orderSchema = z.object({
   type: z.enum(ORDER_TYPE_VALUES),
   customer_id: z.string().uuid('Please select a customer'),
   items: z.array(orderItemSchema).min(1, 'At least one item is required'),
   customer_notes: z.string().optional(),
   internal_notes: z.string().optional(),
+  notes: z.string().optional(), // Alias for customer_notes (forms send 'notes')
+}).transform((data) => {
+  const { notes, ...rest } = data
+  return {
+    ...rest,
+    customer_notes: rest.customer_notes ?? notes,
+  }
 })
 
 export const createOrderSchema = orderSchema
 export const updateOrderSchema = z.object({
   status: z.enum(ORDER_STATUS_VALUES).optional(),
+  vendor_id: z.string().uuid().optional().nullable(),
   assigned_to_id: z.string().uuid().optional().nullable(),
   customer_notes: z.string().optional(),
   internal_notes: z.string().optional(),
+  /** Per-order override for CPO buyback depreciation rate (0–50). null = use global setting. */
+  depreciation_rate_override: z
+    .union([z.coerce.number().min(0).max(50).finite(), z.null()])
+    .optional(),
 })
 
 export const orderTransitionSchema = z.object({
@@ -272,6 +331,7 @@ const pricingMetadataSchema = z.object({
   margin_tier: z.string().optional(),
   anchor_price: z.number().optional(),
   channel_decision: z.string().optional(),
+  pricing_source: z.enum(['auto', 'manual']).optional(),
 }).passthrough()
 
 export const bulkUpdateOrderItemPricesSchema = z.object({
@@ -286,6 +346,43 @@ export const bulkUpdateOrderItemPricesSchema = z.object({
       pricing_metadata: pricingMetadataSchema.nullable().optional(),
     })
   ).min(1, 'At least one item is required')
+})
+
+export const bulkUpdateOrderItemBuybackSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.string().uuid('Invalid item ID'),
+      guaranteed_buyback_price: z
+        .union([z.coerce.number().min(0).max(100000).finite(), z.null()])
+        .optional(),
+      buyback_condition: z.enum(DEVICE_CONDITION_VALUES).nullable().optional(),
+      buyback_valid_until: z.string().optional().nullable(),
+    })
+  ).min(1, 'At least one item is required')
+})
+
+export const bulkRepriceMismatchedItemsSchema = z.object({
+  items: z.array(
+    z.object({
+      order_item_id: z.string().uuid('Invalid order item ID'),
+      actual_condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)),
+      imei_record_id: z.string().uuid().optional(),
+    })
+  ).min(1, 'At least one mismatched item is required'),
+  risk_mode: z.enum(['retail', 'enterprise']).default('enterprise'),
+  beat_competitor_percent: z.coerce.number().min(0).max(20).optional(),
+  trade_in_profit_percent: z.coerce.number().min(0).max(100).optional(),
+})
+
+export const addManualMismatchSchema = z.object({
+  items: z.array(
+    z.object({
+      order_item_id: z.string().uuid('Invalid order item ID'),
+      actual_condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)),
+      imei: z.string().max(20).optional(),
+      notes: z.string().max(500).optional(),
+    })
+  ).min(1, 'At least one item is required'),
 })
 
 const ALLOWED_ORDER_SORT_COLUMNS = ['created_at', 'updated_at', 'order_number', 'status', 'total_amount', 'quoted_amount'] as const
@@ -494,7 +591,7 @@ export const createCompetitorPriceSchema = z.object({
   condition: z.preprocess(normalizeCompetitorConditionInput, z.enum(['excellent', 'good', 'fair', 'broken']).default('good')),
   trade_in_price: z.coerce.number().min(0).optional(),
   sell_price: z.coerce.number().min(0).optional(),
-  source: z.enum(['manual', 'scraped', 'api']).default('manual'),
+  source: z.enum(['manual', 'scraped', 'api', 'international_upload']).default('manual'),
 })
 
 export const updateCompetitorPriceSchema = createCompetitorPriceSchema.partial()
@@ -507,6 +604,11 @@ export const priceCalculationV2Schema = z.object({
   issues: z.array(z.string()).default([]),
   quantity: z.coerce.number().min(1).max(100000).default(1),
   risk_mode: z.enum(['retail', 'enterprise']).default('retail'),
+  trade_in_profit_percent: z.coerce.number().min(0).max(100).optional(),
+  cpo_markup_percent: z.coerce.number().min(0).max(100).optional(),
+  enterprise_margin_percent: z.coerce.number().min(0).max(100).optional(),
+  /** Beat highest competitor by this % — offer best price to win deals (e.g. 2 = 2% above highest) */
+  beat_competitor_percent: z.coerce.number().min(0).max(20).optional(),
 })
 
 // ============================================================================
@@ -524,6 +626,19 @@ export const createSLARuleSchema = z.object({
 })
 
 export const updateSLARuleSchema = createSLARuleSchema.partial()
+
+// ============================================================================
+// VENDOR BID SCHEMAS
+// ============================================================================
+
+export const submitVendorBidSchema = z.object({
+  order_id: z.string().uuid('Invalid order ID'),
+  quantity: z.coerce.number().int('Quantity must be a whole number').min(1, 'Quantity must be at least 1'),
+  unit_price: z.coerce.number().min(0.01, 'Unit price must be greater than 0'),
+  lead_time_days: z.coerce.number().int('Lead time must be a whole number').min(1, 'Lead time must be at least 1 day'),
+  warranty_days: z.coerce.number().int('Warranty must be a whole number').min(1).optional(),
+  notes: z.string().max(1000, 'Notes cannot exceed 1000 characters').optional(),
+})
 
 // ============================================================================
 // NOTIFICATION SCHEMAS

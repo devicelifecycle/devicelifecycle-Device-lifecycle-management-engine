@@ -42,7 +42,7 @@ interface CreateShipmentPayload {
   tracking_number?: string
   from_address: Record<string, unknown>
   to_address: Record<string, unknown>
-  shippo_purchase?: boolean
+  stallion_purchase?: boolean
   weight?: number
   dimensions?: { length: number; width: number; height: number }
   notes?: string
@@ -59,7 +59,7 @@ async function createShipment(payload: CreateShipmentPayload): Promise<Shipment>
     throw new Error(err.error || 'Failed to create shipment')
   }
   const result = await response.json()
-  return result.data
+  return result.data ?? result
 }
 
 async function updateShipmentStatus(
@@ -89,7 +89,7 @@ async function purchaseLabel(shipmentId: string): Promise<Shipment> {
     throw new Error(err.error || 'Failed to purchase label')
   }
   const result = await response.json()
-  return result.data
+  return result.data ?? result
 }
 
 export function useShipments(filters: ShipmentFilters = {}) {

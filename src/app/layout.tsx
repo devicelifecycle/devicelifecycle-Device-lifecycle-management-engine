@@ -23,7 +23,41 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${syne.variable}`}>
-      <body className="font-sans antialiased">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                // Suppress AbortError from Supabase auth-js navigator.locks (harmless; React Strict Mode / tab close)
+                function isAbortRelated(r) {
+                  if (!r) return false;
+                  if (r.name === 'AbortError') return true;
+                  var msg = (r && (r.message || r.reason)) ? String(r.message || r.reason) : '';
+                  if (/aborted|signal is aborted/i.test(msg)) return true;
+                  var stack = (r && (r.stack || (r.error && r.error.stack))) ? String(r.stack || r.error.stack) : '';
+                  if (/locks\\.js|navigator\\.locks|auth-js/i.test(stack)) return true;
+                  return false;
+                }
+                window.addEventListener('unhandledrejection', function(e) {
+                  if (isAbortRelated(e.reason)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                  }
+                }, true);
+                window.addEventListener('error', function(e) {
+                  if (isAbortRelated({ message: e.message, stack: e.error && e.error.stack })) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return true;
+                  }
+                }, true);
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body className="font-sans antialiased text-foreground">
         <Providers>
           {children}
           <Toaster />

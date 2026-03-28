@@ -1,11 +1,12 @@
 // ============================================================================
-// PRICE SCRAPER PIPELINE
+// PRICE SCRAPER PIPELINE (Optimized)
 // ============================================================================
-// Orchestrates scrapers, maps results to device_catalog, upserts to competitor_prices
+// Orchestrates scrapers IN PARALLEL, maps results to device_catalog, batch-upserts to competitor_prices.
 // When run from cron (no user session), pass a service-role client to bypass RLS.
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { normalizeCompetitorName } from '@/lib/utils'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from './types'
 import { scrapeGoRecell, scrapeGoRecellFullCatalog } from './adapters/gorecell'
@@ -57,6 +58,15 @@ function normalizeStorageKey(storage?: string): string {
   return (storage || 'Unknown').trim().toLowerCase()
 }
 
+/** Normalize storage for DB (e.g. "256 GB" -> "256GB", "1024GB" -> "1TB") */
+function normalizeStorageForDb(storage?: string): string {
+  let s = (storage || '128GB').trim().replace(/\s+/g, '').toUpperCase()
+  if (!s) s = '128GB'
+  if (s === '1024GB') s = '1TB'
+  if (s === '2048GB') s = '2TB'
+  return s
+}
+
 function normalizeModelKey(model?: string): string {
   return (model || '').trim().toLowerCase().replace(/\s+/g, ' ')
 }
@@ -66,7 +76,7 @@ function dedupeScrapedPrices(prices: ScrapedPrice[]): ScrapedPrice[] {
 
   for (const price of prices) {
     const key = [
-      price.competitor_name.toLowerCase(),
+      normalizeCompetitorName(price.competitor_name).toLowerCase(),
       (price.make || '').toLowerCase(),
       normalizeModelKey(price.model),
       normalizeStorageKey(price.storage),
@@ -79,6 +89,19 @@ function dedupeScrapedPrices(prices: ScrapedPrice[]): ScrapedPrice[] {
       continue
     }
 
+    // Prefer entry that has both trade_in_price AND sell_price
+    const existingHasBoth = existing.trade_in_price != null && existing.sell_price != null
+    const newHasBoth = price.trade_in_price != null && price.sell_price != null
+    if (newHasBoth && !existingHasBoth) {
+      map.set(key, price)
+      continue
+    }
+
+    // Merge sell_price from newer entry if existing lacks it
+    if (existing.sell_price == null && price.sell_price != null) {
+      existing.sell_price = price.sell_price
+    }
+
     if (existing.trade_in_price == null && price.trade_in_price != null) {
       map.set(key, price)
       continue
@@ -89,6 +112,10 @@ function dedupeScrapedPrices(prices: ScrapedPrice[]): ScrapedPrice[] {
       price.trade_in_price != null &&
       (price.scraped_at || '') > (existing.scraped_at || '')
     ) {
+      // Keep newer sell_price if available
+      if (price.sell_price == null && existing.sell_price != null) {
+        price.sell_price = existing.sell_price
+      }
       map.set(key, price)
     }
   }
@@ -150,6 +177,20 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
+// ============================================================================
+// DEVICE ID RESOLUTION WITH CACHE
+// ============================================================================
+
+/** Check if scraped model matches catalog model with word-boundary safety */
+function modelTokenMatch(scraped: string, catalog: string): boolean {
+  if (scraped === catalog) return true
+  if (scraped.startsWith(catalog)) {
+    const nextChar = scraped[catalog.length]
+    return nextChar === ' ' || nextChar === '-' || nextChar === undefined
+  }
+  return false
+}
+
 /** Map scraped make+model+storage to device_catalog id */
 async function resolveDeviceId(
   supabase: SupabaseClient,
@@ -157,7 +198,6 @@ async function resolveDeviceId(
   model: string,
   storage: string
 ): Promise<string | null> {
-  const makeNorm = normalize(make)
   const modelNorm = normalize(model)
 
   const { data: devices } = await supabase
@@ -169,19 +209,51 @@ async function resolveDeviceId(
   if (!devices?.length) return null
 
   const storageNorm = normalize(storage).replace(/\s/g, '')
+  // Also check alternate forms (1tb ↔ 1024gb)
+  const storageAlternates = [storageNorm]
+  if (storageNorm === '1tb') storageAlternates.push('1024gb')
+  if (storageNorm === '1024gb') storageAlternates.push('1tb')
+  if (storageNorm === '2tb') storageAlternates.push('2048gb')
+  if (storageNorm === '2048gb') storageAlternates.push('2tb')
+
   for (const d of devices) {
-    if (normalize(d.model) === modelNorm) {
+    const dm = normalize((d as { model?: string }).model ?? '')
+    // Word-boundary matching: "iPhone 15" must NOT match "iPhone 150"
+    const exactMatch = dm === modelNorm
+    const scrapedExtendsCatalog = modelTokenMatch(modelNorm, dm) && modelNorm !== dm
+    const catalogExtendsScraped = modelTokenMatch(dm, modelNorm) && dm !== modelNorm
+    const modelMatches = exactMatch || (scrapedExtendsCatalog && !catalogExtendsScraped)
+    if (modelMatches) {
       const spec = (d.specifications || {}) as { storage_options?: string[] }
       const storages = spec.storage_options || []
       if (storages.length === 0) return d.id
-      const storageMatch = storages.some(s => {
+      const storageMatch = storages.some((s: string) => {
         const sNorm = normalize(s).replace(/\s/g, '')
-        return sNorm === storageNorm || s.toLowerCase().includes(storage.toLowerCase())
+        return storageAlternates.some(alt =>
+          sNorm === alt || sNorm.includes(alt) || alt.includes(sNorm)
+        )
       })
       if (storageMatch) return d.id
     }
   }
-  return devices[0]?.id ?? null
+  return null
+}
+
+/** Cached wrapper for resolveDeviceId — avoids repeated DB queries for same device */
+function createDeviceIdResolver(supabase: SupabaseClient) {
+  const cache = new Map<string, string | null>()
+
+  return async function resolveDeviceIdCached(
+    make: string,
+    model: string,
+    storage: string
+  ): Promise<string | null> {
+    const key = `${normalize(make)}|${normalize(model)}|${normalizeStorageKey(storage)}`
+    if (cache.has(key)) return cache.get(key)!
+    const id = await resolveDeviceId(supabase, make, model, storage)
+    cache.set(key, id)
+    return id
+  }
 }
 
 /** Infer category from make/model */
@@ -199,6 +271,23 @@ function normalizeCompetitorCondition(input?: string): 'excellent' | 'good' | 'f
   if (value === 'fair') return 'fair'
   if (value === 'broken' || value === 'poor') return 'broken'
   return 'good'
+}
+
+/** Category-aware outlier thresholds — laptops/tablets have higher legitimate prices */
+function getOutlierThresholds(make: string, model: string): {
+  minTrade: number; maxTrade: number; minSell: number; maxSell: number
+} {
+  const category = inferCategory(make, model)
+  switch (category) {
+    case 'laptop':
+      return { minTrade: 50, maxTrade: 5000, minSell: 100, maxSell: 8000 }
+    case 'tablet':
+      return { minTrade: 20, maxTrade: 2500, minSell: 50, maxSell: 4000 }
+    case 'watch':
+      return { minTrade: 20, maxTrade: 1500, minSell: 50, maxSell: 2500 }
+    default: // phone
+      return { minTrade: 20, maxTrade: 2000, minSell: 50, maxSell: 3000 }
+  }
 }
 
 async function buildScrapeDevicesFromCatalog(supabase: SupabaseClient, limit = 240): Promise<DeviceToScrape[]> {
@@ -226,7 +315,6 @@ async function ensureDevice(supabase: SupabaseClient, make: string, model: strin
   const existing = await resolveDeviceId(supabase, make, model, storage)
   if (existing) return existing
 
-  const makeNorm = normalize(make)
   const modelNorm = normalize(model)
   const { data: devices } = await supabase
     .from('device_catalog')
@@ -267,9 +355,38 @@ async function ensureDevice(supabase: SupabaseClient, make: string, model: strin
   return created.id
 }
 
+// ============================================================================
+// PARALLEL SCRAPER HELPERS
+// ============================================================================
+
+async function runScraperSafe(
+  id: string,
+  fn: () => Promise<ScraperResult>
+): Promise<{ id: string; result: ScraperResult }> {
+  try {
+    const result = await fn()
+    return { id, result }
+  } catch (e) {
+    return {
+      id,
+      result: {
+        competitor_name: id,
+        prices: [],
+        success: false,
+        error: e instanceof Error ? e.message : 'Unknown error',
+        duration_ms: 0,
+      },
+    }
+  }
+}
+
+// ============================================================================
+// MAIN PIPELINE
+// ============================================================================
+
 /**
  * Run full scraper pipeline.
- * @param devices - Optional device list; if omitted, uses discovery mode (scrape all from GoRecell).
+ * @param devices - Optional device list; if omitted, uses discovery mode (scrape all).
  * @param supabaseClient - Optional Supabase client. Pass service-role client for cron (bypasses RLS).
  * @param discovery - If true, scrape full catalog and auto-create devices; ignores devices param.
  */
@@ -281,77 +398,90 @@ export async function runScraperPipeline(
   const supabase = supabaseClient ?? createServerSupabaseClient()
   const errors: string[] = []
   let devicesCreated = 0
+  const resolveDevice = createDeviceIdResolver(supabase)
 
   const results: ScraperResult[] = []
   const allPrices: ScrapedPrice[] = []
 
   if (discovery && (!devices || devices.length === 0)) {
-    // Discovery mode: scrape full catalog, auto-create devices
-    for (const { id, fn } of DISCOVERY_SCRAPERS) {
-      try {
-        const result = await (fn as () => Promise<ScraperResult>)()
-        results.push(result)
-        allPrices.push(...result.prices)
-      } catch (e) {
-        results.push({
-          competitor_name: id,
-          prices: [],
-          success: false,
-          error: e instanceof Error ? e.message : 'Unknown error',
-          duration_ms: 0,
-        })
-        errors.push(`${id}: ${e instanceof Error ? e.message : 'Unknown'}`)
-      }
-    }
-    // Also run regular scrapers for sources without full catalog endpoints (Apple)
-    let devicesToScrape: DeviceToScrape[] = await buildScrapeDevicesFromCatalog(supabase, 200)
+    // Discovery mode: run all discovery scrapers + Apple IN PARALLEL
+    const devicesToScrape = await buildScrapeDevicesFromCatalog(supabase, 200)
     const expandedDevices = expandDevicesByCondition(devicesToScrape)
-    for (const { id, fn } of SCRAPERS) {
-      if (id !== 'apple') continue
-      try {
-        const result = await fn(expandedDevices)
+
+    const scraperPromises = [
+      ...DISCOVERY_SCRAPERS.map(({ id, fn }) =>
+        runScraperSafe(id, () => (fn as () => Promise<ScraperResult>)())
+      ),
+      // Apple doesn't have a discovery mode — run with expanded devices
+      runScraperSafe('apple', () => scrapeApple(expandedDevices)),
+    ]
+
+    const settled = await Promise.allSettled(scraperPromises)
+    for (const outcome of settled) {
+      if (outcome.status === 'fulfilled') {
+        const { id, result } = outcome.value
         results.push(result)
         allPrices.push(...result.prices)
-      } catch (e) {
-        results.push({
-          competitor_name: id,
-          prices: [],
-          success: false,
-          error: e instanceof Error ? e.message : 'Unknown error',
-          duration_ms: 0,
-        })
+        if (!result.success && result.error) {
+          errors.push(`${id}: ${result.error}`)
+        }
       }
     }
   } else {
+    // Non-discovery: run all scrapers IN PARALLEL with device list
     let devicesToScrape = devices
     if (!devicesToScrape?.length) {
       devicesToScrape = await buildScrapeDevicesFromCatalog(supabase, 240)
     }
     const expandedDevices = expandDevicesByCondition(devicesToScrape!)
-    for (const { id, fn } of SCRAPERS) {
-      try {
-        const result = await fn(expandedDevices)
+
+    const scraperPromises = SCRAPERS.map(({ id, fn }) =>
+      runScraperSafe(id, () => fn(expandedDevices))
+    )
+
+    const settled = await Promise.allSettled(scraperPromises)
+    for (const outcome of settled) {
+      if (outcome.status === 'fulfilled') {
+        const { id, result } = outcome.value
         results.push(result)
         allPrices.push(...result.prices)
-      } catch (e) {
-        results.push({
-          competitor_name: id,
-          prices: [],
-          success: false,
-          error: e instanceof Error ? e.message : 'Unknown error',
-          duration_ms: 0,
-        })
-        errors.push(`${id}: ${e instanceof Error ? e.message : 'Unknown'}`)
+        if (!result.success && result.error) {
+          errors.push(`${id}: ${result.error}`)
+        }
       }
     }
   }
 
+  // Clean up stale prices older than 30 days
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const { error: cleanupError } = await supabase
+    .from('competitor_prices')
+    .delete()
+    .lt('scraped_at', thirtyDaysAgo)
+  if (cleanupError) {
+    errors.push(`Stale cleanup failed: ${cleanupError.message}`)
+  }
+
+  // Dedupe and prepare rows for batch upsert
   let upserted = 0
   const dedupedPrices = dedupeScrapedPrices(allPrices)
-  for (const p of dedupedPrices) {
-    if (p.trade_in_price == null) continue
+  const BATCH_SIZE = 50
+  const batchRows: Array<{
+    device_id: string
+    storage: string
+    competitor_name: string
+    condition: 'excellent' | 'good' | 'fair' | 'broken'
+    trade_in_price: number | null
+    sell_price: number | null
+    source: string
+    scraped_at: string
+    updated_at: string
+  }> = []
 
-    let deviceId: string | null = await resolveDeviceId(supabase, p.make, p.model, p.storage)
+  for (const p of dedupedPrices) {
+    if (p.trade_in_price == null && (p.sell_price == null || p.sell_price <= 0)) continue
+
+    let deviceId: string | null = await resolveDevice(p.make, p.model, p.storage)
     if (!deviceId && discovery) {
       try {
         deviceId = await ensureDevice(supabase, p.make, p.model, p.storage)
@@ -362,34 +492,92 @@ export async function runScraperPipeline(
       }
     }
     if (!deviceId) {
-      errors.push(`No device match: ${p.make} ${p.model} ${p.storage}`)
       continue
     }
 
-    const row = {
+    const tradeIn = p.trade_in_price != null && p.trade_in_price > 0 ? p.trade_in_price : null
+    const sell = p.sell_price != null && p.sell_price > 0 ? p.sell_price : null
+    if (tradeIn == null && sell == null) continue
+
+    // Category-aware outlier filtering
+    const { minTrade, maxTrade, minSell, maxSell } = getOutlierThresholds(p.make, p.model)
+    if (tradeIn != null && (tradeIn < minTrade || tradeIn > maxTrade)) continue
+    if (sell != null && (sell < minSell || sell > maxSell)) continue
+
+    const now = new Date().toISOString()
+    batchRows.push({
       device_id: deviceId,
-      storage: p.storage || 'Unknown',
-      competitor_name: p.competitor_name,
+      storage: normalizeStorageForDb(p.storage).slice(0, 50),
+      competitor_name: normalizeCompetitorName(p.competitor_name).slice(0, 100),
       condition: normalizeCompetitorCondition(p.condition),
-      trade_in_price: p.trade_in_price,
-      sell_price: p.sell_price ?? null,
+      trade_in_price: tradeIn,
+      sell_price: sell,
       source: 'scraped',
-      scraped_at: p.scraped_at,
-      updated_at: new Date().toISOString(),
+      scraped_at: p.scraped_at || now,
+      updated_at: now,
+    })
+  }
+
+  // Dedupe batch rows by conflict key (device_id+storage+competitor+condition)
+  // Prevents "ON CONFLICT DO UPDATE cannot affect row a second time" errors
+  const seenConflictRows = new Map<string, typeof batchRows[number]>()
+  for (const row of batchRows) {
+    const key = `${row.device_id}|${row.storage}|${row.competitor_name}|${row.condition}`
+    const existing = seenConflictRows.get(key)
+
+    if (!existing) {
+      seenConflictRows.set(key, row)
+      continue
     }
 
-    const result = await upsertCompetitorPrice(supabase, row)
-    if (result.success) {
-      upserted++
-    } else {
-      errors.push(
-        `Upsert failed: ${p.competitor_name} ${p.make} ${p.model} ${p.storage} ${row.condition} - ${result.error || 'Unknown'}`
+    const existingTrade = existing.trade_in_price ?? 0
+    const rowTrade = row.trade_in_price ?? 0
+    const existingSell = existing.sell_price ?? 0
+    const rowSell = row.sell_price ?? 0
+    const shouldReplace =
+      rowTrade > existingTrade ||
+      (rowTrade === existingTrade && rowSell > existingSell) ||
+      (
+        rowTrade === existingTrade &&
+        rowSell === existingSell &&
+        row.scraped_at > existing.scraped_at
       )
+
+    if (shouldReplace) {
+      seenConflictRows.set(key, row)
+    }
+  }
+  const uniqueBatchRows = Array.from(seenConflictRows.values())
+
+  // Batch upsert — fall back to individual on failure
+  for (let i = 0; i < uniqueBatchRows.length; i += BATCH_SIZE) {
+    const batch = uniqueBatchRows.slice(i, i + BATCH_SIZE)
+    const { error: batchError } = await supabase
+      .from('competitor_prices')
+      .upsert(batch, {
+        onConflict: 'device_id,storage,competitor_name,condition',
+        ignoreDuplicates: false,
+      })
+
+    if (!batchError) {
+      upserted += batch.length
+    } else {
+      // Fall back to individual upserts for this batch
+      for (const row of batch) {
+        const result = await upsertCompetitorPrice(supabase, row)
+        if (result.success) {
+          upserted++
+        } else {
+          errors.push(
+            `Upsert failed: ${row.competitor_name} ${row.storage} ${row.condition} - ${result.error || 'Unknown'}`
+          )
+        }
+      }
     }
   }
 
   return {
-    total_scraped: dedupedPrices.filter(p => p.trade_in_price != null).length,
+    total_scraped: dedupedPrices.filter(p => (p.trade_in_price != null && p.trade_in_price > 0) || (p.sell_price != null && p.sell_price > 0)).length,
     total_upserted: upserted,
     devices_created: discovery ? devicesCreated : undefined,
     results,

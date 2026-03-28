@@ -2,8 +2,7 @@
 // SUPABASE SERVICE-ROLE CLIENT
 // ============================================================================
 // Use ONLY for server-side operations that run without user context
-// (webhooks, cron jobs, background workers). Bypasses RLS.
-
+// (webhooks, cron jobs, background workers, bootstrap scripts). Bypasses RLS.
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''

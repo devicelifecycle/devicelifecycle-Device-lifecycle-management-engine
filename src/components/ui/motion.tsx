@@ -4,10 +4,11 @@ import React from 'react'
 import { motion, useInView, type Variants } from 'framer-motion'
 
 const fadeInUp: Variants = {
-  hidden: { opacity: 0, y: 28 },
+  hidden: { opacity: 0, y: 28, scale: 0.97 },
   visible: {
     opacity: 1,
     y: 0,
+    scale: 1,
     transition: { type: 'spring', stiffness: 260, damping: 24 },
   },
 }
@@ -122,11 +123,13 @@ export function MotionCard({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 20, rotateX: -5 }}
+      animate={{ opacity: 1, y: 0, rotateX: 0 }}
       transition={{ ...defaultTransition, delay }}
-      whileHover={hover ? { y: -4, scale: 1.01, transition: { duration: 0.2 } } : undefined}
+      whileHover={hover ? { y: -6, scale: 1.02, rotateX: 2, transition: { duration: 0.3, type: 'spring', stiffness: 400 } } : undefined}
+      whileTap={hover ? { scale: 0.98, rotateX: 0 } : undefined}
       className={className}
+      style={{ transformPerspective: 1200 }}
     >
       {children}
     </motion.div>
@@ -136,9 +139,9 @@ export function MotionCard({
 export function PageTransition({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+      initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(4px)' }}
+      animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+      transition={{ type: 'spring', stiffness: 240, damping: 22, mass: 0.8 }}
       className={className}
     >
       {children}
@@ -201,4 +204,56 @@ export function AnimatedCounter({ value, duration = 1 }: { value: number; durati
   }, [isInView, value, duration])
 
   return <span ref={ref}>{count}</span>
+}
+
+export function Tilt3DCard({
+  children,
+  className,
+  glowColor = 'rgba(59, 130, 246, 0.15)',
+}: {
+  children: React.ReactNode
+  className?: string
+  glowColor?: string
+}) {
+  const ref = React.useRef<HTMLDivElement>(null)
+  const [rotateX, setRotateX] = React.useState(0)
+  const [rotateY, setRotateY] = React.useState(0)
+
+  const handleMouseMove = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width - 0.5
+    const y = (e.clientY - rect.top) / rect.height - 0.5
+    setRotateX(-y * 12)
+    setRotateY(x * 12)
+  }, [])
+
+  const handleMouseLeave = React.useCallback(() => {
+    setRotateX(0)
+    setRotateY(0)
+  }, [])
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      animate={{ rotateX, rotateY }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      style={{
+        transformPerspective: 1200,
+        transformStyle: 'preserve-3d',
+      }}
+      className={className}
+    >
+      {children}
+      <motion.div
+        className="pointer-events-none absolute inset-0 rounded-[inherit]"
+        animate={{
+          background: `radial-gradient(circle at ${50 + rotateY * 4}% ${50 - rotateX * 4}%, ${glowColor} 0%, transparent 60%)`,
+        }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      />
+    </motion.div>
+  )
 }

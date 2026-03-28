@@ -42,7 +42,7 @@ create index if not exists idx_imei_records_order_triage
 
 -- IMEI lookups by serial/device
 create index if not exists idx_imei_records_device_status
-  on imei_records(device_id, current_status);
+  on imei_records(device_id, triage_status);
 
 -- ============================================================================
 -- DEVICE CATALOG
@@ -72,34 +72,30 @@ create index if not exists idx_pricing_tables_effective
 -- TRIAGE RESULTS
 -- ============================================================================
 
--- Triage results by order and decision
-create index if not exists idx_triage_results_order_decision
-  on triage_results(order_id, decision, created_at desc);
+-- Triage results by order and final condition
+create index if not exists idx_triage_results_order_condition
+  on triage_results(order_id, final_condition, created_at desc);
 
 -- ============================================================================
 -- SHIPMENTS
 -- ============================================================================
 
 -- Shipment tracking by order
-create index if not exists idx_shipments_order_type
-  on shipments(order_id, type, status);
+create index if not exists idx_shipments_order_direction
+  on shipments(order_id, direction, status);
 
 -- Active shipments monitoring
 create index if not exists idx_shipments_status_date
-  on shipments(status, expected_delivery_date)
+  on shipments(status, estimated_delivery)
   where status not in ('delivered', 'cancelled');
 
 -- ============================================================================
 -- NOTIFICATIONS
 -- ============================================================================
 
--- User notifications (unread priority)
+-- User notifications (unread first)
 create index if not exists idx_notifications_user_unread
   on notifications(user_id, is_read, created_at desc);
-
--- Priority notifications
-create index if not exists idx_notifications_priority
-  on notifications(priority desc, created_at desc) where is_read = false;
 
 -- ============================================================================
 -- AUDIT LOGS
@@ -119,11 +115,11 @@ create index if not exists idx_audit_logs_user_action
 
 -- SLA breaches by order
 create index if not exists idx_sla_breaches_order
-  on sla_breaches(order_id, breach_time desc);
+  on sla_breaches(order_id, breached_at desc);
 
 -- Active breaches monitoring
 create index if not exists idx_sla_breaches_resolved
-  on sla_breaches(resolved_at, breach_time desc) where resolved_at is null;
+  on sla_breaches(resolved_at, breached_at desc) where resolved_at is null;
 
 -- ============================================================================
 -- VENDOR BIDS

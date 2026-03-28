@@ -12,7 +12,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/pagination'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
-import { ORDER_STATUS_CONFIG } from '@/lib/constants'
+import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG } from '@/lib/constants'
 import type { OrderStatus } from '@/types'
 
 export default function CustomerOrdersPage() {
@@ -36,7 +36,7 @@ export default function CustomerOrdersPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search by order number..."
+          placeholder="Search by order number, IMEI, or serial number..."
           className="pl-10 bg-background"
           value={search}
           onChange={(event) => {
@@ -80,7 +80,7 @@ export default function CustomerOrdersPage() {
               </TableHeader>
               <TableBody>
                 {orders.map((order) => {
-                  const status = ORDER_STATUS_CONFIG[order.status as OrderStatus]
+                  const status = CUSTOMER_STATUS_CONFIG[order.status as OrderStatus] ?? ORDER_STATUS_CONFIG[order.status as OrderStatus]
                   return (
                     <TableRow key={order.id}>
                       <TableCell>

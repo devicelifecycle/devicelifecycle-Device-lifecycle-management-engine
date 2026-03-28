@@ -7,8 +7,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { safeErrorMessage } from '@/lib/utils'
 import { OrderSplitService } from '@/services/order-split.service'
 import type { OrderSplitConfig } from '@/types'
+export const dynamic = 'force-dynamic'
+
 
 interface RouteParams {
   params: {
@@ -111,8 +114,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     })
   } catch (error) {
     console.error('Error splitting order:', error)
-    const message = error instanceof Error ? error.message : 'Failed to split order'
-    return NextResponse.json({ error: message }, { status: 400 })
+    return NextResponse.json(
+      { error: safeErrorMessage(error, 'Failed to split order') },
+      { status: 400 }
+    )
   }
 }
 
@@ -141,7 +146,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ message: 'Order split has been undone' })
   } catch (error) {
     console.error('Error undoing split:', error)
-    const message = error instanceof Error ? error.message : 'Failed to undo split'
-    return NextResponse.json({ error: message }, { status: 400 })
+    return NextResponse.json(
+      { error: safeErrorMessage(error, 'Failed to undo split') },
+      { status: 400 }
+    )
   }
 }

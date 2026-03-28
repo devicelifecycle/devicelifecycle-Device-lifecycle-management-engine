@@ -38,8 +38,20 @@ export async function GET(request: NextRequest) {
     const cookieStore = cookies()
 
     const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    const supabaseUrl = rawUrl.startsWith('https://') ? rawUrl : 'https://placeholder.supabase.co'
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+    const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    const supabaseUrl =
+      rawUrl.startsWith('https://') ? rawUrl
+      : process.env.NODE_ENV === 'production' ? ''
+      : 'https://placeholder.supabase.co'
+    const supabaseAnonKey =
+      rawKey && rawKey.length > 10 ? rawKey
+      : process.env.NODE_ENV === 'production' ? ''
+      : 'placeholder-key'
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY')
+      return NextResponse.redirect(new URL('/login?error=config', request.url))
+    }
 
     const supabase = createServerClient(
       supabaseUrl,

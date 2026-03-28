@@ -1,0 +1,6 @@
+# Scrapling: web scraping with anti-bot bypass
+# [fetchers] extra includes: patchright (Playwright fork), camoufox, TLS fingerprinting
+scrapling[fetchers]==0.4.2
+
+# patchright is pulled in by scrapling[fetchers], but pin explicitly for fallback usage
+patchright>=1.0.0

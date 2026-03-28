@@ -224,7 +224,7 @@ export class SLAService {
 
   /**
    * Check and send recurring reminder notifications for orders in 'quoted' status.
-   * Customer has 7 days to accept/reject. We send reminders at day 2, 4, 6.
+   * Customer has 30 days to accept/reject trade-in. Reminders at day 7, 14, 21, 25.
    */
   private static async checkCustomerReminders(order: Order): Promise<number> {
     if (!order.quoted_at || !order.customer_id) return 0
@@ -268,7 +268,8 @@ export class SLAService {
         .eq('role', 'customer')
         .eq('is_active', true)
 
-      const daysRemaining = Math.max(0, Math.ceil((168 - hoursSinceQuoted) / 24))
+      const quoteValidityHours = 30 * 24 // 30 days
+      const daysRemaining = Math.max(0, Math.ceil((quoteValidityHours - hoursSinceQuoted) / 24))
 
       // Send in-app notification to each customer user
       for (const user of customerUsers || []) {

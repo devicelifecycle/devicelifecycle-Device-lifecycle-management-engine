@@ -119,6 +119,36 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatus, {
 }
 
 // ============================================================================
+// CUSTOMER-FACING STATUS
+// Internal logistics statuses (sourcing → ready_to_ship) are collapsed to
+// "In Progress" for customers — they don't need to see operational details.
+// ============================================================================
+
+export const CUSTOMER_STATUS_CONFIG: Record<OrderStatus, {
+  label: string
+  description: string
+  color: string
+  bgColor: string
+}> = {
+  draft:          { label: 'Draft',           description: 'Your order is being prepared',                 color: 'text-gray-600',   bgColor: 'bg-gray-100' },
+  submitted:      { label: 'Submitted',       description: "We've received your request",                 color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  quoted:         { label: 'Quoted',          description: 'Your quote is ready to review',               color: 'text-purple-600', bgColor: 'bg-purple-100' },
+  accepted:       { label: 'Accepted',        description: "Quote accepted — we're on it",                color: 'text-green-600',  bgColor: 'bg-green-100' },
+  rejected:       { label: 'Declined',        description: 'Quote was declined',                          color: 'text-red-600',    bgColor: 'bg-red-100' },
+  sourcing:       { label: 'In Progress',     description: "We're sourcing your devices",                 color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  sourced:        { label: 'In Progress',     description: 'Devices located — preparing for dispatch',    color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  shipped_to_coe: { label: 'In Progress',     description: 'Devices being prepared at our facility',      color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  received:       { label: 'In Progress',     description: 'Devices received — running quality checks',   color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  in_triage:      { label: 'In Progress',     description: 'Devices being inspected and graded',          color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  qc_complete:    { label: 'In Progress',     description: 'Quality check complete — almost ready',       color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  ready_to_ship:  { label: 'Ready to Ship',   description: 'Your order is ready for dispatch',            color: 'text-amber-600',  bgColor: 'bg-amber-100' },
+  shipped:        { label: 'Shipped',         description: 'Your order is on its way',                    color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  delivered:      { label: 'Delivered',       description: 'Order delivered successfully',                color: 'text-green-600',  bgColor: 'bg-green-100' },
+  closed:         { label: 'Closed',          description: 'Order completed',                             color: 'text-gray-600',   bgColor: 'bg-gray-100' },
+  cancelled:      { label: 'Cancelled',       description: 'Order was cancelled',                         color: 'text-red-600',    bgColor: 'bg-red-100' },
+}
+
+// ============================================================================
 // ORDER TYPE CONFIG
 // ============================================================================
 
@@ -228,9 +258,9 @@ export const USER_ROLE_CONFIG: Record<UserRole, {
 
 export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   draft: ['submitted', 'cancelled'],
-  submitted: ['quoted', 'cancelled'],
+  submitted: ['quoted', 'sourcing', 'cancelled'],
   quoted: ['accepted', 'rejected'],
-  accepted: ['sourcing', 'cancelled'],
+  accepted: ['sourcing', 'sourced', 'cancelled'],
   rejected: [], // Terminal state
   sourcing: ['sourced', 'cancelled'],
   sourced: ['shipped_to_coe', 'cancelled'],
@@ -251,7 +281,7 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 export const DEFAULT_SLA_HOURS: Record<string, { warning: number; breach: number }> = {
   quote_response: { warning: 24, breach: 48 },        // 24-48hr to quote after trade-in request
-  customer_response: { warning: 120, breach: 168 },    // 5-day warning, 7-day breach for customer to accept/reject
+  customer_response: { warning: 600, breach: 720 },     // 25-day warning, 30-day breach for customer to accept/reject trade-in
   sourcing: { warning: 8, breach: 24 },
   vendor_ship: { warning: 24, breach: 48 },
   coe_receiving: { warning: 4, breach: 8 },
@@ -262,7 +292,14 @@ export const DEFAULT_SLA_HOURS: Record<string, { warning: number; breach: number
 
 // Reminder intervals for customer response (hours since quote was sent)
 // Reminders at day 2, day 4, day 6 if customer hasn't accepted/rejected
-export const CUSTOMER_REMINDER_INTERVALS_HOURS = [48, 96, 144]
+/** Reminder intervals: day 7, day 14, day 21, day 25 (within 30-day quote window) */
+export const CUSTOMER_REMINDER_INTERVALS_HOURS = [168, 336, 504, 600]
+
+/** Trade-in quotes are valid for 30 days */
+export const TRADE_IN_QUOTE_VALIDITY_DAYS = 30
+
+/** Price change threshold (%) — notify customer when market price shifts this much since quote */
+export const PRICE_CHANGE_NOTIFICATION_THRESHOLD = 5
 
 // ============================================================================
 // PAGINATION DEFAULTS
@@ -440,9 +477,8 @@ export const API_ROUTES = {
   SHIPMENT: (id: string) => `/api/shipments/${id}`,
   SHIPMENT_PURCHASE_LABEL: (id: string) => `/api/shipments/${id}/purchase-label`,
   SHIPMENTS_STATS: '/api/shipments/stats',
-  SHIPPO_HEALTH: '/api/shippo/health',
-  SHIPPO_WEBHOOK: '/api/shippo/webhook',
-  
+  STALLION_HEALTH: '/api/stallion/health',
+
   // Triage
   TRIAGE: '/api/triage',
   
@@ -582,7 +618,16 @@ export const MARGIN_TIER_CONFIG: Record<MarginTier, {
   },
 }
 
-export const COMPETITORS = ['Telus', 'Bell', 'GoRecell', 'UniverCell'] as const
+export const COMPETITORS = ['Telus', 'Bell', 'GoRecell', 'UniverCell', 'Apple Trade-In'] as const
+
+/** Display names for competitor columns (Bell/Telus trade-in programs) */
+export const COMPETITOR_DISPLAY_NAMES: Record<string, string> = {
+  Telus: 'Telus Trade-In',
+  Bell: 'Bell Trade-In',
+  GoRecell: 'GoRecell',
+  UniverCell: 'UniverCell',
+  'Apple Trade-In': 'Apple Trade-In',
+}
 
 // ============================================================================
 // ORDER EMAIL NOTIFICATION CONFIG
@@ -639,6 +684,12 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     customer: true,
     subject: (n) => `Devices Received — Order #${n}`,
     message: (n) => `We've received the devices for order #${n}. They are now queued for quality inspection.`,
+  },
+  in_triage: {
+    assigned: true,
+    admin: true,
+    subject: (n) => `Order #${n} In Triage`,
+    message: (n) => `Order #${n} is now in triage and being inspected.`,
   },
   qc_complete: {
     assigned: true,

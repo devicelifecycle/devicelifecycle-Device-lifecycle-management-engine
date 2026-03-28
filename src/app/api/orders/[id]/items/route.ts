@@ -4,13 +4,19 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { bulkUpdateOrderItemPricesSchema } from '@/lib/validations'
+import { bulkUpdateOrderItemPricesSchema, addOrderItemSchema } from '@/lib/validations'
+import { safeErrorMessage, isValidUUID } from '@/lib/utils'
+export const dynamic = 'force-dynamic'
+
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!isValidUUID(params.id)) {
+      return NextResponse.json({ error: 'Invalid order ID format' }, { status: 400 })
+    }
     const supabase = createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -30,14 +36,14 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { device_id, quantity, storage, color, colour, condition, notes } = body
-
-    if (!device_id || !quantity) {
-      return NextResponse.json(
-        { error: 'device_id and quantity are required' },
-        { status: 400 }
-      )
+    const validationResult = addOrderItemSchema.safeParse(body)
+    if (!validationResult.success) {
+      const firstError = validationResult.error.errors[0]
+      const message = firstError?.message ?? 'Validation failed'
+      return NextResponse.json({ error: message }, { status: 400 })
     }
+
+    const { device_id, quantity, storage, color, colour, condition, notes } = validationResult.data
 
     const { data: order, error: orderError } = await supabase
       .from('orders')
@@ -68,7 +74,7 @@ export async function POST(
       .from('order_items')
       .insert({
         order_id: params.id,
-        device_id,
+        device_id: device_id || null,
         quantity,
         storage,
         colour: colour || color,
@@ -78,7 +84,16 @@ export async function POST(
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      // FK violation = invalid device_id; return 400 with clear message
+      if (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('violates foreign key')) {
+        return NextResponse.json(
+          { error: device_id ? 'Device not found. Select a valid device from the catalog.' : 'Invalid reference.' },
+          { status: 400 }
+        )
+      }
+      throw error
+    }
 
     // Update order total quantity
     const { data: items } = await supabase
@@ -169,10 +184,7 @@ export async function PATCH(
     if (!validationResult.success) {
       const firstError = validationResult.error.errors[0]
       const message = firstError?.message || 'Validation failed'
-      return NextResponse.json(
-        { error: message, details: validationResult.error.errors },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: message }, { status: 400 })
     }
 
     const { items } = validationResult.data
@@ -190,15 +202,13 @@ export async function PATCH(
       }
     }
 
-    const errors: string[] = []
-    for (const item of items) {
-      // Build update payload — only include fields that exist
-      const updatePayload: Record<string, unknown> = {
-        unit_price: item.unit_price,
+    const updateResults = await Promise.all(items.map(async (item) => {
+      const meta = item.pricing_metadata ?? {}
+      const mergedMeta = {
+        ...(typeof meta === 'object' ? meta : {}),
+        pricing_source: 'manual' as const,
       }
-      if (item.pricing_metadata) {
-        updatePayload.pricing_metadata = item.pricing_metadata
-      }
+      const updatePayload: Record<string, unknown> = { unit_price: item.unit_price, pricing_metadata: mergedMeta }
 
       const { error } = await supabase
         .from('order_items')
@@ -208,19 +218,21 @@ export async function PATCH(
 
       if (error) {
         console.error(`Error updating item ${item.id}:`, error.message)
-        // If pricing_metadata column doesn't exist, retry without it
-        if (error.message.includes('pricing_metadata')) {
+        // If pricing_metadata error, retry without it
+        if (error.message.includes('pricing_metadata') || (error as { code?: string }).code === '42703') {
           const { error: retryError } = await supabase
             .from('order_items')
             .update({ unit_price: item.unit_price })
             .eq('id', item.id)
             .eq('order_id', params.id)
-          if (retryError) errors.push(`Item ${item.id}: ${retryError.message}`)
+          if (retryError) return item.id
         } else {
-          errors.push(`Item ${item.id}: ${error.message}`)
+          return item.id
         }
       }
-    }
+      return null
+    }))
+    const errors = updateResults.filter((id): id is string => id !== null)
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -252,9 +264,8 @@ export async function PATCH(
     return NextResponse.json({ success: true, total_amount: totalAmount })
   } catch (error) {
     console.error('Error updating order item prices:', error)
-    const message = error instanceof Error ? error.message : 'Failed to update order item prices'
     return NextResponse.json(
-      { error: message },
+      { error: safeErrorMessage(error, 'Failed to update order item prices') },
       { status: 500 }
     )
   }

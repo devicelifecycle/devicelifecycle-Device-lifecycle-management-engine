@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { sanitizeSearchInput } from '@/lib/utils'
 import {
   CHANNEL_DECISION_THRESHOLDS,
   MARKETPLACE_FEE_PERCENT,
@@ -32,8 +33,8 @@ import type {
 const DEFAULT_MARGIN_SETTINGS = {
   trade_in_profit_percent: 20,
   trade_in_min_profit: 15,
-  cpo_markup_percent: 25,
-  cpo_enterprise_markup_percent: 18,
+  cpo_markup_percent: 18,
+  cpo_enterprise_markup_percent: 15,
   testing_cost: 5,
   inbound_shipping_cost: 3,
   outbound_shipping_cost: 5,
@@ -123,6 +124,7 @@ export interface PricingSettingsOverrides {
   breakage_risk_percent: number
   competitive_relevance_min: number
   competitor_ceiling_percent: number
+  beat_competitor_percent: number
   outlier_deviation_threshold: number
   trade_in_profit_percent: number
   enterprise_margin_percent: number
@@ -143,11 +145,12 @@ const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
   breakage_risk_percent: BREAKAGE_RISK_PERCENT,
   competitive_relevance_min: COMPETITIVE_RELEVANCE_MIN,
   competitor_ceiling_percent: 2,
+  beat_competitor_percent: 0,
   outlier_deviation_threshold: OUTLIER_DEVIATION_THRESHOLD,
   trade_in_profit_percent: 20,
   enterprise_margin_percent: 12,
-  cpo_markup_percent: 25,
-  cpo_enterprise_markup_percent: 18,
+  cpo_markup_percent: 18,
+  cpo_enterprise_markup_percent: 15,
   price_staleness_days: 7,
   margin_mode: 'auto',
   custom_margin_percent: 0,
@@ -156,6 +159,11 @@ const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
 
 export class PricingService {
 
+  /**
+   * Single source of truth for margin, beat %, and all pricing knobs.
+   * Used by: order flow, quote API, calculate-batch, reprice-mismatches, and admin pricing page.
+   * Changes in Admin → Pricing → Settings apply to the entire system, not just the pricing page.
+   */
   static async getPricingSettings(): Promise<PricingSettingsOverrides> {
     try {
       const supabase = createServerSupabaseClient()
@@ -188,7 +196,9 @@ export class PricingService {
   // ============================================================================
 
   /**
-   * Calculate price using market-referenced competitive model
+   * Calculate price using market-referenced competitive model.
+   * Uses getPricingSettings() for margin %, beat_competitor %, etc. — so Admin Settings apply
+   * to orders, quotes, and all API callers, not just the pricing page.
    * Algorithm from company's "COE Engine Pricing Alg" spreadsheet:
    * 1. Anchor on wholesale C-stock price
    * 2. Apply condition + deductions
@@ -205,6 +215,10 @@ export class PricingService {
     issues?: string[];
     quantity?: number;
     risk_mode?: RiskMode;
+    beat_competitor_percent?: number;
+    trade_in_profit_percent?: number;
+    enterprise_margin_percent?: number;
+    cpo_markup_percent?: number;
   }): Promise<PriceCalculationResultV2> {
     const supabase = createServerSupabaseClient()
     const carrier = input.carrier || 'Unlocked'
@@ -224,8 +238,57 @@ export class PricingService {
         .limit(1)
         .single()
 
-      // Fallback: try pricing_tables if no market_prices entry
-      let anchorPrice = marketEntry?.wholesale_c_stock || 0
+      // Anchor priority: prefer competitor data when available (trade-in offers) over market wholesale.
+      // Wholesale/market can inflate quotes; competitors reflect what customers actually get.
+      // First try same-condition competitors, then fall back to all conditions.
+      const competitorConditionForAnchor = mapDeviceConditionToCompetitorCondition(input.condition)
+      const { data: compForAnchorCondition } = await supabase
+        .from('competitor_prices')
+        .select('trade_in_price, updated_at, scraped_at')
+        .eq('device_id', input.device_id)
+        .eq('storage', input.storage)
+        .eq('condition', competitorConditionForAnchor)
+        .not('trade_in_price', 'is', null)
+        .gt('trade_in_price', 0)
+
+      const staleDays = 14
+      const staleCutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000)
+      const extractFreshPrices = (rows: Array<{ trade_in_price?: number; updated_at?: string; scraped_at?: string }> | null): number[] =>
+        (rows || [])
+          .filter((c) => {
+            const ts = c.updated_at || c.scraped_at
+            return ts && new Date(ts) > staleCutoff
+          })
+          .map((c) => Number(c.trade_in_price) || 0)
+          .filter((p: number) => p > 0)
+
+      let freshCompetitorPrices = extractFreshPrices(compForAnchorCondition)
+
+      // Fall back to all conditions if no same-condition prices found
+      if (freshCompetitorPrices.length === 0) {
+        const { data: compForAnchorAll } = await supabase
+          .from('competitor_prices')
+          .select('trade_in_price, updated_at, scraped_at')
+          .eq('device_id', input.device_id)
+          .eq('storage', input.storage)
+          .not('trade_in_price', 'is', null)
+          .gt('trade_in_price', 0)
+        freshCompetitorPrices = extractFreshPrices(compForAnchorAll)
+      }
+
+      let anchorPrice = 0
+      // Track whether anchor is a "new/base" equivalent (needs condition multiplier)
+      // vs already condition-specific (skip condition multiplier in Step 2)
+      let anchorIsBaseNormalized = false
+      if (freshCompetitorPrices.length > 0) {
+        anchorPrice = freshCompetitorPrices.reduce((s: number, p: number) => s + p, 0) / freshCompetitorPrices.length
+        // Same-condition competitor prices are already condition-specific
+        anchorIsBaseNormalized = false
+      }
+      if (!anchorPrice) {
+        anchorPrice = marketEntry?.wholesale_c_stock || 0
+        if (anchorPrice) anchorIsBaseNormalized = true // wholesale is a "new" base price
+      }
       if (!anchorPrice) {
         const { data: pricingEntry } = await supabase
           .from('pricing_tables')
@@ -239,18 +302,119 @@ export class PricingService {
           .order('effective_date', { ascending: false })
           .limit(1)
           .single()
-
         anchorPrice = pricingEntry?.base_price || 0
+        if (anchorPrice) anchorIsBaseNormalized = true // pricing table condition='new'
+      }
+      if (!anchorPrice) {
+        const { data: compFallback } = await supabase
+          .from('competitor_prices')
+          .select('trade_in_price')
+          .eq('device_id', input.device_id)
+          .eq('storage', input.storage)
+        const tradePrices = (compFallback || [])
+          .map((c: { trade_in_price?: number }) => c.trade_in_price || 0)
+          .filter((p: number) => p > 0)
+        if (tradePrices.length > 0) {
+          anchorPrice = tradePrices.reduce((s: number, p: number) => s + p, 0) / tradePrices.length
+          anchorIsBaseNormalized = true // mixed conditions — treat as approximate base
+        }
+      }
+
+      // Fallback: same device, any storage — use competitor or market data from other storage variants (e.g. UNKNOWN → 128GB)
+      if (!anchorPrice) {
+        const { data: compAnyStorage } = await supabase
+          .from('competitor_prices')
+          .select('trade_in_price')
+          .eq('device_id', input.device_id)
+        const tradePrices = (compAnyStorage || [])
+          .map((c: { trade_in_price?: number }) => c.trade_in_price || 0)
+          .filter((p: number) => p > 0)
+        if (tradePrices.length > 0) {
+          anchorPrice = tradePrices.reduce((s: number, p: number) => s + p, 0) / tradePrices.length
+          anchorIsBaseNormalized = true // mixed conditions+storage — treat as approximate base
+        }
+      }
+      if (!anchorPrice) {
+        const { data: marketAnyStorage } = await supabase
+          .from('market_prices')
+          .select('wholesale_c_stock')
+          .eq('device_id', input.device_id)
+          .eq('is_active', true)
+          .not('wholesale_c_stock', 'is', null)
+          .limit(10)
+        const stocks = (marketAnyStorage || [])
+          .map((m: { wholesale_c_stock?: number }) => m.wholesale_c_stock || 0)
+          .filter((p: number) => p > 0)
+        if (stocks.length > 0) {
+          anchorPrice = stocks.reduce((s: number, p: number) => s + p, 0) / stocks.length
+          anchorIsBaseNormalized = true // wholesale is a base price
+        }
+      }
+
+      // Fallback: trained_pricing_baselines — our own historical data
+      // Checks: exact (device+storage+condition) → any storage → cross-condition
+      if (!anchorPrice) {
+        const condMult = CONDITION_MULTIPLIERS[input.condition] ?? 0.85
+
+        // 1. Exact match
+        const { data: exactBaseline } = await supabase
+          .from('trained_pricing_baselines')
+          .select('median_trade_price')
+          .eq('device_id', input.device_id)
+          .eq('storage', input.storage)
+          .eq('condition', input.condition)
+          .order('last_trained_at', { ascending: false })
+          .limit(1)
+          .single()
+        if ((exactBaseline?.median_trade_price ?? 0) > 0) {
+          anchorPrice = exactBaseline!.median_trade_price / condMult
+          anchorIsBaseNormalized = true // divided by condMult → base equivalent
+        }
+
+        // 2. Same device, any storage, same condition
+        if (!anchorPrice) {
+          const { data: anyStorage } = await supabase
+            .from('trained_pricing_baselines')
+            .select('median_trade_price, condition')
+            .eq('device_id', input.device_id)
+            .eq('condition', input.condition)
+            .gt('median_trade_price', 0)
+            .limit(1)
+            .single()
+          if ((anyStorage?.median_trade_price ?? 0) > 0) {
+            anchorPrice = anyStorage!.median_trade_price / condMult
+            anchorIsBaseNormalized = true
+          }
+        }
+
+        // 3. Same device, different condition — scale to "new" equivalent using condition multiplier ratio
+        if (!anchorPrice) {
+          const { data: otherCond } = await supabase
+            .from('trained_pricing_baselines')
+            .select('median_trade_price, condition')
+            .eq('device_id', input.device_id)
+            .gt('median_trade_price', 0)
+            .order('last_trained_at', { ascending: false })
+            .limit(5)
+          if (otherCond && otherCond.length > 0) {
+            const ref = otherCond.find(r => r.condition === 'good') ?? otherCond[0]
+            const refMult = CONDITION_MULTIPLIERS[ref.condition as DeviceCondition] ?? 0.85
+            if (refMult > 0) {
+              anchorPrice = ref.median_trade_price / refMult
+              anchorIsBaseNormalized = true
+            }
+          }
+        }
       }
 
       if (!anchorPrice) {
-        return this.v2ErrorResult('Device not found in market prices or pricing table')
+        return this.v2ErrorResult('Device not found in market prices, pricing table, competitor data, or trained baselines. Add pricing data or run the scraper.')
       }
 
-      // Step 2: Apply condition multiplier
+      // Step 2: Apply condition multiplier (only when anchor is a base/"new" equivalent)
       const conditionMultiplier = CONDITION_MULTIPLIERS[input.condition] || 1.0
-      const conditionAdjustment = anchorPrice * (1 - conditionMultiplier)
-      let adjustedPrice = anchorPrice * conditionMultiplier
+      const conditionAdjustment = anchorIsBaseNormalized ? anchorPrice * (1 - conditionMultiplier) : 0
+      let adjustedPrice = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
 
       // Step 3: Apply functional deductions (map triage labels to deduction keys)
       let totalDeductions = 0
@@ -305,12 +469,16 @@ export class PricingService {
           const price = cp.trade_in_price || 0
           const sellPrice = cp.sell_price || 0
           const updatedAt = cp.updated_at || cp.scraped_at || cp.created_at
+          const cpCondition = (cp as CompetitorPrice).condition
           if (updatedAt) {
             const ageMs = now - new Date(updatedAt).getTime()
             if (ageMs > maxAgeMs) maxAgeMs = ageMs
           }
-          if (price > 0) rawCompetitors.push({ name: cp.competitor_name, price })
-          if (sellPrice > 0) rawCompetitorSellPrices.push(sellPrice)
+          if (price > 0) rawCompetitors.push({ name: cp.competitor_name || 'Unknown', price })
+          // Only use sell prices for our condition — when fallback fetches all conditions, avoid mixing
+          if (sellPrice > 0 && (!cpCondition || cpCondition === competitorCondition)) {
+            rawCompetitorSellPrices.push(sellPrice)
+          }
         }
         if (maxAgeMs > 0) {
           competitorDataAgeDays = round2(maxAgeMs / (24 * 60 * 60 * 1000))
@@ -324,16 +492,31 @@ export class PricingService {
         gap_percent: round2(anchorPrice > 0 ? (anchorPrice - c.price) / anchorPrice * 100 : 0) / 100,
       }))
       const highestCompetitor = filteredCompetitors.length > 0 ? Math.max(...filteredCompetitors.map(c => c.price)) : 0
+      const avgCompetitorPrice = filteredCompetitors.length > 0
+        ? filteredCompetitors.reduce((s, c) => s + c.price, 0) / filteredCompetitors.length
+        : 0
 
-      // Step 5: Risk mode — enterprise has lower margin target
+      // Step 5: Risk mode — enterprise has lower margin target. API overrides take precedence over saved settings.
       const riskMode: RiskMode = input.risk_mode || 'retail'
-      let marginTargetPercent = riskMode === 'enterprise' ? settings.enterprise_margin_percent : settings.trade_in_profit_percent
-      if (settings.margin_mode === 'custom') {
+      const enterpriseOverride = input.enterprise_margin_percent != null && input.enterprise_margin_percent >= 0
+      const retailOverride = input.trade_in_profit_percent != null && input.trade_in_profit_percent >= 0
+      let marginTargetPercent: number
+      if (riskMode === 'enterprise' && enterpriseOverride) {
+        marginTargetPercent = input.enterprise_margin_percent!
+      } else if (retailOverride) {
+        marginTargetPercent = input.trade_in_profit_percent!
+      } else if (riskMode === 'enterprise') {
+        marginTargetPercent = settings.enterprise_margin_percent
+      } else if (settings.margin_mode === 'custom') {
         if (settings.custom_margin_percent > 0) {
           marginTargetPercent = settings.custom_margin_percent
         } else if (settings.custom_margin_amount > 0 && anchorPrice > 0) {
           marginTargetPercent = (settings.custom_margin_amount / anchorPrice) * 100
+        } else {
+          marginTargetPercent = settings.trade_in_profit_percent
         }
+      } else {
+        marginTargetPercent = settings.trade_in_profit_percent
       }
       const marginTarget = marginTargetPercent / 100
 
@@ -394,18 +577,50 @@ export class PricingService {
       )
 
       // Step 8: Determine trade price (competitive relevance)
+      const beatPercent = (input.beat_competitor_percent ?? settings.beat_competitor_percent ?? 0)
+      const useBeatPricing = beatPercent > 0 && filteredCompetitors.length > 0 && highestCompetitor > 0
+
       let tradePrice: number
       let competitorCeilingApplied = false
       let competitorCeilingValue: number | undefined
+      let beatPricingApplied = false
 
-      if (isBroken) {
+      const hasMarginOverride = retailOverride || enterpriseOverride
+      if (useBeatPricing) {
+        // Beat competitors: offer X% above highest to win deals (best price)
+        tradePrice = round2(highestCompetitor * (1 + beatPercent / 100))
+        if (isBroken) {
+          tradePrice = round2(tradePrice * BROKEN_DEVICE_MULTIPLIER)
+        }
+        beatPricingApplied = true
+      } else if (isBroken) {
         // Brian: "Broken could just be 50% of good" — simple rule
         tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
       } else {
-        tradePrice = marketEntry?.trade_price || 0
-        if (!tradePrice) {
-          tradePrice = Math.max(adjustedPrice, competitiveFloor)
+        // Apply margin target when override is provided; otherwise use stored market trade_price or anchor-based
+        if (hasMarginOverride) {
+          // Our Quote = Avg × (1 − margin%). Use competitor avg when available, else anchor-based.
+          if (avgCompetitorPrice > 0) {
+            tradePrice = round2(avgCompetitorPrice * (1 - marginTarget))
+          } else {
+            // No competitors: apply margin to anchor-derived value (pre-breakage, pre-deductions)
+            const preBreakageValue = anchorPrice * conditionMultiplier - totalDeductions
+            tradePrice = round2(preBreakageValue * (1 - marginTarget) - breakageDeduction)
+            tradePrice = Math.max(tradePrice, 0)
+          }
           tradePrice = Math.max(tradePrice, competitiveFloor)
+        } else {
+          tradePrice = marketEntry?.trade_price || 0
+          if (!tradePrice) {
+            tradePrice = Math.max(adjustedPrice, competitiveFloor)
+          }
+          // Enforce minimum margin even in default path — prevent overpaying for trade-ins
+          if (anchorPrice > 0) {
+            const maxTradeAtMargin = round2(anchorPrice * (1 - marginTarget))
+            if (tradePrice > maxTradeAtMargin) {
+              tradePrice = Math.max(maxTradeAtMargin, competitiveFloor)
+            }
+          }
         }
 
         if (filteredCompetitors.length > 0 && highestCompetitor > 0) {
@@ -456,9 +671,13 @@ export class PricingService {
       }
 
       // Append risk mode context
-      reasoning += ` [${riskMode} mode, ${marginTargetPercent}% target margin]`
-      if (competitorCeilingApplied && competitorCeilingValue != null) {
-        reasoning += ` [competitor ceiling applied at $${competitorCeilingValue}]`
+      if (beatPricingApplied) {
+        reasoning = `Beat competitors by ${beatPercent}% — offering best price ($${round2(tradePrice)}) to win deals.`
+      } else {
+        reasoning += ` [${riskMode} mode, ${marginTargetPercent}% target margin]`
+        if (competitorCeilingApplied && competitorCeilingValue != null) {
+          reasoning += ` [competitor ceiling applied at $${competitorCeilingValue}]`
+        }
       }
 
       const channelDecision: ChannelDecision = {
@@ -471,20 +690,29 @@ export class PricingService {
         value_add_viable: repairBuffer > minRepairCost,
       }
 
-      // Step 12: CPO price — prefer competitor sell prices, then market entry, then markup on anchor
-      const cpoMarkup = riskMode === 'enterprise'
-        ? (settings.cpo_enterprise_markup_percent / 100)
-        : (settings.cpo_markup_percent / 100)
+      // Step 12: CPO price — prefer competitor sell prices, then market entry, then markup on trade. Cap at marketplace to stay competitive.
+      const cpoMarkupOverride = input.cpo_markup_percent != null && input.cpo_markup_percent >= 0
+      const cpoMarkup = cpoMarkupOverride
+        ? (input.cpo_markup_percent! / 100)
+        : riskMode === 'enterprise'
+          ? (settings.cpo_enterprise_markup_percent / 100)
+          : (settings.cpo_markup_percent / 100)
       let cpoPrice: number
       if (rawCompetitorSellPrices.length > 0) {
-        // Use average competitor CPO/sell price as our CPO reference
+        // Use average competitor CPO/sell price (condition-specific) as our CPO reference
         const avgCompetitorSell = rawCompetitorSellPrices.reduce((s, p) => s + p, 0) / rawCompetitorSellPrices.length
         cpoPrice = round2(avgCompetitorSell)
       } else if (marketEntry?.cpo_price) {
-        cpoPrice = marketEntry.cpo_price
+        // Market cpo_price is per device/storage with no condition — scale by condition multiplier so CPO varies
+        const scale = conditionMultiplier / goodConditionMult
+        cpoPrice = round2(marketEntry.cpo_price * scale)
       } else {
-        // Fallback: trade price + markup (not anchor + markup which inflates the price)
+        // Fallback: trade price + markup (trade price already varies by condition)
         cpoPrice = round2(tradePrice * (1 + cpoMarkup))
+      }
+      // Cap CPO at marketplace price when available — don't exceed market
+      if (mpPrice > 0 && marketplaceAboveCstock && cpoPrice > mpPrice) {
+        cpoPrice = round2(mpPrice)
       }
 
       // Step 13: Outlier detection — compare trade price against historical sales
@@ -528,6 +756,26 @@ export class PricingService {
       const validForHours = (confidence < 0.7 || outlierFlag) ? 12 : 24
       const priceExpiresAt = new Date(Date.now() + validForHours * 60 * 60 * 1000).toISOString()
 
+      const breakdown: PriceCalculationResultV2['breakdown'] & {
+        broken_applied?: boolean
+        good_working_trade_price?: number
+        broken_multiplier?: number
+      } = {
+        anchor_price: anchorPrice,
+        condition_adjustment: round2(conditionAdjustment),
+        deductions: round2(totalDeductions),
+        breakage_deduction: round2(breakageDeduction),
+        margin_applied: round2(marginPercent * 100),
+        final_trade_price: round2(tradePrice),
+        final_cpo_price: round2(cpoPrice),
+      }
+
+      if (isBroken) {
+        breakdown.broken_applied = true
+        breakdown.good_working_trade_price = round2(goodWorkingTradePrice)
+        breakdown.broken_multiplier = BROKEN_DEVICE_MULTIPLIER
+      }
+
       return {
         success: true,
         trade_price: round2(tradePrice * qty),
@@ -552,20 +800,7 @@ export class PricingService {
         price_expires_at: priceExpiresAt,
         competitor_data_age_days: competitorDataAgeDays,
         data_staleness_warning: dataStalenessWarning,
-        breakdown: {
-          anchor_price: anchorPrice,
-          condition_adjustment: round2(conditionAdjustment),
-          deductions: round2(totalDeductions),
-          breakage_deduction: round2(breakageDeduction),
-          margin_applied: round2(marginPercent * 100),
-          final_trade_price: round2(tradePrice),
-          final_cpo_price: round2(cpoPrice),
-          ...(isBroken && {
-            broken_applied: true,
-            good_working_trade_price: round2(goodWorkingTradePrice),
-            broken_multiplier: BROKEN_DEVICE_MULTIPLIER,
-          }),
-        },
+        breakdown,
       }
     } catch (error) {
       return this.v2ErrorResult(error instanceof Error ? error.message : 'Unknown error')
@@ -679,25 +914,61 @@ export class PricingService {
     return 4
   }
 
-  static async getCompetitorPrices(deviceId?: string, condition?: 'excellent' | 'good' | 'fair' | 'broken'): Promise<CompetitorPrice[]> {
+  static async getCompetitorPrices(deviceId?: string, condition?: 'excellent' | 'good' | 'fair' | 'broken', search?: string): Promise<CompetitorPrice[]> {
     const supabase = createServerSupabaseClient()
-    let query = supabase
-      .from('competitor_prices')
-      .select('*, device:device_catalog(*)')
-      .order('updated_at', { ascending: false })
+    const pageSize = 1000
+    let matchedDeviceIds: string[] | null = null
 
-    if (deviceId) {
-      query = query.eq('device_id', deviceId)
+    if (search && !deviceId) {
+      const s = sanitizeSearchInput(search)
+      if (s) {
+        const { data: devices } = await supabase
+          .from('device_catalog')
+          .select('id')
+          .eq('is_active', true)
+          .or(`make.ilike.%${s}%,model.ilike.%${s}%`)
+        matchedDeviceIds = (devices || []).map(d => d.id)
+        if (matchedDeviceIds.length === 0) {
+          return []
+        }
+      }
     }
 
-    if (condition) {
-      query = query.eq('condition', condition)
+    const rows: CompetitorPrice[] = []
+
+    for (let page = 0; ; page++) {
+      let query = supabase
+        .from('competitor_prices')
+        .select('*, device:device_catalog(*)')
+        .order('updated_at', { ascending: false })
+        .range(page * pageSize, ((page + 1) * pageSize) - 1)
+
+      if (deviceId) {
+        query = query.eq('device_id', deviceId)
+      }
+
+      if (condition) {
+        query = query.eq('condition', condition)
+      }
+
+      if (matchedDeviceIds) {
+        if (matchedDeviceIds.length > 0) {
+          query = query.in('device_id', matchedDeviceIds)
+        } else {
+          return []
+        }
+      }
+
+      const { data, error } = await query
+      if (error) throw new Error(error.message)
+
+      const batch = (data || []) as CompetitorPrice[]
+      rows.push(...batch)
+
+      if (batch.length < pageSize) {
+        break
+      }
     }
-
-    const { data, error } = await query
-    if (error) throw new Error(error.message)
-
-    const rows = (data || []) as CompetitorPrice[]
 
     rows.sort((left, right) => {
       const leftDevice = `${left.device?.make || ''} ${left.device?.model || ''}`.trim()
@@ -752,6 +1023,45 @@ export class PricingService {
     const supabase = createServerSupabaseClient()
     const { error } = await supabase.from('competitor_prices').delete().eq('id', id)
     if (error) throw new Error(error.message)
+  }
+
+  /**
+   * Bulk upsert international competitor prices.
+   * Uses device_id + storage + competitor_name as the conflict key.
+   */
+  static async bulkUpsertCompetitorPrices(
+    rows: Array<{ device_id: string; storage: string; trade_in_price?: number; sell_price?: number }>
+  ): Promise<{ imported: number; errors: string[] }> {
+    const supabase = createServerSupabaseClient()
+    const errors: string[] = []
+    let imported = 0
+
+    // Process in batches of 50 to avoid payload limits
+    const batchSize = 50
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize).map(row => ({
+        device_id: row.device_id,
+        storage: row.storage,
+        competitor_name: 'International',
+        source: 'international_upload' as const,
+        condition: 'good' as const,
+        trade_in_price: row.trade_in_price ?? null,
+        sell_price: row.sell_price ?? null,
+        updated_at: new Date().toISOString(),
+      }))
+
+      const { error } = await supabase
+        .from('competitor_prices')
+        .upsert(batch, { onConflict: 'device_id,storage,competitor_name' })
+
+      if (error) {
+        errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`)
+      } else {
+        imported += batch.length
+      }
+    }
+
+    return { imported, errors }
   }
 
   // ============================================================================
@@ -934,7 +1244,7 @@ export class PricingService {
       .order('effective_date', { ascending: false })
 
     if (deviceCatalogId) {
-      query = query.eq('device_catalog_id', deviceCatalogId)
+      query = query.eq('device_id', deviceCatalogId)
     }
 
     const { data, error } = await query

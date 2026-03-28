@@ -21,16 +21,16 @@ export default function CustomerRequestsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Create New Request</CardTitle>
+          <CardTitle className="text-base">Create New Order</CardTitle>
           <CardDescription>
-            Submit devices for trade-in. Once quoted, go to My Orders to accept or reject.
+            Submit devices for trade-in or CPO purchase. Once quoted, go to My Orders to accept or reject.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <Link href="/orders/new/trade-in">
+          <Link href="/orders/new">
             <Button>
               <FilePlus2 className="mr-2 h-4 w-4" />
-              New Trade-In Request
+              New Order
             </Button>
           </Link>
           <Link href="/customer/orders">

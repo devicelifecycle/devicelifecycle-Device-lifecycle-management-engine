@@ -5,7 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ClipboardCheck, Search, ChevronRight, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ClipboardCheck, Search, ChevronRight, AlertTriangle, CheckCircle2, Plus, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useDebounce } from '@/hooks/useDebounce'
 import { TRIAGE_CHECKLIST_ITEMS, COMMON_DEVICE_ISSUES, CONDITION_CONFIG } from '@/lib/constants'
 import { formatRelativeTime } from '@/lib/utils'
-import type { IMEIRecord, DeviceCondition } from '@/types'
+import type { IMEIRecord, DeviceCondition, Device } from '@/types'
 
 const conditions: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
 const screenConditions = ['good', 'cracked', 'damaged', 'dead'] as const
@@ -41,6 +41,22 @@ export default function COETriagePage() {
   const [issues, setIssues] = useState<string[]>([])
   const [notes, setNotes] = useState('')
 
+  // Add device dialog state
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [deviceSearch, setDeviceSearch] = useState('')
+  const debouncedDeviceSearch = useDebounce(deviceSearch, 300)
+  const [deviceResults, setDeviceResults] = useState<Device[]>([])
+  const [isSearchingDevices, setIsSearchingDevices] = useState(false)
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
+  const [addForm, setAddForm] = useState({
+    imei: '',
+    claimed_condition: 'good' as DeviceCondition,
+    storage: '',
+    color: '',
+    notes: '',
+  })
+  const [isAdding, setIsAdding] = useState(false)
+
   const fetchPending = useCallback(async () => {
     setIsLoading(true)
     try {
@@ -53,6 +69,65 @@ export default function COETriagePage() {
   }, [])
 
   useEffect(() => { fetchPending() }, [fetchPending])
+
+  // Device search for add dialog
+  useEffect(() => {
+    if (!debouncedDeviceSearch.trim()) {
+      setDeviceResults([])
+      return
+    }
+    const searchDevices = async () => {
+      setIsSearchingDevices(true)
+      try {
+        const res = await fetch(`/api/devices?search=${encodeURIComponent(debouncedDeviceSearch)}&limit=10`)
+        if (res.ok) {
+          const data = await res.json()
+          setDeviceResults(data.data || [])
+        }
+      } catch {} finally { setIsSearchingDevices(false) }
+    }
+    searchDevices()
+  }, [debouncedDeviceSearch])
+
+  const openAddDialog = () => {
+    setAddForm({ imei: '', claimed_condition: 'good', storage: '', color: '', notes: '' })
+    setSelectedDevice(null)
+    setDeviceSearch('')
+    setDeviceResults([])
+    setAddDialogOpen(true)
+  }
+
+  const handleAddDevice = async () => {
+    if (!selectedDevice || !addForm.imei.trim()) {
+      toast.error('Please select a device and enter an IMEI')
+      return
+    }
+    setIsAdding(true)
+    try {
+      const res = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_device',
+          imei: addForm.imei.trim(),
+          device_id: selectedDevice.id,
+          claimed_condition: addForm.claimed_condition,
+          storage: addForm.storage || undefined,
+          color: addForm.color || undefined,
+          notes: addForm.notes || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to add device')
+      }
+      toast.success('Device added to triage queue')
+      setAddDialogOpen(false)
+      fetchPending()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to add device')
+    } finally { setIsAdding(false) }
+  }
 
   const openTriageDialog = (item: IMEIRecord) => {
     setSelectedItem(item)
@@ -141,9 +216,14 @@ export default function COETriagePage() {
           <h1 className="text-2xl font-bold">Triage</h1>
           <p className="text-muted-foreground">Inspect and grade received devices</p>
         </div>
-        <Badge variant="outline" className="text-sm px-3 py-1">
-          {pendingItems.length} pending
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Button onClick={openAddDialog}>
+            <Plus className="mr-1.5 h-4 w-4" />Add Device
+          </Button>
+          <Badge variant="outline" className="text-sm px-3 py-1">
+            {pendingItems.length} pending
+          </Badge>
+        </div>
       </div>
 
       <div className="relative">
@@ -175,6 +255,7 @@ export default function COETriagePage() {
                   <TableHead>Device</TableHead>
                   <TableHead>Claimed Condition</TableHead>
                   <TableHead>Order</TableHead>
+                  <TableHead>Created By</TableHead>
                   <TableHead>Received</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
@@ -182,7 +263,8 @@ export default function COETriagePage() {
               <TableBody>
                 {filtered.map(item => {
                   const device = item.device as unknown as Record<string, string> | undefined
-                  const order = item.order as unknown as Record<string, string> | undefined
+                  const order = item.order as unknown as { order_number?: string; created_by?: { full_name?: string } } | undefined
+                  const createdBy = order?.created_by?.full_name ?? ((item.metadata as Record<string, unknown>)?.added_by_id ? 'COE (manual add)' : '—')
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-sm">{item.imei}</TableCell>
@@ -197,6 +279,7 @@ export default function COETriagePage() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm">{order?.order_number || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{createdBy}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(item.created_at)}</TableCell>
                       <TableCell className="text-right">
                         <Button size="sm" onClick={() => openTriageDialog(item)}>
@@ -307,6 +390,140 @@ export default function COETriagePage() {
             <Button variant="outline" onClick={() => setTriageDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSubmitTriage} disabled={isSubmitting}>
               {isSubmitting ? 'Submitting...' : 'Submit Triage'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Device Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Device to Triage</DialogTitle>
+            <DialogDescription>
+              Manually add a device for quality inspection. Enter the IMEI and select the device model.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* IMEI Input */}
+            <div className="space-y-2">
+              <Label>IMEI / Serial Number <span className="text-red-500">*</span></Label>
+              <Input
+                placeholder="Enter IMEI or serial number"
+                value={addForm.imei}
+                onChange={e => setAddForm(p => ({ ...p, imei: e.target.value }))}
+                className="font-mono"
+              />
+            </div>
+
+            {/* Device Search */}
+            <div className="space-y-2">
+              <Label>Device Model <span className="text-red-500">*</span></Label>
+              {selectedDevice ? (
+                <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <Smartphone className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">{selectedDevice.make} {selectedDevice.model}</p>
+                      <p className="text-sm text-muted-foreground">{selectedDevice.category}</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedDevice(null)}>Change</Button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Search for device (e.g., iPhone 15 Pro)"
+                      className="pl-10"
+                      value={deviceSearch}
+                      onChange={e => setDeviceSearch(e.target.value)}
+                    />
+                  </div>
+                  {isSearchingDevices && (
+                    <p className="text-sm text-muted-foreground">Searching...</p>
+                  )}
+                  {deviceResults.length > 0 && (
+                    <div className="border rounded-lg divide-y max-h-48 overflow-auto">
+                      {deviceResults.map(device => (
+                        <button
+                          key={device.id}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 text-left"
+                          onClick={() => {
+                            setSelectedDevice(device)
+                            setDeviceSearch('')
+                            setDeviceResults([])
+                          }}
+                        >
+                          <Smartphone className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="font-medium text-sm">{device.make} {device.model}</p>
+                            <p className="text-xs text-muted-foreground">{device.category}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Claimed Condition */}
+            <div className="space-y-2">
+              <Label>Claimed Condition</Label>
+              <Select
+                value={addForm.claimed_condition}
+                onValueChange={v => setAddForm(p => ({ ...p, claimed_condition: v as DeviceCondition }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {conditions.map(c => (
+                    <SelectItem key={c} value={c}>
+                      <span className={CONDITION_CONFIG[c].color}>{CONDITION_CONFIG[c].label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Storage & Color */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Storage</Label>
+                <Input
+                  placeholder="e.g., 256GB"
+                  value={addForm.storage}
+                  onChange={e => setAddForm(p => ({ ...p, storage: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Color</Label>
+                <Input
+                  placeholder="e.g., Black"
+                  value={addForm.color}
+                  onChange={e => setAddForm(p => ({ ...p, color: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                placeholder="Any additional information..."
+                value={addForm.notes}
+                onChange={e => setAddForm(p => ({ ...p, notes: e.target.value }))}
+                rows={2}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddDevice} disabled={isAdding || !selectedDevice || !addForm.imei.trim()}>
+              {isAdding ? 'Adding...' : 'Add to Triage'}
             </Button>
           </DialogFooter>
         </DialogContent>

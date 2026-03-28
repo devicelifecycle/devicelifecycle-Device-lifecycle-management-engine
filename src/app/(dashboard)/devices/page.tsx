@@ -18,10 +18,13 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { DEVICE_BRANDS } from '@/lib/constants'
 import { useDebounce } from '@/hooks/useDebounce'
+import { useAuth } from '@/hooks/useAuth'
 import { Pagination } from '@/components/ui/pagination'
 import type { Device } from '@/types'
 
 export default function DevicesPage() {
+  const { user } = useAuth()
+  const canCreate = user?.role === 'admin' || user?.role === 'coe_manager'
   const [devices, setDevices] = useState<Device[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
@@ -117,7 +120,7 @@ export default function DevicesPage() {
           <h1 className="text-2xl font-bold tracking-tight">Device Catalog</h1>
           <p className="text-muted-foreground mt-1">Manage the master device list</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        {canCreate && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="shadow-md shadow-primary/20"><Plus className="mr-2 h-4 w-4" />Add Device</Button>
           </DialogTrigger>
@@ -181,7 +184,7 @@ export default function DevicesPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

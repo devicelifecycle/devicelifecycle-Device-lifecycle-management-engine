@@ -43,7 +43,9 @@ export class CustomerService {
       query = query.or(`company_name.ilike.%${s}%,contact_name.ilike.%${s}%,contact_email.ilike.%${s}%`)
     }
 
-    query = query.order(sort_by, { ascending: sort_order === 'asc' })
+    const ALLOWED_SORT = ['company_name', 'contact_name', 'contact_email', 'created_at', 'updated_at'] as const
+    const safeSortBy = ALLOWED_SORT.includes(sort_by as (typeof ALLOWED_SORT)[number]) ? sort_by : 'company_name'
+    query = query.order(safeSortBy, { ascending: sort_order === 'asc' })
 
     const from = (page - 1) * page_size
     const to = from + page_size - 1
@@ -85,16 +87,16 @@ export class CustomerService {
   }
 
   /**
-   * Create a new customer
+   * Create a new customer. orgId links to organizations table (type 'customer').
    */
-  static async createCustomer(input: CreateCustomerInput, orgId: string): Promise<Customer> {
+  static async createCustomer(input: CreateCustomerInput, orgId?: string): Promise<Customer> {
     const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('customers')
       .insert({
         ...input,
-        organization_id: orgId,
+        organization_id: orgId ?? null,
         is_active: true,
       })
       .select()
@@ -105,6 +107,14 @@ export class CustomerService {
     }
 
     return data as Customer
+  }
+
+  /**
+   * Get customers linked to an organization
+   */
+  static async getCustomersByOrganizationId(organizationId: string): Promise<Customer[]> {
+    const result = await this.getCustomers({ organization_id: organizationId, page_size: 100 })
+    return result.data
   }
 
   /**

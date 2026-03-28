@@ -7,9 +7,10 @@
 
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from '../types'
 import { fetchWithRetry, throttle } from '../utils'
+import { runGoRecellScraperPilot } from './gorecell-scrapling'
 
-const STORE_API = 'https://gorecell.ca/wp-json/wc/store/v1/products'
-const PRODUCT_BASE = 'https://gorecell.ca/product/'
+const STORE_API = process.env.GORECELL_STORE_API || 'https://gorecell.ca/wp-json/wc/store/v1/products'
+const PRODUCT_BASE = process.env.GORECELL_PRODUCT_BASE || 'https://gorecell.ca/product/'
 
 interface WooProduct {
   id: number
@@ -21,7 +22,9 @@ interface QueryRule {
   title: string
   desc?: string
   price: string
-  price_formate: 'fixed' | 'percent'
+  /** GoRecell uses "price_formate" (typo); support both for robustness */
+  price_formate?: 'fixed' | 'percent'
+  price_format?: 'fixed' | 'percent'
 }
 
 interface QueryStep {
@@ -31,22 +34,71 @@ interface QueryStep {
 
 type QueryData = Record<string, QueryStep>
 
-/** Extract query_data JSON from product page HTML */
+/** Extract query_data JSON from product page HTML — multiple patterns for resilience */
 function extractQueryData(html: string): QueryData | null {
-  // Match JSON.parse('...') - capture content handling escaped quotes
-  const match = html.match(/var\s+query_data\s*=\s*JSON\.parse\s*\(\s*'((?:[^'\\]|\\.)*)'\s*\)/)
-  if (!match) return null
-  try {
-    const raw = match[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\')
-    return JSON.parse(raw) as QueryData
-  } catch {
-    return null
+  const patterns = [
+    /var\s+query_data\s*=\s*JSON\.parse\s*\(\s*'((?:[^'\\]|\\.)*)'\s*\)/,
+    /var\s+query_data\s*=\s*JSON\.parse\s*\(\s*"((?:[^"\\]|\\.)*)"\s*\)/,
+    /var\s+query_data\s*=\s*(\{[^;]{10,}\})\s*;/,
+    /query_data\s*[:=]\s*(\{[^;]{10,}\})/,
+  ]
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (!match) continue
+    try {
+      let raw = match[1]
+      if (raw.startsWith('{')) {
+        return JSON.parse(raw) as QueryData
+      }
+      raw = raw.replace(/\\'/g, "'").replace(/\\\\/g, '\\')
+      return JSON.parse(raw) as QueryData
+    } catch {
+      continue
+    }
   }
+  return null
+}
+
+/** Get price format from rule (GoRecell typo: price_formate; support both) */
+function getPriceFormat(rule: QueryRule): 'fixed' | 'percent' | undefined {
+  return rule.price_formate ?? rule.price_format
 }
 
 /** Normalize storage for matching (e.g. "256GB" vs "256 GB") */
 function normalizeStorage(s: string): string {
   return s.toLowerCase().replace(/\s+/g, '').trim()
+}
+
+function normalizeText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function selectBestGoRecellProduct(catalog: WooProduct[], device: DeviceToScrape): WooProduct | null {
+  const targetModel = normalizeText(device.model)
+  const targetMake = normalizeText(device.make)
+  const variantKeywords = ['max', 'plus', 'ultra', 'mini', 'fold', 'flip', 'fe', 'pro']
+
+  const scored = catalog
+    .map((product) => {
+      const name = normalizeText(product.name || '')
+      let score = 0
+
+      if (name === targetModel) score += 20
+      if (name.includes(targetModel) || targetModel.includes(name)) score += 10
+      if (targetMake && name.includes(targetMake)) score += 2
+
+      for (const keyword of variantKeywords) {
+        const targetHas = targetModel.includes(keyword)
+        const candidateHas = name.includes(keyword)
+        if (targetHas !== candidateHas) score -= 10
+      }
+
+      return { product, score }
+    })
+    .filter((candidate) => candidate.score >= 10)
+    .sort((a, b) => b.score - a.score)
+
+  return scored[0]?.product || null
 }
 
 /** Map our condition to GoRecell's (prefer best match) */
@@ -69,7 +121,7 @@ function computePrice(queryData: QueryData, storage: string, condition: string):
     for (const rule of Object.values(step.rules)) {
       const ruleTitle = (rule.title || '').trim()
       const priceStr = (rule.price || '').trim()
-      if (rule.price_formate === 'fixed') {
+      if (getPriceFormat(rule) === 'fixed') {
         const price = parseFloat(priceStr)
         if (!Number.isNaN(price) && price > 0) {
           const ruleStorageNorm = normalizeStorage(ruleTitle)
@@ -79,7 +131,7 @@ function computePrice(queryData: QueryData, storage: string, condition: string):
             break
           }
         }
-      } else if (rule.price_formate === 'percent' && ruleTitle.toLowerCase().includes(condition.toLowerCase())) {
+      } else if (getPriceFormat(rule) === 'percent' && ruleTitle.toLowerCase().includes(condition.toLowerCase())) {
         const pct = parseFloat(priceStr)
         if (!Number.isNaN(pct)) {
           conditionMultiplier = 1 + pct / 100
@@ -104,7 +156,7 @@ function findBestStorageMatch(queryData: QueryData, storage: string): number | n
   for (const step of Object.values(queryData)) {
     if (!step.rules) continue
     for (const rule of Object.values(step.rules)) {
-      if (rule.price_formate !== 'fixed') continue
+      if (getPriceFormat(rule) !== 'fixed') continue
       const price = parseFloat(rule.price)
       if (Number.isNaN(price) || price <= 0) continue
       const ruleNorm = normalizeStorage(rule.title)
@@ -119,26 +171,38 @@ function findBestStorageMatch(queryData: QueryData, storage: string): number | n
   return best?.price ?? null
 }
 
-export async function scrapeGoRecell(devices: DeviceToScrape[]): Promise<ScraperResult> {
+async function scrapeGoRecellTypeScript(devices: DeviceToScrape[]): Promise<ScraperResult> {
   const start = Date.now()
   const prices: ScrapedPrice[] = []
   const now = new Date().toISOString()
 
+  // Phase 4: Cache catalog search results and product page query_data
+  const catalogCache = new Map<string, WooProduct[]>()
+  const queryDataCache = new Map<string, QueryData | null>()
+
   try {
     for (const device of devices) {
       try {
-        const modelLower = device.model.toLowerCase()
-        // Search catalog for this model (narrows results vs full 100)
-        const searchUrl = `${STORE_API}?search=${encodeURIComponent(device.model)}&per_page=10`
-        const catalogRes = await fetchWithRetry(searchUrl, {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        })
-        const catalogRaw = catalogRes.ok ? await catalogRes.json() : []
-        const catalog: WooProduct[] = Array.isArray(catalogRaw) ? catalogRaw : []
-        const match = catalog.find(
-          p => p?.name && typeof p.name === 'string' && p.name.toLowerCase().includes(modelLower)
-        )
+        // Cache key: normalized model name (devices with same model share catalog results)
+        const modelKey = normalizeText(device.model)
+
+        // Search catalog — reuse cached results for same model
+        let catalog: WooProduct[]
+        if (catalogCache.has(modelKey)) {
+          catalog = catalogCache.get(modelKey)!
+        } else {
+          const searchUrl = `${STORE_API}?search=${encodeURIComponent(device.model)}&per_page=10`
+          const catalogRes = await fetchWithRetry(searchUrl, {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+          })
+          const catalogRaw = catalogRes.ok ? await catalogRes.json() : []
+          catalog = Array.isArray(catalogRaw) ? catalogRaw : []
+          catalogCache.set(modelKey, catalog)
+          await throttle(150)
+        }
+
+        const match = selectBestGoRecellProduct(catalog, device)
         if (!match?.slug) {
           prices.push({
             competitor_name: 'GoRecell',
@@ -147,15 +211,22 @@ export async function scrapeGoRecell(devices: DeviceToScrape[]): Promise<Scraper
             condition: device.condition ?? 'good', scraped_at: now,
             raw: { matched: false, source: 'no-product-slug' },
           })
-          await throttle(400)
           continue
         }
 
-        const productUrl = `${PRODUCT_BASE}${match.slug}/`
-        const pageRes = await fetchWithRetry(productUrl, { method: 'GET' })
-        const html = pageRes.ok ? await pageRes.text() : ''
+        // Fetch product page query_data — reuse cached results for same slug
+        let queryData: QueryData | null
+        if (queryDataCache.has(match.slug)) {
+          queryData = queryDataCache.get(match.slug)!
+        } else {
+          const productUrl = `${PRODUCT_BASE}${match.slug}/`
+          const pageRes = await fetchWithRetry(productUrl, { method: 'GET' })
+          const html = pageRes.ok ? await pageRes.text() : ''
+          queryData = extractQueryData(html)
+          queryDataCache.set(match.slug, queryData)
+          await throttle(150)
+        }
 
-        const queryData = extractQueryData(html)
         let tradePrice: number | null = null
         let source = 'none'
 
@@ -170,14 +241,14 @@ export async function scrapeGoRecell(devices: DeviceToScrape[]): Promise<Scraper
             const basePrice = findBestStorageMatch(queryData, storageToUse)
             if (basePrice != null) {
               const condKey = Object.keys(queryData).find(k =>
-                queryData[k]?.rules && Object.values(queryData[k].rules).some(
+                queryData![k]?.rules && Object.values(queryData![k].rules).some(
                   r => r.title?.toLowerCase().includes(cond.toLowerCase())
                 )
               )
               let mult = 1
               if (condKey && queryData[condKey]?.rules) {
                 for (const r of Object.values(queryData[condKey].rules)) {
-                  if (r.title?.toLowerCase().includes(cond.toLowerCase()) && r.price_formate === 'percent') {
+                  if (r.title?.toLowerCase().includes(cond.toLowerCase()) && getPriceFormat(r) === 'percent') {
                     const p = parseFloat(r.price)
                     if (!Number.isNaN(p)) mult = 1 + p / 100
                     break
@@ -197,7 +268,6 @@ export async function scrapeGoRecell(devices: DeviceToScrape[]): Promise<Scraper
           condition: device.condition ?? 'good', scraped_at: now,
           raw: { matched: tradePrice != null, source },
         })
-        await throttle(400)
       } catch (e) {
         console.warn(`[gorecell] Skip ${device.make} ${device.model}:`, e)
         prices.push({
@@ -257,7 +327,7 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
     for (const rule of Object.values(step.rules)) {
       const ruleTitle = (rule.title || '').trim()
       const priceStr = (rule.price || '').trim()
-      if (rule.price_formate === 'percent' && ruleTitle.toLowerCase().includes(condition.toLowerCase())) {
+      if (getPriceFormat(rule) === 'percent' && ruleTitle.toLowerCase().includes(condition.toLowerCase())) {
         const pct = parseFloat(priceStr)
         conditionMultiplier = Number.isNaN(pct) ? 1 : 1 + pct / 100
       }
@@ -267,7 +337,7 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
   for (const step of Object.values(queryData)) {
     if (!step.rules) continue
     for (const rule of Object.values(step.rules)) {
-      if (rule.price_formate !== 'fixed') continue
+      if (getPriceFormat(rule) !== 'fixed') continue
       const price = parseFloat(rule.price)
       if (Number.isNaN(price) || price <= 0) continue
       const storage = rule.title?.trim() || 'Unknown'
@@ -279,7 +349,7 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
 }
 
 /** Discovery mode: scrape full GoRecell catalog, return all devices + prices (no input devices needed) */
-export async function scrapeGoRecellFullCatalog(limitProducts = 150): Promise<ScraperResult> {
+async function scrapeGoRecellFullCatalogTypeScript(limitProducts = 150): Promise<ScraperResult> {
   const start = Date.now()
   const prices: ScrapedPrice[] = []
   const now = new Date().toISOString()
@@ -307,7 +377,7 @@ export async function scrapeGoRecellFullCatalog(limitProducts = 150): Promise<Sc
           const queryData = extractQueryData(html)
 
           if (!queryData) {
-            await throttle(300)
+            await throttle(150)
             continue
           }
 
@@ -331,7 +401,7 @@ export async function scrapeGoRecellFullCatalog(limitProducts = 150): Promise<Sc
             }
           }
           fetched++
-          await throttle(350)
+          await throttle(150)
         } catch (e) {
           console.warn(`[gorecell-discovery] Skip ${p.name}:`, e)
         }
@@ -344,4 +414,20 @@ export async function scrapeGoRecellFullCatalog(limitProducts = 150): Promise<Sc
   } catch (error) {
     return { competitor_name: 'GoRecell', prices: [], success: false, error: error instanceof Error ? error.message : 'Unknown error', duration_ms: Date.now() - start }
   }
+}
+
+export async function scrapeGoRecell(devices: DeviceToScrape[]): Promise<ScraperResult> {
+  return runGoRecellScraperPilot({
+    devices,
+    runTypeScript: () => scrapeGoRecellTypeScript(devices),
+  })
+}
+
+export async function scrapeGoRecellFullCatalog(limitProducts = 150): Promise<ScraperResult> {
+  return runGoRecellScraperPilot({
+    devices: [],
+    discovery: true,
+    limitProducts,
+    runTypeScript: () => scrapeGoRecellFullCatalogTypeScript(limitProducts),
+  })
 }

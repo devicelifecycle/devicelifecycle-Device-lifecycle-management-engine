@@ -23,6 +23,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
+import { matchDeviceFromCsv } from '@/lib/device-match'
+import {
+  TRADE_IN_CSV_HEADERS,
+  TRADE_IN_CSV_SAMPLE,
+  CSV_COLUMN_ALIASES,
+  buildCsvContent,
+} from '@/lib/csv-templates'
 import { formatCurrency } from '@/lib/utils'
 import type { Device, DeviceCondition } from '@/types'
 
@@ -99,7 +106,7 @@ export default function NewTradeInPage() {
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
 
   useEffect(() => {
-    fetch('/api/devices?page_size=500').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
 
   // For customer role: auto-set their org's customer (no selection needed)
@@ -214,18 +221,9 @@ export default function NewTradeInPage() {
     }))
   }
 
-  // CSV template download
+  // CSV template download — from shared csv-templates (keeps templates in sync)
   const handleDownloadTemplate = () => {
-    const headers = ['device_make', 'device_model', 'quantity', 'condition', 'storage', 'notes']
-    const sampleData = [
-      ['Apple', 'iPhone 13', '5', 'good', '128GB', 'Sample device'],
-      ['Samsung', 'Galaxy S21', '3', 'excellent', '256GB', ''],
-    ]
-
-    const csvContent = [
-      headers.join(','),
-      ...sampleData.map(row => row.join(','))
-    ].join('\n')
+    const csvContent = buildCsvContent(TRADE_IN_CSV_HEADERS, TRADE_IN_CSV_SAMPLE)
 
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -247,7 +245,26 @@ export default function NewTradeInPage() {
       skipEmptyLines: true,
       complete: (results) => {
         const errors: string[] = []
-        const rows = results.data as CSVRow[]
+        const rawRows = results.data as Record<string, string>[]
+        const normalizeRow = (r: Record<string, string>): CSVRow => {
+          const out: Partial<CSVRow> = {}
+          for (const [k, v] of Object.entries(r)) {
+            const key = k.toLowerCase().trim().replace(/\s+/g, '_')
+            const mapped = CSV_COLUMN_ALIASES[key] ?? (key === 'device_make' || key === 'device_model' ? key : null)
+            if (mapped) {
+              out[mapped as keyof CSVRow] = String(v ?? '').trim()
+            }
+          }
+          return {
+            device_make: out.device_make ?? '',
+            device_model: out.device_model ?? '',
+            quantity: out.quantity ?? '',
+            condition: out.condition ?? '',
+            storage: out.storage ?? '',
+            notes: out.notes ?? '',
+          }
+        }
+        const rows = rawRows.map(normalizeRow)
 
         rows.forEach((row, i) => {
           if (!row.device_make) errors.push(`Row ${i + 1}: Missing device_make`)
@@ -267,27 +284,41 @@ export default function NewTradeInPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!customerId) { toast.error('Please select a customer'); return }
+    const effectiveCustomerId = isCustomer ? myCustomer?.id : customerId
+    if (!effectiveCustomerId) {
+      toast.error(isCustomer ? 'Loading your organization...' : 'Please select a customer')
+      return
+    }
 
     let orderItems: Record<string, unknown>[]
 
     if (tab === 'csv' && csvData.length > 0) {
-      // Match CSV rows to devices
-      orderItems = csvData.map(row => {
-        const device = devices.find(d =>
-          d.make.toLowerCase() === row.device_make?.toLowerCase() &&
-          d.model.toLowerCase() === row.device_model?.toLowerCase()
-        )
+      // Match CSV rows to devices (flexible: aliases, storage stripping, trim)
+      const rows = csvData.map(row => {
+        const device = matchDeviceFromCsv(devices, row.device_make, row.device_model)
         return {
           device_id: device?.id || '',
           quantity: parseInt(row.quantity) || 1,
           storage: row.storage || '128GB',
           condition: (row.condition?.toLowerCase() || 'good') as DeviceCondition,
           notes: row.notes || '',
+          _row: row,
         }
       })
+      const invalid = rows.filter(r => !r.device_id)
+      if (invalid.length > 0) {
+        const examples = invalid.slice(0, 3).map(r => `"${(r as { _row?: CSVRow })._row?.device_make || '?'} ${(r as { _row?: CSVRow })._row?.device_model || '?'}"`).join(', ')
+        toast.error(`Could not match ${invalid.length} row(s): ${examples}. Use exact make/model from catalog (e.g. Apple, iPhone 15 Pro).`)
+        return
+      }
+      orderItems = rows.map(({ _row, ...r }) => r)
     } else {
       if (items.length === 0) { toast.error('Please add at least one item'); return }
+      const invalidItems = items.filter(i => !i.device_id)
+      if (invalidItems.length > 0) {
+        toast.error('Please select a device for all items')
+        return
+      }
       orderItems = items.map((i, idx) => ({
         device_id: i.device_id,
         quantity: i.quantity,
@@ -301,14 +332,14 @@ export default function NewTradeInPage() {
     try {
       const result = await create({
         type: 'trade_in',
-        customer_id: customerId,
+        customer_id: effectiveCustomerId,
         items: orderItems,
         notes,
       } as Record<string, unknown>)
       toast.success('Trade-in order created successfully')
       router.push(`/orders/${result.id}`)
-    } catch {
-      toast.error('Failed to create order')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create order')
     }
   }
 
@@ -463,18 +494,24 @@ export default function NewTradeInPage() {
               </TabsContent>
 
               <TabsContent value="csv" className="space-y-4">
+                {/* Clear Trade-In template label at top */}
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 p-4">
+                  <p className="font-semibold text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>
+                  <p className="text-xs text-muted-foreground mt-1">Use this template for device buybacks. Columns: device_make, device_model, quantity, condition, storage, notes (Make/Model also accepted). Download template to ensure correct format.</p>
+                </div>
+
                 <div className="rounded-lg border-2 border-dashed p-6 text-center">
                   <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground mb-3">
-                    Upload a CSV with columns: device_make, device_model, quantity, condition, storage, notes
+                    Download the Trade-In template or upload your own CSV
                   </p>
                   <input ref={fileRef} type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                  <div className="flex gap-2 justify-center">
-                    <Button type="button" variant="outline" onClick={handleDownloadTemplate}>
-                      <Download className="mr-2 h-4 w-4" />Download Template
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <Button type="button" variant="outline" onClick={handleDownloadTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
+                      <Download className="mr-2 h-4 w-4" />Download Trade-In Template
                     </Button>
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                      <Upload className="mr-2 h-4 w-4" />Choose CSV File
+                      <Upload className="mr-2 h-4 w-4" />Upload Your Own CSV
                     </Button>
                   </div>
                 </div>

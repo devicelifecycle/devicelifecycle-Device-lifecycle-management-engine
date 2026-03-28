@@ -4,8 +4,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { ShipmentService } from '@/services/shipment.service'
-import { ShippoService } from '@/services/shippo.service'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { ShipmentService, isShippingConfigured } from '@/services/shipment.service'
+import { StallionService } from '@/services/stallion.service'
+import { NotificationService } from '@/services/notification.service'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,17 +19,36 @@ export async function GET(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
-    if (!profile || !['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
+    if (!profile) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
     const direction = searchParams.get('direction') as 'inbound' | 'outbound' | null
     const orderId = searchParams.get('order_id')
+
+    // Customers can only fetch shipments for their own orders
+    if (profile.role === 'customer') {
+      if (!orderId) {
+        return NextResponse.json({ error: 'Customers must specify order_id' }, { status: 403 })
+      }
+      // Verify the order belongs to this customer's org
+      const { data: order } = await supabase
+        .from('orders')
+        .select('customer_id, customer:customers(organization_id)')
+        .eq('id', orderId)
+        .single()
+      const custOrg = (order?.customer as { organization_id?: string } | null)?.organization_id
+      if (!order || custOrg !== profile.organization_id) {
+        return NextResponse.json({ error: 'You can only view shipments for your own orders' }, { status: 403 })
+      }
+    } else if (!['admin', 'coe_manager', 'coe_tech', 'vendor'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     let shipments
     if (orderId) {
@@ -61,11 +84,11 @@ export async function POST(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
-    if (!profile || !['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
+    if (!profile) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -76,24 +99,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'order_id is required' }, { status: 400 })
     }
 
-    const shippoPurchase = body.shippo_purchase === true
-    if (!shippoPurchase && (!body.tracking_number || typeof body.tracking_number !== 'string')) {
-      return NextResponse.json({ error: 'tracking_number is required when shippo_purchase is false' }, { status: 400 })
+    // Customer can only create shipments for their own accepted orders
+    if (profile.role === 'customer') {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('status, customer_id, customer:customers(organization_id)')
+        .eq('id', body.order_id)
+        .single()
+      const custOrg = (order?.customer as { organization_id?: string } | null)?.organization_id
+      if (!order || custOrg !== profile.organization_id) {
+        return NextResponse.json({ error: 'You can only create shipments for your own orders' }, { status: 403 })
+      }
+      if (order.status !== 'accepted') {
+        return NextResponse.json({ error: 'You can only ship devices after accepting the quote' }, { status: 400 })
+      }
+    } else if (!['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    if (shippoPurchase && body.direction !== 'outbound') {
-      return NextResponse.json({ error: 'Shippo purchase is only supported for outbound shipments' }, { status: 400 })
+    const stallionPurchase = body.stallion_purchase === true
+    if (!stallionPurchase && (!body.tracking_number || typeof body.tracking_number !== 'string')) {
+      return NextResponse.json({ error: 'tracking_number is required when stallion_purchase is false' }, { status: 400 })
+    }
+
+    if (stallionPurchase && !isShippingConfigured()) {
+      return NextResponse.json(
+        { error: 'Stallion Express is not configured. Set STALLION_API_TOKEN in environment.' },
+        { status: 503 }
+      )
     }
 
     const shipment = await ShipmentService.createShipment({
       ...body,
-      tracking_number: body.tracking_number || (shippoPurchase ? `SHIPPO-PENDING-${Date.now()}` : body.tracking_number),
+      tracking_number: body.tracking_number || (stallionPurchase ? `STALLION-PENDING-${Date.now()}` : body.tracking_number),
       created_by_id: user.id,
     })
 
-    if (shippoPurchase) {
+    if (stallionPurchase) {
       try {
-        const purchased = await ShippoService.purchaseLabel({
+        const purchased = await StallionService.purchaseLabel({
           fromAddress: body.from_address,
           toAddress: body.to_address,
           preferredCarrier: body.carrier,
@@ -108,16 +152,51 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        const updatedShipment = await ShipmentService.attachShippoPurchase(shipment.id, {
-          ...purchased,
+        const updatedShipment = await ShipmentService.attachLabelPurchase(shipment.id, {
+          stallion_shipment_id: purchased.stallion_shipment_id,
+          tracking_number: purchased.tracking_number,
+          carrier: purchased.carrier,
+          tracking_status: purchased.tracking_status,
+          label_url: purchased.label_url,
+          label_pdf_url: purchased.label_pdf_url,
+          rate_amount: purchased.rate_amount,
+          rate_currency: purchased.rate_currency,
+          estimated_delivery: purchased.estimated_delivery,
+          raw_response: purchased.stallion_raw,
           purchased_by_id: user.id,
         })
 
-        return NextResponse.json(updatedShipment, { status: 201 })
+        return NextResponse.json({ ...updatedShipment, provider: 'stallion' }, { status: 201 })
       } catch (error) {
-        await supabase.from('shipments').delete().eq('id', shipment.id)
-        throw error
+        // Label purchase failed — delete the pending shipment record
+        const svcClient = createServiceRoleClient()
+        await svcClient.from('shipments').delete().eq('id', shipment.id)
+        const msg = error instanceof Error ? error.message : 'Label purchase failed'
+        return NextResponse.json(
+          { error: `Stallion label purchase failed: ${msg}. Try turning off "Purchase shipping label" and entering a tracking number manually.` },
+          { status: 400 }
+        )
       }
+    }
+
+    // Notify admins when a customer submits shipment details (fire-and-forget)
+    if (profile.role === 'customer') {
+      ;(async () => {
+        const svc = createServiceRoleClient()
+        const { data: order } = await svc.from('orders').select('order_number').eq('id', body.order_id).single()
+        const orderNumber = order?.order_number || body.order_id
+        const { data: admins } = await svc.from('users').select('id').eq('role', 'admin').eq('is_active', true)
+        for (const admin of admins || []) {
+          await NotificationService.createNotification({
+            user_id: admin.id,
+            type: 'in_app',
+            title: `Customer Shipped Devices — Order #${orderNumber}`,
+            message: `Customer has shipped devices for order #${orderNumber} via ${body.carrier}. Tracking: ${body.tracking_number}`,
+            link: `/orders/${body.order_id}`,
+            metadata: { order_id: body.order_id, tracking_number: body.tracking_number, carrier: body.carrier, audience: 'admin' },
+          }).catch(() => {})
+        }
+      })().catch(err => console.error('Customer shipment notification error:', err))
     }
 
     return NextResponse.json(shipment, { status: 201 })

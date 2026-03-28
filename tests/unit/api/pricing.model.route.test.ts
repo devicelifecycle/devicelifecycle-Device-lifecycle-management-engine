@@ -27,7 +27,7 @@ describe('GET /api/pricing/model', () => {
     createServerSupabaseClientMock.mockReturnValue(createMockSupabase(null, null))
 
     const { GET } = await import('@/app/api/pricing/model/route')
-    const res = await GET(new NextRequest('http://localhost/api/pricing/model'))
+    const res = await GET()
 
     expect(res.status).toBe(401)
   })
@@ -36,7 +36,7 @@ describe('GET /api/pricing/model', () => {
     createServerSupabaseClientMock.mockReturnValue(createMockSupabase({ id: 'u1' }, { role: 'admin' }))
 
     const { GET } = await import('@/app/api/pricing/model/route')
-    const res = await GET(new NextRequest('http://localhost/api/pricing/model'))
+    const res = await GET()
 
     expect(res.status).toBe(200)
     const json = await res.json()

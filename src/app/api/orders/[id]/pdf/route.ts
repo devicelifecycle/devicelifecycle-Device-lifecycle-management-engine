@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrderService } from '@/services/order.service'
 import { generateOrderPDF } from '@/lib/pdf'
+export const dynamic = 'force-dynamic'
+
 
 interface RouteParams {
   params: {
@@ -97,6 +99,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         storage: item.storage,
         claimed_condition: item.claimed_condition,
         unit_price: item.unit_price,
+        guaranteed_buyback_price: item.guaranteed_buyback_price,
+        buyback_condition: item.buyback_condition,
+        buyback_valid_until: item.buyback_valid_until,
       })),
     })
 

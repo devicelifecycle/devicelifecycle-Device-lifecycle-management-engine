@@ -1,541 +1,320 @@
-// ============================================================================
-// DASHBOARD HOME PAGE
-// ============================================================================
-
 'use client'
 
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { ShoppingCart, Users, AlertTriangle, TrendingUp, Plus, ArrowRight, DollarSign, Package, Clock, Activity } from 'lucide-react'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  ClipboardCheck,
+  DollarSign,
+  Package,
+  Plus,
+  ShoppingCart,
+  Truck,
+} from 'lucide-react'
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrders } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { AnimatedCounter } from '@/components/ui/motion'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
-import { AnimatedCounter } from '@/components/ui/motion'
 
-// Generate last 7 days trend data from orders
-function useOrderTrend(orders: { created_at: string }[]) {
+const PIPELINE_COLORS = ['#f1d7af', '#d17843', '#6ec6b8', '#8da8d8', '#d95f5f', '#f0c36d']
+
+function useTrend(orders: Array<{ created_at?: string | null }>) {
   return useMemo(() => {
-    const days: { date: string; label: string; orders: number }[] = []
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      const dateStr = d.toISOString().slice(0, 10)
-      const label = d.toLocaleDateString('en-US', { weekday: 'short' })
-      const count = orders.filter(o => o.created_at?.slice(0, 10) === dateStr).length
-      days.push({ date: dateStr, label, orders: count })
-    }
-    return days
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date()
+      date.setDate(date.getDate() - (6 - index))
+      const key = date.toISOString().slice(0, 10)
+      return {
+        label: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        orders: orders.filter((order) => order.created_at?.slice(0, 10) === key).length,
+      }
+    })
   }, [orders])
 }
 
-// Generate pipeline data from orders
-function useOrderPipeline(orders: { status: string }[]) {
+function usePipeline(orders: Array<{ status: string }>) {
   return useMemo(() => {
-    const statusOrder = ['draft', 'submitted', 'quoted', 'accepted', 'sourcing', 'shipped_to_coe', 'received', 'triaging', 'ready_to_ship', 'shipped', 'delivered', 'closed']
-    const counts: Record<string, number> = {}
-    orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1 })
-    return statusOrder
-      .filter(s => counts[s])
-      .map(s => ({
-        status: (ORDER_STATUS_CONFIG as Record<string, { label: string }>)[s]?.label || s,
-        count: counts[s] || 0,
-        fill: STATUS_COLORS[s] || '#94a3b8',
+    const counts = new Map<string, number>()
+    for (const order of orders) {
+      counts.set(order.status, (counts.get(order.status) || 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([status, count], index) => ({
+        label: ORDER_STATUS_CONFIG[status as keyof typeof ORDER_STATUS_CONFIG]?.label || status,
+        count,
+        fill: PIPELINE_COLORS[index % PIPELINE_COLORS.length],
       }))
   }, [orders])
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: '#94a3b8',
-  submitted: '#3b82f6',
-  quoted: '#8b5cf6',
-  accepted: '#14b8a6',
-  sourcing: '#f59e0b',
-  shipped_to_coe: '#6366f1',
-  received: '#06b6d4',
-  triaging: '#ec4899',
-  ready_to_ship: '#10b981',
-  shipped: '#0ea5e9',
-  delivered: '#22c55e',
-  closed: '#64748b',
-  cancelled: '#ef4444',
-  rejected: '#f43f5e',
-}
-
 export default function DashboardPage() {
   const { user, hasRole } = useAuth()
-  const { orders, total, isLoading } = useOrders({ page_size: 50 })
+  const { orders, total } = useOrders({ page_size: 50 })
 
   const isInternal = hasRole(['admin', 'coe_manager', 'coe_tech', 'sales'])
+  const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
+  const slaAlerts = orders.filter((order) => order.is_sla_breached).length
+  const recentRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
+  const trendData = useTrend(orders)
+  const pipelineData = usePipeline(orders)
+  const recentOrders = orders.slice(0, 6)
 
-  const pendingOrders = orders.filter(o => ['submitted', 'quoted', 'sourcing'].includes(o.status)).length
-  const breachedOrders = orders.filter(o => o.is_sla_breached).length
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.total_amount || 0), 0)
-
-  const trendData = useOrderTrend(orders)
-  const pipelineData = useOrderPipeline(orders)
-  const recentOrders = orders.slice(0, 5)
-
-  const statCards = [
-    {
-      title: isInternal ? 'Total Orders' : 'My Orders',
-      value: total,
-      description: isInternal ? 'All time orders' : 'Your orders',
-      icon: ShoppingCart,
-      iconBg: 'bg-blue-500/12',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      gradient: 'from-blue-500/5 to-blue-600/5',
-    },
-    {
-      title: 'Pending',
-      value: pendingOrders,
-      description: 'Awaiting action',
-      icon: Clock,
-      iconBg: 'bg-slate-500/12',
-      iconColor: 'text-slate-600 dark:text-slate-400',
-      gradient: 'from-slate-500/5 to-slate-600/5',
-    },
-    ...(isInternal ? [
-      {
-        title: 'SLA Alerts',
-        value: breachedOrders,
-        description: 'Orders breaching SLA',
-        icon: AlertTriangle,
-        iconBg: breachedOrders > 0 ? 'bg-red-500/12' : 'bg-slate-500/12',
-        iconColor: breachedOrders > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400',
-        gradient: breachedOrders > 0 ? 'from-red-500/5 to-red-600/5' : 'from-slate-500/5 to-slate-600/5',
-      },
-      {
-        title: 'Revenue',
-        value: formatCurrency(totalRevenue),
-        description: 'From recent orders',
-        icon: DollarSign,
-        iconBg: 'bg-blue-500/12',
-        iconColor: 'text-blue-600 dark:text-blue-400',
-        gradient: 'from-blue-500/5 to-blue-600/5',
-      },
-    ] : []),
+  const stats = [
+    { label: isInternal ? 'Total Orders' : 'My Orders', value: total, icon: ShoppingCart, tone: 'text-amber-200' },
+    { label: 'Active Queue', value: pendingOrders, icon: Activity, tone: 'text-teal-200' },
+    ...(isInternal
+      ? [
+          { label: 'SLA Alerts', value: slaAlerts, icon: AlertTriangle, tone: 'text-rose-200' },
+          { label: 'Revenue', value: formatCurrency(recentRevenue), icon: DollarSign, tone: 'text-sky-200' },
+        ]
+      : []),
   ]
 
-  const staggerClasses = ['animate-stagger-1', 'animate-stagger-2', 'animate-stagger-3', 'animate-stagger-4']
-
-  const displayValue = (stat: (typeof statCards)[0]) => {
-    if (typeof stat.value === 'number') return <AnimatedCounter value={stat.value} />
-    return stat.value
-  }
+  const quickActions = [
+    { href: '/orders/new/trade-in', label: 'Create Trade-In', icon: Plus, description: 'Start a fresh device intake' },
+    { href: '/orders/new/cpo', label: 'Create CPO Quote', icon: Package, description: 'Build a resale purchase flow' },
+    { href: '/coe/triage', label: 'Open Triage', icon: ClipboardCheck, description: 'Review condition and exceptions' },
+    { href: '/coe/shipping', label: 'Check Shipping', icon: Truck, description: 'Finalize outbound operations' },
+  ]
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-8"
-    >
-      {/* Page Header */}
-      <motion.div
-        initial={{ y: -10, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.1 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight font-heading cinematic-title">Dashboard</h1>
-          <p className="text-muted-foreground mt-1.5 text-[15px]">
-            Welcome back, {user?.full_name || 'User'}. Here&apos;s what&apos;s happening today.
-          </p>
-        </div>
-        {isInternal && (
-          <div className="flex gap-3">
-            <Link href="/orders/new/trade-in">
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="mr-2 h-4 w-4" />New Trade-In
-              </Button>
-            </Link>
-            <Link href="/orders/new/cpo">
-              <Button variant="outline" className="border-slate-600 hover:bg-slate-800/50">
-                  <Plus className="mr-2 h-4 w-4" />New CPO
-                </Button>
-            </Link>
+    <div className="relative space-y-8">
+      <section className="surface-panel relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8 lg:px-10">
+        <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
+        <div className="grid gap-8 lg:grid-cols-[1.5fr_0.9fr]">
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <span className="eyebrow-label">Command Center</span>
+              <div className="space-y-3">
+                <h1 className="editorial-title max-w-3xl text-4xl text-stone-100 sm:text-5xl lg:text-6xl">
+                  A sharper operating view for every <span className="brand-gradient">device journey</span>.
+                </h1>
+                <p className="max-w-2xl text-base leading-7 text-stone-400 sm:text-lg">
+                  Welcome back, {user?.full_name || 'Operator'}. This workspace surfaces order flow, pricing pressure,
+                  SLA risk, and fulfillment movement in one place.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {isInternal && (
+                <>
+                  <Link href="/orders/new/trade-in">
+                    <Button size="lg">
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Trade-In
+                    </Button>
+                  </Link>
+                  <Link href="/orders/new/cpo">
+                    <Button size="lg" variant="outline">
+                      <Package className="mr-2 h-4 w-4" />
+                      New CPO
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
-        )}
-      </motion.div>
 
-      {/* Stats Cards */}
-      <div className={`grid gap-5 md:grid-cols-2 ${isInternal ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
-        {statCards.map((stat, i) => (
-          <motion.div
-            key={stat.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.05 }}
-            whileHover={{ y: -4, scale: 1.02 }}
-            className="group"
-          >
-            <Card className={`relative overflow-hidden bg-gradient-to-br ${stat.gradient} ${i === 0 ? 'stat-glow-cyan' : i === 1 ? 'stat-glow-amber' : i === 2 ? 'stat-glow-violet' : 'stat-glow-emerald'}`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1.5">
-                    <p className="text-sm font-medium text-muted-foreground/90">{stat.title}</p>
-                    <p className="text-3xl font-bold tracking-tight font-heading">{displayValue(stat)}</p>
-                    <p className="text-xs text-muted-foreground/70">{stat.description}</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            {quickActions.slice(0, isInternal ? 4 : 2).map((action) => (
+              <Link key={action.href} href={action.href}>
+                <div className="metric-tile h-full p-5 transition-transform duration-300 hover:-translate-y-1">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                    <action.icon className="h-5 w-5" />
                   </div>
-                  <motion.div
-                    className={`flex h-14 w-14 items-center justify-center rounded-2xl ${stat.iconBg} backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_4px_12px_-4px_rgba(0,0,0,0.3)]`}
-                    whileHover={{ scale: 1.12, rotate: 8, y: -2 }}
-                    whileTap={{ scale: 0.95 }}
-                    animate={{ y: [0, -3, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.5 }}
-                  >
-                    <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-                  </motion.div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Charts Row (internal only) */}
-      {isInternal && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Order Trend */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            whileHover={{ y: -2 }}
-          >
-            <Card className="relative overflow-hidden stat-glow-cyan">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2.5 font-heading">
-                <motion.div
-                  animate={{ y: [0, -2, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  <TrendingUp className="h-4.5 w-4.5 text-cyan-400" />
-                </motion.div>
-                Order Trend (7 days)
-              </CardTitle>
-              <CardDescription>New orders created per day</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="h-[200px] rounded-lg bg-muted/50 animate-pulse" />
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={trendData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 20% 91% / 0.5)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'hsl(224 30% 10%)',
-                        border: '1px solid hsl(220 25% 20%)',
-                        borderRadius: '8px',
-                        color: '#e2e8f0',
-                        fontSize: '13px',
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="orders"
-                      stroke="#f59e0b"
-                      strokeWidth={2}
-                      fill="url(#chartGradient)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Order Pipeline */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.35 }}
-            whileHover={{ y: -2 }}
-          >
-            <Card className="relative overflow-hidden stat-glow-violet">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2.5 font-heading">
-                <motion.div
-                  animate={{ rotate: [0, 5, 0, -5, 0] }}
-                  transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  <Activity className="h-4.5 w-4.5 text-violet-400" />
-                </motion.div>
-                Order Pipeline
-              </CardTitle>
-              <CardDescription>Orders by current status</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="h-[200px] rounded-lg bg-muted/50 animate-pulse" />
-              ) : pipelineData.length === 0 ? (
-                <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
-                  No orders to display
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={pipelineData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 20% 91% / 0.5)" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                    <YAxis type="category" dataKey="status" tick={{ fontSize: 11 }} stroke="#94a3b8" width={90} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'hsl(224 30% 10%)',
-                        border: '1px solid hsl(220 25% 20%)',
-                        borderRadius: '8px',
-                        color: '#e2e8f0',
-                        fontSize: '13px',
-                      }}
-                    />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={16}>
-                      {pipelineData.map((entry, index) => (
-                        <Cell key={index} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Quick Actions + Recent Orders + Activity Feed */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="grid gap-6 lg:grid-cols-3"
-      >
-        {/* Quick Actions */}
-        <Card className="lg:col-span-1 relative overflow-hidden stat-glow-amber">
-          <CardHeader>
-            <CardTitle className="text-base font-heading">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Link href="/orders">
-              <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/12">
-                <ShoppingCart className="h-5 w-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">{isInternal ? 'View All Orders' : 'My Orders'}</p>
-                <p className="text-xs text-muted-foreground">{isInternal ? 'Manage trade-in & CPO orders' : 'View your order history'}</p>
-              </div>
-              </div>
-            </Link>
-            {isInternal && (
-              <>
-                <Link href="/orders/new/trade-in">
-                  <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/12">
-                    <Package className="h-5 w-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">New Order</p>
-                    <p className="text-xs text-muted-foreground">Create trade-in or CPO order</p>
-                  </div>
-                  </div>
-                </Link>
-                {hasRole(['admin', 'coe_manager', 'sales']) && (
-                  <Link href="/customers/new">
-                    <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-600/20">
-                      <Users className="h-5 w-5 text-slate-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Add Customer</p>
-                    <p className="text-xs text-muted-foreground">Register new customer</p>
-                  </div>
-                    </div>
-                  </Link>
-                )}
-                {hasRole(['admin', 'coe_manager', 'sales']) && (
-                  <Link href="/vendors/new">
-                    <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-600/20">
-                      <TrendingUp className="h-5 w-5 text-slate-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Add Vendor</p>
-                    <p className="text-xs text-muted-foreground">Register new vendor</p>
-                  </div>
-                    </div>
-                  </Link>
-                )}
-              </>
-            )}
-            {!isInternal && (
-              <Link href="/notifications">
-                <div className="flex items-center gap-3 rounded-lg border border-slate-800 p-3.5 transition-colors hover:bg-slate-800/50 group cursor-pointer">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-600/20">
-                  <Clock className="h-5 w-5 text-slate-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Notifications</p>
-                  <p className="text-xs text-muted-foreground">View updates and alerts</p>
-                </div>
+                  <p className="mb-1 text-base font-semibold text-stone-100">{action.label}</p>
+                  <p className="text-sm leading-6 text-stone-400">{action.description}</p>
                 </div>
               </Link>
-            )}
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className={`grid gap-4 md:grid-cols-2 ${isInternal ? 'xl:grid-cols-4' : 'xl:grid-cols-2'}`}>
+        {stats.map((stat, index) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.08 }}
+            className="metric-tile p-6"
+          >
+            <div className="mb-8 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.18em] text-stone-500">{stat.label}</p>
+                <div className="mt-3 text-4xl font-semibold text-stone-50">
+                  {typeof stat.value === 'number' ? <AnimatedCounter value={stat.value} /> : stat.value}
+                </div>
+              </div>
+              <div className={stat.tone}>
+                <stat.icon className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="h-px w-full copper-line opacity-60" />
+          </motion.div>
+        ))}
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+          <CardHeader>
+            <CardTitle className="text-2xl text-stone-100">Order Momentum</CardTitle>
+            <CardDescription className="text-stone-400">Volume over the last seven days.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData}>
+                <defs>
+                  <linearGradient id="momentumFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#d17843" stopOpacity={0.55} />
+                    <stop offset="100%" stopColor="#d17843" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="rgba(255,255,255,0.07)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: '#a8a29e', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#a8a29e', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: 'rgba(18,14,12,0.95)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '18px',
+                    color: '#f5f5f4',
+                  }}
+                />
+                <Area type="monotone" dataKey="orders" stroke="#f3d5af" strokeWidth={2.5} fill="url(#momentumFill)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Recent Orders */}
-        <Card className="lg:col-span-2 relative overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+          <CardHeader>
+            <CardTitle className="text-2xl text-stone-100">Pipeline Weight</CardTitle>
+            <CardDescription className="text-stone-400">Where operational effort is concentrated now.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={pipelineData}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: '#a8a29e', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#a8a29e', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: 'rgba(18,14,12,0.95)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '18px',
+                    color: '#f5f5f4',
+                  }}
+                />
+                <Bar dataKey="count" radius={[10, 10, 0, 0]}>
+                  {pipelineData.map((entry) => (
+                    <Cell key={entry.label} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+          <CardHeader className="flex-row items-end justify-between space-y-0">
             <div>
-              <CardTitle className="text-base font-heading">Recent Orders</CardTitle>
-              <CardDescription>Latest order activity</CardDescription>
+              <CardTitle className="text-2xl text-stone-100">Recent Activity</CardTitle>
+              <CardDescription className="mt-2 text-stone-400">Latest orders and where they sit.</CardDescription>
             </div>
-            <Link href="/orders">
-              <Button variant="ghost" size="sm" className="text-xs">
-                View All <ArrowRight className="ml-1 h-3 w-3" />
-              </Button>
+            <Link href="/orders" className="text-sm text-primary hover:text-amber-200">
+              View all
             </Link>
           </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-16 rounded-lg bg-muted/50 animate-pulse" />
-                ))}
-              </div>
-            ) : recentOrders.length === 0 ? (
-              <div className="text-center py-12">
-                <ShoppingCart className="mx-auto h-10 w-10 text-muted-foreground/40" />
-                <p className="mt-3 text-sm text-muted-foreground">No orders yet.</p>
-                <Link href="/orders/new/trade-in">
-                  <Button size="sm" className="mt-4">Create First Order</Button>
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {recentOrders.map((order) => {
-                  const statusConfig = ORDER_STATUS_CONFIG[order.status]
-                  return (
-                    <Link key={order.id} href={`/orders/${order.id}`}>
-                      <motion.div
-                        whileHover={{ x: 6, scale: 1.005 }}
-                        whileTap={{ scale: 0.998 }}
-                        className="flex items-center justify-between rounded-xl border border-white/[0.06] p-3.5 transition-all hover:bg-white/[0.04] hover:border-white/[0.12] hover:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.3)] group"
-                      >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] ${order.type === 'trade_in' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-violet-500/15 text-violet-400'}`}>
-                          {order.type === 'trade_in' ? 'TI' : 'CPO'}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm group-hover:text-primary transition-colors">{order.order_number}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {order.customer?.company_name || 'Unknown'} · {formatRelativeTime(order.created_at)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <span className="text-sm font-semibold">{formatCurrency(order.total_amount || 0)}</span>
-                        <Badge variant={
-                          order.status === 'delivered' || order.status === 'closed' ? 'default' :
-                          order.status === 'cancelled' || order.status === 'rejected' ? 'destructive' :
-                          'secondary'
-                        } className="text-[11px]">
-                          {statusConfig?.label || order.status}
-                        </Badge>
-                      </div>
-                      </motion.div>
-                    </Link>
-                  )
-                })}
+          <CardContent className="space-y-3">
+            {recentOrders.length === 0 && (
+              <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center text-sm text-stone-500">
+                No recent orders yet.
               </div>
             )}
+            {recentOrders.map((order) => (
+              <Link key={order.id} href={`/orders/${order.id}`}>
+                <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-5 py-4 transition hover:bg-white/[0.05]">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="font-semibold text-stone-100">{order.order_number || 'Untitled Order'}</p>
+                      <p className="text-sm text-stone-400">
+                        {order.type === 'cpo' ? 'CPO workflow' : 'Trade-in workflow'} · Updated{' '}
+                        {formatRelativeTime(order.updated_at || order.created_at || new Date().toISOString())}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-stone-200">
+                        {ORDER_STATUS_CONFIG[order.status as keyof typeof ORDER_STATUS_CONFIG]?.label || order.status}
+                      </Badge>
+                      <ArrowRight className="h-4 w-4 text-stone-500" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </CardContent>
         </Card>
-      </motion.div>
 
-      {/* Activity Feed (internal only) */}
-      {isInternal && recentOrders.length > 0 && (
-        <Card className="relative overflow-hidden stat-glow-cyan">
+        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2.5 font-heading">
-              <motion.div
-                animate={{ scale: [1, 1.15, 1] }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <Activity className="h-4.5 w-4.5 text-cyan-400" />
-              </motion.div>
-              Activity Feed
-            </CardTitle>
-            <CardDescription>Recent order timeline</CardDescription>
+            <CardTitle className="text-2xl text-stone-100">Operational Notes</CardTitle>
+            <CardDescription className="text-stone-400">A quick read of today’s posture.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="relative">
-              {/* Timeline line */}
-              <motion.div
-                className="absolute left-[11px] top-2 bottom-2 w-px bg-border origin-top"
-                initial={{ scaleY: 0 }}
-                animate={{ scaleY: 1 }}
-                transition={{ duration: 0.8, delay: 0.5, ease: 'easeOut' }}
-              />
-              <div className="space-y-4">
-                {recentOrders.map((order, idx) => {
-                  const statusConfig = ORDER_STATUS_CONFIG[order.status]
-                  const color = STATUS_COLORS[order.status] || '#94a3b8'
-                  return (
-                    <motion.div
-                      key={order.id}
-                      className="flex items-start gap-4 relative"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.6 + idx * 0.1 }}
-                    >
-                      {/* Timeline dot */}
-                      <motion.div
-                        className="relative z-10 mt-1 h-[10px] w-[10px] rounded-full ring-2 ring-background flex-shrink-0"
-                        style={{ backgroundColor: color }}
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: 0.7 + idx * 0.1, type: 'spring', stiffness: 400, damping: 15 }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Link href={`/orders/${order.id}`} className="text-sm font-medium hover:text-primary transition-colors">
-                            {order.order_number}
-                          </Link>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0" style={{ borderColor: color, color }}>
-                            {statusConfig?.label || order.status}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {order.customer?.company_name || 'Unknown'} · {order.type === 'trade_in' ? 'Trade-In' : 'CPO'} · {formatRelativeTime(order.created_at)}
-                        </p>
-                      </div>
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                        {formatCurrency(order.total_amount || 0)}
-                      </span>
-                    </motion.div>
-                  )
-                })}
-              </div>
+          <CardContent className="space-y-4">
+            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Queue</p>
+              <p className="text-lg font-semibold text-stone-100">{pendingOrders} orders need active handling.</p>
+              <p className="mt-2 text-sm leading-6 text-stone-400">
+                Submitted, quoted, sourcing, receiving, and triage work are grouped into the active queue so the team can
+                prioritize throughput instead of scanning every status manually.
+              </p>
+            </div>
+            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Revenue Surface</p>
+              <p className="text-lg font-semibold text-stone-100">{formatCurrency(recentRevenue)} in visible order value.</p>
+              <p className="mt-2 text-sm leading-6 text-stone-400">
+                This is drawn from the currently loaded order set and gives finance and sales a quick directional read on the
+                active book of business.
+              </p>
+            </div>
+            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">SLA Risk</p>
+              <p className="text-lg font-semibold text-stone-100">{slaAlerts} breached or at-risk orders flagged.</p>
+              <p className="mt-2 text-sm leading-6 text-stone-400">
+                Keep an eye on exceptions and triage if this number climbs. It’s usually the earliest signal that the system
+                needs operational rebalancing.
+              </p>
             </div>
           </CardContent>
         </Card>
-      )}
-    </motion.div>
+      </section>
+    </div>
   )
 }

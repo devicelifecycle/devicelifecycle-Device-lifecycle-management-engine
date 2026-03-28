@@ -11,20 +11,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
+export const dynamic = 'force-dynamic'
+
 
 type TemplateType = 'trade_in' | 'cpo' | 'vendor_inventory'
 
-// Column name aliases → canonical field names
+// Column name aliases → canonical field names (includes common typos for auto-correction)
 const COLUMN_MAP: Record<string, string> = {
   // Brand / Make
   'make': 'brand',
   'make*': 'brand',
   'brand': 'brand',
   'manufacturer': 'brand',
+  'device_make': 'brand',
+  'devcie_make': 'brand',
+  'divice_make': 'brand',
+  'device make': 'brand',
   // Model
   'model': 'model',
   'model*': 'model',
   'device': 'model',
+  'device_model': 'model',
+  'devcie_model': 'model',
+  'divice_model': 'model',
+  'device model': 'model',
   'product': 'product',  // special: parse brand from "MacBook Pro 16-inch"
   // Storage
   'storage': 'storage',
@@ -64,21 +74,72 @@ const COLUMN_MAP: Record<string, string> = {
   'model number': 'model_number',
   'accessories': 'accessories',
   'accessories. ex., charger?': 'accessories',
+  // Common typos (auto-correction)
+  'condtion': 'condition',
+  'condiiton': 'condition',
+  'storag': 'storage',
+  'storrage': 'storage',
+  'quantitty': 'quantity',
+  'quantiy': 'quantity',
+  'colur': 'colour',
+  'serial_numbr': 'serial_number',
+  'serail_number': 'serial_number',
+  'nots': 'notes',
 }
 
-// Map free-text condition → enum
+// Levenshtein distance for fuzzy column matching
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0))
+  for (let i = 0; i <= m; i++) dp[i][0] = i
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      )
+    }
+  }
+  return dp[m][n]
+}
+
+// Auto-correct column header typos: exact match first, then fuzzy (≤2 edits)
+function autoCorrectColumn(header: string): string | undefined {
+  const lower = header.toLowerCase().trim().replace(/\s+/g, ' ')
+  if (COLUMN_MAP[lower]) return COLUMN_MAP[lower]
+  const keys = Object.keys(COLUMN_MAP)
+  let best: { key: string; dist: number } | null = null
+  for (const k of keys) {
+    const d = levenshtein(lower, k)
+    if (d <= 2 && (!best || d < best.dist)) best = { key: k, dist: d }
+  }
+  return best ? COLUMN_MAP[best.key] : undefined
+}
+
+// Condition value typos → canonical (auto-correction for template cell values)
+const CONDITION_TYPO_MAP: Record<string, string> = {
+  excellant: 'excellent', exacellent: 'excellent', exellent: 'excellent', excelent: 'excellent',
+  gud: 'good', gd: 'good',
+  fr: 'fair', average: 'fair',
+  brokn: 'poor', broke: 'poor', broken: 'poor', damag: 'poor', crack: 'poor',
+}
+
 // Order: check worst conditions first (poor→fair) before better ones (good→excellent→new)
 // to avoid false positives like "battery worn" matching "new" via substring
 function normalizeCondition(raw: string): string | null {
   if (!raw) return null
   const lower = raw.toLowerCase().trim()
+  const token = lower.replace(/[^a-z]/g, '')
 
-  // Direct match
-  if (DEVICE_CONDITION_VALUES.includes(lower as (typeof DEVICE_CONDITION_VALUES)[number])) {
-    return lower
-  }
+  // Typo auto-correction (excellant → excellent, etc.)
+  if (CONDITION_TYPO_MAP[token]) return CONDITION_TYPO_MAP[token]
 
-  // Check worst → best to avoid substring false positives
+  // Direct enum match
+  if (DEVICE_CONDITION_VALUES.includes(lower as (typeof DEVICE_CONDITION_VALUES)[number])) return lower
+
+  // Check worst → best (free-text substring matching) to avoid substring false positives
   if (lower.includes('cracked') || lower.includes('broken') || lower.includes('damaged')) return 'poor'
   if (lower.includes('battery') || lower.includes('scratch') || lower.includes('worn') || lower.includes('fair')) return 'fair'
   if (lower.includes('good') || lower.includes('reset and cleaned') || lower.includes('clean')) return 'good'
@@ -118,32 +179,31 @@ function extractBrandFromProduct(product: string): { brand: string; model: strin
   return { brand: parts[0], model: parts.slice(1).join(' ') || parts[0] }
 }
 
-// Detect template type from column headers
+// Detect template type from column headers (with typo tolerance)
 function detectTemplate(columns: string[]): TemplateType {
   const lowerCols = columns.map(c => c.toLowerCase().trim())
+  const hasCol = (names: string[]) => (c: string) => names.includes(c) || names.some(n => levenshtein(c, n) <= 2)
 
   // Vendor inventory: has Product + Year + CPU/RAM columns
-  if (lowerCols.some(c => c === 'product') && (lowerCols.some(c => c === 'cpu' || c === 'processor') || lowerCols.some(c => c === 'ram' || c === 'memory'))) {
+  if (lowerCols.some(hasCol(['product', 'produt', 'produkt'])) &&
+      (lowerCols.some(hasCol(['cpu', 'processor', 'proc'])) || lowerCols.some(hasCol(['ram', 'memory', 'mem'])))) {
     return 'vendor_inventory'
   }
 
   // CPO: has Quantity column
-  if (lowerCols.some(c => c === 'quantity' || c === 'qty')) {
+  if (lowerCols.some(hasCol(['quantity', 'qty', 'quantitty', 'quantiy', 'quantit']))) {
     return 'cpo'
   }
 
-  // Default: trade-in (per-device rows)
   return 'trade_in'
 }
 
-// Map raw column headers to canonical field names
+// Map raw column headers to canonical field names (with typo auto-correction)
 function mapColumns(columns: string[]): Record<number, string> {
   const mapping: Record<number, string> = {}
   for (let i = 0; i < columns.length; i++) {
-    const lower = columns[i].toLowerCase().trim()
-    if (COLUMN_MAP[lower]) {
-      mapping[i] = COLUMN_MAP[lower]
-    }
+    const canonical = autoCorrectColumn(columns[i])
+    if (canonical) mapping[i] = canonical
   }
   return mapping
 }

@@ -7,6 +7,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { isValidUUID } from '@/lib/utils'
+export const dynamic = 'force-dynamic'
+
 
 const MAX_BATCH_SIZE = 50
 
@@ -36,14 +39,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const { order_ids } = body
+    const body = await request.json().catch(() => ({}))
+    const { order_ids } = body || {}
 
     if (!Array.isArray(order_ids) || order_ids.length === 0) {
       return NextResponse.json({ error: 'order_ids must be a non-empty array' }, { status: 400 })
     }
     if (order_ids.length > MAX_BATCH_SIZE) {
       return NextResponse.json({ error: `Maximum ${MAX_BATCH_SIZE} orders per batch` }, { status: 400 })
+    }
+    if (order_ids.some((id: unknown) => typeof id !== 'string' || !isValidUUID(id))) {
+      return NextResponse.json({ error: 'All order_ids must be valid UUIDs' }, { status: 400 })
     }
 
     const results: { id: string; success: boolean; error?: string }[] = []
@@ -64,13 +70,18 @@ export async function POST(request: NextRequest) {
         await OrderService.deleteOrder(orderId, user.id)
 
         await AuditService.logDelete(
-          user.id, 'order', orderId,
-          { order_number: order.order_number, bulk: true }
+          user.id,
+          'order',
+          orderId,
+          { order_number: order.order_number, status: order.status },
+          { bulk: true }
         )
 
         results.push({ id: orderId, success: true })
-      } catch {
-        results.push({ id: orderId, success: false, error: 'Internal error' })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Internal error'
+        console.error('[bulk-delete] Order', orderId, ':', msg)
+        results.push({ id: orderId, success: false, error: msg })
       }
     }
 

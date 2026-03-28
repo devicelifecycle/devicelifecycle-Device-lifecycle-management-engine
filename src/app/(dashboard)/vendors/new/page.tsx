@@ -16,6 +16,14 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
+
+type VendorCreateResult = {
+  portal_account_created?: boolean
+  welcome_email_sent_to?: string | null
+  welcome_email_sent?: boolean
+  portal_account_skipped_reason?: string | null
+}
 
 export default function NewVendorPage() {
   const router = useRouter()
@@ -28,19 +36,35 @@ export default function NewVendorPage() {
     payment_terms: '',
     warranty_period_days: '',
     notes: '',
+    street: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: '',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await create({
-        ...form,
+      const { street, city, state, zip, country, ...rest } = form
+      const result = await create({
+        ...rest,
         warranty_period_days: form.warranty_period_days ? Number(form.warranty_period_days) : undefined,
-      })
-      toast.success('Vendor created successfully')
+        address: { street, city, state, zip, country },
+      }) as VendorCreateResult
+
+      if (result.portal_account_created && result.welcome_email_sent_to && result.welcome_email_sent) {
+        toast.success(`Vendor created and login details emailed to ${result.welcome_email_sent_to}`)
+      } else if (result.portal_account_created && result.welcome_email_sent_to && result.welcome_email_sent === false) {
+        toast.warning(`Vendor created, but the welcome email could not be sent to ${result.welcome_email_sent_to}. Please retry or create the user manually.`)
+      } else if (result.portal_account_skipped_reason) {
+        toast.success(`Vendor created. ${result.portal_account_skipped_reason}.`)
+      } else {
+        toast.success('Vendor created successfully')
+      }
       router.push('/vendors')
-    } catch {
-      toast.error('Failed to create vendor')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create vendor')
     }
   }
 
@@ -57,7 +81,7 @@ export default function NewVendorPage() {
       <Card>
         <CardHeader>
           <CardTitle>Vendor Details</CardTitle>
-          <CardDescription>Fill in the vendor information below</CardDescription>
+          <CardDescription>Fill in the vendor information below. A vendor login and welcome email will be created automatically.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -99,6 +123,33 @@ export default function NewVendorPage() {
                 <Input id="warranty_period_days" type="number" value={form.warranty_period_days} onChange={e => setForm(f => ({ ...f, warranty_period_days: e.target.value }))} />
               </div>
             </div>
+            <Separator className="my-2" />
+            <p className="text-sm font-medium">Address *</p>
+            <div className="space-y-2">
+              <Label htmlFor="street">Street *</Label>
+              <Input id="street" value={form.street} onChange={e => setForm(f => ({ ...f, street: e.target.value }))} required placeholder="123 Main St" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="city">City *</Label>
+                <Input id="city" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state">State / Province *</Label>
+                <Input id="state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} required />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="zip">ZIP / Postal Code *</Label>
+                <Input id="zip" value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country">Country *</Label>
+                <Input id="country" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} required placeholder="Canada" />
+              </div>
+            </div>
+            <Separator className="my-2" />
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea id="notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />

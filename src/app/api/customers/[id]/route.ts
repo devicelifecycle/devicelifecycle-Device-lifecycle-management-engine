@@ -6,12 +6,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { CustomerService } from '@/services/customer.service'
 import { updateCustomerSchema } from '@/lib/validations'
+import { isValidUUID } from '@/lib/utils'
+export const dynamic = 'force-dynamic'
+
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!isValidUUID(params.id)) {
+      return NextResponse.json({ error: 'Invalid customer ID format' }, { status: 400 })
+    }
     const supabase = createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -39,13 +45,23 @@ export async function GET(
 
     // Internal roles and sales can view all customers
     if (role === 'admin' || role === 'coe_manager' || role === 'coe_tech' || role === 'sales') {
-      return NextResponse.json(customer)
+      let organization = null
+      if (customer.organization_id) {
+        const { data: org } = await supabase.from('organizations').select('id, name, type').eq('id', customer.organization_id).single()
+        organization = org
+      }
+      return NextResponse.json({ ...customer, organization })
     }
 
     // Customer can only view their own customer record
     if (role === 'customer') {
       if (customer.organization_id === organization_id) {
-        return NextResponse.json(customer)
+        let organization = null
+        if (customer.organization_id) {
+          const { data: org } = await supabase.from('organizations').select('id, name, type').eq('id', customer.organization_id).single()
+          organization = org
+        }
+        return NextResponse.json({ ...customer, organization })
       }
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }

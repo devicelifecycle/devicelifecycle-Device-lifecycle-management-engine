@@ -122,6 +122,7 @@ export default function COEExceptionsPage() {
                   <TableHead>Actual</TableHead>
                   <TableHead>Price Adj.</TableHead>
                   <TableHead>Reason</TableHead>
+                  <TableHead>Triaged By</TableHead>
                   <TableHead>Triaged</TableHead>
                   <TableHead className="text-right">Decision</TableHead>
                 </TableRow>
@@ -157,7 +158,10 @@ export default function COEExceptionsPage() {
                         <p className="text-sm text-muted-foreground truncate">{exc.exception_reason || '—'}</p>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {exc.created_at ? formatDateTime(exc.created_at) : '—'}
+                        {(exc.triaged_by as { full_name?: string })?.full_name ?? '—'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {exc.triaged_at ? formatDateTime(exc.triaged_at) : (exc.created_at ? formatDateTime(exc.created_at) : '—')}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">

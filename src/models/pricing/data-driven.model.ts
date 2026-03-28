@@ -223,6 +223,8 @@ export class DataDrivenPricingModel implements IPricingModel {
       case 'pricing_table':
         confidence = 0.45
         break
+      default:
+        confidence = 0.5
     }
 
     return {
@@ -290,11 +292,12 @@ export class DataDrivenPricingModel implements IPricingModel {
     lastTrainCheck = Date.now()
 
     try {
-      const { count } = await supabase
+      const { data: existing } = await supabase
         .from('trained_pricing_baselines')
-        .select('id', { count: 'exact', head: true })
+        .select('id')
+        .limit(1)
 
-      if (count === 0 || count === null) {
+      if (!existing?.length) {
         console.log('[DataDrivenModel] No baselines found — auto-training from all available data...')
         const { PricingTrainingService } = await import('@/services/pricing-training.service')
         const result = await PricingTrainingService.train()
@@ -303,5 +306,6 @@ export class DataDrivenPricingModel implements IPricingModel {
     } catch (e) {
       console.warn('[DataDrivenModel] Auto-train check failed:', e instanceof Error ? e.message : e)
     }
+
   }
 }

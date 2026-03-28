@@ -5,19 +5,17 @@
  *
  * Usage:
  *   npm run create-admin
- *   # Or with env vars:
- *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/create-admin-user.mjs
  *
- * Default: admin@example.com / Admin123!
- * Override: EMAIL=... PASSWORD=... node scripts/create-admin-user.mjs
+ * Default: admin@login.local (login with "admin") / Test123!
+ * Override: EMAIL=admin@login.local PASSWORD=Test123! node scripts/create-admin-user.mjs
  */
 
 import { createClient } from '@supabase/supabase-js'
 
 const URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const EMAIL = process.env.EMAIL || 'admin@example.com'
-const PASSWORD = process.env.PASSWORD || 'Admin123!'
+const EMAIL = process.env.EMAIL || 'admin@login.local'
+const PASSWORD = process.env.PASSWORD || 'Test123!'
 const FULL_NAME = process.env.FULL_NAME || 'Admin User'
 
 if (!URL || !SERVICE_KEY) {

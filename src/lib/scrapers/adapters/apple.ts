@@ -7,8 +7,10 @@
 import cheerio from 'cheerio'
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from '../types'
 import { fetchWithRetry, parsePrice, throttle } from '../utils'
+import { convertConditionPrice } from '../condition-pricing'
+import { runAppleScraperPilot } from './apple-scrapling'
 
-const TRADE_IN_URL = 'https://www.apple.com/ca/shop/trade-in'
+const TRADE_IN_URL = process.env.APPLE_TRADE_IN_URL || 'https://www.apple.com/ca/shop/trade-in'
 
 type $Root = ReturnType<typeof cheerio.load>
 
@@ -17,7 +19,7 @@ interface AppleTradeInEntry {
   price: number
 }
 
-export async function scrapeApple(devices: DeviceToScrape[]): Promise<ScraperResult> {
+async function scrapeAppleTypeScript(devices: DeviceToScrape[]): Promise<ScraperResult> {
   const start = Date.now()
   const prices: ScrapedPrice[] = []
   const now = new Date().toISOString()
@@ -71,20 +73,32 @@ export async function scrapeApple(devices: DeviceToScrape[]): Promise<ScraperRes
         }
       }
 
+      // Apple's "Up to $X" is the max value (excellent condition, highest storage).
+      // Apply condition adjustment: the scraped price represents "excellent".
+      const requestedCondition = device.condition ?? 'good'
+      const adjustedPrice = convertConditionPrice(tradePrice, 'excellent', requestedCondition)
+
       prices.push({
         competitor_name: 'Apple Trade-In',
         make: device.make, model: device.model, storage: device.storage,
-        trade_in_price: tradePrice, sell_price: null,
-        condition: device.condition ?? 'good', scraped_at: now,
-        raw: { matched: tradePrice != null, source, totalScraped: livePrices.length },
+        trade_in_price: adjustedPrice, sell_price: null,
+        condition: requestedCondition, scraped_at: now,
+        raw: { matched: tradePrice != null, source, totalScraped: livePrices.length, base_condition: 'excellent' },
       })
-      await throttle(200)
+      // No throttle needed — Apple scraper makes only 1 HTTP request total
     }
 
     return { competitor_name: 'Apple Trade-In', prices, success: true, duration_ms: Date.now() - start }
   } catch (error) {
     return { competitor_name: 'Apple Trade-In', prices: [], success: false, error: error instanceof Error ? error.message : 'Unknown error', duration_ms: Date.now() - start }
   }
+}
+
+export async function scrapeApple(devices: DeviceToScrape[]): Promise<ScraperResult> {
+  return runAppleScraperPilot({
+    devices,
+    runTypeScript: () => scrapeAppleTypeScript(devices),
+  })
 }
 
 function extractLivePrices($: $Root, html: string): AppleTradeInEntry[] {

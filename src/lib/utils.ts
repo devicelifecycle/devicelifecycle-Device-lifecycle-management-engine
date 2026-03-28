@@ -33,20 +33,39 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount)
 }
 
+/** Default timezone for date/time display (EST) */
+const DISPLAY_TIMEZONE = 'America/New_York'
+
 /**
- * Format date
+ * Format date (EST)
  */
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const defaultOptions: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+    timeZone: DISPLAY_TIMEZONE,
   }
-  return new Date(date).toLocaleDateString('en-US', options || defaultOptions)
+  return new Date(date).toLocaleDateString('en-US', options ? { ...defaultOptions, ...options } : defaultOptions)
 }
 
 /**
- * Format date with time
+ * Format address object to readable string
+ */
+export function formatAddress(addr?: Record<string, unknown> | null): string {
+  if (!addr || typeof addr !== 'object') return '—'
+  const street1 = (addr.street1 ?? addr.line1 ?? addr.address1 ?? addr.street ?? '').toString().trim()
+  const street2 = (addr.street2 ?? addr.line2 ?? addr.address2 ?? '').toString().trim()
+  const city = (addr.city ?? '').toString().trim()
+  const state = (addr.state ?? addr.province ?? '').toString().trim()
+  const zip = (addr.postal_code ?? addr.zip_code ?? addr.zip ?? '').toString().trim()
+  const country = (addr.country ?? '').toString().trim()
+  const parts = [street1, street2, city, state, zip, country].filter(Boolean)
+  return parts.length ? parts.join(', ') : '—'
+}
+
+/**
+ * Format date with time (EST)
  */
 export function formatDateTime(date: string | Date): string {
   return new Date(date).toLocaleString('en-US', {
@@ -55,6 +74,7 @@ export function formatDateTime(date: string | Date): string {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: DISPLAY_TIMEZONE,
   })
 }
 
@@ -250,6 +270,30 @@ export function sanitizeSearchInput(input: string): string {
     .replace(/[,().]/g, '')       // Strip PostgREST filter-breaking chars
     .trim()
     .slice(0, 200)                // Limit length to prevent abuse
+}
+
+/**
+ * Normalize competitor name for consistent display and grouping system-wide.
+ * Maps variants (Go Resell, GoRecell, etc.) to canonical names.
+ */
+export function normalizeCompetitorName(name?: string): string {
+  const normalized = (name || '').trim().toLowerCase().replace(/\s+/g, ' ')
+  if (normalized === 'goresell' || normalized === 'go recell' || normalized === 'gorecell' || normalized === 'go resell') return 'GoRecell'
+  if (normalized === 'telus') return 'Telus'
+  if (normalized === 'bell') return 'Bell'
+  if (normalized === 'universal' || normalized === 'universalcell' || normalized === 'univercell') return 'UniverCell'
+  if (normalized === 'apple trade-in' || normalized === 'apple tradein') return 'Apple Trade-In'
+  return (name || 'Unknown').trim() || 'Unknown'
+}
+
+/** UUID v4 regex for validation */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/**
+ * Check if a string is a valid UUID (safe for DB queries / filter injection).
+ */
+export function isValidUUID(id: string): boolean {
+  return typeof id === 'string' && UUID_REGEX.test(id)
 }
 
 /**

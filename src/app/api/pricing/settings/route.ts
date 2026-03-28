@@ -5,14 +5,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { PricingSettingsOverrides } from '@/services/pricing.service'
+export const dynamic = 'force-dynamic'
 
-const SETTING_KEYS: (keyof PricingSettingsOverrides)[] = [
+
+const SETTING_KEYS: (keyof PricingSettingsOverrides | 'cpo_depreciation_rate' | 'cpo_buyback_years')[] = [
   'channel_green_min', 'channel_yellow_min', 'marketplace_fee_percent',
-  'breakage_risk_percent', 'competitive_relevance_min', 'competitor_ceiling_percent', 'outlier_deviation_threshold',
-  'trade_in_profit_percent', 'enterprise_margin_percent',
+  'breakage_risk_percent', 'competitive_relevance_min', 'competitor_ceiling_percent', 'beat_competitor_percent',
+  'outlier_deviation_threshold', 'trade_in_profit_percent', 'enterprise_margin_percent',
   'cpo_markup_percent', 'cpo_enterprise_markup_percent', 'price_staleness_days',
   'margin_mode', 'custom_margin_percent', 'custom_margin_amount',
   'prefer_data_driven',
+  'cpo_depreciation_rate', 'cpo_buyback_years',
 ]
 
 const SETTING_BOUNDS: Record<string, { min: number; max: number }> = {
@@ -22,6 +25,7 @@ const SETTING_BOUNDS: Record<string, { min: number; max: number }> = {
   breakage_risk_percent: { min: 0, max: 100 },
   competitive_relevance_min: { min: 0, max: 100 },
   competitor_ceiling_percent: { min: 0, max: 100 },
+  beat_competitor_percent: { min: 0, max: 20 },
   outlier_deviation_threshold: { min: 0, max: 200 },
   trade_in_profit_percent: { min: 0, max: 100 },
   enterprise_margin_percent: { min: 0, max: 100 },
@@ -30,6 +34,8 @@ const SETTING_BOUNDS: Record<string, { min: number; max: number }> = {
   price_staleness_days: { min: 0, max: 365 },
   custom_margin_percent: { min: 0, max: 100 },
   custom_margin_amount: { min: 0, max: 100000 },
+  cpo_depreciation_rate: { min: 0, max: 50 },
+  cpo_buyback_years: { min: 1, max: 10 },
 }
 
 export async function GET() {

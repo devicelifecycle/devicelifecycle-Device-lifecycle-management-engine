@@ -47,26 +47,31 @@ export class CompetitorBeatPricingModel implements IPricingModel {
     const storage = input.storage || '128GB'
     const carrier = input.carrier || 'Unlocked'
 
-    // Fetch competitor trade-in prices
+    // Fetch competitor trade-in prices (exclude Bell — scraper disabled)
     const { data: competitors } = await supabase
       .from('competitor_prices')
       .select('competitor_name, trade_in_price')
       .eq('device_id', input.device_id)
       .eq('storage', storage)
+      .neq('competitor_name', 'Bell')
       .not('trade_in_price', 'is', null)
 
     let anchorPrice = input.base_price ?? 0
     let highestCompetitor = 0
     const competitorList: Array<{ name: string; price: number }> = []
+    const { normalizeCompetitorName } = await import('@/lib/utils')
 
     if (competitors?.length) {
+      const byName = new Map<string, number>()
       for (const c of competitors) {
         const p = Number(c.trade_in_price) || 0
         if (p > 0) {
-          competitorList.push({ name: c.competitor_name, price: p })
+          const name = normalizeCompetitorName(c.competitor_name)
+          if (!byName.has(name)) byName.set(name, p)
           if (p > highestCompetitor) highestCompetitor = p
         }
       }
+      for (const [name, price] of byName) competitorList.push({ name, price })
     }
 
     // If no base_price and no competitors, fail
@@ -99,12 +104,12 @@ export class CompetitorBeatPricingModel implements IPricingModel {
     }
     price = Math.max(price, 0)
 
-    // Model logic: beat competitor by beat_percent
+    // Model logic: beat competitor by beat_percent — offer at least beatTarget (competitor * (1 + beat%))
     let tradePrice = price
     if (highestCompetitor > 0) {
       const beatTarget = highestCompetitor * (1 + cfg.beat_percent / 100)
-      const floor = highestCompetitor * (cfg.min_floor_percent_of_competitor / 100)
-      tradePrice = Math.max(price, Math.min(beatTarget, price), floor)
+      const floor = highestCompetitor * cfg.min_floor_percent_of_competitor
+      tradePrice = Math.max(floor, beatTarget, price)
     }
 
     const qty = input.quantity ?? 1

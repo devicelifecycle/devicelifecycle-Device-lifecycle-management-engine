@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { NotificationService } from '@/services/notification.service'
 import type { 
   IMEIRecord, 
   DeviceCondition, 
@@ -111,6 +112,33 @@ export class TriageService {
         triage_status: outcome.exception_required ? 'needs_exception' : 'complete',
       })
       .eq('id', input.imei_record_id)
+
+    // If exception required, notify the customer organization
+    if (outcome.exception_required && imeiRecord.order) {
+      const order = imeiRecord.order as unknown as Order
+      if (order.customer_id) {
+        // Get device info for notification
+        let deviceName = ''
+        if (imeiRecord.device_id) {
+          const { data: device } = await supabase
+            .from('device_catalog')
+            .select('make, model')
+            .eq('id', imeiRecord.device_id)
+            .single()
+          if (device) deviceName = `${device.make} ${device.model}`
+        }
+
+        await NotificationService.sendExceptionNotification({
+          order_id: order.id,
+          order_number: order.order_number,
+          customer_id: order.customer_id,
+          imei: imeiRecord.imei,
+          device_name: deviceName,
+          exception_reason: outcome.exception_reason || 'Condition mismatch detected during triage',
+          adjustment_amount: outcome.price_adjustment,
+        })
+      }
+    }
 
     return {
       triageResult: triageResult as TriageResult,
@@ -258,7 +286,12 @@ export class TriageService {
       .from('imei_records')
       .select(`
         *,
-        order:orders(*),
+        order:orders(
+          id,
+          order_number,
+          created_by_id,
+          created_by:users!orders_created_by_id_fkey(full_name, email)
+        ),
         device:device_catalog(*)
       `)
       .eq('triage_status', 'pending')
@@ -272,6 +305,16 @@ export class TriageService {
   }
 
   /**
+   * Get pending exceptions for an order (for customer or internal view)
+   */
+  static async getPendingExceptionsForOrder(orderId: string): Promise<TriageResult[]> {
+    const results = await this.getTriageResultsForOrder(orderId)
+    return results.filter(
+      (r) => r.exception_required && !r.exception_approved_at
+    ) as TriageResult[]
+  }
+
+  /**
    * Get items needing exception approval
    */
   static async getExceptionItems(): Promise<TriageResult[]> {
@@ -282,7 +325,8 @@ export class TriageService {
       .select(`
         *,
         imei_record:imei_records(*),
-        order:orders(*)
+        order:orders(*),
+        triaged_by:users!triage_results_triaged_by_id_fkey(full_name, email)
       `)
       .eq('exception_required', true)
       .is('exception_approved_at', null)
@@ -306,6 +350,17 @@ export class TriageService {
   ): Promise<TriageResult> {
     const supabase = createServerSupabaseClient()
 
+    // Get the triage result with related data for notification
+    const { data: existingTriage } = await supabase
+      .from('triage_results')
+      .select(`
+        *,
+        imei_record:imei_records(*),
+        order:orders(*)
+      `)
+      .eq('id', triageResultId)
+      .single()
+
     const { data, error } = await supabase
       .from('triage_results')
       .update({
@@ -324,6 +379,7 @@ export class TriageService {
 
     // Update IMEI record status
     const triageResult = data as TriageResult
+    const imeiRecord = existingTriage?.imei_record as { order_item_id?: string; imei?: string } | null
     await supabase
       .from('imei_records')
       .update({
@@ -331,6 +387,43 @@ export class TriageService {
         actual_condition: approved ? triageResult.final_condition : null,
       })
       .eq('id', triageResult.imei_record_id)
+
+    // When rejected, clear order_item.actual_condition for manual mismatches (admin-added via order page)
+    if (!approved && imeiRecord?.order_item_id && String(imeiRecord?.imei || '').startsWith('MANUAL-')) {
+      await supabase
+        .from('order_items')
+        .update({ actual_condition: null, updated_at: new Date().toISOString() })
+        .eq('id', imeiRecord.order_item_id)
+    }
+
+    // Send notification to customer organization about exception resolution
+    if (existingTriage?.order?.customer_id) {
+      const order = existingTriage.order as unknown as Order
+      const imeiRecord = existingTriage.imei_record as IMEIRecord | null
+      const customerId = order.customer_id as string // We checked it exists above
+      
+      // Get device info
+      let deviceName = ''
+      if (imeiRecord?.device_id) {
+        const { data: device } = await supabase
+          .from('device_catalog')
+          .select('make, model')
+          .eq('id', imeiRecord.device_id)
+          .single()
+        if (device) deviceName = `${device.make} ${device.model}`
+      }
+
+      await NotificationService.sendExceptionResolvedNotification({
+        order_id: order.id,
+        order_number: order.order_number,
+        customer_id: customerId,
+        imei: imeiRecord?.imei,
+        device_name: deviceName,
+        approved,
+        new_price: approved ? (imeiRecord?.quoted_price ?? 0) + (existingTriage.price_adjustment ?? 0) : undefined,
+        notes,
+      })
+    }
 
     return triageResult
   }

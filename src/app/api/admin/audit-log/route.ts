@@ -7,6 +7,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { AuditService } from '@/services/audit.service'
 import type { AuditAction } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createServerSupabaseClient()
