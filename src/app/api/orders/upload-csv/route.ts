@@ -77,14 +77,42 @@ const COLUMN_MAP: Record<string, string> = {
   // Common typos (auto-correction)
   'condtion': 'condition',
   'condiiton': 'condition',
+  'conditon': 'condition',
+  'conidtion': 'condition',
   'storag': 'storage',
   'storrage': 'storage',
+  'storgae': 'storage',
+  'stroge': 'storage',
   'quantitty': 'quantity',
   'quantiy': 'quantity',
+  'qantity': 'quantity',
   'colur': 'colour',
+  'coluur': 'colour',
   'serial_numbr': 'serial_number',
   'serail_number': 'serial_number',
+  'seria_number': 'serial_number',
+  'serialnumber': 'serial_number',
   'nots': 'notes',
+  // Brand/make aliases for user-created templates
+  'oem': 'brand',
+  'company': 'brand',
+  'phone brand': 'brand',
+  'phone model': 'model',
+  'device name': 'model',
+  'device_name': 'model',
+  // Storage aliases
+  'gb': 'storage',
+  'size': 'storage',
+  'disk': 'storage',
+  'hard drive': 'storage',
+  'ssd': 'storage',
+  // Price aliases (user may include a price column)
+  'price': 'price',
+  'unit_price': 'price',
+  'unit price': 'price',
+  'value': 'price',
+  'amount': 'price',
+  'cost': 'price',
 }
 
 // Levenshtein distance for fuzzy column matching
@@ -121,9 +149,17 @@ function autoCorrectColumn(header: string): string | undefined {
 // Condition value typos → canonical (auto-correction for template cell values)
 const CONDITION_TYPO_MAP: Record<string, string> = {
   excellant: 'excellent', exacellent: 'excellent', exellent: 'excellent', excelent: 'excellent',
-  gud: 'good', gd: 'good',
-  fr: 'fair', average: 'fair',
+  execellent: 'excellent', excellen: 'excellent', excellet: 'excellent',
+  gud: 'good', gd: 'good', goood: 'good', god: 'good',
+  fr: 'fair', average: 'fair', fiar: 'fair', fai: 'fair',
   brokn: 'poor', broke: 'poor', broken: 'poor', damag: 'poor', crack: 'poor',
+  por: 'poor', pooor: 'poor', bad: 'poor', damaged: 'poor', cracked: 'poor',
+  nw: 'new', nwe: 'new', sealed: 'new', unopened: 'new', brandnew: 'new',
+  likenew: 'excellent', lknew: 'excellent', asnew: 'excellent',
+  grade_a: 'excellent', gradea: 'excellent',
+  grade_b: 'good', gradeb: 'good',
+  grade_c: 'fair', gradec: 'fair',
+  grade_d: 'poor', graded: 'poor',
 }
 
 // Order: check worst conditions first (poor→fair) before better ones (good→excellent→new)
@@ -148,6 +184,26 @@ function normalizeCondition(raw: string): string | null {
   if (lower.includes('new') || lower.includes('sealed') || lower.includes('unopened')) return 'new'
 
   return null // Couldn't map — will store raw text in faults/notes
+}
+
+// Normalize storage to canonical form: "256 gb" → "256GB", "1 tb" → "1TB", "1024" → "1TB"
+function normalizeStorage(raw: string): string {
+  if (!raw) return ''
+  let s = raw.trim()
+  // Strip units and whitespace: "256 GB" → "256", "1 TB" → "1"
+  const tbMatch = s.match(/^(\d+)\s*tb$/i)
+  if (tbMatch) return `${tbMatch[1]}TB`
+  const gbMatch = s.match(/^(\d+)\s*(?:gb|g)?$/i)
+  if (gbMatch) {
+    const num = parseInt(gbMatch[1], 10)
+    // Convert large GB values to TB
+    if (num === 1024) return '1TB'
+    if (num === 2048) return '2TB'
+    if (num === 4096) return '4TB'
+    if (num === 8192) return '8TB'
+    return `${num}GB`
+  }
+  return s
 }
 
 // Extract brand from product string like "MacBook Pro 16-inch"
@@ -238,6 +294,7 @@ interface NormalizedRow {
   accessories?: string
   faults?: string
   notes?: string
+  price?: number
   raw_condition?: string  // original free-text if condition couldn't be mapped
 }
 
@@ -352,12 +409,17 @@ export async function POST(request: NextRequest) {
       const yearStr = mapped.year || rawRow.year || rawRow.Year || ''
       const yearNum = yearStr ? parseInt(yearStr, 10) : undefined
 
+      // Price: strip $ and commas, parse as number
+      const rawPrice = sanitizeCsvCell(mapped.price || rawRow.price || rawRow.Price || rawRow['Unit Price'] || rawRow.unit_price || '')
+      const parsedPrice = rawPrice ? parseFloat(rawPrice.replace(/[$,]/g, '')) : undefined
+
       normalizedRows.push({
         brand,
         model,
-        storage: storage.replace(/\s*GB\s*/i, '').trim() || storage, // Strip "GB" suffix
+        storage: normalizeStorage(storage),
         condition: normalizedCondition,
         quantity: Math.max(1, quantity),
+        price: parsedPrice && !isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : undefined,
         imei: sanitizeCsvCell(mapped.imei || rawRow.imei || rawRow.IMEI || ''),
         serial_number: sanitizeCsvCell(mapped.serial_number || rawRow.serial_number || rawRow['Sample S/N'] || rawRow['S/N'] || rawRow.Serial || ''),
         colour: sanitizeCsvCell(mapped.colour || rawRow.colour || rawRow.Colour || rawRow.color || rawRow.Color || ''),
@@ -444,6 +506,7 @@ export async function POST(request: NextRequest) {
       if (row.model_number) item.model_number = row.model_number
       if (row.accessories) item.accessories = row.accessories
       if (row.faults) item.faults = row.faults
+      if (row.price) item.unit_price = row.price
 
       orderItems.push(item)
     }

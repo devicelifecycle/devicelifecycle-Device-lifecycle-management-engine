@@ -179,7 +179,7 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
     expect(insertedItems[0]).toMatchObject({
       order_id: 'order-1',
       quantity: 1,
-      storage: '128',
+      storage: '128GB',
       imei: '351545707040647',
     })
 
@@ -187,7 +187,7 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
     expect(insertedItems[1]).toMatchObject({
       order_id: 'order-1',
       quantity: 1,
-      storage: '64',
+      storage: '64GB',
       imei: '356806119003267',
       claimed_condition: 'poor', // "Cracked Screen" → poor
       faults: 'Cracked Screen',
@@ -232,7 +232,7 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
     expect(insertedItems[0]).toMatchObject({
       order_id: 'order-1',
       quantity: 600,
-      storage: '128',
+      storage: '128GB',
       claimed_condition: 'new',
     })
   })
@@ -332,7 +332,7 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
     // Verify first item: clean MacBook
     const item1 = insertedItems[0] as Record<string, unknown>
     expect(item1.quantity).toBe(1)
-    expect(item1.storage).toBe('512')
+    expect(item1.storage).toBe('512GB')
     expect(item1.serial_number).toBe('SC02F70N8MD6M')
     expect(item1.cpu).toBe('intel i7')
     expect(item1.ram).toBe('16 GB')
@@ -448,9 +448,9 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
   })
 
   // =====================================================================
-  // TEST 7: Storage GB suffix stripping
+  // TEST 7: Storage normalization to canonical form
   // =====================================================================
-  it('strips GB suffix from storage values', async () => {
+  it('normalizes storage to canonical form (e.g. "512 GB" → "512GB")', async () => {
     const { POST } = await import('@/app/api/orders/upload-csv/route')
 
     const rows = [
@@ -469,6 +469,6 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
 
     const response = await POST(request)
     expect(response.status).toBe(201)
-    expect((insertedItems[0] as Record<string, unknown>).storage).toBe('512')
+    expect((insertedItems[0] as Record<string, unknown>).storage).toBe('512GB')
   })
 })

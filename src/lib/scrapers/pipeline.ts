@@ -58,12 +58,44 @@ function normalizeStorageKey(storage?: string): string {
   return (storage || 'Unknown').trim().toLowerCase()
 }
 
-/** Normalize storage for DB (e.g. "256 GB" -> "256GB", "1024GB" -> "1TB") */
+/** Normalize storage for DB (e.g. "256 GB" -> "256GB", "1024GB" -> "1TB")
+ *  Also strips compound specs (RAM, CPU, GPU, SSD labels) to extract pure capacity */
 function normalizeStorageForDb(storage?: string): string {
-  let s = (storage || '128GB').trim().replace(/\s+/g, '').toUpperCase()
-  if (!s) s = '128GB'
+  let s = (storage || '128GB').trim().toUpperCase()
+  if (!s) return '128GB'
+
+  // Reject condition values accidentally placed in storage field
+  const sNoSpaces = s.replace(/\s+/g, '')
+  if (/^(GOOD|FAIR|EXCELLENT|LIKENEW|BROKEN|POOR|NEW)$/i.test(sNoSpaces)) return 'DEFAULT'
+
+  // Strip compound specs: "8TBSSD|48GBRAM|M5MAX18-CORE|40-COREGPU" -> extract SSD or first GB/TB value
+  // Also handles: "INTELCOREULTRA9,32GBRAM,1TBSSD", "256GB 8GB RAM", "GPS+CELLULAR|ALUMINUM"
+  if (/RAM|SSD|CPU|GPU|CORE|INTEL|NVIDIA|ALUMINUM|CELLULAR|GPS/i.test(s)) {
+    // Try to find SSD capacity first (most specific for laptops)
+    const ssdMatch = s.match(/(\d+)\s*TB\s*SSD/i)
+    if (ssdMatch) return `${ssdMatch[1]}TB`
+    const ssdGbMatch = s.match(/(\d+)\s*GB\s*SSD/i)
+    if (ssdGbMatch) {
+      const gb = parseInt(ssdGbMatch[1], 10)
+      if (gb === 1024) return '1TB'
+      if (gb === 2048) return '2TB'
+      return `${gb}GB`
+    }
+    // For watches/tablets with GPS/CELLULAR, try to find a GB value
+    const gbMatch = s.match(/(\d+)\s*GB(?!RAM|SSD)/i)
+    if (gbMatch) return `${gbMatch[1]}GB`
+    // If no storage capacity found in compound string, return DEFAULT
+    return 'DEFAULT'
+  }
+
+  // Handle WiFi/Cellular variants: "256GB(WIFI+CELLULAR)" -> "256GB"
+  s = s.replace(/\(WIFI(?:\+CELLULAR)?\)/i, '')
+
+  s = s.replace(/\s+/g, '')
   if (s === '1024GB') s = '1TB'
   if (s === '2048GB') s = '2TB'
+  if (s === '4096GB') s = '4TB'
+  if (s === '8192GB') s = '8TB'
   return s
 }
 
@@ -191,6 +223,27 @@ function modelTokenMatch(scraped: string, catalog: string): boolean {
   return false
 }
 
+/** Extract core model identity for fuzzy matching across naming conventions.
+ *  e.g. 'MacBook Air 13" (2024)' and 'MacBook Air 13-inch (M3)' both become 'macbook air 13'
+ *  e.g. 'iPad Pro 11 (2nd Gen) (2020)' and 'iPad Pro 11-inch (M2)' both become 'ipad pro 11'
+ *  e.g. 'Galaxy Watch6 Classic' stays 'galaxy watch6 classic' */
+function coreModelName(model: string): string {
+  let m = model.toLowerCase().trim()
+  // Normalize unicode quotes
+  m = m.replace(/[\u2033\u201c\u201d\u2019"']/g, '')
+  // Remove parenthesized suffixes: (2024), (M3), (2nd Gen), (M2 Pro), (Nov 2023), (A1822 | A1823)
+  m = m.replace(/\s*\([^)]*\)/g, '')
+  // Remove -inch suffix
+  m = m.replace(/-inch/g, '')
+  // Remove generation suffixes
+  m = m.replace(/\b\d+(st|nd|rd|th)\s*(gen(eration)?)?/gi, '')
+  // Remove trailing year: "MacBook Air 13 2024" -> "MacBook Air 13"
+  m = m.replace(/\s+20\d{2}$/g, '')
+  // Collapse whitespace
+  m = m.replace(/\s+/g, ' ').trim()
+  return m
+}
+
 /** Map scraped make+model+storage to device_catalog id */
 async function resolveDeviceId(
   supabase: SupabaseClient,
@@ -216,26 +269,38 @@ async function resolveDeviceId(
   if (storageNorm === '2tb') storageAlternates.push('2048gb')
   if (storageNorm === '2048gb') storageAlternates.push('2tb')
 
+  const checkStorage = (d: { specifications?: unknown }) => {
+    const spec = (d.specifications || {}) as { storage_options?: string[] }
+    const storages = spec.storage_options || []
+    if (storages.length === 0) return true // No storage options = match any
+    return storages.some((s: string) => {
+      const sNorm = normalize(s).replace(/\s/g, '')
+      return storageAlternates.some(alt =>
+        sNorm === alt || sNorm.includes(alt) || alt.includes(sNorm)
+      )
+    })
+  }
+
+  // Pass 1: Exact or token-prefix match (strict)
   for (const d of devices) {
     const dm = normalize((d as { model?: string }).model ?? '')
-    // Word-boundary matching: "iPhone 15" must NOT match "iPhone 150"
     const exactMatch = dm === modelNorm
     const scrapedExtendsCatalog = modelTokenMatch(modelNorm, dm) && modelNorm !== dm
     const catalogExtendsScraped = modelTokenMatch(dm, modelNorm) && dm !== modelNorm
     const modelMatches = exactMatch || (scrapedExtendsCatalog && !catalogExtendsScraped)
-    if (modelMatches) {
-      const spec = (d.specifications || {}) as { storage_options?: string[] }
-      const storages = spec.storage_options || []
-      if (storages.length === 0) return d.id
-      const storageMatch = storages.some((s: string) => {
-        const sNorm = normalize(s).replace(/\s/g, '')
-        return storageAlternates.some(alt =>
-          sNorm === alt || sNorm.includes(alt) || alt.includes(sNorm)
-        )
-      })
-      if (storageMatch) return d.id
+    if (modelMatches && checkStorage(d)) return d.id
+  }
+
+  // Pass 2: Core model name match (strips year/chip/generation suffixes)
+  // This catches "MacBook Air 13" (2024)" matching "MacBook Air 13-inch (M3)"
+  const scrapedCore = coreModelName(model)
+  if (scrapedCore.length >= 5) { // Avoid matching very short cores
+    for (const d of devices) {
+      const catalogCore = coreModelName((d as { model?: string }).model ?? '')
+      if (scrapedCore === catalogCore && checkStorage(d)) return d.id
     }
   }
+
   return null
 }
 
