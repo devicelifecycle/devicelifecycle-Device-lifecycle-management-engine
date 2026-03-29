@@ -16,6 +16,8 @@ build
 # misc
 .DS_Store
 *.pem
+*.pyc
+__pycache__/
 *.tsbuildinfo
 next-env.d.ts
 
