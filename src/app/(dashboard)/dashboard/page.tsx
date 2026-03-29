@@ -45,7 +45,7 @@ function useTrend(orders: Array<{ created_at?: string | null }>) {
       date.setDate(date.getDate() - (6 - index))
       const key = date.toISOString().slice(0, 10)
       return {
-        label: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        label: date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Toronto' }),
         orders: orders.filter((order) => order.created_at?.slice(0, 10) === key).length,
       }
     })

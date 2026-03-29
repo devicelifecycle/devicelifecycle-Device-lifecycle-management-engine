@@ -211,7 +211,7 @@ async function searchOrders(args: Record<string, unknown>, ctx: ToolContext): Pr
     status: o.status,
     total: o.total_amount ? `$${o.total_amount}` : 'TBD',
     customer: (o.customer as Record<string, unknown>)?.company_name || 'N/A',
-    created: new Date(o.created_at as string).toLocaleDateString(),
+    created: new Date(o.created_at as string).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }),
   }))
 
   return JSON.stringify({ orders, count: orders.length })
@@ -273,8 +273,8 @@ async function getOrderDetails(args: Record<string, unknown>, ctx: ToolContext):
     total: order.total_amount ? `$${order.total_amount}` : 'TBD',
     customer: (order.customer as Record<string, unknown>)?.company_name,
     vendor: (order.vendor as Record<string, unknown>)?.company_name || 'Not assigned',
-    created: new Date(order.created_at as string).toLocaleDateString(),
-    updated: new Date(order.updated_at as string).toLocaleDateString(),
+    created: new Date(order.created_at as string).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }),
+    updated: new Date(order.updated_at as string).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }),
     items,
     notes: ctx.role !== 'customer' ? order.internal_notes : undefined,
     customer_notes: order.customer_notes,

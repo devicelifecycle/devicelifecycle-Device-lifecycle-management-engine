@@ -180,7 +180,7 @@ export default function CustomersPage() {
                           {customer.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-stone-400">{new Date(customer.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-stone-400">{new Date(customer.created_at).toLocaleDateString('en-US', { timeZone: 'America/Toronto' })}</TableCell>
                       {canDelete && (
                         <TableCell className="text-right">
                           <DropdownMenu>

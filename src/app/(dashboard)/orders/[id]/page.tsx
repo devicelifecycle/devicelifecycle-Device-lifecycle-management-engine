@@ -1693,7 +1693,7 @@ export default function OrderDetailPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {item.buyback_valid_until
-                            ? new Date(item.buyback_valid_until).toLocaleDateString()
+                            ? new Date(item.buyback_valid_until).toLocaleDateString('en-US', { timeZone: 'America/Toronto' })
                             : '—'}
                         </TableCell>
                       </TableRow>

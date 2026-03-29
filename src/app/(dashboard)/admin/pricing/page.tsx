@@ -2717,7 +2717,7 @@ export default function AdminPricingPage() {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Timestamp</p>
-                      <p className="font-semibold text-sm">{new Date(trainingResult.timestamp).toLocaleTimeString()}</p>
+                      <p className="font-semibold text-sm">{new Date(trainingResult.timestamp).toLocaleTimeString('en-US', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t">

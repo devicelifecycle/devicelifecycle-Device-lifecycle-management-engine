@@ -50,7 +50,7 @@ export function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
             'mt-1 text-[10px] opacity-50',
             isUser ? 'text-right' : 'text-left'
           )}>
-            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {new Date(timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' })}
           </p>
         )}
       </div>
