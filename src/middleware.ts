@@ -80,6 +80,7 @@ export async function middleware(request: NextRequest) {
         if (!allowedRoles.includes(user.role)) {
           return NextResponse.redirect(new URL('/', request.url))
         }
+        break // Most specific route matched — don't check broader routes
       }
     }
 

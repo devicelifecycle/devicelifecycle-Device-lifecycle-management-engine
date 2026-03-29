@@ -565,7 +565,12 @@ export class PricingService {
 
       // Step 7b: "Good working" trade price for broken-device rule (Brian: broken = 50% of good)
       const goodConditionMult = CONDITION_MULTIPLIERS['good'] ?? 0.85
-      const goodWorkingAnchor = anchorPrice * goodConditionMult
+      // When anchor is condition-specific, convert to base first then apply good multiplier
+      const goodWorkingAnchor = anchorIsBaseNormalized
+        ? anchorPrice * goodConditionMult
+        : conditionMultiplier > 0
+          ? anchorPrice * (goodConditionMult / conditionMultiplier)
+          : anchorPrice
       const goodWorkingBreakage = goodWorkingAnchor * (settings.breakage_risk_percent / 100)
       const goodWorkingAfterBreakage = Math.max(goodWorkingAnchor - goodWorkingBreakage, 0)
       const competitiveFloor = highestCompetitor * settings.competitive_relevance_min
@@ -604,7 +609,9 @@ export class PricingService {
             tradePrice = round2(avgCompetitorPrice * (1 - marginTarget))
           } else {
             // No competitors: apply margin to anchor-derived value (pre-breakage, pre-deductions)
-            const preBreakageValue = anchorPrice * conditionMultiplier - totalDeductions
+            // When anchor is already condition-specific, don't re-apply conditionMultiplier
+            const conditionAdjustedAnchor = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
+            const preBreakageValue = conditionAdjustedAnchor - totalDeductions
             tradePrice = round2(preBreakageValue * (1 - marginTarget) - breakageDeduction)
             tradePrice = Math.max(tradePrice, 0)
           }
