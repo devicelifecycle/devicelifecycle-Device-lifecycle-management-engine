@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       doc.setFontSize(14)
       doc.text('Competitor Price Tracking', 14, 16)
       doc.setFontSize(9)
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22)
+      doc.text(`Generated: ${new Date().toLocaleString('en-US', { timeZone: 'America/Toronto' })}`, 14, 22)
 
       autoTable(doc, {
         startY: 28,
@@ -79,9 +79,9 @@ export async function GET(request: NextRequest) {
           row.sell_price != null ? row.sell_price.toFixed(2) : '—',
           row.source,
           (row.retrieved_at || row.scraped_at || row.updated_at || row.created_at)
-            ? new Date(row.retrieved_at || row.scraped_at || row.updated_at || row.created_at as string).toLocaleString()
+            ? new Date(row.retrieved_at || row.scraped_at || row.updated_at || row.created_at as string).toLocaleString('en-US', { timeZone: 'America/Toronto' })
             : '—',
-          row.updated_at ? new Date(row.updated_at).toLocaleDateString() : '—',
+          row.updated_at ? new Date(row.updated_at).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }) : '—',
         ]),
         styles: { fontSize: 8 },
         headStyles: { fillColor: [24, 24, 27] },
@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
     const rowsHtml = filtered.map((row) => {
       const deviceName = row.device ? `${row.device.make} ${row.device.model}` : row.device_id
       const retrievedAtRaw = row.retrieved_at || row.scraped_at || row.updated_at || row.created_at
-      const retrievedAt = retrievedAtRaw ? new Date(retrievedAtRaw).toLocaleString() : '—'
-      const updated = row.updated_at ? new Date(row.updated_at).toLocaleString() : '—'
+      const retrievedAt = retrievedAtRaw ? new Date(retrievedAtRaw).toLocaleString('en-US', { timeZone: 'America/Toronto' }) : '—'
+      const updated = row.updated_at ? new Date(row.updated_at).toLocaleString('en-US', { timeZone: 'America/Toronto' }) : '—'
       return `<tr>
         <td>${escapeHtml(deviceName)}</td>
         <td>${escapeHtml(row.storage)}</td>

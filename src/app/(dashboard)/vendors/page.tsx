@@ -187,7 +187,7 @@ export default function VendorsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-stone-400">
-                        {vendor.created_at ? new Date(vendor.created_at).toLocaleDateString() : '—'}
+                        {vendor.created_at ? new Date(vendor.created_at).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }) : '—'}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -33,8 +33,8 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount)
 }
 
-/** Default timezone for date/time display (EST) */
-const DISPLAY_TIMEZONE = 'America/New_York'
+/** Default timezone for date/time display (Toronto / Eastern) */
+const DISPLAY_TIMEZONE = 'America/Toronto'
 
 /**
  * Format date (EST)
