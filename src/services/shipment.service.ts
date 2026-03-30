@@ -4,6 +4,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { readServerEnv } from '@/lib/server-env'
 import { StallionService } from '@/services/stallion.service'
 import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
@@ -11,7 +12,7 @@ import type { Shipment } from '@/types'
 
 /** Check if Stallion Express is configured */
 export function isShippingConfigured(): boolean {
-  return Boolean(process.env.STALLION_API_TOKEN)
+  return Boolean(readServerEnv('STALLION_API_TOKEN'))
 }
 
 export function getActiveShippingProvider(): 'stallion' | 'manual' {

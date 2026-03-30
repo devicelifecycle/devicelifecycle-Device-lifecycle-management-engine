@@ -70,9 +70,10 @@ function makeSupabaseMock(options?: { existingId?: string | null; upsertErrorCod
 describe('GET /api/cron/competitor-sync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(process.env as Record<string, string | undefined>).CRON_SECRET = 'secret123'
-    ;(process.env as Record<string, string | undefined>).COMPETITOR_SYNC_ENABLED = 'true'
-    ;(process.env as Record<string, string | undefined>).COMPETITOR_CSV_URL = 'https://example.com/prices.csv'
+    vi.resetModules()
+    ;(process.env as Record<string, string | undefined>).CRON_SECRET = ' secret123 \n'
+    ;(process.env as Record<string, string | undefined>).COMPETITOR_SYNC_ENABLED = ' true \n'
+    ;(process.env as Record<string, string | undefined>).COMPETITOR_CSV_URL = ' https://example.com/prices.csv \n'
   })
 
   it('returns 401 when auth header is invalid', async () => {
@@ -181,5 +182,22 @@ describe('GET /api/cron/competitor-sync', () => {
     })
 
     vi.unstubAllGlobals()
+  })
+
+  it('skips when sync is disabled with whitespace in the env value', async () => {
+    const { supabase } = makeSupabaseMock()
+    createServiceRoleClientMock.mockReturnValue(supabase)
+    ;(process.env as Record<string, string | undefined>).COMPETITOR_SYNC_ENABLED = ' false \n'
+
+    const { GET } = await import('@/app/api/cron/competitor-sync/route')
+    const response = await GET(new NextRequest('http://localhost/api/cron/competitor-sync', {
+      headers: { authorization: 'Bearer secret123' },
+    }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      skipped: true,
+    })
   })
 })

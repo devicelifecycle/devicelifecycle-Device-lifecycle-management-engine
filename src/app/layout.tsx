@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type { Metadata } from 'next'
+import { Analytics } from '@vercel/analytics/react'
 import { Outfit, Syne } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
@@ -62,6 +63,7 @@ export default function RootLayout({
           {children}
           <Toaster />
         </Providers>
+        <Analytics />
       </body>
     </html>
   )

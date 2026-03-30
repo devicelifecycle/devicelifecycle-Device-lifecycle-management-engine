@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readServerEnv } from '@/lib/server-env'
 import { ShipmentService, isShippingConfigured } from '@/services/shipment.service'
 import { StallionService } from '@/services/stallion.service'
 
 export const dynamic = 'force-dynamic'
-
-const CRON_SECRET = process.env.CRON_SECRET
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -17,13 +16,15 @@ function safeCompare(a: string, b: string): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    if (!CRON_SECRET) {
+    const cronSecret = readServerEnv('CRON_SECRET')
+
+    if (!cronSecret) {
       console.error('CRON_SECRET environment variable is not set. Cron endpoint disabled.')
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
     }
 
     const authHeader = request.headers.get('authorization') || ''
-    if (!safeCompare(authHeader, `Bearer ${CRON_SECRET}`)) {
+    if (!safeCompare(authHeader, `Bearer ${cronSecret}`)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

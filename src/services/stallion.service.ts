@@ -6,6 +6,7 @@
 // ============================================================================
 
 import type { AddressInput } from '@/services/shipment.service'
+import { readServerEnv } from '@/lib/server-env'
 
 // ──────────────────────────────────────────────────────────────
 // Types
@@ -160,17 +161,17 @@ export interface StallionTrackingUpdate {
 
 export class StallionService {
   private static getApiToken(): string {
-    const token = process.env.STALLION_API_TOKEN
+    const token = readServerEnv('STALLION_API_TOKEN')
     if (!token) throw new Error('STALLION_API_TOKEN is not configured')
     return token
   }
 
   private static getBaseUrl(): string {
-    return process.env.STALLION_API_BASE_URL || 'https://ship.stallionexpress.ca/api/v4'
+    return readServerEnv('STALLION_API_BASE_URL') || 'https://ship.stallionexpress.ca/api/v4'
   }
 
   private static getStoreId(): string | undefined {
-    return process.env.STALLION_STORE_ID
+    return readServerEnv('STALLION_STORE_ID')
   }
 
   private static async request<T>(path: string, init?: RequestInit): Promise<T> {

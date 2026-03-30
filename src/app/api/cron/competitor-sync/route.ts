@@ -5,11 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { timingSafeEqual } from 'crypto'
-
-const CRON_SECRET = process.env.CRON_SECRET
-const SYNC_ENABLED = process.env.COMPETITOR_SYNC_ENABLED === 'true'
-const CSV_URL = process.env.COMPETITOR_CSV_URL
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -96,15 +93,19 @@ async function upsertCompetitorRow(supabase: ReturnType<typeof createServiceRole
 
 export async function GET(request: NextRequest) {
   try {
-    if (!CRON_SECRET) {
+    const cronSecret = readServerEnv('CRON_SECRET')
+    const syncEnabled = readBooleanServerEnv('COMPETITOR_SYNC_ENABLED')
+    const csvUrl = readServerEnv('COMPETITOR_CSV_URL')
+
+    if (!cronSecret) {
       return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
     }
     const authHeader = request.headers.get('authorization') || ''
-    if (!safeCompare(authHeader, `Bearer ${CRON_SECRET}`)) {
+    if (!safeCompare(authHeader, `Bearer ${cronSecret}`)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!SYNC_ENABLED) {
+    if (!syncEnabled) {
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    if (!CSV_URL) {
+    if (!csvUrl) {
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -122,7 +123,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const res = await fetch(CSV_URL, { cache: 'no-store' })
+    const res = await fetch(csvUrl, { cache: 'no-store' })
     if (!res.ok) throw new Error(`Failed to fetch CSV: ${res.status}`)
     const csvText = await res.text()
 

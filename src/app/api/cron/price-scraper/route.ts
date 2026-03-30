@@ -5,13 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
+import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { runScraperPipeline } from '@/lib/scrapers'
 import { SCRAPER_PROVIDERS, getPersistedScraperImplementation } from '@/lib/scrapers/rollout-metadata'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-
-const CRON_SECRET = process.env.CRON_SECRET
-const SCRAPER_ENABLED = process.env.PRICE_SCRAPER_ENABLED === 'true'
-const AUTO_TRAINING_ENABLED = process.env.PRICE_SCRAPER_AUTO_TRAINING === 'true'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -116,15 +113,19 @@ async function persistScraperRolloutHealth(
 
 export async function GET(request: NextRequest) {
   try {
-    if (!CRON_SECRET) {
+    const cronSecret = readServerEnv('CRON_SECRET')
+    const scraperEnabled = readBooleanServerEnv('PRICE_SCRAPER_ENABLED')
+    const autoTrainingEnabled = readBooleanServerEnv('PRICE_SCRAPER_AUTO_TRAINING')
+
+    if (!cronSecret) {
       return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
     }
     const authHeader = request.headers.get('authorization') || ''
-    if (!safeCompare(authHeader, `Bearer ${CRON_SECRET}`)) {
+    if (!safeCompare(authHeader, `Bearer ${cronSecret}`)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!SCRAPER_ENABLED) {
+    if (!scraperEnabled) {
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -140,7 +141,7 @@ export async function GET(request: NextRequest) {
 
     // Optional auto-train after scraping so scraped data feeds into the AI model
     let trainingResult = null
-    if (AUTO_TRAINING_ENABLED) {
+    if (autoTrainingEnabled) {
       try {
         const { PricingTrainingService } = await import('@/services/pricing-training.service')
         trainingResult = await PricingTrainingService.train()

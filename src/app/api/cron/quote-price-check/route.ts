@@ -15,10 +15,9 @@ import { getAppPath } from '@/lib/app-url'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { PRICE_CHANGE_NOTIFICATION_THRESHOLD } from '@/lib/constants'
+import { readServerEnv } from '@/lib/server-env'
 import { timingSafeEqual } from 'crypto'
 export const dynamic = 'force-dynamic'
-
-const CRON_SECRET = process.env.CRON_SECRET
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -27,18 +26,20 @@ function safeCompare(a: string, b: string): boolean {
 
 function getServiceSupabase() {
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    readServerEnv('NEXT_PUBLIC_SUPABASE_URL') || '',
+    readServerEnv('SUPABASE_SERVICE_ROLE_KEY') || '',
     { auth: { persistSession: false, autoRefreshToken: false } }
   )
 }
 
 export async function GET(request: NextRequest) {
   try {
+    const cronSecret = readServerEnv('CRON_SECRET')
+
     // Verify cron secret
-    if (CRON_SECRET) {
+    if (cronSecret) {
       const authHeader = request.headers.get('authorization') || ''
-      const expected = `Bearer ${CRON_SECRET}`
+      const expected = `Bearer ${cronSecret}`
       if (!safeCompare(authHeader, expected)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }

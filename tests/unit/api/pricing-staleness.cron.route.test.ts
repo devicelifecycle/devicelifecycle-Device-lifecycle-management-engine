@@ -13,7 +13,7 @@ describe('GET /api/cron/pricing-staleness', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
-    ;(process.env as Record<string, string | undefined>).CRON_SECRET = 'secret123'
+    ;(process.env as Record<string, string | undefined>).CRON_SECRET = ' secret123 \n'
     ;(process.env as Record<string, string | undefined>).PRICING_STALENESS_MONITOR_ENABLED = 'true'
 
     checkCompetitorPriceStalenessMock.mockResolvedValue({
@@ -52,7 +52,7 @@ describe('GET /api/cron/pricing-staleness', () => {
   })
 
   it('skips when monitor is disabled', async () => {
-    ;(process.env as Record<string, string | undefined>).PRICING_STALENESS_MONITOR_ENABLED = 'false'
+    ;(process.env as Record<string, string | undefined>).PRICING_STALENESS_MONITOR_ENABLED = ' false \n'
 
     const { GET } = await import('@/app/api/cron/pricing-staleness/route')
     const response = await GET(new NextRequest('http://localhost/api/cron/pricing-staleness', {
@@ -64,5 +64,15 @@ describe('GET /api/cron/pricing-staleness', () => {
     expect(json.success).toBe(true)
     expect(json.skipped).toBe(true)
     expect(checkCompetitorPriceStalenessMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts an auth secret with trailing whitespace in env', async () => {
+    const { GET } = await import('@/app/api/cron/pricing-staleness/route')
+    const response = await GET(new NextRequest('http://localhost/api/cron/pricing-staleness', {
+      headers: { authorization: 'Bearer secret123' },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(checkCompetitorPriceStalenessMock).toHaveBeenCalledTimes(1)
   })
 })
