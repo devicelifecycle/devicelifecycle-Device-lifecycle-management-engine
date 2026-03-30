@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 400 })
     }
 
-    const { full_name, email, role, password, organization_id, notification_email } = validationResult.data
+    const { full_name, email, role, password, organization_id, notification_email, phone } = validationResult.data
 
     const provisioned = await UserProvisioningService.provisionUser({
       fullName: full_name,
@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
       password,
       organizationId: organization_id,
       notificationEmail: notification_email,
+      phone,
     })
 
     return NextResponse.json(provisioned.user, { status: 201 })

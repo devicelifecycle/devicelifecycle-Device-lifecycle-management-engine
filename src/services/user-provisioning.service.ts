@@ -16,6 +16,7 @@ interface ProvisionUserParams {
   organizationId?: string
   password?: string
   notificationEmail?: string
+  phone?: string
   oneUserPerRolePerOrganization?: boolean
 }
 
@@ -147,6 +148,7 @@ export class UserProvisioningService {
         organization_id: params.organizationId,
         is_active: true,
         notification_email: isLoginId ? emailToSend : null,
+        phone: params.phone || null,
       })
       .select()
       .single()

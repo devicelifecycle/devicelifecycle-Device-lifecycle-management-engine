@@ -5,17 +5,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Shield, Pencil, Copy, Send, RadioTower } from 'lucide-react'
+import { Plus, Shield, Pencil, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,25 +37,17 @@ export default function AdminUsersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ full_name: '', email: '', role: 'sales' as UserRole, password: '', organization_id: '', notification_email: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', role: 'sales' as UserRole, password: '', organization_id: '', notification_email: '', phone: '' })
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; type: string }>>([])
 
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [editForm, setEditForm] = useState({ full_name: '', role: '' as UserRole, notification_email: '' })
+  const [editForm, setEditForm] = useState({ full_name: '', role: '' as UserRole, notification_email: '', phone: '' })
   const [saving, setSaving] = useState(false)
 
   // Deactivate state
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null)
-  const [twilioStatus, setTwilioStatus] = useState<{
-    configured: boolean
-    account_sid: string | null
-    phone_number: string | null
-  } | null>(null)
-  const [testPhone, setTestPhone] = useState('')
-  const [testMessage, setTestMessage] = useState('DLM Engine test message. Twilio is connected and ready to send SMS alerts.')
-  const [sendingTestSms, setSendingTestSms] = useState(false)
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true)
@@ -67,18 +58,6 @@ export default function AdminUsersPage() {
   }, [])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
-
-  useEffect(() => {
-    fetch('/api/twilio/health')
-      .then(async (res) => {
-        const data = await res.json().catch(() => null)
-        if (!res.ok || !data?.twilio) return
-        setTwilioStatus(data.twilio)
-      })
-      .catch(() => {
-        setTwilioStatus(null)
-      })
-  }, [])
 
   useEffect(() => {
     if (['customer', 'vendor', 'sales'].includes(form.role)) {
@@ -99,6 +78,7 @@ export default function AdminUsersPage() {
         ...form,
         organization_id: form.organization_id || undefined,
         notification_email: form.notification_email || undefined,
+        phone: form.phone || undefined,
       }
       const res = await fetch('/api/users', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -110,7 +90,7 @@ export default function AdminUsersPage() {
       }
       toast.success('User created. A confirmation email with username and password has been sent.')
       setDialogOpen(false)
-      setForm({ full_name: '', email: '', role: 'sales', password: '', organization_id: '', notification_email: '' })
+      setForm({ full_name: '', email: '', role: 'sales', password: '', organization_id: '', notification_email: '', phone: '' })
       fetchUsers()
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to create user') }
     finally { setCreating(false) }
@@ -118,7 +98,7 @@ export default function AdminUsersPage() {
 
   const handleOpenEdit = (user: User) => {
     setEditingUser(user)
-    setEditForm({ full_name: user.full_name, role: user.role, notification_email: user.notification_email ?? '' })
+    setEditForm({ full_name: user.full_name, role: user.role, notification_email: user.notification_email ?? '', phone: user.phone ?? '' })
     setEditDialogOpen(true)
   }
 
@@ -126,7 +106,7 @@ export default function AdminUsersPage() {
     if (!editingUser) return
     setSaving(true)
     try {
-      const payload: Record<string, unknown> = { full_name: editForm.full_name, role: editForm.role }
+      const payload: Record<string, unknown> = { full_name: editForm.full_name, role: editForm.role, phone: editForm.phone?.trim() || null }
       if ((editingUser as { email?: string }).email?.endsWith('@login.local')) {
         payload.notification_email = editForm.notification_email?.trim() || null
       }
@@ -164,31 +144,6 @@ export default function AdminUsersPage() {
       setDeactivateTarget(null)
       fetchUsers()
     } catch { toast.error('Failed to update user status') }
-  }
-
-  const handleSendTestSms = async () => {
-    setSendingTestSms(true)
-    try {
-      const res = await fetch('/api/twilio/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone_number: testPhone,
-          message: testMessage,
-        }),
-      })
-
-      const data = await res.json().catch(() => null)
-      if (!res.ok) {
-        throw new Error(data?.error || 'Failed to send test SMS')
-      }
-
-      toast.success(`Test SMS sent to ${data?.destination || 'destination number'}`)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to send test SMS')
-    } finally {
-      setSendingTestSms(false)
-    }
   }
 
   const roleColors: Record<string, string> = {
@@ -264,6 +219,11 @@ export default function AdminUsersPage() {
                 </div>
               )}
               <div className="space-y-2">
+                <Label>Phone Number</Label>
+                <Input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 416 555 1234" />
+                <p className="text-xs text-muted-foreground">Mobile number for SMS notifications (order updates, alerts).</p>
+              </div>
+              <div className="space-y-2">
                 <Label>Initial Password</Label>
                 <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="User can change after first login" />
                 <p className="text-xs text-muted-foreground">User can change this in Profile or use &quot;Forgot password&quot; to set a new one.</p>
@@ -288,59 +248,6 @@ export default function AdminUsersPage() {
           </DialogContent>
         </Dialog>
       </div>
-
-      <Card className="border-primary/20 bg-gradient-to-br from-card via-card to-primary/5">
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2">
-              <RadioTower className="h-4 w-4 text-primary" />
-              Twilio SMS Test
-            </CardTitle>
-            <CardDescription>
-              Admin-only delivery check for the live SMS provider. Send a short message to verify outbound notifications before launch.
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Badge variant={twilioStatus?.configured ? 'default' : 'secondary'}>
-              {twilioStatus?.configured ? 'Configured' : 'Not configured'}
-            </Badge>
-            {twilioStatus?.account_sid ? <Badge variant="secondary">SID {twilioStatus.account_sid}</Badge> : null}
-            {twilioStatus?.phone_number ? <Badge variant="secondary">From {twilioStatus.phone_number}</Badge> : null}
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto] md:items-end">
-          <div className="space-y-2">
-            <Label htmlFor="twilio-test-phone">Destination Phone</Label>
-            <Input
-              id="twilio-test-phone"
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-              placeholder="+1 604 555 1234"
-              autoComplete="tel"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="twilio-test-message">Message</Label>
-            <Textarea
-              id="twilio-test-message"
-              value={testMessage}
-              onChange={(e) => setTestMessage(e.target.value)}
-              rows={3}
-              maxLength={160}
-              placeholder="Short delivery-check message"
-            />
-            <p className="text-xs text-muted-foreground">{testMessage.length}/160 characters</p>
-          </div>
-          <Button
-            onClick={handleSendTestSms}
-            disabled={sendingTestSms || !twilioStatus?.configured || !testPhone.trim() || !testMessage.trim()}
-            className="md:self-end"
-          >
-            <Send className="mr-2 h-4 w-4" />
-            {sendingTestSms ? 'Sending...' : 'Send Test SMS'}
-          </Button>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -444,6 +351,11 @@ export default function AdminUsersPage() {
                   {roles.map(r => <SelectItem key={r} value={r}>{USER_ROLE_CONFIG[r].label}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Phone Number</Label>
+              <Input type="tel" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 416 555 1234" />
+              <p className="text-xs text-muted-foreground">Mobile number for SMS notifications.</p>
             </div>
             {(editingUser as { email?: string })?.email?.endsWith('@login.local') && (
               <div className="space-y-2">
