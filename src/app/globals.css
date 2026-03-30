@@ -1412,9 +1412,26 @@ textarea {
       rgba(14, 11, 10, 0.98) 100%
     );
   border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px) saturate(145%);
   box-shadow:
     0 28px 120px -54px rgba(0, 0, 0, 0.96),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.landing-stage-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    transparent 22%,
+    transparent 78%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.95), transparent 72%);
 }
 
 .landing-story-card {
@@ -1441,6 +1458,19 @@ textarea {
     180deg,
     rgba(255, 255, 255, 0.05) 0%,
     transparent 22%
+  );
+}
+
+.landing-story-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 18% 82%,
+    rgba(255, 255, 255, 0.05),
+    transparent 28%
   );
 }
 

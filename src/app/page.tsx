@@ -202,6 +202,7 @@ export default function LandingPage() {
   const { isAuthenticated, isInitializing } = useAuth();
   const shouldReduceMotion = useReducedMotion();
   const heroRef = useRef<HTMLDivElement>(null);
+  const experienceRef = useRef<HTMLElement>(null);
   const chapterRefs = useRef<Record<string, HTMLElement | null>>({});
   const [activeChapterId, setActiveChapterId] = useState(storyChapters[0].id);
 
@@ -215,6 +216,10 @@ export default function LandingPage() {
   const { scrollYProgress: heroScrollProgress } = useScroll({
     target: heroRef,
     offset: ["start start", "end start"],
+  });
+  const { scrollYProgress: experienceScrollProgress } = useScroll({
+    target: experienceRef,
+    offset: ["start end", "end start"],
   });
 
   const heroCopyY = useTransform(
@@ -241,6 +246,26 @@ export default function LandingPage() {
     heroScrollProgress,
     [0, 1],
     [0.18, shouldReduceMotion ? 0.18 : 0.42],
+  );
+  const stageShellY = useTransform(
+    experienceScrollProgress,
+    [0, 0.5, 1],
+    [shouldReduceMotion ? 0 : 28, 0, shouldReduceMotion ? 0 : -28],
+  );
+  const stageShellRotate = useTransform(
+    experienceScrollProgress,
+    [0, 0.5, 1],
+    [shouldReduceMotion ? 0 : 2.4, 0, shouldReduceMotion ? 0 : -2.4],
+  );
+  const stageGlowOpacity = useTransform(
+    experienceScrollProgress,
+    [0, 0.5, 1],
+    [0.16, 0.36, 0.2],
+  );
+  const chapterRailScaleY = useTransform(
+    experienceScrollProgress,
+    [0, 1],
+    [0.2, 1],
   );
 
   useEffect(() => {
@@ -278,6 +303,16 @@ export default function LandingPage() {
   const activeChapter =
     storyChapters.find((chapter) => chapter.id === activeChapterId) ??
     storyChapters[0];
+  const activeChapterIndex = storyChapters.findIndex(
+    (chapter) => chapter.id === activeChapter.id,
+  );
+
+  const scrollToChapter = (chapterId: string) => {
+    chapterRefs.current[chapterId]?.scrollIntoView({
+      behavior: shouldReduceMotion ? "auto" : "smooth",
+      block: "center",
+    });
+  };
 
   return (
     <div className="relative overflow-x-clip bg-[#130f0d] text-stone-100">
@@ -291,12 +326,12 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] opacity-30" />
       </div>
 
-      <div className="relative mx-auto max-w-[1500px] px-5 sm:px-8 lg:px-10">
+      <div className="relative mx-auto max-w-[1500px] px-4 sm:px-8 lg:px-10">
         <motion.header
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="sticky top-0 z-50 flex items-center justify-between border-b border-white/6 bg-[#130f0d]/72 py-4 backdrop-blur-xl"
+          className="sticky top-0 z-50 flex items-center justify-between border-b border-white/6 bg-[#130f0d]/72 py-3 sm:py-4 backdrop-blur-xl"
         >
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-primary text-primary-foreground shadow-[0_20px_45px_-24px_rgba(182,93,47,0.9)]">
@@ -350,7 +385,7 @@ export default function LandingPage() {
 
         <main className="pb-14">
           <section ref={heroRef} className="relative" id="top">
-            <div className="grid min-h-[calc(100svh-5.5rem)] items-center gap-12 py-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-16 lg:py-16">
+            <div className="grid min-h-[calc(100svh-5rem)] items-center gap-10 py-8 sm:py-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-16 lg:py-16">
               <motion.div
                 style={
                   shouldReduceMotion
@@ -411,9 +446,27 @@ export default function LandingPage() {
                 </motion.div>
 
                 <motion.div
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.26 }}
+                  className="flex flex-wrap gap-2"
+                >
+                  {storyChapters.map((chapter) => (
+                    <button
+                      key={chapter.id}
+                      type="button"
+                      onClick={() => scrollToChapter(chapter.id)}
+                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.22em] text-stone-400 transition-all duration-300 hover:border-white/20 hover:text-stone-100"
+                    >
+                      {chapter.step} {chapter.eyebrow}
+                    </button>
+                  ))}
+                </motion.div>
+
+                <motion.div
                   initial={{ opacity: 0, y: 24 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
+                  transition={{ delay: 0.34 }}
                   className="grid gap-3 sm:grid-cols-3"
                 >
                   {heroSignals.map((signal, index) => (
@@ -448,7 +501,7 @@ export default function LandingPage() {
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.46 }}
+                  transition={{ delay: 0.5 }}
                   className="flex items-center gap-3 text-xs uppercase tracking-[0.26em] text-stone-500"
                 >
                   <motion.div
@@ -482,7 +535,7 @@ export default function LandingPage() {
                   className="absolute left-16 top-8 h-40 w-40 rounded-full bg-[#e7c38f]/12 blur-3xl"
                   style={{ opacity: heroHaloOpacity }}
                 />
-                <div className="landing-stage-panel grain-overlay relative overflow-hidden rounded-[2.8rem] p-6 sm:p-8">
+                <div className="landing-stage-panel grain-overlay relative overflow-hidden rounded-[2.4rem] p-5 sm:rounded-[2.8rem] sm:p-8">
                   <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
                   <OrbitingDeviceField className="opacity-70" />
 
@@ -578,7 +631,11 @@ export default function LandingPage() {
             </div>
           </section>
 
-          <section id="experience" className="relative py-16 sm:py-24">
+          <section
+            ref={experienceRef}
+            id="experience"
+            className="relative py-16 sm:py-24"
+          >
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -605,12 +662,7 @@ export default function LandingPage() {
                   <button
                     key={chapter.id}
                     type="button"
-                    onClick={() =>
-                      chapterRefs.current[chapter.id]?.scrollIntoView({
-                        behavior: shouldReduceMotion ? "auto" : "smooth",
-                        block: "center",
-                      })
-                    }
+                    onClick={() => scrollToChapter(chapter.id)}
                     className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.24em] transition-all duration-300 ${
                       isActive
                         ? "border-primary/40 bg-primary/12 text-stone-100 shadow-[0_16px_40px_-28px_rgba(182,93,47,0.9)]"
@@ -624,10 +676,67 @@ export default function LandingPage() {
             </div>
 
             <div className="mt-16 grid gap-10 lg:grid-cols-[0.95fr_1.05fr] xl:gap-16">
-              <div className="lg:sticky lg:top-28 lg:h-[calc(100vh-8rem)]">
-                <div className="flex h-full items-start">
+              <motion.div
+                style={
+                  shouldReduceMotion
+                    ? undefined
+                    : {
+                        y: stageShellY,
+                        rotateX: stageShellRotate,
+                      }
+                }
+                className="lg:sticky lg:top-28 lg:h-[calc(100vh-8rem)]"
+              >
+                <div
+                  className="flex h-full items-start"
+                  style={{ perspective: 1400 }}
+                >
                   <div className="landing-stage-panel grain-overlay relative w-full overflow-hidden rounded-[2.8rem] p-6 sm:p-8">
                     <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
+                    <motion.div
+                      className="absolute inset-x-8 top-8 h-28 rounded-full bg-primary/10 blur-3xl"
+                      style={{ opacity: stageGlowOpacity }}
+                    />
+                    <div className="absolute right-5 top-6 hidden xl:flex flex-col items-end gap-4">
+                      <p className="text-[10px] uppercase tracking-[0.28em] text-stone-500">
+                        Chapter rail
+                      </p>
+                      <div className="relative h-24 w-px bg-white/10">
+                        <motion.div
+                          className="absolute inset-x-0 top-0 origin-top bg-gradient-to-b from-[#f2d7af] via-[#d17843] to-transparent"
+                          style={{ scaleY: chapterRailScaleY }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        {storyChapters.map((chapter, index) => {
+                          const isActive = activeChapter.id === chapter.id;
+
+                          return (
+                            <button
+                              key={chapter.id}
+                              type="button"
+                              onClick={() => scrollToChapter(chapter.id)}
+                              className={`flex w-full items-center justify-end gap-3 rounded-full border px-3 py-2 text-[11px] uppercase tracking-[0.22em] transition-all duration-300 ${
+                                isActive
+                                  ? "border-primary/35 bg-primary/10 text-stone-100"
+                                  : "border-white/10 bg-white/[0.03] text-stone-400 hover:border-white/20 hover:text-stone-100"
+                              }`}
+                            >
+                              <span>{chapter.eyebrow}</span>
+                              <span
+                                className={`h-2 w-2 rounded-full ${
+                                  isActive
+                                    ? "bg-primary shadow-[0_0_18px_rgba(209,120,67,0.85)]"
+                                    : index < activeChapterIndex
+                                      ? "bg-stone-300"
+                                      : "bg-white/20"
+                                }`}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
                     <AnimatePresence mode="wait">
                       <motion.div
@@ -642,7 +751,7 @@ export default function LandingPage() {
                           className={`absolute inset-x-12 top-10 h-28 rounded-full blur-3xl ${activeChapter.glow}`}
                         />
 
-                        <div className="relative flex min-h-[32rem] flex-col justify-between gap-8">
+                        <div className="relative flex min-h-[30rem] flex-col justify-between gap-8 sm:min-h-[32rem]">
                           <div>
                             <div className="flex items-center justify-between gap-3">
                               <span className="eyebrow-label">
@@ -669,6 +778,16 @@ export default function LandingPage() {
                                 <p className="mt-4 max-w-xl text-sm leading-7 text-stone-400">
                                   {activeChapter.description}
                                 </p>
+                                <div className="mt-5 flex flex-wrap gap-2">
+                                  {activeChapter.tags.map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-stone-400"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -713,15 +832,23 @@ export default function LandingPage() {
                               </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
-                              {activeChapter.tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-stone-400"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
+                            <div className="rounded-[1.8rem] border border-white/10 bg-black/20 p-5">
+                              <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
+                                Now in focus
+                              </p>
+                              <div className="mt-4 flex items-end justify-between gap-6">
+                                <div>
+                                  <p className="text-4xl font-semibold text-stone-100">
+                                    {activeChapter.metricValue}
+                                  </p>
+                                  <p className="mt-2 text-sm uppercase tracking-[0.18em] text-stone-500">
+                                    {activeChapter.metricLabel}
+                                  </p>
+                                </div>
+                                <p className="max-w-xs text-right text-sm leading-6 text-stone-400">
+                                  {activeChapter.metricDetail}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -729,7 +856,7 @@ export default function LandingPage() {
                     </AnimatePresence>
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
               <div className="space-y-6">
                 {storyChapters.map((chapter, index) => {
@@ -746,7 +873,7 @@ export default function LandingPage() {
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true, amount: 0.25 }}
                       transition={{ duration: 0.7, delay: index * 0.06 }}
-                      className={`landing-story-card relative min-h-[70svh] overflow-hidden rounded-[2.6rem] px-6 py-8 sm:px-8 sm:py-10 lg:min-h-[78vh] lg:px-10 lg:py-12 ${
+                      className={`landing-story-card relative min-h-[62svh] overflow-hidden rounded-[2.4rem] px-5 py-7 sm:min-h-[70svh] sm:rounded-[2.6rem] sm:px-8 sm:py-10 lg:min-h-[78vh] lg:px-10 lg:py-12 ${
                         isActive
                           ? "border-primary/30 shadow-[0_32px_120px_-56px_rgba(182,93,47,0.9)]"
                           : "border-white/8"
@@ -755,6 +882,9 @@ export default function LandingPage() {
                       <div
                         className={`absolute inset-0 bg-gradient-to-br ${chapter.accent} opacity-100`}
                       />
+                      <div className="pointer-events-none absolute right-4 top-3 text-[6.5rem] font-semibold leading-none text-white/[0.035] sm:right-8 sm:top-6 sm:text-[8rem]">
+                        {chapter.step}
+                      </div>
                       <div className="relative flex h-full flex-col justify-between gap-10">
                         <div>
                           <div className="flex items-center justify-between gap-4">
