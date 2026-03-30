@@ -1436,6 +1436,81 @@ textarea {
   );
 }
 
+.premium-runway-shell {
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  box-shadow:
+    0 44px 120px -74px rgba(28, 20, 16, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.premium-runway-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.64) 0%,
+    transparent 22%,
+    transparent 76%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+}
+
+.premium-runway-spotlight {
+  background: radial-gradient(
+    circle,
+    rgba(236, 180, 109, 0.48) 0%,
+    rgba(250, 231, 205, 0.42) 34%,
+    transparent 72%
+  );
+}
+
+.premium-device-card {
+  position: relative;
+}
+
+.premium-device-frame {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(235, 227, 217, 0.92) 100%);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  box-shadow:
+    0 38px 90px -54px rgba(15, 23, 42, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.premium-device-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    transparent 28%,
+    transparent 72%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+}
+
+.premium-device-meta {
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.74) 0%,
+      rgba(255, 255, 255, 0.55) 100%
+    );
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 24px 50px -42px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
 .welcome-stage {
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 28%),
@@ -1477,7 +1552,8 @@ textarea {
 }
 
 .hero-sequence {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
@@ -1486,13 +1562,14 @@ textarea {
   background:
     linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.84) 0%,
-      rgba(255, 255, 255, 0.64) 100%
+      rgba(255, 255, 255, 0.74) 0%,
+      rgba(255, 255, 255, 0.56) 100%
     );
-  border-radius: 1.5rem;
-  padding: 1rem 1.1rem;
+  border-radius: 999px;
+  min-width: 11rem;
+  padding: 0.95rem 1.15rem;
   box-shadow:
-    0 22px 44px -34px rgba(15, 23, 42, 0.18),
+    0 18px 44px -34px rgba(15, 23, 42, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
@@ -1538,6 +1615,47 @@ textarea {
     transparent 72%,
     rgba(255, 255, 255, 0.03) 100%
   );
+}
+
+.premium-story-shell {
+  position: relative;
+}
+
+.premium-story-card {
+  position: relative;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(255, 255, 255, 0.025) 100%
+    );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 30px 90px -54px rgba(0, 0, 0, 0.92),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.premium-story-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    130deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 28%,
+    transparent 76%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+}
+
+.premium-story-media {
+  overflow: hidden;
+  border-radius: 1.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .landing-stage-panel {
@@ -1683,7 +1801,6 @@ textarea {
 }
 
 @media (min-width: 640px) {
-  .hero-sequence,
   .hero-stage-rail {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

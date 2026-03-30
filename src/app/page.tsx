@@ -22,13 +22,16 @@ import {
   Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { OrbitingDeviceField } from "@/components/landing/OrbitingDeviceField";
+import {
+  PremiumDeviceHero,
+  PremiumStoryShowcase,
+} from "@/components/landing/PremiumDeviceShowcase";
 import { useAuth } from "@/hooks/useAuth";
 
 const heroMoments = [
-  { title: "Capture", detail: "Device and context arrive together" },
-  { title: "Decide", detail: "Pricing stays close to the quote" },
-  { title: "Move", detail: "Operations continue the same story" },
+  { title: "Arrive", detail: "Intake stays clean" },
+  { title: "Value", detail: "Pricing stays visible" },
+  { title: "Move", detail: "Ops stay aligned" },
 ] as const;
 
 const storyChapters = [
@@ -308,7 +311,7 @@ export default function LandingPage() {
                 className="relative z-10 space-y-8"
               >
                 <span className="eyebrow-label text-[#8a6c45]">
-                  Welcome Experience, Reframed
+                  Premium Welcome Experience
                 </span>
 
                 <div className="space-y-6">
@@ -318,9 +321,9 @@ export default function LandingPage() {
                     transition={{ delay: 0.08 }}
                     className="editorial-title max-w-5xl text-[clamp(3.3rem,7.7vw,7.6rem)] text-[#17120f]"
                   >
-                    The device lifecycle,
+                    Devices move through the business
                     <span className="block brand-gradient">
-                      told in one clean motion.
+                      in one premium flow.
                     </span>
                   </motion.h1>
 
@@ -330,9 +333,9 @@ export default function LandingPage() {
                     transition={{ delay: 0.16 }}
                     className="max-w-2xl text-lg leading-8 text-[#5f5751] sm:text-[1.18rem]"
                   >
-                    Less dashboard noise. More hierarchy, space, and sequence.
-                    The product now introduces itself like a premium system,
-                    not a pile of features.
+                    Real hardware, cleaner composition, and a calmer scroll
+                    story make the first impression feel closer to a product
+                    reveal than a feature dump.
                   </motion.p>
                 </div>
 
@@ -410,50 +413,7 @@ export default function LandingPage() {
                 className="relative"
               >
                 <div className="landing-hero-halo absolute inset-0 blur-3xl" />
-                <div className="welcome-stage grain-overlay relative overflow-hidden rounded-[2.8rem] p-5 sm:p-7">
-                  <OrbitingDeviceField className="opacity-70" compact />
-
-                  <div className="relative flex min-h-[34rem] flex-col justify-between">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.26em] text-white/42">
-                          System preview
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold text-white">
-                          One quieter frame for the whole platform
-                        </p>
-                      </div>
-                      <div className="rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-xs text-white/72">
-                        Scroll-led story
-                      </div>
-                    </div>
-
-                    <div className="hero-lens relative mx-auto flex max-w-xl flex-col items-center rounded-[2.2rem] px-6 py-8 text-center sm:px-8 sm:py-10">
-                      <p className="text-xs uppercase tracking-[0.28em] text-white/45">
-                        Product focus
-                      </p>
-                      <p className="mt-5 max-w-lg text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                        A quieter front door for the whole operation.
-                      </p>
-                      <p className="mt-4 max-w-md text-sm leading-7 text-white/68">
-                        Big ideas first. Useful detail only after the scroll.
-                      </p>
-                    </div>
-
-                    <div className="hero-stage-rail">
-                      {heroMoments.map((moment) => (
-                        <div key={moment.title} className="hero-stage-rail-item">
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            {moment.title}
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-white/72">
-                            {moment.detail}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <PremiumDeviceHero />
               </motion.div>
             </div>
           </section>
@@ -474,12 +434,12 @@ export default function LandingPage() {
                 Scroll The Product
               </span>
               <h2 className="editorial-title mt-6 text-5xl text-[#17120f] sm:text-6xl">
-                Fewer panels. Stronger moments.
+                Scroll the system, not a pile of widgets.
               </h2>
               <p className="mt-5 text-lg leading-8 text-[#625a54]">
-                The new welcome page trades dense grids and repeated metrics for
-                a paced reveal, so visitors understand the platform without
-                feeling hit by too much information.
+                The welcome page now leans on stronger visuals and fewer words,
+                so the platform feels expensive before visitors ever read a long
+                paragraph.
               </p>
             </motion.div>
 
@@ -532,80 +492,17 @@ export default function LandingPage() {
                       className={`absolute left-10 top-8 h-32 w-32 rounded-full blur-3xl ${activeChapter.glow}`}
                       style={{ opacity: stageGlowOpacity }}
                     />
-
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={activeChapter.id}
-                        initial={{ opacity: 0, y: 24, scale: 0.985 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -18, scale: 0.985 }}
-                        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                        className="relative flex min-h-[31rem] flex-col justify-between gap-8 sm:min-h-[34rem]"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="eyebrow-label text-[#ebc88d]">
-                              Chapter {activeChapter.step}
-                            </span>
-                            <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-white/70">
-                              {activeChapter.stageLabel}
-                            </span>
-                          </div>
-
-                          <div className="mt-8 flex items-start gap-4">
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.5rem] border border-white/10 bg-white/[0.06] text-white">
-                              <activeChapter.icon className="h-6 w-6" />
-                            </div>
-                            <div>
-                              <p className="text-sm uppercase tracking-[0.22em] text-white/46">
-                                {activeChapter.eyebrow}
-                              </p>
-                              <p className="mt-3 max-w-xl text-4xl font-semibold tracking-tight text-white">
-                                {activeChapter.stageHeadline}
-                              </p>
-                            </div>
-                          </div>
-
-                          <p className="mt-6 max-w-xl text-base leading-8 text-white/68">
-                            {activeChapter.description}
-                          </p>
-                        </div>
-
-                        <div className="grid gap-4">
-                          <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.05] p-5">
-                            <p className="text-xs uppercase tracking-[0.24em] text-white/42">
-                              Focus
-                            </p>
-                            <p className="mt-4 text-lg leading-8 text-white">
-                              {activeChapter.focus}
-                            </p>
-                          </div>
-
-                          <div className="rounded-[1.8rem] border border-white/10 bg-black/20 p-5">
-                            <p className="text-xs uppercase tracking-[0.24em] text-white/42">
-                              Effect
-                            </p>
-                            <p className="mt-4 text-lg leading-8 text-white/82">
-                              {activeChapter.outcome}
-                            </p>
-                            <p className="mt-4 text-sm leading-7 text-white/58">
-                              {activeChapter.stageFootnote}
-                            </p>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            {activeChapter.chips.map((chip) => (
-                              <span
-                                key={chip}
-                                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[11px] uppercase tracking-[0.22em] text-white/68"
-                              >
-                                {chip}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </motion.div>
-                    </AnimatePresence>
+                    <div className="relative">
+                      <div className="mb-8 flex items-center justify-between gap-4">
+                        <span className="eyebrow-label text-[#ebc88d]">
+                          Chapter {activeChapter.step}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-white/70">
+                          {activeChapter.stageLabel}
+                        </span>
+                      </div>
+                      <PremiumStoryShowcase chapterId={activeChapter.id} />
+                    </div>
                   </div>
                 </div>
               </motion.div>
