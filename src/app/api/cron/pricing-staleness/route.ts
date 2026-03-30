@@ -4,10 +4,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
+import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { PricingHealthService } from '@/services/pricing-health.service'
-
-const CRON_SECRET = process.env.CRON_SECRET
-const MONITOR_ENABLED = process.env.PRICING_STALENESS_MONITOR_ENABLED !== 'false'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -16,16 +14,19 @@ function safeCompare(a: string, b: string): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    if (!CRON_SECRET) {
+    const cronSecret = readServerEnv('CRON_SECRET')
+    const monitorEnabled = readBooleanServerEnv('PRICING_STALENESS_MONITOR_ENABLED', true)
+
+    if (!cronSecret) {
       return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
     }
 
     const authHeader = request.headers.get('authorization') || ''
-    if (!safeCompare(authHeader, `Bearer ${CRON_SECRET}`)) {
+    if (!safeCompare(authHeader, `Bearer ${cronSecret}`)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!MONITOR_ENABLED) {
+    if (!monitorEnabled) {
       return NextResponse.json({
         success: true,
         skipped: true,

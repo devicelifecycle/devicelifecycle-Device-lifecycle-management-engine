@@ -4,10 +4,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { SLAService } from '@/services/sla.service'
+import { readServerEnv } from '@/lib/server-env'
 import { timingSafeEqual } from 'crypto'
-
-// Protect cron endpoint with secret
-const CRON_SECRET = process.env.CRON_SECRET
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -16,14 +14,16 @@ function safeCompare(a: string, b: string): boolean {
 
 export async function GET(request: NextRequest) {
   try {
+    const cronSecret = readServerEnv('CRON_SECRET')
+
     // Verify cron secret - always required. Fail closed if env var not set.
-    if (!CRON_SECRET) {
+    if (!cronSecret) {
       console.error('CRON_SECRET environment variable is not set. Cron endpoint disabled.')
       return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
     }
 
     const authHeader = request.headers.get('authorization') || ''
-    const expected = `Bearer ${CRON_SECRET}`
+    const expected = `Bearer ${cronSecret}`
     if (!safeCompare(authHeader, expected)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

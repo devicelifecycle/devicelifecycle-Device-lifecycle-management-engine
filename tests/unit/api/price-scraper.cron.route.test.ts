@@ -23,9 +23,9 @@ describe('GET /api/cron/price-scraper', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
-    ;(process.env as Record<string, string | undefined>).CRON_SECRET = 'secret123'
-    ;(process.env as Record<string, string | undefined>).PRICE_SCRAPER_ENABLED = 'true'
-    ;(process.env as Record<string, string | undefined>).PRICE_SCRAPER_AUTO_TRAINING = 'false'
+    ;(process.env as Record<string, string | undefined>).CRON_SECRET = ' secret123 \n'
+    ;(process.env as Record<string, string | undefined>).PRICE_SCRAPER_ENABLED = ' true \n'
+    ;(process.env as Record<string, string | undefined>).PRICE_SCRAPER_AUTO_TRAINING = ' false \n'
 
     const upsertMock = vi.fn().mockResolvedValue({ error: null })
     createServiceRoleClientMock.mockReturnValue({
@@ -108,5 +108,21 @@ describe('GET /api/cron/price-scraper', () => {
         expect.objectContaining({ setting_key: 'last_universal_scraper_configured_impl', setting_value: 'scrapling' }),
       ])
     )
+  })
+
+  it('skips cleanly when the enabled flag contains false with whitespace', async () => {
+    ;(process.env as Record<string, string | undefined>).PRICE_SCRAPER_ENABLED = ' false \n'
+
+    const { GET } = await import('@/app/api/cron/price-scraper/route')
+    const response = await GET(new NextRequest('http://localhost/api/cron/price-scraper', {
+      headers: { authorization: 'Bearer secret123' },
+    }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      skipped: true,
+    })
+    expect(runScraperPipelineMock).not.toHaveBeenCalled()
   })
 })

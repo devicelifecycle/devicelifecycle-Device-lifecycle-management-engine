@@ -6,10 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
+import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { PricingTrainingService } from '@/services/pricing-training.service'
-
-const CRON_SECRET = process.env.CRON_SECRET
-const TRAINING_ENABLED = process.env.PRICING_TRAINING_ENABLED === 'true'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -18,15 +16,18 @@ function safeCompare(a: string, b: string): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    if (!CRON_SECRET) {
+    const cronSecret = readServerEnv('CRON_SECRET')
+    const trainingEnabled = readBooleanServerEnv('PRICING_TRAINING_ENABLED')
+
+    if (!cronSecret) {
       return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
     }
     const authHeader = request.headers.get('authorization') || ''
-    if (!safeCompare(authHeader, `Bearer ${CRON_SECRET}`)) {
+    if (!safeCompare(authHeader, `Bearer ${cronSecret}`)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!TRAINING_ENABLED) {
+    if (!trainingEnabled) {
       return NextResponse.json({
         success: true,
         skipped: true,
