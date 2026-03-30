@@ -3,7 +3,11 @@ const nextConfig = {
   // Webpack cache improves dev server responsiveness. Use config.cache = false only if disk issues occur.
   webpack: (config) => config,
   images: {
-    domains: ['localhost', 'jngokdqfqudyaykmsdjm.supabase.co', 'images.unsplash.com'],
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'https', hostname: 'jngokdqfqudyaykmsdjm.supabase.co' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+    ],
     minimumCacheTTL: 60,
   },
   async headers() {
