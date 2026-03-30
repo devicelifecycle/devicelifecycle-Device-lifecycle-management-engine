@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!isShippingConfigured()) {
-      return NextResponse.json({ error: 'Stallion Express is not configured' }, { status: 503 })
+      return NextResponse.json({ skipped: true, reason: 'Stallion Express is not configured' }, { status: 200 })
     }
 
     // Use service-role — cron has no user session
