@@ -162,6 +162,7 @@ export const createUserSchema = z
     organization_id: z.string().uuid().optional(),
     password: z.string().min(8, 'Password must be at least 8 characters').max(128),
     notification_email: z.string().email().optional(),
+    phone: z.string().max(30).optional(),
   })
   .refine(
     (data) => {
@@ -177,6 +178,7 @@ export const updateUserSchema = z.object({
   is_active: z.boolean().optional(),
   /** For Login ID users: real email for notifications, forgot-password */
   notification_email: z.string().email().optional().nullable(),
+  phone: z.string().max(30).optional().nullable(),
 })
 
 // ============================================================================
