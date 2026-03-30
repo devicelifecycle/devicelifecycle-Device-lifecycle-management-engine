@@ -25,7 +25,11 @@ import { Button } from "@/components/ui/button";
 import { OrbitingDeviceField } from "@/components/landing/OrbitingDeviceField";
 import { useAuth } from "@/hooks/useAuth";
 
-const heroMoments = ["Trade-in", "Pricing", "COE", "Shipping"];
+const heroMoments = [
+  { title: "Capture", detail: "Device and context arrive together" },
+  { title: "Decide", detail: "Pricing stays close to the quote" },
+  { title: "Move", detail: "Operations continue the same story" },
+] as const;
 
 const storyChapters = [
   {
@@ -45,6 +49,7 @@ const storyChapters = [
     icon: Sparkles,
     accent: "from-[#f4d8b0]/55 via-[#fcf4e8] to-white",
     glow: "bg-[#edc486]/35",
+    wash: "from-[#e8bd84]/18 via-transparent to-transparent",
   },
   {
     id: "pricing",
@@ -63,6 +68,7 @@ const storyChapters = [
     icon: Radar,
     accent: "from-[#dbeafb]/58 via-[#f6fbff] to-white",
     glow: "bg-sky-300/35",
+    wash: "from-sky-300/16 via-transparent to-transparent",
   },
   {
     id: "operations",
@@ -81,6 +87,7 @@ const storyChapters = [
     icon: Truck,
     accent: "from-[#d4f4ea]/55 via-[#f5fbf8] to-white",
     glow: "bg-emerald-300/30",
+    wash: "from-emerald-300/14 via-transparent to-transparent",
   },
 ] as const;
 
@@ -168,6 +175,11 @@ export default function LandingPage() {
     experienceScrollProgress,
     [0, 0.5, 1],
     [0.18, 0.34, 0.2],
+  );
+  const quoteOpacity = useTransform(
+    experienceScrollProgress,
+    [0, 0.45, 0.85, 1],
+    [0.45, 1, 1, 0.65],
   );
 
   useEffect(() => {
@@ -306,9 +318,9 @@ export default function LandingPage() {
                     transition={{ delay: 0.08 }}
                     className="editorial-title max-w-5xl text-[clamp(3.3rem,7.7vw,7.6rem)] text-[#17120f]"
                   >
-                    Operational software
+                    The device lifecycle,
                     <span className="block brand-gradient">
-                      that finally feels clean.
+                      told in one clean motion.
                     </span>
                   </motion.h1>
 
@@ -318,9 +330,9 @@ export default function LandingPage() {
                     transition={{ delay: 0.16 }}
                     className="max-w-2xl text-lg leading-8 text-[#5f5751] sm:text-[1.18rem]"
                   >
-                    The homepage now says less, breathes more, and reveals the
-                    product in larger, calmer scenes so the first impression
-                    feels premium instead of overloaded.
+                    Less dashboard noise. More hierarchy, space, and sequence.
+                    The product now introduces itself like a premium system,
+                    not a pile of features.
                   </motion.p>
                 </div>
 
@@ -351,15 +363,17 @@ export default function LandingPage() {
                   initial={{ opacity: 0, y: 22 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.28 }}
-                  className="flex flex-wrap gap-2"
+                  className="hero-sequence"
                 >
                   {heroMoments.map((moment) => (
-                    <span
-                      key={moment}
-                      className="rounded-full border border-black/8 bg-white/70 px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-[#5d5550] shadow-[0_18px_40px_-28px_rgba(0,0,0,0.24)]"
-                    >
-                      {moment}
-                    </span>
+                    <div key={moment.title} className="hero-sequence-item">
+                      <p className="text-[11px] uppercase tracking-[0.26em] text-[#8b8078]">
+                        {moment.title}
+                      </p>
+                      <p className="mt-2 text-sm text-[#544d47]">
+                        {moment.detail}
+                      </p>
+                    </div>
                   ))}
                 </motion.div>
 
@@ -419,27 +433,22 @@ export default function LandingPage() {
                         Product focus
                       </p>
                       <p className="mt-5 max-w-lg text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                        Arrival, decisions, and operations in one continuous
-                        experience.
+                        A quieter front door for the whole operation.
                       </p>
                       <p className="mt-4 max-w-md text-sm leading-7 text-white/68">
-                        Instead of stacking every dashboard block up front, the
-                        page now lets the product breathe and reveals the system
-                        in measured beats.
+                        Big ideas first. Useful detail only after the scroll.
                       </p>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {[
-                        "A cleaner first impression",
-                        "Less visual noise",
-                        "More memorable product story",
-                      ].map((item) => (
-                        <div
-                          key={item}
-                          className="rounded-[1.5rem] border border-white/10 bg-white/[0.05] px-4 py-4 text-sm leading-6 text-white/74 backdrop-blur-xl"
-                        >
-                          {item}
+                    <div className="hero-stage-rail">
+                      {heroMoments.map((moment) => (
+                        <div key={moment.title} className="hero-stage-rail-item">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                            {moment.title}
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-white/72">
+                            {moment.detail}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -509,6 +518,16 @@ export default function LandingPage() {
               >
                 <div className="flex h-full items-start">
                   <div className="chapter-stage grain-overlay relative w-full overflow-hidden rounded-[2.8rem] p-6 sm:p-8">
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={`${activeChapter.id}-wash`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                        className={`absolute inset-0 bg-gradient-to-br ${activeChapter.wash}`}
+                      />
+                    </AnimatePresence>
                     <motion.div
                       className={`absolute left-10 top-8 h-32 w-32 rounded-full blur-3xl ${activeChapter.glow}`}
                       style={{ opacity: stageGlowOpacity }}
@@ -606,6 +625,7 @@ export default function LandingPage() {
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true, amount: 0.22 }}
                       transition={{ duration: 0.7, delay: index * 0.06 }}
+                      whileHover={shouldReduceMotion ? undefined : { y: -5 }}
                       className={`chapter-card relative min-h-[44rem] overflow-hidden rounded-[2.5rem] p-6 sm:min-h-[48rem] sm:p-8 lg:min-h-[54rem] ${
                         isActive
                           ? "border-[#d07a48]/28 shadow-[0_42px_120px_-70px_rgba(186,104,48,0.46)]"
@@ -675,6 +695,28 @@ export default function LandingPage() {
             </div>
           </section>
 
+          <section className="py-6 sm:py-10">
+            <motion.div
+              style={shouldReduceMotion ? undefined : { opacity: quoteOpacity }}
+              initial={{ opacity: 0, y: 22 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.35 }}
+              transition={{ duration: 0.75 }}
+              className="pause-band mx-auto max-w-5xl rounded-[2.8rem] px-6 py-10 text-center sm:px-10 sm:py-14"
+            >
+              <p className="text-xs uppercase tracking-[0.28em] text-[#8c7050]">
+                Built For Clarity
+              </p>
+              <p className="editorial-title mt-5 text-4xl text-[#17120f] sm:text-6xl">
+                Designed to stay calm while the work gets complicated.
+              </p>
+              <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-[#645c56] sm:text-lg">
+                The goal is not to show more. It is to make the system feel
+                obvious, intentional, and memorable.
+              </p>
+            </motion.div>
+          </section>
+
           <section id="principles" className="py-16 sm:py-24">
             <div className="mx-auto max-w-3xl text-center">
               <span className="eyebrow-label text-[#8a6c45]">
@@ -684,9 +726,8 @@ export default function LandingPage() {
                 Clean on first glance. Deep when you keep going.
               </h2>
               <p className="mt-5 text-lg leading-8 text-[#625a54]">
-                The welcome page no longer tries to prove everything in the
-                first five seconds. It makes the product look composed, then
-                reveals the depth with scroll.
+                The first screen now sets the tone quickly. The next screens
+                reveal the product with more control and less clutter.
               </p>
             </div>
 
