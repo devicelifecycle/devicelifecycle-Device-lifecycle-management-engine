@@ -1394,12 +1394,111 @@ textarea {
   color: transparent;
 }
 
+.landing-shell {
+  background:
+    linear-gradient(180deg, #fbf7f1 0%, #f3ede3 52%, #ebe4d9 100%);
+}
+
+.landing-backdrop {
+  background:
+    radial-gradient(
+      circle at 12% 10%,
+      rgba(240, 203, 145, 0.32),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 88% 8%,
+      rgba(132, 180, 226, 0.18),
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(209, 120, 67, 0.1),
+      transparent 26%
+    );
+}
+
+.welcome-header {
+  background: rgba(255, 251, 246, 0.76);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  backdrop-filter: blur(18px) saturate(145%);
+  box-shadow:
+    0 22px 50px -36px rgba(15, 23, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
 .landing-hero-halo {
   background: radial-gradient(
     circle at 50% 30%,
-    rgba(241, 213, 169, 0.14) 0%,
-    rgba(209, 120, 67, 0.08) 38%,
-    transparent 74%
+    rgba(245, 214, 165, 0.3) 0%,
+    rgba(209, 120, 67, 0.14) 38%,
+    transparent 72%
+  );
+}
+
+.welcome-stage {
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 28%),
+    linear-gradient(180deg, #18120f 0%, #0b0807 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 40px 130px -60px rgba(28, 20, 16, 0.92),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.welcome-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 24%,
+    transparent 76%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.94), transparent 80%);
+}
+
+.hero-lens {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.085) 0%,
+      rgba(255, 255, 255, 0.04) 100%
+    );
+  backdrop-filter: blur(18px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 28px 70px -40px rgba(0, 0, 0, 0.72);
+}
+
+.chapter-stage {
+  background:
+    radial-gradient(circle at top left, rgba(243, 210, 161, 0.14), transparent 22%),
+    linear-gradient(180deg, rgba(24, 18, 15, 0.98) 0%, rgba(11, 8, 7, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 34px 110px -58px rgba(16, 12, 10, 0.86),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.chapter-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    130deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    transparent 22%,
+    transparent 72%,
+    rgba(255, 255, 255, 0.03) 100%
   );
 }
 
@@ -1472,6 +1571,62 @@ textarea {
     rgba(255, 255, 255, 0.05),
     transparent 28%
   );
+}
+
+.chapter-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.54);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow:
+    0 34px 90px -58px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.chapter-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 20%
+  );
+}
+
+.chapter-highlight {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.48) 100%);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 22px 50px -36px rgba(15, 23, 42, 0.12);
+}
+
+.principle-card {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.62) 100%
+    );
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow:
+    0 24px 56px -42px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.launch-slab {
+  background:
+    radial-gradient(circle at top right, rgba(246, 213, 160, 0.18), transparent 26%),
+    linear-gradient(180deg, #17120f 0%, #0a0807 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 40px 120px -64px rgba(8, 6, 5, 0.96),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .metric-tile {

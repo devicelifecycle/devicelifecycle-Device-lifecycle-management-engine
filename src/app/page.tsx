@@ -13,13 +13,10 @@ import {
 } from "framer-motion";
 import {
   ArrowRight,
-  BarChart3,
   ChevronDown,
-  ClipboardCheck,
   Package,
   Radar,
   ShieldCheck,
-  ShoppingCart,
   Sparkles,
   Truck,
   Workflow,
@@ -28,189 +25,104 @@ import { Button } from "@/components/ui/button";
 import { OrbitingDeviceField } from "@/components/landing/OrbitingDeviceField";
 import { useAuth } from "@/hooks/useAuth";
 
-const features = [
-  {
-    icon: ShoppingCart,
-    title: "Order choreography",
-    description:
-      "Trade-in, customer, and vendor flows now read as one continuous experience instead of disconnected tools.",
-  },
-  {
-    icon: BarChart3,
-    title: "Pricing intelligence",
-    description:
-      "Competitor signals, guardrails, and quote context stay close enough to drive action in real time.",
-  },
-  {
-    icon: ClipboardCheck,
-    title: "COE execution",
-    description:
-      "Receiving, triage, exceptions, and outbound readiness feel tied to the same operational thread.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Role-built access",
-    description:
-      "Admins, sales, COE teams, customers, and vendors each get a calmer surface with the right controls.",
-  },
-];
-
-const heroSignals = [
-  {
-    label: "Competitor sensing",
-    value: "15.6k live rows",
-    detail: "Bell, Telus, Apple, and other pricing signals stay within reach.",
-    accent: "text-amber-200",
-  },
-  {
-    label: "Shared visibility",
-    value: "One operating canvas",
-    detail:
-      "Intake, quote, triage, and shipping stay attached to the same order story.",
-    accent: "text-sky-200",
-  },
-  {
-    label: "Role-aware flow",
-    value: "From admin to vendor",
-    detail:
-      "Every team sees a clearer path without losing the sense of a single system.",
-    accent: "text-teal-200",
-  },
-];
+const heroMoments = ["Trade-in", "Pricing", "COE", "Shipping"];
 
 const storyChapters = [
   {
-    id: "intake",
+    id: "arrival",
     step: "01",
-    eyebrow: "Front door",
-    title: "Begin with the device, not the department.",
+    eyebrow: "Arrival",
+    title: "Everything begins with one calm front door.",
     description:
-      "Every request starts in a calmer intake layer, so customer details, device specifics, and quote intent travel together from the first touch.",
-    points: [
-      "Capture device data, owner context, and quote purpose once.",
-      "Move customer, trade-in, and vendor flows into the same narrative.",
-      "Surface missing data or exceptions before the work fragments.",
-    ],
-    railLabel: "Intake canvas",
-    railHeadline:
-      "A single entry point for device requests, quotes, and sourcing.",
-    railMetrics: [
-      { label: "Workflow lanes", value: "4" },
-      { label: "Context loss", value: "Near zero" },
-      { label: "Team handoff", value: "Continuous" },
-    ],
-    timeline: [
-      "Request lands with device metadata and ownership details attached.",
-      "Pricing and policy signals join the order before teams begin routing.",
-      "Approvals, notes, and next actions move forward as one thread.",
-    ],
-    tags: ["Trade-in", "Customer", "Vendor", "CPO"],
-    metricValue: "4",
-    metricLabel: "workflow lanes",
-    metricDetail: "running through one intake motion",
-    icon: ShoppingCart,
-    accent: "from-[#f0d6ab]/22 via-[#d17843]/12 to-transparent",
-    glow: "bg-[#d17843]/18",
+      "Customer context, device identity, and business intent arrive together, so the work starts aligned instead of fragmented.",
+    focus: "Capture once, route with context, and let the system stay composed from the first touch.",
+    outcome: "Less re-entry. Faster first decisions.",
+    chips: ["Trade-in", "Customer", "Vendor"],
+    stageLabel: "Intake surface",
+    stageHeadline: "A single arrival layer keeps the device story intact.",
+    stageFootnote:
+      "The experience feels lighter because teams stop rebuilding context downstream.",
+    icon: Sparkles,
+    accent: "from-[#f4d8b0]/55 via-[#fcf4e8] to-white",
+    glow: "bg-[#edc486]/35",
   },
   {
     id: "pricing",
     step: "02",
-    eyebrow: "Signal engine",
-    title: "Let pricing react to the market with confidence.",
+    eyebrow: "Pricing",
+    title: "Signal-driven decisions stay close to the quote.",
     description:
-      "Competitor pulls, baselines, and controls now feel like part of the experience, not an afterthought hidden in a back office tool.",
-    points: [
-      "Keep live competitor benchmarks close to the quote decision.",
-      "Explain margin movement before an approver has to ask.",
-      "Reduce guesswork with visible rules and quote confidence.",
-    ],
-    railLabel: "Pricing theater",
-    railHeadline: "Quotes move with real signals instead of gut checks.",
-    railMetrics: [
-      { label: "Signal freshness", value: "Live" },
-      { label: "Quote controls", value: "Visible" },
-      { label: "Approval context", value: "Attached" },
-    ],
-    timeline: [
-      "Competitor rows refresh the benchmark window behind each quote.",
-      "Internal rules and floor logic shape the right price corridor.",
-      "Teams see why a number changed before they approve or revise it.",
-    ],
-    tags: ["Bell", "Telus", "Apple", "Guardrails"],
-    metricValue: "15.6k",
-    metricLabel: "competitor rows",
-    metricDetail: "feeding the quote surface",
+      "Benchmarks, rules, and confidence cues are surfaced in the same flow, so the number feels explained before anyone asks why it changed.",
+    focus: "Show the pricing logic where the decision happens instead of hiding it in a back-office corner.",
+    outcome: "Sharper approvals. Fewer slowdowns.",
+    chips: ["Benchmarks", "Guardrails", "Quotes"],
+    stageLabel: "Decision surface",
+    stageHeadline: "Market movement becomes readable, not noisy.",
+    stageFootnote:
+      "The page reveals complexity gradually, so pricing feels intelligent without looking busy.",
     icon: Radar,
-    accent: "from-sky-200/18 via-cyan-300/14 to-transparent",
-    glow: "bg-sky-300/16",
+    accent: "from-[#dbeafb]/58 via-[#f6fbff] to-white",
+    glow: "bg-sky-300/35",
   },
   {
     id: "operations",
     step: "03",
-    eyebrow: "Floor motion",
-    title: "Finish with an operations picture that stays readable.",
+    eyebrow: "Operations",
+    title: "The floor stays readable all the way to outbound.",
     description:
-      "Receiving, triage, repair decisions, and outbound shipping now land in one polished story, so the floor stays fast without feeling chaotic.",
-    points: [
-      "Keep receiving and triage attached to the original order context.",
-      "Track exceptions without losing the bigger operational picture.",
-      "Make outbound readiness visible before devices leave the building.",
-    ],
-    railLabel: "Operations chamber",
-    railHeadline:
-      "Every downstream touch stays connected to the same device story.",
-    railMetrics: [
-      { label: "Traceability", value: "End to end" },
-      { label: "Shipping state", value: "Visible" },
-      { label: "Exceptions", value: "Actionable" },
-    ],
-    timeline: [
-      "Devices arrive with order history and quote reasoning still intact.",
-      "Receiving, triage, and exception handling stay in the same view.",
-      "Outbound teams ship with cleaner signals and less last-minute searching.",
-    ],
-    tags: ["Receiving", "Triage", "Exceptions", "Outbound"],
-    metricValue: "1",
-    metricLabel: "shared floor view",
-    metricDetail: "across receiving to shipping",
+      "Receiving, triage, exceptions, and shipping continue the same story, which makes handoffs feel connected rather than improvised.",
+    focus: "Keep operations visible as one motion, even when multiple teams touch the same device.",
+    outcome: "Cleaner handoffs. Calmer execution.",
+    chips: ["Receiving", "Triage", "Outbound"],
+    stageLabel: "Operations surface",
+    stageHeadline: "From intake to ship, the product keeps one continuous frame.",
+    stageFootnote:
+      "The welcome page mirrors the actual workflow: fewer jumps, more continuity, better recall.",
     icon: Truck,
-    accent: "from-teal-200/18 via-emerald-300/12 to-transparent",
-    glow: "bg-emerald-300/14",
+    accent: "from-[#d4f4ea]/55 via-[#f5fbf8] to-white",
+    glow: "bg-emerald-300/30",
   },
-];
+] as const;
 
-const platformStats = [
+const principles = [
   {
-    value: "15.6k",
-    label: "competitor rows in motion",
-    note: "Pricing data now supports the story instead of hiding behind it.",
+    icon: Workflow,
+    title: "Show one idea at a time",
+    description:
+      "The page now introduces the platform in a sequence instead of dropping every workflow on screen at once.",
   },
   {
-    value: "4",
-    label: "workflow lanes, one narrative",
-    note: "Trade-in, CPO, customer, and vendor motion now feel connected from the first screen.",
+    icon: ShieldCheck,
+    title: "Let the product feel expensive",
+    description:
+      "Bigger typography, cleaner spacing, and calmer surfaces make the homepage feel deliberate instead of overfilled.",
   },
   {
-    value: "1",
-    label: "operating canvas",
-    note: "Users understand the system faster because the page shows a unified product story.",
+    icon: Package,
+    title: "Keep detail behind the scroll",
+    description:
+      "The first screen sells the system. The next screens explain it only when visitors are ready for more.",
   },
-];
+] as const;
+
+type ChapterId = (typeof storyChapters)[number]["id"];
 
 export default function LandingPage() {
   const router = useRouter();
   const { isAuthenticated, isInitializing } = useAuth();
   const shouldReduceMotion = useReducedMotion();
   const heroRef = useRef<HTMLDivElement>(null);
-  const experienceRef = useRef<HTMLElement>(null);
   const chapterRefs = useRef<Record<string, HTMLElement | null>>({});
-  const [activeChapterId, setActiveChapterId] = useState(storyChapters[0].id);
+  const experienceRef = useRef<HTMLElement>(null);
+  const [activeChapterId, setActiveChapterId] = useState<ChapterId>(
+    storyChapters[0].id,
+  );
 
   const { scrollYProgress } = useScroll();
   const progressScaleX = useSpring(scrollYProgress, {
     stiffness: 160,
     damping: 30,
-    mass: 0.3,
+    mass: 0.28,
   });
 
   const { scrollYProgress: heroScrollProgress } = useScroll({
@@ -225,47 +137,37 @@ export default function LandingPage() {
   const heroCopyY = useTransform(
     heroScrollProgress,
     [0, 1],
-    [0, shouldReduceMotion ? 0 : 110],
+    [0, shouldReduceMotion ? 0 : 96],
   );
   const heroCopyOpacity = useTransform(
     heroScrollProgress,
-    [0, 0.72, 1],
-    [1, 1, shouldReduceMotion ? 1 : 0.2],
+    [0, 0.75, 1],
+    [1, 1, shouldReduceMotion ? 1 : 0.16],
   );
   const heroStageY = useTransform(
     heroScrollProgress,
     [0, 1],
-    [0, shouldReduceMotion ? 0 : 84],
+    [0, shouldReduceMotion ? 0 : 70],
   );
   const heroStageScale = useTransform(
     heroScrollProgress,
     [0, 1],
-    [1, shouldReduceMotion ? 1 : 0.94],
-  );
-  const heroHaloOpacity = useTransform(
-    heroScrollProgress,
-    [0, 1],
-    [0.18, shouldReduceMotion ? 0.18 : 0.42],
+    [1, shouldReduceMotion ? 1 : 0.95],
   );
   const stageShellY = useTransform(
     experienceScrollProgress,
     [0, 0.5, 1],
-    [shouldReduceMotion ? 0 : 28, 0, shouldReduceMotion ? 0 : -28],
+    [shouldReduceMotion ? 0 : 24, 0, shouldReduceMotion ? 0 : -24],
   );
-  const stageShellRotate = useTransform(
+  const stageShellScale = useTransform(
     experienceScrollProgress,
     [0, 0.5, 1],
-    [shouldReduceMotion ? 0 : 2.4, 0, shouldReduceMotion ? 0 : -2.4],
+    [shouldReduceMotion ? 1 : 0.98, 1, shouldReduceMotion ? 1 : 0.985],
   );
   const stageGlowOpacity = useTransform(
     experienceScrollProgress,
     [0, 0.5, 1],
-    [0.16, 0.36, 0.2],
-  );
-  const chapterRailScaleY = useTransform(
-    experienceScrollProgress,
-    [0, 1],
-    [0.2, 1],
+    [0.18, 0.34, 0.2],
   );
 
   useEffect(() => {
@@ -281,13 +183,15 @@ export default function LandingPage() {
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
 
-        const nextChapter = visible[0]?.target.getAttribute("data-chapter");
+        const nextChapter = visible[0]?.target.getAttribute(
+          "data-chapter",
+        ) as ChapterId | null;
         if (nextChapter) {
           setActiveChapterId(nextChapter);
         }
       },
       {
-        threshold: [0.25, 0.4, 0.55, 0.7],
+        threshold: [0.25, 0.45, 0.62],
         rootMargin: "-16% 0px -18% 0px",
       },
     );
@@ -303,9 +207,6 @@ export default function LandingPage() {
   const activeChapter =
     storyChapters.find((chapter) => chapter.id === activeChapterId) ??
     storyChapters[0];
-  const activeChapterIndex = storyChapters.findIndex(
-    (chapter) => chapter.id === activeChapter.id,
-  );
 
   const scrollToChapter = (chapterId: string) => {
     chapterRefs.current[chapterId]?.scrollIntoView({
@@ -315,33 +216,33 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative overflow-x-clip bg-[#130f0d] text-stone-100">
+    <div className="landing-shell relative overflow-x-clip text-[#16120f]">
       <motion.div
-        className="fixed inset-x-0 top-0 z-[70] h-px origin-left bg-gradient-to-r from-[#f4dfbf] via-[#d17843] to-sky-200"
+        className="fixed inset-x-0 top-0 z-[80] h-px origin-left bg-gradient-to-r from-[#e8bb77] via-[#d46f39] to-[#8dbde9]"
         style={{ scaleX: progressScaleX }}
       />
 
       <div className="pointer-events-none fixed inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(241,209,163,0.12),transparent_22%),radial-gradient(circle_at_80%_18%,rgba(98,185,255,0.08),transparent_20%),linear-gradient(180deg,#130f0d_0%,#0b0807_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] opacity-30" />
+        <div className="landing-backdrop absolute inset-0" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(17,24,39,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(17,24,39,0.03)_1px,transparent_1px)] bg-[size:72px_72px] opacity-30" />
       </div>
 
-      <div className="relative mx-auto max-w-[1500px] px-4 sm:px-8 lg:px-10">
+      <div className="relative mx-auto max-w-[1480px] px-4 sm:px-8 lg:px-10">
         <motion.header
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="sticky top-0 z-50 flex items-center justify-between border-b border-white/6 bg-[#130f0d]/72 py-3 sm:py-4 backdrop-blur-xl"
+          className="welcome-header sticky top-0 z-50 mt-4 flex items-center justify-between rounded-full px-4 py-3 sm:px-6"
         >
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-primary text-primary-foreground shadow-[0_20px_45px_-24px_rgba(182,93,47,0.9)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#17120f] text-[#f8f2ea] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.45)]">
               <Package className="h-5 w-5" />
             </div>
             <div>
-              <p className="editorial-title text-3xl leading-none brand-gradient">
+              <p className="editorial-title text-[1.7rem] leading-none text-[#17120f]">
                 DLM Engine
               </p>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-500">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-[#7f766f]">
                 Device Lifecycle Management
               </p>
             </div>
@@ -350,19 +251,19 @@ export default function LandingPage() {
           <div className="hidden items-center gap-6 lg:flex">
             <Link
               href="#experience"
-              className="text-sm text-stone-400 transition-colors hover:text-stone-100"
+              className="text-sm text-[#6d655f] transition-colors hover:text-[#17120f]"
             >
-              Experience
+              Story
             </Link>
             <Link
-              href="#platform"
-              className="text-sm text-stone-400 transition-colors hover:text-stone-100"
+              href="#principles"
+              className="text-sm text-[#6d655f] transition-colors hover:text-[#17120f]"
             >
-              Platform
+              Principles
             </Link>
             <Link
               href="#launch"
-              className="text-sm text-stone-400 transition-colors hover:text-stone-100"
+              className="text-sm text-[#6d655f] transition-colors hover:text-[#17120f]"
             >
               Launch
             </Link>
@@ -372,7 +273,7 @@ export default function LandingPage() {
             <Link href="/login">
               <Button
                 variant="outline"
-                className="transition-transform duration-300 hover:-translate-y-0.5"
+                className="border-black/10 bg-white/60 text-[#17120f] hover:bg-white"
               >
                 Sign In
               </Button>
@@ -383,9 +284,9 @@ export default function LandingPage() {
           </div>
         </motion.header>
 
-        <main className="pb-14">
+        <main className="pb-16">
           <section ref={heroRef} className="relative" id="top">
-            <div className="grid min-h-[calc(100svh-5rem)] items-center gap-10 py-8 sm:py-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-16 lg:py-16">
+            <div className="grid min-h-[calc(100svh-6rem)] items-center gap-12 py-10 sm:py-12 lg:grid-cols-[0.92fr_1.08fr] lg:gap-16 lg:py-20">
               <motion.div
                 style={
                   shouldReduceMotion
@@ -394,40 +295,37 @@ export default function LandingPage() {
                 }
                 className="relative z-10 space-y-8"
               >
-                <motion.span
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.7 }}
-                  className="eyebrow-label"
-                >
-                  Scroll-Built Welcome Experience
-                </motion.span>
+                <span className="eyebrow-label text-[#8a6c45]">
+                  Welcome Experience, Reframed
+                </span>
 
                 <div className="space-y-6">
                   <motion.h1
-                    initial={{ opacity: 0, y: 24 }}
+                    initial={{ opacity: 0, y: 22 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.08 }}
-                    className="editorial-title max-w-5xl text-[clamp(3.6rem,8vw,7.8rem)] text-stone-100"
+                    className="editorial-title max-w-5xl text-[clamp(3.3rem,7.7vw,7.6rem)] text-[#17120f]"
                   >
-                    One operating story
-                    <span className="brand-gradient"> for every device.</span>
+                    Operational software
+                    <span className="block brand-gradient">
+                      that finally feels clean.
+                    </span>
                   </motion.h1>
+
                   <motion.p
-                    initial={{ opacity: 0, y: 24 }}
+                    initial={{ opacity: 0, y: 22 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.16 }}
-                    className="max-w-2xl text-lg leading-8 text-stone-400 sm:text-xl"
+                    className="max-w-2xl text-lg leading-8 text-[#5f5751] sm:text-[1.18rem]"
                   >
-                    The landing experience now unfolds more like a premium
-                    product reveal: bigger ideas first, calmer hierarchy, and a
-                    scroll path that introduces trade-in, pricing, COE, and
-                    shipping as one system.
+                    The homepage now says less, breathes more, and reveals the
+                    product in larger, calmer scenes so the first impression
+                    feels premium instead of overloaded.
                   </motion.p>
                 </div>
 
                 <motion.div
-                  initial={{ opacity: 0, y: 24 }}
+                  initial={{ opacity: 0, y: 22 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.22 }}
                   className="flex flex-wrap gap-3"
@@ -439,83 +337,50 @@ export default function LandingPage() {
                     </Button>
                   </Link>
                   <Link href="#experience">
-                    <Button size="lg" variant="outline">
-                      Explore the flow
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="border-black/10 bg-white/70 text-[#17120f] hover:bg-white"
+                    >
+                      Explore the story
                     </Button>
                   </Link>
                 </motion.div>
 
                 <motion.div
-                  initial={{ opacity: 0, y: 18 }}
+                  initial={{ opacity: 0, y: 22 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.26 }}
+                  transition={{ delay: 0.28 }}
                   className="flex flex-wrap gap-2"
                 >
-                  {storyChapters.map((chapter) => (
-                    <button
-                      key={chapter.id}
-                      type="button"
-                      onClick={() => scrollToChapter(chapter.id)}
-                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.22em] text-stone-400 transition-all duration-300 hover:border-white/20 hover:text-stone-100"
+                  {heroMoments.map((moment) => (
+                    <span
+                      key={moment}
+                      className="rounded-full border border-black/8 bg-white/70 px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-[#5d5550] shadow-[0_18px_40px_-28px_rgba(0,0,0,0.24)]"
                     >
-                      {chapter.step} {chapter.eyebrow}
-                    </button>
-                  ))}
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.34 }}
-                  className="grid gap-3 sm:grid-cols-3"
-                >
-                  {heroSignals.map((signal, index) => (
-                    <motion.div
-                      key={signal.label}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        delay: 0.34 + index * 0.08,
-                        duration: 0.65,
-                      }}
-                      whileHover={
-                        shouldReduceMotion ? undefined : { y: -4, scale: 1.01 }
-                      }
-                      className="rounded-[1.5rem] border border-white/8 bg-white/[0.035] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                    >
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-stone-500">
-                        {signal.label}
-                      </p>
-                      <p
-                        className={`mt-2 text-base font-medium ${signal.accent}`}
-                      >
-                        {signal.value}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-stone-400">
-                        {signal.detail}
-                      </p>
-                    </motion.div>
+                      {moment}
+                    </span>
                   ))}
                 </motion.div>
 
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="flex items-center gap-3 text-xs uppercase tracking-[0.26em] text-stone-500"
+                  transition={{ delay: 0.38 }}
+                  className="flex items-center gap-3 text-xs uppercase tracking-[0.26em] text-[#83786f]"
                 >
                   <motion.div
                     animate={shouldReduceMotion ? undefined : { y: [0, 8, 0] }}
                     transition={{
-                      duration: 2.6,
+                      duration: 2.8,
                       repeat: Infinity,
                       ease: "easeInOut",
                     }}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03]"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-black/8 bg-white/70"
                   >
                     <ChevronDown className="h-4 w-4" />
                   </motion.div>
-                  Scroll to enter the system story
+                  Scroll for the product reveal
                 </motion.div>
               </motion.div>
 
@@ -525,103 +390,56 @@ export default function LandingPage() {
                     ? undefined
                     : { y: heroStageY, scale: heroStageScale }
                 }
-                initial={{ opacity: 0, scale: 0.96, y: 18 }}
+                initial={{ opacity: 0, scale: 0.97, y: 16 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ delay: 0.14 }}
                 className="relative"
               >
                 <div className="landing-hero-halo absolute inset-0 blur-3xl" />
-                <motion.div
-                  className="absolute left-16 top-8 h-40 w-40 rounded-full bg-[#e7c38f]/12 blur-3xl"
-                  style={{ opacity: heroHaloOpacity }}
-                />
-                <div className="landing-stage-panel grain-overlay relative overflow-hidden rounded-[2.4rem] p-5 sm:rounded-[2.8rem] sm:p-8">
-                  <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
-                  <OrbitingDeviceField className="opacity-70" />
+                <div className="welcome-stage grain-overlay relative overflow-hidden rounded-[2.8rem] p-5 sm:p-7">
+                  <OrbitingDeviceField className="opacity-70" compact />
 
-                  <div className="relative">
-                    <div className="flex items-center justify-between gap-3">
+                  <div className="relative flex min-h-[34rem] flex-col justify-between">
+                    <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
-                          Operations theater
+                        <p className="text-xs uppercase tracking-[0.26em] text-white/42">
+                          System preview
                         </p>
-                        <p className="mt-2 text-2xl font-semibold text-stone-100">
-                          A cinematic first look at the platform
-                        </p>
-                      </div>
-                      <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-stone-300">
-                        Live product story
-                      </div>
-                    </div>
-
-                    <div className="mt-8 rounded-[2rem] border border-white/10 bg-black/20 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
-                        Now introducing
-                      </p>
-                      <p className="mt-4 max-w-2xl text-4xl font-semibold tracking-tight text-stone-100">
-                        Trade-in, pricing, and floor execution in one continuous
-                        frame.
-                      </p>
-                      <p className="mt-4 max-w-2xl text-sm leading-7 text-stone-400">
-                        The page now leads with atmosphere, hierarchy, and
-                        movement, but still stays grounded in what the product
-                        actually does for operations teams.
-                      </p>
-                    </div>
-
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <div className="metric-tile p-5">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
-                            Quote intelligence
-                          </p>
-                          <Radar className="h-4 w-4 text-sky-200" />
-                        </div>
-                        <p className="mt-4 text-2xl font-semibold text-stone-100">
-                          Market-aware by default
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-stone-400">
-                          Benchmarks and controls feel built into the product
-                          story instead of bolted on.
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          One quieter frame for the whole platform
                         </p>
                       </div>
-                      <div className="metric-tile p-5">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
-                            Operations thread
-                          </p>
-                          <Workflow className="h-4 w-4 text-amber-200" />
-                        </div>
-                        <p className="mt-4 text-2xl font-semibold text-stone-100">
-                          Readable from intake to ship
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-stone-400">
-                          Teams can understand the system quickly because the
-                          motion now mirrors the real workflow.
-                        </p>
+                      <div className="rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-xs text-white/72">
+                        Scroll-led story
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-3">
-                      {storyChapters.map((chapter) => (
+                    <div className="hero-lens relative mx-auto flex max-w-xl flex-col items-center rounded-[2.2rem] px-6 py-8 text-center sm:px-8 sm:py-10">
+                      <p className="text-xs uppercase tracking-[0.28em] text-white/45">
+                        Product focus
+                      </p>
+                      <p className="mt-5 max-w-lg text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+                        Arrival, decisions, and operations in one continuous
+                        experience.
+                      </p>
+                      <p className="mt-4 max-w-md text-sm leading-7 text-white/68">
+                        Instead of stacking every dashboard block up front, the
+                        page now lets the product breathe and reveals the system
+                        in measured beats.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {[
+                        "A cleaner first impression",
+                        "Less visual noise",
+                        "More memorable product story",
+                      ].map((item) => (
                         <div
-                          key={chapter.id}
-                          className="flex items-start gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.035] px-4 py-4"
+                          key={item}
+                          className="rounded-[1.5rem] border border-white/10 bg-white/[0.05] px-4 py-4 text-sm leading-6 text-white/74 backdrop-blur-xl"
                         >
-                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.05] text-primary">
-                            <chapter.icon className="h-5 w-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[11px] uppercase tracking-[0.22em] text-stone-500">
-                              Chapter {chapter.step}
-                            </p>
-                            <p className="mt-1 text-base font-semibold text-stone-100">
-                              {chapter.title}
-                            </p>
-                            <p className="mt-1 text-sm leading-6 text-stone-400">
-                              {chapter.railLabel}
-                            </p>
-                          </div>
+                          {item}
                         </div>
                       ))}
                     </div>
@@ -634,7 +452,7 @@ export default function LandingPage() {
           <section
             ref={experienceRef}
             id="experience"
-            className="relative py-16 sm:py-24"
+            className="relative py-20 sm:py-24"
           >
             <motion.div
               initial={{ opacity: 0, y: 24 }}
@@ -643,14 +461,16 @@ export default function LandingPage() {
               transition={{ duration: 0.75 }}
               className="mx-auto max-w-3xl text-center"
             >
-              <span className="eyebrow-label">Scroll The System</span>
-              <h2 className="editorial-title mt-6 text-5xl text-stone-100 sm:text-6xl">
-                A homepage that reveals itself in chapters.
+              <span className="eyebrow-label text-[#8a6c45]">
+                Scroll The Product
+              </span>
+              <h2 className="editorial-title mt-6 text-5xl text-[#17120f] sm:text-6xl">
+                Fewer panels. Stronger moments.
               </h2>
-              <p className="mt-5 text-lg leading-8 text-stone-400">
-                Instead of showing every feature at once, the page now uses a
-                sticky product stage and full-height scenes so people understand
-                the platform as a sequence of connected decisions.
+              <p className="mt-5 text-lg leading-8 text-[#625a54]">
+                The new welcome page trades dense grids and repeated metrics for
+                a paced reveal, so visitors understand the platform without
+                feeling hit by too much information.
               </p>
             </motion.div>
 
@@ -665,8 +485,8 @@ export default function LandingPage() {
                     onClick={() => scrollToChapter(chapter.id)}
                     className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.24em] transition-all duration-300 ${
                       isActive
-                        ? "border-primary/40 bg-primary/12 text-stone-100 shadow-[0_16px_40px_-28px_rgba(182,93,47,0.9)]"
-                        : "border-white/10 bg-white/[0.03] text-stone-400 hover:border-white/20 hover:text-stone-100"
+                        ? "border-[#d07a48]/35 bg-[#f7e9da] text-[#17120f] shadow-[0_18px_50px_-30px_rgba(190,106,49,0.42)]"
+                        : "border-black/8 bg-white/65 text-[#6a625d] hover:border-black/16 hover:text-[#17120f]"
                     }`}
                   >
                     {chapter.eyebrow}
@@ -682,174 +502,87 @@ export default function LandingPage() {
                     ? undefined
                     : {
                         y: stageShellY,
-                        rotateX: stageShellRotate,
+                        scale: stageShellScale,
                       }
                 }
                 className="lg:sticky lg:top-28 lg:h-[calc(100vh-8rem)]"
               >
-                <div
-                  className="flex h-full items-start"
-                  style={{ perspective: 1400 }}
-                >
-                  <div className="landing-stage-panel grain-overlay relative w-full overflow-hidden rounded-[2.8rem] p-6 sm:p-8">
-                    <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
+                <div className="flex h-full items-start">
+                  <div className="chapter-stage grain-overlay relative w-full overflow-hidden rounded-[2.8rem] p-6 sm:p-8">
                     <motion.div
-                      className="absolute inset-x-8 top-8 h-28 rounded-full bg-primary/10 blur-3xl"
+                      className={`absolute left-10 top-8 h-32 w-32 rounded-full blur-3xl ${activeChapter.glow}`}
                       style={{ opacity: stageGlowOpacity }}
                     />
-                    <div className="absolute right-5 top-6 hidden xl:flex flex-col items-end gap-4">
-                      <p className="text-[10px] uppercase tracking-[0.28em] text-stone-500">
-                        Chapter rail
-                      </p>
-                      <div className="relative h-24 w-px bg-white/10">
-                        <motion.div
-                          className="absolute inset-x-0 top-0 origin-top bg-gradient-to-b from-[#f2d7af] via-[#d17843] to-transparent"
-                          style={{ scaleY: chapterRailScaleY }}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        {storyChapters.map((chapter, index) => {
-                          const isActive = activeChapter.id === chapter.id;
-
-                          return (
-                            <button
-                              key={chapter.id}
-                              type="button"
-                              onClick={() => scrollToChapter(chapter.id)}
-                              className={`flex w-full items-center justify-end gap-3 rounded-full border px-3 py-2 text-[11px] uppercase tracking-[0.22em] transition-all duration-300 ${
-                                isActive
-                                  ? "border-primary/35 bg-primary/10 text-stone-100"
-                                  : "border-white/10 bg-white/[0.03] text-stone-400 hover:border-white/20 hover:text-stone-100"
-                              }`}
-                            >
-                              <span>{chapter.eyebrow}</span>
-                              <span
-                                className={`h-2 w-2 rounded-full ${
-                                  isActive
-                                    ? "bg-primary shadow-[0_0_18px_rgba(209,120,67,0.85)]"
-                                    : index < activeChapterIndex
-                                      ? "bg-stone-300"
-                                      : "bg-white/20"
-                                }`}
-                              />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
 
                     <AnimatePresence mode="wait">
                       <motion.div
                         key={activeChapter.id}
-                        initial={{ opacity: 0, y: 26, scale: 0.98 }}
+                        initial={{ opacity: 0, y: 24, scale: 0.985 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -18, scale: 0.98 }}
+                        exit={{ opacity: 0, y: -18, scale: 0.985 }}
                         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                        className="relative"
+                        className="relative flex min-h-[31rem] flex-col justify-between gap-8 sm:min-h-[34rem]"
                       >
-                        <div
-                          className={`absolute inset-x-12 top-10 h-28 rounded-full blur-3xl ${activeChapter.glow}`}
-                        />
+                        <div>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="eyebrow-label text-[#ebc88d]">
+                              Chapter {activeChapter.step}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-white/70">
+                              {activeChapter.stageLabel}
+                            </span>
+                          </div>
 
-                        <div className="relative flex min-h-[30rem] flex-col justify-between gap-8 sm:min-h-[32rem]">
-                          <div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="eyebrow-label">
-                                Chapter {activeChapter.step}
-                              </span>
-                              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-stone-300">
-                                {activeChapter.railLabel}
-                              </span>
+                          <div className="mt-8 flex items-start gap-4">
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.5rem] border border-white/10 bg-white/[0.06] text-white">
+                              <activeChapter.icon className="h-6 w-6" />
                             </div>
-
-                            <div className="mt-8 flex items-start gap-4">
-                              <div
-                                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.4rem] bg-gradient-to-br ${activeChapter.accent} border border-white/10 text-white`}
-                              >
-                                <activeChapter.icon className="h-6 w-6" />
-                              </div>
-                              <div>
-                                <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
-                                  {activeChapter.eyebrow}
-                                </p>
-                                <p className="mt-3 max-w-xl text-4xl font-semibold tracking-tight text-stone-100">
-                                  {activeChapter.railHeadline}
-                                </p>
-                                <p className="mt-4 max-w-xl text-sm leading-7 text-stone-400">
-                                  {activeChapter.description}
-                                </p>
-                                <div className="mt-5 flex flex-wrap gap-2">
-                                  {activeChapter.tags.map((tag) => (
-                                    <span
-                                      key={tag}
-                                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-stone-400"
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
+                            <div>
+                              <p className="text-sm uppercase tracking-[0.22em] text-white/46">
+                                {activeChapter.eyebrow}
+                              </p>
+                              <p className="mt-3 max-w-xl text-4xl font-semibold tracking-tight text-white">
+                                {activeChapter.stageHeadline}
+                              </p>
                             </div>
                           </div>
 
-                          <div className="grid gap-4">
-                            <div className="rounded-[1.8rem] border border-white/10 bg-black/20 p-5">
-                              <div className="grid gap-3 sm:grid-cols-3">
-                                {activeChapter.railMetrics.map((metric) => (
-                                  <div
-                                    key={metric.label}
-                                    className="rounded-[1.3rem] border border-white/8 bg-white/[0.035] px-4 py-4"
-                                  >
-                                    <p className="text-[11px] uppercase tracking-[0.2em] text-stone-500">
-                                      {metric.label}
-                                    </p>
-                                    <p className="mt-2 text-lg font-semibold text-stone-100">
-                                      {metric.value}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
+                          <p className="mt-6 max-w-xl text-base leading-8 text-white/68">
+                            {activeChapter.description}
+                          </p>
+                        </div>
 
-                            <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.03] p-5">
-                              <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
-                                Live thread
-                              </p>
-                              <div className="mt-4 space-y-4">
-                                {activeChapter.timeline.map((item, index) => (
-                                  <div
-                                    key={item}
-                                    className="flex items-start gap-4"
-                                  >
-                                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-xs text-stone-200">
-                                      0{index + 1}
-                                    </div>
-                                    <p className="text-sm leading-7 text-stone-300">
-                                      {item}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
+                        <div className="grid gap-4">
+                          <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.05] p-5">
+                            <p className="text-xs uppercase tracking-[0.24em] text-white/42">
+                              Focus
+                            </p>
+                            <p className="mt-4 text-lg leading-8 text-white">
+                              {activeChapter.focus}
+                            </p>
+                          </div>
 
-                            <div className="rounded-[1.8rem] border border-white/10 bg-black/20 p-5">
-                              <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
-                                Now in focus
-                              </p>
-                              <div className="mt-4 flex items-end justify-between gap-6">
-                                <div>
-                                  <p className="text-4xl font-semibold text-stone-100">
-                                    {activeChapter.metricValue}
-                                  </p>
-                                  <p className="mt-2 text-sm uppercase tracking-[0.18em] text-stone-500">
-                                    {activeChapter.metricLabel}
-                                  </p>
-                                </div>
-                                <p className="max-w-xs text-right text-sm leading-6 text-stone-400">
-                                  {activeChapter.metricDetail}
-                                </p>
-                              </div>
-                            </div>
+                          <div className="rounded-[1.8rem] border border-white/10 bg-black/20 p-5">
+                            <p className="text-xs uppercase tracking-[0.24em] text-white/42">
+                              Effect
+                            </p>
+                            <p className="mt-4 text-lg leading-8 text-white/82">
+                              {activeChapter.outcome}
+                            </p>
+                            <p className="mt-4 text-sm leading-7 text-white/58">
+                              {activeChapter.stageFootnote}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {activeChapter.chips.map((chip) => (
+                              <span
+                                key={chip}
+                                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[11px] uppercase tracking-[0.22em] text-white/68"
+                              >
+                                {chip}
+                              </span>
+                            ))}
                           </div>
                         </div>
                       </motion.div>
@@ -869,82 +602,69 @@ export default function LandingPage() {
                         chapterRefs.current[chapter.id] = node;
                       }}
                       data-chapter={chapter.id}
-                      initial={{ opacity: 0, y: 32 }}
+                      initial={{ opacity: 0, y: 28 }}
                       whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, amount: 0.25 }}
+                      viewport={{ once: true, amount: 0.22 }}
                       transition={{ duration: 0.7, delay: index * 0.06 }}
-                      className={`landing-story-card relative min-h-[62svh] overflow-hidden rounded-[2.4rem] px-5 py-7 sm:min-h-[70svh] sm:rounded-[2.6rem] sm:px-8 sm:py-10 lg:min-h-[78vh] lg:px-10 lg:py-12 ${
+                      className={`chapter-card relative min-h-[44rem] overflow-hidden rounded-[2.5rem] p-6 sm:min-h-[48rem] sm:p-8 lg:min-h-[54rem] ${
                         isActive
-                          ? "border-primary/30 shadow-[0_32px_120px_-56px_rgba(182,93,47,0.9)]"
-                          : "border-white/8"
+                          ? "border-[#d07a48]/28 shadow-[0_42px_120px_-70px_rgba(186,104,48,0.46)]"
+                          : "border-black/8"
                       }`}
                     >
                       <div
-                        className={`absolute inset-0 bg-gradient-to-br ${chapter.accent} opacity-100`}
+                        className={`absolute inset-0 bg-gradient-to-br ${chapter.accent} opacity-95`}
                       />
-                      <div className="pointer-events-none absolute right-4 top-3 text-[6.5rem] font-semibold leading-none text-white/[0.035] sm:right-8 sm:top-6 sm:text-[8rem]">
+                      <div className="pointer-events-none absolute right-6 top-4 text-[7rem] font-semibold leading-none text-black/[0.05] sm:right-8 sm:text-[8.5rem]">
                         {chapter.step}
                       </div>
+
                       <div className="relative flex h-full flex-col justify-between gap-10">
                         <div>
                           <div className="flex items-center justify-between gap-4">
-                            <p className="text-xs uppercase tracking-[0.28em] text-stone-500">
+                            <p className="text-xs uppercase tracking-[0.28em] text-[#7b726b]">
                               Chapter {chapter.step}
                             </p>
-                            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-stone-300">
-                              {chapter.metricValue} {chapter.metricLabel}
+                            <div className="rounded-full border border-black/8 bg-white/65 px-3 py-1 text-xs text-[#514a44]">
+                              {chapter.eyebrow}
                             </div>
                           </div>
 
-                          <div className="mt-8 flex flex-col gap-6 sm:flex-row">
-                            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.6rem] border border-white/10 bg-white/[0.05] text-primary">
+                          <div className="mt-10 flex flex-col gap-6">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-[1.7rem] border border-black/8 bg-white/75 text-[#17120f] shadow-[0_20px_40px_-28px_rgba(0,0,0,0.22)]">
                               <chapter.icon className="h-6 w-6" />
                             </div>
-                            <div>
-                              <p className="text-sm uppercase tracking-[0.2em] text-stone-500">
-                                {chapter.eyebrow}
-                              </p>
-                              <h3 className="editorial-title mt-4 text-4xl text-stone-100 sm:text-5xl">
+
+                            <div className="max-w-2xl">
+                              <h3 className="editorial-title text-4xl text-[#17120f] sm:text-5xl">
                                 {chapter.title}
                               </h3>
-                              <p className="mt-5 max-w-2xl text-base leading-8 text-stone-400">
+                              <p className="mt-5 text-base leading-8 text-[#5f5751]">
                                 {chapter.description}
                               </p>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {chapter.points.map((point, pointIndex) => (
-                            <div
-                              key={point}
-                              className="rounded-[1.6rem] border border-white/8 bg-black/18 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                            >
-                              <p className="text-[11px] uppercase tracking-[0.22em] text-stone-500">
-                                0{pointIndex + 1}
-                              </p>
-                              <p className="mt-3 text-sm leading-7 text-stone-200">
-                                {point}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="flex flex-col gap-6 border-t border-white/10 pt-6 sm:flex-row sm:items-end sm:justify-between">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.22em] text-stone-500">
-                              {chapter.metricLabel}
+                        <div className="space-y-4">
+                          <div className="chapter-highlight rounded-[2rem] p-5 sm:p-6">
+                            <p className="text-xs uppercase tracking-[0.24em] text-[#8a6d4b]">
+                              Why it lands better
                             </p>
-                            <p className="mt-3 text-4xl font-semibold text-stone-100">
-                              {chapter.metricValue}
-                            </p>
-                            <p className="mt-2 text-sm leading-6 text-stone-400">
-                              {chapter.metricDetail}
+                            <p className="mt-4 text-lg leading-8 text-[#1d1815]">
+                              {chapter.focus}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2 text-sm text-stone-300">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                            Scroll keeps the stage updated in sync
+
+                          <div className="flex flex-wrap gap-2">
+                            {chapter.chips.map((chip) => (
+                              <span
+                                key={chip}
+                                className="rounded-full border border-black/8 bg-white/70 px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-[#5f5751]"
+                              >
+                                {chip}
+                              </span>
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -955,89 +675,55 @@ export default function LandingPage() {
             </div>
           </section>
 
-          <section id="platform" className="py-16 sm:py-24">
-            <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.25 }}
-                transition={{ duration: 0.75 }}
-                className="space-y-6"
-              >
-                <span className="eyebrow-label">Designed To Land Better</span>
-                <h2 className="editorial-title text-5xl text-stone-100 sm:text-6xl">
-                  Bigger ideas up front. Finer detail when you keep going.
-                </h2>
-                <p className="max-w-2xl text-lg leading-8 text-stone-400">
-                  The redesign is not just prettier. It makes the platform
-                  easier to understand by spacing out decisions, reducing visual
-                  noise, and revealing complexity in the right order.
-                </p>
-              </motion.div>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                {platformStats.map((stat, index) => (
-                  <motion.div
-                    key={stat.label}
-                    initial={{ opacity: 0, y: 24 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, amount: 0.2 }}
-                    transition={{ duration: 0.65, delay: index * 0.08 }}
-                    className="landing-story-card rounded-[2rem] p-5"
-                  >
-                    <p className="text-4xl font-semibold text-stone-100">
-                      {stat.value}
-                    </p>
-                    <p className="mt-3 text-sm uppercase tracking-[0.18em] text-stone-500">
-                      {stat.label}
-                    </p>
-                    <p className="mt-4 text-sm leading-7 text-stone-400">
-                      {stat.note}
-                    </p>
-                  </motion.div>
-                ))}
-              </div>
+          <section id="principles" className="py-16 sm:py-24">
+            <div className="mx-auto max-w-3xl text-center">
+              <span className="eyebrow-label text-[#8a6c45]">
+                Design Principles
+              </span>
+              <h2 className="editorial-title mt-6 text-5xl text-[#17120f] sm:text-6xl">
+                Clean on first glance. Deep when you keep going.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-[#625a54]">
+                The welcome page no longer tries to prove everything in the
+                first five seconds. It makes the product look composed, then
+                reveals the depth with scroll.
+              </p>
             </div>
 
-            <div className="mt-10 grid gap-4 lg:grid-cols-4">
-              {features.map((feature, index) => (
+            <div className="mt-10 grid gap-4 lg:grid-cols-3">
+              {principles.map((principle, index) => (
                 <motion.div
-                  key={feature.title}
+                  key={principle.title}
                   initial={{ opacity: 0, y: 24 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, amount: 0.2 }}
                   transition={{ duration: 0.65, delay: index * 0.06 }}
-                  whileHover={
-                    shouldReduceMotion
-                      ? undefined
-                      : { y: -6, rotateX: 2, rotateY: index % 2 === 0 ? -2 : 2 }
-                  }
-                  className="surface-panel rounded-[2rem] p-5"
-                  style={{ transformPerspective: 1200 }}
+                  className="principle-card rounded-[2.1rem] p-6"
                 >
-                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-primary/15 text-primary">
-                    <feature.icon className="h-5 w-5" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-[#17120f] text-[#f7efe5]">
+                    <principle.icon className="h-5 w-5" />
                   </div>
-                  <p className="text-xl font-semibold text-stone-100">
-                    {feature.title}
+                  <p className="mt-6 text-2xl font-semibold text-[#17120f]">
+                    {principle.title}
                   </p>
-                  <p className="mt-3 text-sm leading-7 text-stone-400">
-                    {feature.description}
+                  <p className="mt-3 text-sm leading-7 text-[#605953]">
+                    {principle.description}
                   </p>
                 </motion.div>
               ))}
             </div>
           </section>
 
-          <section id="launch" className="pb-8 pt-12 sm:pt-16">
+          <section id="launch" className="pb-8 pt-8 sm:pt-12">
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.3 }}
               transition={{ duration: 0.75 }}
-              className="landing-stage-panel grain-overlay relative overflow-hidden rounded-[3rem] px-6 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-12"
+              className="launch-slab grain-overlay relative overflow-hidden rounded-[3rem] px-6 py-10 sm:px-8 sm:py-12 lg:px-12"
             >
-              <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+
               <motion.div
                 className="absolute right-10 top-8 h-40 w-40 rounded-full bg-[#d17843]/16 blur-3xl"
                 animate={
@@ -1046,7 +732,7 @@ export default function LandingPage() {
                     : {
                         x: [0, -18, 0],
                         y: [0, 18, 0],
-                        opacity: [0.22, 0.34, 0.22],
+                        opacity: [0.18, 0.34, 0.18],
                       }
                 }
                 transition={{
@@ -1058,14 +744,16 @@ export default function LandingPage() {
 
               <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
                 <div className="max-w-3xl">
-                  <span className="eyebrow-label">Ready To Launch</span>
-                  <h2 className="editorial-title mt-6 text-5xl text-stone-100 sm:text-6xl">
-                    A sharper welcome page for a serious operations product.
+                  <span className="eyebrow-label text-[#f0cca0]">
+                    Ready To Launch
+                  </span>
+                  <h2 className="editorial-title mt-6 text-5xl text-white sm:text-6xl">
+                    A cleaner welcome page for a serious operations platform.
                   </h2>
-                  <p className="mt-5 text-lg leading-8 text-stone-400">
-                    The homepage now feels more premium, more scrollable, and
-                    more memorable while still explaining the real value of DLM
-                    Engine quickly.
+                  <p className="mt-5 text-lg leading-8 text-white/68">
+                    The homepage now feels closer to a premium product reveal:
+                    less clutter, more confidence, and a clearer story from the
+                    first screen onward.
                   </p>
                 </div>
 
@@ -1077,7 +765,11 @@ export default function LandingPage() {
                     </Button>
                   </Link>
                   <Link href="/register">
-                    <Button size="lg" variant="outline">
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="border-white/16 bg-white/8 text-white hover:bg-white/12"
+                    >
                       Request access
                     </Button>
                   </Link>
