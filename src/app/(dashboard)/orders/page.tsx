@@ -20,6 +20,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { PageHero } from '@/components/ui/page-hero'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
+import { StatusBadge } from '@/components/shared/StatusBadge'
 import type { OrderStatus, OrderType } from '@/types'
 
 export default function OrdersPage() {
@@ -400,17 +401,7 @@ export default function OrdersPage() {
                           {order.type === 'trade_in' ? order.customer?.company_name : order.vendor?.company_name}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              order.status === 'delivered' || order.status === 'closed'
-                                ? 'default'
-                                : order.status === 'cancelled' || order.status === 'rejected'
-                                  ? 'destructive'
-                                  : 'secondary'
-                            }
-                          >
-                            {statusConfig?.label || order.status}
-                          </Badge>
+                          <StatusBadge status={order.status} label={statusConfig?.label} />
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{order.total_quantity}</TableCell>
                         <TableCell className="text-right tabular-nums font-medium">

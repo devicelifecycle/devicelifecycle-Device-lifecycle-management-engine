@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { useOrder } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/shared/StatusBadge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Separator } from '@/components/ui/separator'
@@ -1222,11 +1223,7 @@ export default function OrderDetailPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{order.order_number}</h1>
               <Badge variant="outline" className="capitalize">{order.type.replace('_', ' ')}</Badge>
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig?.bgColor || 'bg-gray-100'} ${statusConfig?.color || 'text-gray-700'}`}
-              >
-                {statusConfig?.label || order.status}
-              </span>
+              <StatusBadge status={order.status} label={statusConfig?.label} dot />
               {!isCustomer && order.is_sla_breached && (
                 <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" />SLA Breached</Badge>
               )}

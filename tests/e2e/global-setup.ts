@@ -92,7 +92,7 @@ export default async function globalSetup() {
     .maybeSingle()
 
   if (acmeOrgError) throw acmeOrgError
-  const acmeOrgId = acmeOrg?.id || '00000000-0000-0000-0000-000000000002'
+  const acmeOrgId = acmeOrg?.id || defaultOrgId
 
   const users: SeedUser[] = [
     { email: 'jamal.h@genovation.ai', full_name: 'Test Admin', role: 'admin', organization_id: defaultOrgId },
