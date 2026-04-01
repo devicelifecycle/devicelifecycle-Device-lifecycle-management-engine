@@ -313,7 +313,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (!userProfile || !['admin', 'coe_manager', 'sales'].includes(userProfile.role)) {
+    if (!userProfile || !['admin', 'coe_manager', 'sales', 'customer'].includes(userProfile.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
@@ -350,6 +350,12 @@ export async function POST(request: NextRequest) {
 
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     if (!customer.is_active) return NextResponse.json({ error: 'Customer is inactive' }, { status: 400 })
+
+    if (userProfile.role === 'customer') {
+      if (!userProfile.organization_id || userProfile.organization_id !== customer.organization_id) {
+        return NextResponse.json({ error: 'Cannot create orders for another organization' }, { status: 403 })
+      }
+    }
 
     if (userProfile.role === 'sales' && userProfile.organization_id && customer.organization_id) {
       if (customer.organization_id !== userProfile.organization_id) {
