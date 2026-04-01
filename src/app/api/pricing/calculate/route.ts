@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import { PricingModelRegistry } from '@/models/pricing'
 import { normalizeCompetitorConditionInput, priceCalculationSchema, priceCalculationV2Schema } from '@/lib/validations'
@@ -50,12 +51,14 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (profile && ['customer', 'vendor'].includes(profile.role)) {
+    const isCustomer = profile?.role === 'customer'
+    const isVendor = profile?.role === 'vendor'
+    if (isVendor) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
-    const version = body.version || 'v2'
+    const version = isCustomer ? 'v2' : (body.version || 'v2')
     // If model_id is explicitly provided, use the pricing model (e.g. data_driven).
     // Otherwise, fall through to V1/V2 PricingService.
     const modelId = body.model_id || undefined
@@ -113,7 +116,20 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const result = await PricingService.calculatePriceV2(validation.data)
+      // Customers use service-role client to bypass RLS on competitor_prices
+      const result = await PricingService.calculatePriceV2(
+        validation.data,
+        isCustomer ? createServiceRoleClient() : undefined
+      )
+      // Customers only get the headline numbers — no competitor breakdown
+      if (isCustomer) {
+        return NextResponse.json({
+          unit_price: result.trade_price,
+          cpo_unit_price: result.cpo_price ?? 0,
+          source: 'market',
+          competitor_count: result.competitors?.length ?? 0,
+        })
+      }
       return NextResponse.json(result)
     }
 

@@ -219,8 +219,8 @@ export class PricingService {
     trade_in_profit_percent?: number;
     enterprise_margin_percent?: number;
     cpo_markup_percent?: number;
-  }): Promise<PriceCalculationResultV2> {
-    const supabase = createServerSupabaseClient()
+  }, supabaseClient?: ReturnType<typeof createServerSupabaseClient>): Promise<PriceCalculationResultV2> {
+    const supabase = supabaseClient ?? createServerSupabaseClient()
     const carrier = input.carrier || 'Unlocked'
     const settings = await this.getPricingSettings()
 
@@ -397,7 +397,7 @@ export class PricingService {
             .order('last_trained_at', { ascending: false })
             .limit(5)
           if (otherCond && otherCond.length > 0) {
-            const ref = otherCond.find(r => r.condition === 'good') ?? otherCond[0]
+            const ref = otherCond.find((r: { condition: string }) => r.condition === 'good') ?? otherCond[0]
             const refMult = CONDITION_MULTIPLIERS[ref.condition as DeviceCondition] ?? 0.85
             if (refMult > 0) {
               anchorPrice = ref.median_trade_price / refMult
