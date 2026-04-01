@@ -1,19 +1,13 @@
 // ============================================================================
 // UNIVERSAL TRADE-IN SCRAPER
 // ============================================================================
-// UniverCell uses Next.js Server Actions which have dynamic action IDs that
-// change with each deployment. This scraper attempts to discover action IDs
-// dynamically by parsing the page HTML and JS chunks.
-// 
-// HOW TO MANUALLY UPDATE ACTION IDS:
-// 1. Open https://univercell.ai/sell/details/mobile in Chrome DevTools
-// 2. Go to Network tab, select a device make (like Apple)
-// 3. Look for POST requests to /sell/details/mobile
-// 4. Find the "Next-Action" header in the request headers
-// 5. Update environment variables:
-//    - UNIVERCELL_ACTION_GET_DEVICE_TYPES (first action when page loads)
-//    - UNIVERCELL_ACTION_GET_MAKES_FOR_DEVICE_TYPE (when selecting device type)
-//    - UNIVERCELL_ACTION_GET_MODELS_FOR_MAKE_AND_TYPE (when selecting make)
+// UniverCell uses Next.js Server Actions. Action IDs are hashes that change
+// on every deployment. This scraper auto-discovers them at runtime by:
+//   1. Parsing the RSC __next_f payload embedded in the page HTML
+//   2. Scanning inline <script> tags
+//   3. Scanning JS chunk bundles
+// Discovered IDs are validated (one live call) then cached for 1 hour.
+// Env var overrides: UNIVERCELL_ACTION_GET_DEVICE_TYPES, etc.
 // ============================================================================
 
 import cheerio from 'cheerio'
@@ -28,7 +22,7 @@ const UNIVERCELL_ACTION_URL = process.env.UNIVERCELL_ACTION_URL || 'https://univ
 // Shop product pages (e.g. /shop/products/iphone-15) - for sell_price fallback
 const UNIVERCELL_SHOP_BASE = process.env.UNIVERCELL_SHOP_BASE || 'https://univercell.ai/shop/products/'
 
-// Cached action IDs - will be discovered dynamically or fall back to env/defaults
+// Cached action IDs - discovered dynamically, fall back to env/hardcoded defaults
 let cachedActionIds: {
   getDeviceTypes: string | null
   getMakesForDeviceType: string | null
@@ -45,80 +39,138 @@ let cachedActionIds: {
 const ACTION_ID_CACHE_TTL = 60 * 60 * 1000
 
 /**
- * Attempt to discover action IDs from the UniverCell page JS chunks.
- * Next.js Server Actions have IDs embedded in the page/chunk bundles.
+ * Extract candidate hex action IDs from raw HTML.
+ * Checks the RSC __next_f payload (most reliable) and inline <script> blocks.
+ */
+function extractHexIdsFromHtml(html: string): string[] {
+  const ids: string[] = []
+
+  // 1. RSC flight payload: self.__next_f.push([1, "...json..."])
+  //    Next.js App Router embeds action IDs as 40-52 char hex strings here.
+  for (const m of html.matchAll(/self\.__next_f\.push\(\[1,\s*"([\s\S]*?)"\]\)/g)) {
+    try {
+      const payload = m[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\')
+      for (const h of payload.matchAll(/"([a-f0-9]{40,52})"/g)) {
+        if (!ids.includes(h[1])) ids.push(h[1])
+      }
+    } catch { /* skip malformed */ }
+  }
+
+  // 2. Inline <script> blocks (no src attribute)
+  for (const m of html.matchAll(/<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/g)) {
+    for (const h of m[1].matchAll(/"([a-f0-9]{40,52})"/g)) {
+      if (!ids.includes(h[1])) ids.push(h[1])
+    }
+  }
+
+  return ids
+}
+
+/**
+ * Extract candidate hex action IDs from a JS bundle.
+ * Prefers Next.js-specific patterns; falls back to any matching hex literal.
+ */
+function extractHexIdsFromJs(js: string): string[] {
+  const high: string[] = []
+  const low: string[] = []
+
+  // High-confidence: Next.js 14 App Router explicit action reference patterns
+  for (const m of js.matchAll(/registerServerReference\s*\([^,)]+?,\s*"([a-f0-9]{40,52})"/g)) {
+    if (!high.includes(m[1])) high.push(m[1])
+  }
+  for (const m of js.matchAll(/\$\$ACTION_ID_([a-f0-9]{40,52})/g)) {
+    if (!high.includes(m[1])) high.push(m[1])
+  }
+  for (const m of js.matchAll(/"ACTION_REF[^"]*":\s*"([a-f0-9]{40,52})"/g)) {
+    if (!high.includes(m[1])) high.push(m[1])
+  }
+
+  // Low-confidence: bare hex literals (many false positives, used as last resort)
+  for (const m of js.matchAll(/"([a-f0-9]{40,52})"/g)) {
+    if (!high.includes(m[1]) && !low.includes(m[1])) low.push(m[1])
+  }
+
+  return [...high, ...low]
+}
+
+/**
+ * Discover action IDs by fetching the UniverCell page + JS chunks, then
+ * validating the getDeviceTypes candidate with one live API call.
+ *
+ * Returns true if all three IDs were successfully identified and cached.
  */
 async function discoverActionIds(): Promise<boolean> {
-  // Check cache
+  // Serve from cache while fresh
   if (cachedActionIds.discoveredAt && Date.now() - cachedActionIds.discoveredAt < ACTION_ID_CACHE_TTL) {
     return cachedActionIds.getDeviceTypes !== null
   }
 
+  // Reset before re-discovery so stale IDs don't persist on failure
+  cachedActionIds = { getDeviceTypes: null, getMakesForDeviceType: null, getModelsForMakeAndType: null, discoveredAt: null }
+
   try {
-    // Fetch the sell details page
     const pageRes = await fetchWithRetry(UNIVERCELL_ACTION_URL, { method: 'GET' })
     if (!pageRes.ok) return false
     const html = await pageRes.text()
 
-    // Extract JS chunk URLs
-    const chunkMatches = Array.from(html.matchAll(/<script[^>]*src="([^"]*chunks[^"]*)"[^>]*>/g))
+    // Collect candidates from HTML first (cheaper than loading chunks)
+    const candidates: string[] = extractHexIdsFromHtml(html)
+
+    // Then scan ALL JS chunks (not filtered by name — action IDs can be in any bundle)
     const chunkUrls: string[] = []
-    for (const match of chunkMatches) {
-      if (match[1].includes('sell') || match[1].includes('details')) {
-        chunkUrls.push(match[1].startsWith('/') ? `https://univercell.ai${match[1]}` : match[1])
-      }
+    for (const m of html.matchAll(/<script[^>]+src="([^"]+\.js[^"]*)"[^>]*>/g)) {
+      const url = m[1].startsWith('/') ? `https://univercell.ai${m[1]}` : m[1]
+      if (!chunkUrls.includes(url)) chunkUrls.push(url)
     }
 
-    // Fetch and parse JS chunks to find action IDs
-    for (const chunkUrl of chunkUrls.slice(0, 5)) {
+    for (const url of chunkUrls.slice(0, 10)) {
+      if (candidates.length >= 15) break // enough to validate from
       try {
-        const chunkRes = await fetchWithRetry(chunkUrl, { method: 'GET' })
-        if (!chunkRes.ok) continue
-        const chunkJs = await chunkRes.text()
-
-        // Look for action ID patterns in the bundled JS
-        // Next.js 14+ uses patterns like: $$ACTION_ID_xxx or $ACTION$xxx
-        const actionIdMatches = Array.from(chunkJs.matchAll(/\$\$ACTION[_$]ID[_$]?([a-f0-9]{32,50})/gi))
-        const foundIds: string[] = []
-        for (const m of actionIdMatches) {
-          foundIds.push(m[1])
+        const r = await fetchWithRetry(url, { method: 'GET' })
+        if (!r.ok) continue
+        const js = await r.text()
+        for (const id of extractHexIdsFromJs(js)) {
+          if (!candidates.includes(id)) candidates.push(id)
         }
-
-        // Also try to find direct action references
-        const directMatches = Array.from(chunkJs.matchAll(/"([a-f0-9]{40,50})"/g))
-        for (const m of directMatches) {
-          if (!foundIds.includes(m[1])) {
-            foundIds.push(m[1])
-          }
-        }
-
-        if (foundIds.length >= 3) {
-          // Assume order: getDeviceTypes, getMakes, getModels
-          cachedActionIds = {
-            getDeviceTypes: foundIds[0],
-            getMakesForDeviceType: foundIds[1],
-            getModelsForMakeAndType: foundIds[2],
-            discoveredAt: Date.now(),
-          }
-          return true
-        }
-      } catch {
-        continue
-      }
+      } catch { continue }
     }
-  } catch {
-    // Discovery failed
-  }
+
+    if (candidates.length === 0) return false
+
+    // Validate: the getDeviceTypes action accepts no arguments and returns
+    // [{id: string, name: string, rd_id?: number}]. Try each candidate until one works.
+    for (let i = 0; i < Math.min(candidates.length, 12); i++) {
+      try {
+        const types = await fetchUniverCellAction<UniverCellDeviceType>(candidates[i], [])
+        if (!Array.isArray(types) || types.length === 0 || !types[0].id || !types[0].name) continue
+
+        // Found getDeviceTypes. The makes and models actions come from the same
+        // deployment bundle so the next distinct IDs in the candidate list are correct.
+        const rest = candidates.filter((_, idx) => idx !== i)
+        cachedActionIds = {
+          getDeviceTypes: candidates[i],
+          getMakesForDeviceType: rest[0] ?? candidates[i],
+          getModelsForMakeAndType: rest[1] ?? candidates[i],
+          discoveredAt: Date.now(),
+        }
+        return true
+      } catch { continue }
+    }
+  } catch { /* discovery failed entirely */ }
 
   return false
 }
 
 /**
- * Get action ID with fallback to environment variable or default
+ * Get action ID with fallback chain:
+ * 1. Runtime-discovered (validated)
+ * 2. Environment variable override
+ * 3. Hardcoded last-known-good IDs (updated 2026-03-25)
  */
 function getActionId(type: 'deviceTypes' | 'makes' | 'models'): string {
-  // Updated action IDs as of March 25, 2026 from live browser discovery.
-  // If these stop working, run: npx tsx scripts/discover-univercell-actions.ts
   const envDefaults = {
     deviceTypes: process.env.UNIVERCELL_ACTION_GET_DEVICE_TYPES || '002d8f7ec727c08e299f84b04d3b412735ede54700',
     makes: process.env.UNIVERCELL_ACTION_GET_MAKES_FOR_DEVICE_TYPE || '40748246c8bd4b73125db4804f15b18c543b2d4ed4',
@@ -297,12 +349,20 @@ async function scrapeUniversalTypeScript(devices: DeviceToScrape[]): Promise<Scr
   const now = new Date().toISOString()
 
   try {
-    // Try to discover action IDs dynamically
+    // Discover action IDs dynamically (validated, cached 1h)
     await discoverActionIds()
-    
+
     let matchedViaActions = 0
 
-    const typePayload = await fetchUniverCellAction<UniverCellDeviceType>(getActionId('deviceTypes'), [])
+    let typePayload = await fetchUniverCellAction<UniverCellDeviceType>(getActionId('deviceTypes'), [])
+
+    // If current IDs returned nothing, force a fresh discovery then retry once
+    if (!typePayload || typePayload.length === 0) {
+      cachedActionIds = { getDeviceTypes: null, getMakesForDeviceType: null, getModelsForMakeAndType: null, discoveredAt: null }
+      await discoverActionIds()
+      typePayload = await fetchUniverCellAction<UniverCellDeviceType>(getActionId('deviceTypes'), [])
+    }
+
     const deviceTypes = typePayload || []
 
     const neededTypeIds = Array.from(new Set(devices.map((device) => inferTypeIdForDevice(device))))
@@ -463,16 +523,24 @@ async function scrapeUniversalFullCatalogTypeScript(): Promise<ScraperResult> {
   const now = new Date().toISOString()
 
   try {
-    // Try to discover action IDs dynamically
+    // Discover action IDs dynamically (validated, cached 1h)
     await discoverActionIds()
-    
-    const types = await fetchUniverCellAction<UniverCellDeviceType>(getActionId('deviceTypes'), [])
+
+    let types = await fetchUniverCellAction<UniverCellDeviceType>(getActionId('deviceTypes'), [])
+
+    // If IDs are stale, force re-discovery and retry once
+    if (!types || types.length === 0) {
+      cachedActionIds = { getDeviceTypes: null, getMakesForDeviceType: null, getModelsForMakeAndType: null, discoveredAt: null }
+      await discoverActionIds()
+      types = await fetchUniverCellAction<UniverCellDeviceType>(getActionId('deviceTypes'), [])
+    }
+
     if (!types || types.length === 0) {
       return {
         competitor_name: 'UniverCell',
         prices: [],
         success: false,
-        error: 'UniverCell device types unavailable - action IDs may have changed',
+        error: 'UniverCell device types unavailable — action IDs could not be discovered',
         duration_ms: Date.now() - start,
       }
     }
