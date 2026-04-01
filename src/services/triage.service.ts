@@ -527,40 +527,48 @@ export class TriageService {
     needsException: number
     isComplete: boolean
   }> {
-    const supabase = createServerSupabaseClient()
+    const serviceRole = createServiceRoleClient()
+    let lastSummary = {
+      total: 0,
+      complete: 0,
+      pending: 0,
+      needsException: 0,
+      isComplete: false,
+    }
 
-    let { data, error } = await supabase
-      .from('imei_records')
-      .select('triage_status')
-      .eq('order_id', orderId)
-
-    if (error || !(data?.length)) {
-      const serviceRole = createServiceRoleClient()
-      const fallback = await serviceRole
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data, error } = await serviceRole
         .from('imei_records')
         .select('triage_status')
         .eq('order_id', orderId)
 
-      data = fallback.data
-      error = fallback.error
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      const records = data ?? []
+      const total = records.length
+      const complete = records.filter(r => r.triage_status === 'complete').length
+      const pending = records.filter(r => r.triage_status === 'pending').length
+      const needsException = records.filter(r => r.triage_status === 'needs_exception').length
+
+      lastSummary = {
+        total,
+        complete,
+        pending,
+        needsException,
+        isComplete: total > 0 && complete === total,
+      }
+
+      if (lastSummary.isComplete && lastSummary.pending === 0 && lastSummary.needsException === 0) {
+        return lastSummary
+      }
+
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 150))
+      }
     }
 
-    if (error) {
-      throw new Error(error.message)
-    }
-
-    const records = data ?? []
-    const total = records.length
-    const complete = records.filter(r => r.triage_status === 'complete').length
-    const pending = records.filter(r => r.triage_status === 'pending').length
-    const needsException = records.filter(r => r.triage_status === 'needs_exception').length
-
-    return {
-      total,
-      complete,
-      pending,
-      needsException,
-      isComplete: total > 0 && complete === total,
-    }
+    return lastSummary
   }
 }
