@@ -116,9 +116,32 @@ async function login(page, { email, password, actor, waitForText }) {
 
 async function selectComboboxOption(page, trigger, optionText) {
   await trigger.click()
-  const option = page.getByRole('option', { name: new RegExp(escapeRegex(optionText), 'i') }).first()
-  await option.waitFor({ timeout: 15000 })
-  await option.click()
+  const exactOption = page.getByRole('option', { name: new RegExp(`^${escapeRegex(optionText)}$`, 'i') }).first()
+
+  try {
+    await exactOption.waitFor({ timeout: 10000 })
+    await exactOption.click()
+    return
+  } catch {
+    const fallbackLabels = [
+      optionText.replace(/^[A-Za-z]+\s+/, '').trim(),
+      optionText.split(/\s+/).slice(-2).join(' '),
+      optionText,
+    ].filter(Boolean)
+
+    for (const label of fallbackLabels) {
+      const option = page.getByRole('option', { name: new RegExp(escapeRegex(label), 'i') }).first()
+      try {
+        await option.waitFor({ timeout: 5000 })
+        await option.click()
+        return
+      } catch {
+        // Keep trying progressively looser matches until one succeeds.
+      }
+    }
+  }
+
+  throw new Error(`Unable to select combobox option "${optionText}"`)
 }
 
 async function fetchUserByEmail(email) {
@@ -167,16 +190,32 @@ async function fetchDeviceChoice() {
   const { data, error } = await supabase
     .from('device_catalog')
     .select('id, make, model')
-    .or('model.ilike.%iPhone%,model.ilike.%Galaxy%')
+    .limit(500)
     .order('make', { ascending: true })
     .order('model', { ascending: true })
-    .limit(10)
 
   if (error || !data || data.length === 0) {
     throw new Error(`Unable to load device catalog choice: ${error?.message || 'no devices found'}`)
   }
 
-  return data.find((entry) => /iphone|galaxy/i.test(entry.model || '')) || data[0]
+  const preferredPatterns = [
+    /iphone 15/i,
+    /iphone 14/i,
+    /iphone 13/i,
+    /iphone 12/i,
+    /galaxy s24/i,
+    /galaxy s23/i,
+    /galaxy s22/i,
+    /iphone/i,
+    /galaxy/i,
+  ]
+
+  for (const pattern of preferredPatterns) {
+    const match = data.find((entry) => pattern.test(`${entry.make || ''} ${entry.model || ''}`))
+    if (match) return match
+  }
+
+  return data[0]
 }
 
 async function fetchOrder(orderId) {

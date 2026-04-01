@@ -148,9 +148,9 @@ function StepIndicator({ current }: { current: number }) {
               className={cn(
                 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-300',
                 i < current
-                  ? 'bg-[var(--color-brand)] text-white'
+                  ? 'bg-[#b35a21] text-white'
                   : i === current
-                  ? 'ring-2 ring-[var(--color-brand)] ring-offset-2 bg-[var(--color-brand)] text-white'
+                  ? 'ring-2 ring-[#b35a21] ring-offset-2 bg-[#b35a21] text-white'
                   : 'bg-stone-100 text-stone-400'
               )}
             >
@@ -169,7 +169,7 @@ function StepIndicator({ current }: { current: number }) {
             <div
               className={cn(
                 'h-[2px] w-8 sm:w-14 mx-1 mb-4 rounded-full transition-all duration-500',
-                i < current ? 'bg-[var(--color-brand)]' : 'bg-stone-200'
+                i < current ? 'bg-[#b35a21]' : 'bg-stone-200'
               )}
             />
           )}
@@ -183,7 +183,7 @@ function SectionTitle({ eyebrow, title, subtitle }: { eyebrow?: string; title: s
   return (
     <div className="mb-8">
       {eyebrow && (
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-brand)] mb-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b35a21] mb-2">
           {eyebrow}
         </p>
       )}
@@ -341,21 +341,21 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                         className={cn(
                           'group relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 p-8 text-center transition-all duration-200',
                           active
-                            ? 'border-[var(--color-brand)] bg-[var(--color-brand)]/5 shadow-sm'
+                            ? 'border-[#b35a21] bg-[#b35a21]/5 shadow-sm'
                             : 'border-stone-200 bg-white hover:border-stone-300 hover:shadow-sm'
                         )}
                       >
                         <div className={cn(
                           'rounded-xl p-3 transition-colors',
-                          active ? 'bg-[var(--color-brand)]/10' : 'bg-stone-100 group-hover:bg-stone-200'
+                          active ? 'bg-[#b35a21]/10' : 'bg-stone-100 group-hover:bg-stone-200'
                         )}>
-                          <Icon className={cn('w-7 h-7', active ? 'text-[var(--color-brand)]' : 'text-stone-500')} />
+                          <Icon className={cn('w-7 h-7', active ? 'text-[#b35a21]' : 'text-stone-500')} />
                         </div>
                         <span className={cn('text-sm font-semibold', active ? 'text-stone-900' : 'text-stone-700')}>
                           {cat.label}
                         </span>
                         {active && (
-                          <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[var(--color-brand)] flex items-center justify-center">
+                          <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#b35a21] flex items-center justify-center">
                             <Check className="w-3 h-3 text-white" />
                           </div>
                         )}
@@ -385,13 +385,13 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                         className={cn(
                           'flex flex-col items-center justify-center gap-2 rounded-xl border-2 py-5 px-3 text-center transition-all duration-200',
                           active
-                            ? 'border-[var(--color-brand)] bg-[var(--color-brand)]/5'
+                            ? 'border-[#b35a21] bg-[#b35a21]/5'
                             : 'border-stone-200 bg-white hover:border-stone-300'
                         )}
                       >
                         <div className={cn(
                           'text-3xl font-black tracking-tight leading-none',
-                          active ? 'text-[var(--color-brand)]' : 'text-stone-300'
+                          active ? 'text-[#b35a21]' : 'text-stone-300'
                         )}>
                           {b.slice(0, 1)}
                         </div>
@@ -399,7 +399,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                           {b}
                         </span>
                         {active && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-brand)]" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#b35a21]" />
                         )}
                       </button>
                     )
@@ -442,7 +442,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                         className={cn(
                           'w-full flex items-center justify-between rounded-xl border-2 px-4 py-3.5 text-left transition-all duration-150',
                           active
-                            ? 'border-[var(--color-brand)] bg-[var(--color-brand)]/5'
+                            ? 'border-[#b35a21] bg-[#b35a21]/5'
                             : 'border-stone-200 bg-white hover:border-stone-300'
                         )}
                       >
@@ -452,7 +452,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                           </p>
                           <p className="text-xs text-stone-400 mt-0.5">{d.make}</p>
                         </div>
-                        {active && <Check className="w-4 h-4 text-[var(--color-brand)] shrink-0" />}
+                        {active && <Check className="w-4 h-4 text-[#b35a21] shrink-0" />}
                       </button>
                     )
                   })}
@@ -481,7 +481,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                         className={cn(
                           'px-3 py-1.5 rounded-lg border text-sm font-medium transition-all duration-150',
                           storage === s
-                            ? 'border-[var(--color-brand)] bg-[var(--color-brand)]/8 text-stone-900'
+                            ? 'border-[#b35a21] bg-[#b35a21]/8 text-stone-900'
                             : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
                         )}
                       >
@@ -505,7 +505,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                         className={cn(
                           'group relative flex flex-col rounded-2xl border-2 p-5 text-left transition-all duration-200',
                           active
-                            ? 'border-[var(--color-brand)] bg-[var(--color-brand)]/5 shadow-sm'
+                            ? 'border-[#b35a21] bg-[#b35a21]/5 shadow-sm'
                             : 'border-stone-200 bg-white hover:border-stone-300'
                         )}
                       >
@@ -517,7 +517,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                             <p className="text-xs text-stone-400">{card.headline}</p>
                           </div>
                           {active && (
-                            <div className="w-5 h-5 rounded-full bg-[var(--color-brand)] flex items-center justify-center shrink-0">
+                            <div className="w-5 h-5 rounded-full bg-[#b35a21] flex items-center justify-center shrink-0">
                               <Check className="w-3 h-3 text-white" />
                             </div>
                           )}
@@ -525,7 +525,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                         <ul className="space-y-1">
                           {card.bullets.map(b => (
                             <li key={b} className="flex items-center gap-1.5 text-xs text-stone-500">
-                              <div className={cn('w-1 h-1 rounded-full shrink-0', active ? 'bg-[var(--color-brand)]' : 'bg-stone-300')} />
+                              <div className={cn('w-1 h-1 rounded-full shrink-0', active ? 'bg-[#b35a21]' : 'bg-stone-300')} />
                               {b}
                             </li>
                           ))}
@@ -637,7 +637,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                     { icon: Package, label: 'Free prepaid shipping label' },
                   ].map(({ icon: Icon, label }) => (
                     <div key={label} className="flex flex-col items-center gap-1.5 rounded-xl bg-white border border-stone-200 p-4 text-center">
-                      <Icon className="w-5 h-5 text-[var(--color-brand)]" />
+                      <Icon className="w-5 h-5 text-[#b35a21]" />
                       <span className="text-[11px] text-stone-500 font-medium leading-tight">{label}</span>
                     </div>
                   ))}
@@ -681,7 +681,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                   (step === 2 && !device) ||
                   (step === 3 && (!condition || !storage))
                 }
-                className="gap-1.5 bg-[var(--color-brand)] hover:bg-[var(--color-brand)]/90 text-white rounded-xl px-6"
+                className="gap-1.5 bg-[#b35a21] hover:bg-[#b35a21]/90 text-white rounded-xl px-6"
               >
                 Continue
                 <ChevronRight className="w-4 h-4" />
@@ -690,7 +690,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
               <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !customerId}
-                className="gap-1.5 bg-[var(--color-brand)] hover:bg-[var(--color-brand)]/90 text-white rounded-xl px-8"
+                className="gap-1.5 bg-[#b35a21] hover:bg-[#b35a21]/90 text-white rounded-xl px-8"
               >
                 {isSubmitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
