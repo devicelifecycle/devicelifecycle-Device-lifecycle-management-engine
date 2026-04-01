@@ -95,6 +95,23 @@ describe('TriageService order lookups', () => {
           }
         }
 
+        if (table === 'imei_records') {
+          return {
+            select: vi.fn().mockImplementation((selection: string) => {
+              if (selection === 'triage_status') {
+                return {
+                  eq: vi.fn().mockResolvedValue({
+                    data: [{ triage_status: 'complete' }],
+                    error: null,
+                  }),
+                }
+              }
+
+              throw new Error(`Unexpected imei_records select: ${selection}`)
+            }),
+          }
+        }
+
         throw new Error(`Unexpected table: ${table}`)
       }),
     })
@@ -323,6 +340,23 @@ describe('TriageService order lookups', () => {
                   error: null,
                 }),
               }),
+            }),
+          }
+        }
+
+        if (table === 'imei_records') {
+          return {
+            select: vi.fn().mockImplementation((selection: string) => {
+              if (selection === 'triage_status') {
+                return {
+                  eq: vi.fn().mockResolvedValue({
+                    data: [{ triage_status: 'needs_exception' }],
+                    error: null,
+                  }),
+                }
+              }
+
+              throw new Error(`Unexpected imei_records select: ${selection}`)
             }),
           }
         }
