@@ -74,8 +74,13 @@ export class TriageService {
       throw new Error('IMEI record not found')
     }
 
+    const pricedImeiRecord = await this.resolveImeiQuotedPrice(imeiRecord as IMEIRecord, supabase)
+    if (!pricedImeiRecord) {
+      throw new Error('IMEI record not found')
+    }
+
     // Calculate outcome
-    const outcome = this.calculateTriageOutcome(input, imeiRecord as IMEIRecord)
+    const outcome = this.calculateTriageOutcome(input, pricedImeiRecord)
 
     // Create triage result
     const { data: triageResult, error: triageError } = await supabase
@@ -390,7 +395,10 @@ export class TriageService {
 
     // Update IMEI record status
     const triageResult = data as TriageResult
-    const imeiRecord = existingTriage?.imei_record as { order_item_id?: string; imei?: string } | null
+    const imeiRecord = await this.resolveImeiQuotedPrice(
+      (existingTriage?.imei_record as IMEIRecord | null) ?? null,
+      supabase,
+    )
     await supabase
       .from('imei_records')
       .update({
@@ -443,6 +451,31 @@ export class TriageService {
     )
 
     return triageResult
+  }
+
+  private static async resolveImeiQuotedPrice(
+    imeiRecord: IMEIRecord | null,
+    supabase: ReturnType<typeof createServerSupabaseClient>,
+  ): Promise<IMEIRecord | null> {
+    if (!imeiRecord || imeiRecord.quoted_price != null || !imeiRecord.order_item_id) {
+      return imeiRecord
+    }
+
+    const { data: orderItem } = await supabase
+      .from('order_items')
+      .select('quoted_price, unit_price')
+      .eq('id', imeiRecord.order_item_id)
+      .single()
+
+    const fallbackQuotedPrice =
+      (orderItem as { quoted_price?: number | null; unit_price?: number | null } | null)?.quoted_price
+      ?? (orderItem as { quoted_price?: number | null; unit_price?: number | null } | null)?.unit_price
+      ?? imeiRecord.quoted_price
+
+    return {
+      ...imeiRecord,
+      quoted_price: fallbackQuotedPrice ?? undefined,
+    }
   }
 
   private static async syncOrderStatusAfterTriage(

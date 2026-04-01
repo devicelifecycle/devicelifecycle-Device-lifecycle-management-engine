@@ -256,4 +256,114 @@ describe('TriageService order lookups', () => {
 
     expect(transitionOrderMock).toHaveBeenCalledWith('order-2', 'qc_complete', 'customer-user', 'All devices triaged')
   })
+
+  it('falls back to the order item unit price when the IMEI record is missing quoted_price', async () => {
+    createServerSupabaseClientMock.mockReturnValue({
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'imei_records') {
+          return {
+            select: vi.fn().mockImplementation((selection: string) => {
+              if (selection.includes('order:orders')) {
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: {
+                        id: 'imei-3',
+                        order_id: 'order-3',
+                        order_item_id: 'item-3',
+                        claimed_condition: 'excellent',
+                        quoted_price: null,
+                        order: { id: 'order-3', status: 'received', customer_id: 'customer-3' },
+                      },
+                      error: null,
+                    }),
+                  }),
+                }
+              }
+
+              if (selection === 'triage_status') {
+                return {
+                  eq: vi.fn().mockResolvedValue({
+                    data: [{ triage_status: 'needs_exception' }],
+                    error: null,
+                  }),
+                }
+              }
+
+              throw new Error(`Unexpected imei_records select: ${selection}`)
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+          }
+        }
+
+        if (table === 'triage_results') {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: 'triage-3',
+                    imei_record_id: 'imei-3',
+                    final_condition: 'poor',
+                    exception_required: true,
+                    price_adjustment: -470,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+
+        if (table === 'order_items') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { quoted_price: null, unit_price: 850 },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const { TriageService } = await import('@/services/triage.service')
+    const result = await TriageService.submitTriageResult({
+      imei_record_id: 'imei-3',
+      physical_condition: 'fair',
+      functional_grade: 'fair',
+      cosmetic_grade: 'fair',
+      screen_condition: 'cracked',
+      battery_health: 72,
+      storage_verified: false,
+      original_accessories: false,
+      functional_tests: {
+        touchscreen: false,
+        display: false,
+        speakers: false,
+        microphone: false,
+        cameras: true,
+        wifi: true,
+        bluetooth: true,
+        cellular: false,
+        charging_port: true,
+        buttons: false,
+        face_id_or_touch_id: true,
+        gps: true,
+      },
+      notes: 'Damaged device',
+      triaged_by_id: 'tech-3',
+    })
+
+    expect(result.outcome.exception_required).toBe(true)
+    expect(result.outcome.price_adjustment).toBeLessThan(-50)
+    expect(transitionOrderMock).toHaveBeenCalledWith('order-3', 'in_triage', 'tech-3', 'Triage started')
+  })
 })
