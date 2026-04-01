@@ -92,7 +92,7 @@ export class VendorService {
       .select('id, order_number, type, status, total_quantity, total_amount, quoted_amount, created_at, updated_at, items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))', { count: 'exact' })
       .eq('type', 'cpo')
       .is('vendor_id', null)
-      .in('status', ['sourcing'])
+      .in('status', ['sourcing', 'accepted'])
       .is('parent_order_id', null)
       .order('created_at', { ascending: false })
       .range(from, to)
