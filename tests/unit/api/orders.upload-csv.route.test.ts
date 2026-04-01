@@ -49,6 +49,8 @@ const mockSupabase = {
 
 // Track what gets inserted
 let insertedItems: Record<string, unknown>[] = []
+let mockUserProfile = { role: 'admin', organization_id: 'org-1' }
+let mockCustomerRecord = { id: 'cust-1', organization_id: 'org-1', is_active: true }
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: () => {
@@ -65,7 +67,7 @@ vi.mock('@/lib/supabase/server', () => ({
             select: () => ({
               eq: () => ({
                 single: () => Promise.resolve({
-                  data: { role: 'admin', organization_id: 'org-1' },
+                  data: mockUserProfile,
                 }),
               }),
             }),
@@ -76,7 +78,7 @@ vi.mock('@/lib/supabase/server', () => ({
             select: () => ({
               eq: () => ({
                 single: () => Promise.resolve({
-                  data: { id: 'cust-1', organization_id: 'org-1', is_active: true },
+                  data: mockCustomerRecord,
                 }),
               }),
             }),
@@ -128,6 +130,8 @@ vi.mock('@/lib/supabase/server', () => ({
 describe('CSV Upload — Auto-detect and Smart Mapping', () => {
   beforeEach(() => {
     insertedItems = []
+    mockUserProfile = { role: 'admin', organization_id: 'org-1' }
+    mockCustomerRecord = { id: 'cust-1', organization_id: 'org-1', is_active: true }
   })
 
   // =====================================================================
@@ -470,5 +474,30 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
     const response = await POST(request)
     expect(response.status).toBe(201)
     expect((insertedItems[0] as Record<string, unknown>).storage).toBe('512GB')
+  })
+
+  it('allows customers to upload CSV orders for their own organization', async () => {
+    mockUserProfile = { role: 'customer', organization_id: 'org-1' }
+
+    const { POST } = await import('@/app/api/orders/upload-csv/route')
+
+    const rows = [
+      { 'Make*': 'Apple', 'Model*': 'iPhone 15', 'Storage/GB*': '128', 'Condition': 'Good' },
+    ]
+
+    const request = new NextRequest('http://localhost/api/orders/upload-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rows,
+        columns: ['Make*', 'Model*', 'Storage/GB*', 'Condition'],
+        customer_id: '00000000-0000-0000-0000-000000000001',
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(201)
+    expect((insertedItems[0] as Record<string, unknown>).storage).toBe('128GB')
   })
 })
