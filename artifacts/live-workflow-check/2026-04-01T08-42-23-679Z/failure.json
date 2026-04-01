@@ -1,0 +1,4 @@
+{
+  "outputDir": "/Users/saiyaganti/Device-lifecycle-management-engine/artifacts/live-workflow-check/2026-04-01T08-42-23-679Z",
+  "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('option', { name: /Apple Apple Watch SE \\(1st generation\\)/i }).first() to be visible\u001b[22m\n\n    at selectComboboxOption (/Users/saiyaganti/Device-lifecycle-management-engine/scripts/live-workflow-check.mjs:120:16)\n    at async createManualOrder (/Users/saiyaganti/Device-lifecycle-management-engine/scripts/live-workflow-check.mjs:260:3)\n    at async runCustomerActor (/Users/saiyaganti/Device-lifecycle-management-engine/scripts/live-workflow-check.mjs:619:12)\n    at async main (/Users/saiyaganti/Device-lifecycle-management-engine/scripts/live-workflow-check.mjs:685:27)"
+}

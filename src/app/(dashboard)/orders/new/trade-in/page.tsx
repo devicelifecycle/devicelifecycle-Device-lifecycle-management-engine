@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import { matchDeviceFromCsv } from '@/lib/device-match'
+import TradeInWizard from '@/components/orders/TradeInWizard'
 import {
   TRADE_IN_CSV_HEADERS,
   TRADE_IN_CSV_SAMPLE,
@@ -347,10 +348,26 @@ export default function NewTradeInPage() {
   const quoteTotalItems = items.filter((_, i) => itemPrices[i]?.unit_price > 0)
   const grandTotal = items.reduce((sum, item, i) => sum + ((itemPrices[i]?.unit_price || 0) * item.quantity), 0)
 
+  // ── Customer role: premium wizard ────────────────────────────────────────
+  if (isCustomer) {
+    const customerId = myCustomer?.id || ''
+    return (
+      <TradeInWizard
+        customerId={customerId}
+        isSubmitting={isCreating}
+        onSubmit={async (payload) => {
+          const result = await create(payload as Record<string, unknown>)
+          toast.success('Trade-in request submitted!')
+          router.push(`/orders/${result.id}`)
+        }}
+      />
+    )
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center gap-4">
-        <Link href={isCustomer ? '/customer/requests' : '/orders'}>
+        <Link href="/orders">
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div>

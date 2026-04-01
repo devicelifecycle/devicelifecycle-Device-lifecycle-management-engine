@@ -178,9 +178,21 @@ async function main() {
     }, null, 2))
   } catch (error) {
     const failureShot = await screenshot(page, 'failure-state').catch(() => null)
+    const pendingNavigationMarker = await page.evaluate(() => {
+      try {
+        return window.sessionStorage.getItem('__dlm_post_login_navigation_pending')
+      } catch {
+        return null
+      }
+    }).catch(() => null)
+    const bodyTextSnippet = await page.locator('body').textContent()
+      .then((text) => text?.trim().slice(0, 400) || null)
+      .catch(() => null)
     console.log(JSON.stringify({
       failureScreenshot: failureShot,
       currentUrl: page.url(),
+      pendingNavigationMarker,
+      bodyTextSnippet,
     }, null, 2))
     throw error
   } finally {

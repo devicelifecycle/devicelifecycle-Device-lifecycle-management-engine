@@ -12,6 +12,7 @@ interface CustomerFilters {
   page?: number
   limit?: number
   organization_id?: string
+  enabled?: boolean
 }
 
 interface CustomersResponse {
@@ -82,10 +83,14 @@ async function deleteCustomer(id: string): Promise<void> {
 
 export function useCustomers(filters: CustomerFilters = {}) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const canReadCustomers = !!user && !['customer', 'vendor'].includes(user.role)
+  const { enabled = true, ...queryFilters } = filters
 
   const customersQuery = useQuery({
-    queryKey: ['customers', filters],
-    queryFn: () => fetchCustomers(filters),
+    queryKey: ['customers', queryFilters],
+    queryFn: () => fetchCustomers(queryFilters),
+    enabled: enabled && canReadCustomers,
   })
 
   const createMutation = useMutation({

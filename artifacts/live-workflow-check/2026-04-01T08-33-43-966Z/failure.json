@@ -1,0 +1,4 @@
+{
+  "outputDir": "/Users/saiyaganti/Device-lifecycle-management-engine/artifacts/live-workflow-check/2026-04-01T08-33-43-966Z",
+  "error": "page.waitForURL: Timeout 60000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"domcontentloaded\"\n============================================================\n    at login (/Users/saiyaganti/Device-lifecycle-management-engine/scripts/live-workflow-check.mjs:101:10)\n    at async runCustomerActor (/Users/saiyaganti/Device-lifecycle-management-engine/scripts/live-workflow-check.mjs:607:5)\n    at async main (/Users/saiyaganti/Device-lifecycle-management-engine/scripts/live-workflow-check.mjs:679:27)"
+}

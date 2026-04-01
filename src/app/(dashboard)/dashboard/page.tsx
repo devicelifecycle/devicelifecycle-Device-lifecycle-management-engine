@@ -35,6 +35,7 @@ import { Badge } from '@/components/ui/badge'
 import { AnimatedCounter } from '@/components/ui/motion'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
+import { StatusBadge } from '@/components/shared/StatusBadge'
 
 const PIPELINE_COLORS = ['#f1d7af', '#d17843', '#6ec6b8', '#8da8d8', '#d95f5f', '#f0c36d']
 
@@ -270,9 +271,11 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Badge className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-stone-200">
-                        {ORDER_STATUS_CONFIG[order.status as keyof typeof ORDER_STATUS_CONFIG]?.label || order.status}
-                      </Badge>
+                      <StatusBadge
+                        status={order.status}
+                        label={ORDER_STATUS_CONFIG[order.status as keyof typeof ORDER_STATUS_CONFIG]?.label}
+                        dot
+                      />
                       <ArrowRight className="h-4 w-4 text-stone-500" />
                     </div>
                   </div>
