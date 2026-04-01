@@ -1,13 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  BarChart3,
   ClipboardCheck,
   DollarSign,
   Package,
@@ -27,11 +27,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrders } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { AnimatedCounter } from '@/components/ui/motion'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
@@ -70,11 +70,8 @@ function usePipeline(orders: Array<{ status: string }>) {
   }, [orders])
 }
 
-export default function DashboardPage() {
-  const { user, hasRole } = useAuth()
+function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
   const { orders, total } = useOrders({ page_size: 50 })
-
-  const isInternal = hasRole(['admin', 'coe_manager', 'coe_tech', 'sales'])
   const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
   const slaAlerts = orders.filter((order) => order.is_sla_breached).length
   const recentRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
@@ -83,14 +80,10 @@ export default function DashboardPage() {
   const recentOrders = orders.slice(0, 6)
 
   const stats = [
-    { label: isInternal ? 'Total Orders' : 'My Orders', value: total, icon: ShoppingCart, tone: 'text-amber-200' },
+    { label: 'Total Orders', value: total, icon: ShoppingCart, tone: 'text-amber-200' },
     { label: 'Active Queue', value: pendingOrders, icon: Activity, tone: 'text-teal-200' },
-    ...(isInternal
-      ? [
-          { label: 'SLA Alerts', value: slaAlerts, icon: AlertTriangle, tone: 'text-rose-200' },
-          { label: 'Revenue', value: formatCurrency(recentRevenue), icon: DollarSign, tone: 'text-sky-200' },
-        ]
-      : []),
+    { label: 'SLA Alerts', value: slaAlerts, icon: AlertTriangle, tone: 'text-rose-200' },
+    { label: 'Revenue', value: formatCurrency(recentRevenue), icon: DollarSign, tone: 'text-sky-200' },
   ]
 
   const quickActions = [
@@ -117,30 +110,26 @@ export default function DashboardPage() {
                   SLA risk, and fulfillment movement in one place.
                 </p>
               </div>
-            </div>
+          </div>
 
             <div className="flex flex-wrap gap-3">
-              {isInternal && (
-                <>
-                  <Link href="/orders/new/trade-in">
-                    <Button size="lg">
-                      <Plus className="mr-2 h-4 w-4" />
-                      New Trade-In
-                    </Button>
-                  </Link>
-                  <Link href="/orders/new/cpo">
-                    <Button size="lg" variant="outline">
-                      <Package className="mr-2 h-4 w-4" />
-                      New CPO
-                    </Button>
-                  </Link>
-                </>
-              )}
+              <Link href="/orders/new/trade-in">
+                <Button size="lg">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Trade-In
+                </Button>
+              </Link>
+              <Link href="/orders/new/cpo">
+                <Button size="lg" variant="outline">
+                  <Package className="mr-2 h-4 w-4" />
+                  New CPO
+                </Button>
+              </Link>
             </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            {quickActions.slice(0, isInternal ? 4 : 2).map((action) => (
+            {quickActions.map((action) => (
               <Link key={action.href} href={action.href}>
                 <div className="metric-tile h-full p-5 transition-transform duration-300 hover:-translate-y-1">
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
@@ -155,7 +144,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className={`grid gap-4 md:grid-cols-2 ${isInternal ? 'xl:grid-cols-4' : 'xl:grid-cols-2'}`}>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -320,4 +309,35 @@ export default function DashboardPage() {
       </section>
     </div>
   )
+}
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const { user, isInitializing } = useAuth()
+  const isInternal = user ? ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user.role) : false
+  const targetPath = getDefaultAppPathForRole(user?.role)
+
+  useEffect(() => {
+    if (!isInitializing && user && !isInternal) {
+      router.replace(targetPath)
+    }
+  }, [isInitializing, isInternal, router, targetPath, user])
+
+  if (isInitializing || !user) {
+    return (
+      <div className="surface-panel rounded-[1.75rem] px-6 py-12 text-center text-stone-400">
+        Loading your workspace...
+      </div>
+    )
+  }
+
+  if (!isInternal) {
+    return (
+      <div className="surface-panel rounded-[1.75rem] px-6 py-12 text-center text-stone-400">
+        Opening your workspace...
+      </div>
+    )
+  }
+
+  return <InternalDashboard user={user} />
 }
