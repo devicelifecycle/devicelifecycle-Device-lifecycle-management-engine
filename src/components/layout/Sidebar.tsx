@@ -146,7 +146,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         const isActive =
                           pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
                         return (
-                          <Link key={item.href} href={item.href} onClick={onNavigate}>
+                          <Link key={item.href} href={item.href} onClick={onNavigate} prefetch={false}>
                             <div
                               className={cn(
                                 'group relative flex items-center gap-3 rounded-[1.1rem] px-3.5 py-3 text-sm transition-all duration-200',
