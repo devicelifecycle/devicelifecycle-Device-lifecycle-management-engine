@@ -44,7 +44,17 @@ function fastNavigate(path: string, router: ReturnType<typeof useRouter>) {
     // a full navigation so middleware/session hydration can recover.
     window.setTimeout(() => {
       if (window.sessionStorage.getItem(pendingKey) === path) {
-        window.location.replace(path)
+        const currentPath = window.location.pathname
+        const stillOnLogin = currentPath === '/login' || currentPath.startsWith('/login/')
+
+        if (stillOnLogin) {
+          window.location.replace(path)
+          return
+        }
+
+        // The user has already moved into the app on a different route, so the
+        // fallback should stand down instead of snapping them back to /dashboard.
+        window.sessionStorage.removeItem(pendingKey)
       }
     }, 1200)
     return
