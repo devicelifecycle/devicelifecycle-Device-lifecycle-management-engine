@@ -22,6 +22,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isInitializing && isAuthenticated) {
+      window.sessionStorage.removeItem('__dlm_post_login_navigation_pending')
+    }
+  }, [isAuthenticated, isInitializing])
+
+  useEffect(() => {
     if (!isInitializing && !isAuthenticated) {
       router.replace('/login')
     }
