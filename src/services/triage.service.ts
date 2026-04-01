@@ -5,11 +5,13 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { NotificationService } from '@/services/notification.service'
+import { OrderService } from '@/services/order.service'
 import type { 
   IMEIRecord, 
   DeviceCondition, 
   TriageResult,
-  Order 
+  Order,
+  OrderStatus,
 } from '@/types'
 
 export interface TriageInput {
@@ -140,6 +142,12 @@ export class TriageService {
         })
       }
     }
+
+    await this.syncOrderStatusAfterTriage(
+      imeiRecord.order_id,
+      (imeiRecord.order as Partial<Order> | null)?.status,
+      input.triaged_by_id,
+    )
 
     return {
       triageResult: triageResult as TriageResult,
@@ -428,7 +436,41 @@ export class TriageService {
       })
     }
 
+    await this.syncOrderStatusAfterTriage(
+      existingTriage?.order?.id,
+      (existingTriage?.order as Partial<Order> | null)?.status,
+      approvedById,
+    )
+
     return triageResult
+  }
+
+  private static async syncOrderStatusAfterTriage(
+    orderId: string | undefined,
+    currentStatus: string | undefined,
+    actorId: string,
+  ): Promise<void> {
+    if (!orderId) return
+
+    let workingStatus = currentStatus as OrderStatus | undefined
+
+    try {
+      if (workingStatus === 'received' && OrderService.isValidTransition('received', 'in_triage')) {
+        await OrderService.transitionOrder(orderId, 'in_triage', actorId, 'Triage started')
+        workingStatus = 'in_triage'
+      }
+
+      const summary = await this.checkOrderTriageComplete(orderId)
+      if (!summary.isComplete || summary.pending > 0 || summary.needsException > 0) {
+        return
+      }
+
+      if (workingStatus === 'in_triage' && OrderService.isValidTransition('in_triage', 'qc_complete')) {
+        await OrderService.transitionOrder(orderId, 'qc_complete', actorId, 'All devices triaged')
+      }
+    } catch (error) {
+      console.error('[TriageService] Failed to sync order status after triage:', error)
+    }
   }
 
   /**
