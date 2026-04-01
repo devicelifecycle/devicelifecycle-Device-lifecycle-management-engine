@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handleExceptionMock = vi.fn()
 const createServerSupabaseClientMock = vi.fn()
+const createServiceRoleClientMock = vi.fn()
 
 vi.mock('@/services/triage.service', () => ({
   TriageService: {
@@ -14,14 +15,16 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: createServerSupabaseClientMock,
 }))
 
+vi.mock('@/lib/supabase/service-role', () => ({
+  createServiceRoleClient: createServiceRoleClientMock,
+}))
+
 function makeSupabase({
   user,
   profile,
-  triage,
 }: {
   user: { id: string } | null
   profile: { role?: string; organization_id?: string } | null
-  triage: { order?: { customer?: { organization_id?: string } } } | null
 }) {
   return {
     auth: {
@@ -36,6 +39,18 @@ function makeSupabase({
         }
       }
 
+      throw new Error(`Unexpected table: ${table}`)
+    }),
+  }
+}
+
+function makeServiceRoleSupabase({
+  triage,
+}: {
+  triage: { order?: { customer?: { organization_id?: string } } } | null
+}) {
+  return {
+    from: vi.fn().mockImplementation((table: string) => {
       if (table === 'triage_results') {
         return {
           select: vi.fn().mockReturnThis(),
@@ -61,6 +76,10 @@ describe('POST /api/triage/[id]/exception', () => {
       makeSupabase({
         user: { id: 'customer-user' },
         profile: { role: 'customer', organization_id: 'org-1' },
+      }),
+    )
+    createServiceRoleClientMock.mockReturnValue(
+      makeServiceRoleSupabase({
         triage: {
           order: {
             customer: { organization_id: 'org-1' },
@@ -93,6 +112,10 @@ describe('POST /api/triage/[id]/exception', () => {
       makeSupabase({
         user: { id: 'customer-user' },
         profile: { role: 'customer', organization_id: 'org-1' },
+      }),
+    )
+    createServiceRoleClientMock.mockReturnValue(
+      makeServiceRoleSupabase({
         triage: {
           order: {
             customer: { organization_id: 'org-2' },
@@ -120,6 +143,10 @@ describe('POST /api/triage/[id]/exception', () => {
       makeSupabase({
         user: { id: 'admin-user' },
         profile: { role: 'admin', organization_id: 'org-admin' },
+      }),
+    )
+    createServiceRoleClientMock.mockReturnValue(
+      makeServiceRoleSupabase({
         triage: {
           order: {
             customer: { organization_id: 'org-1' },
