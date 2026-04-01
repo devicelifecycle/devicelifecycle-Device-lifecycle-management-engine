@@ -99,24 +99,11 @@ function fastNavigate(path: string, router: ReturnType<typeof useRouter>) {
 }
 
 export function useAuth() {
-  const [state, setState] = useState<AuthState>(() => {
-    const cachedUser = readCachedUser()
-
-    if (cachedUser) {
-      return {
-        user: cachedUser,
-        isLoading: false,
-        isInitializing: false,
-        isAuthenticated: true,
-      }
-    }
-
-    return {
-      user: null,
-      isLoading: false,
-      isInitializing: true,
-      isAuthenticated: false,
-    }
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    isLoading: false,
+    isInitializing: true,
+    isAuthenticated: false,
   })
   const router = useRouter()
   const mountedRef = useRef(true)
@@ -188,6 +175,17 @@ export function useAuth() {
   // Listen for auth changes + session expiry
   useEffect(() => {
     mountedRef.current = true
+
+    const cachedUser = readCachedUser()
+    if (cachedUser) {
+      setState((prev) => ({
+        user: cachedUser,
+        isLoading: prev.isLoading,
+        isInitializing: false,
+        isAuthenticated: true,
+      }))
+    }
+
     fetchUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
