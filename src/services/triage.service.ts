@@ -499,17 +499,29 @@ export class TriageService {
         workingStatus = orderRow.status as OrderStatus
       }
 
+      console.info('[TriageService] syncOrderStatusAfterTriage', {
+        orderId,
+        currentStatus,
+        workingStatus,
+      })
+
       if (workingStatus === 'received' && OrderService.isValidTransition('received', 'in_triage')) {
         await OrderService.transitionOrder(orderId, 'in_triage', actorId, 'Triage started')
         workingStatus = 'in_triage'
       }
 
       const summary = await this.checkOrderTriageComplete(orderId)
+      console.info('[TriageService] triage completion summary', {
+        orderId,
+        summary,
+        workingStatus,
+      })
       if (!summary.isComplete || summary.pending > 0 || summary.needsException > 0) {
         return
       }
 
       if (workingStatus === 'in_triage' && OrderService.isValidTransition('in_triage', 'qc_complete')) {
+        console.info('[TriageService] transitioning order to qc_complete', { orderId, actorId })
         await OrderService.transitionOrder(orderId, 'qc_complete', actorId, 'All devices triaged')
       }
     } catch (error) {
