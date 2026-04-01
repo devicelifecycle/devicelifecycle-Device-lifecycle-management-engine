@@ -653,15 +653,17 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     message: (n) => `Your quote for order #${n} is ready for review. Please log in to accept or decline.`,
   },
   accepted: {
+    customer: true,
     admin: true,
     assigned: true,
     subject: (n) => `Order #${n} Accepted`,
     message: (n) => `Order #${n} has been accepted by the customer and is ready for processing.`,
   },
   rejected: {
+    customer: true,
     admin: true,
-    subject: (n) => `Order #${n} Rejected`,
-    message: (n) => `The customer has rejected the quote for order #${n}.`,
+    subject: (n) => `Order #${n} Declined`,
+    message: (n) => `The quote for order #${n} has been declined. No further action is required — contact us if you'd like to revisit.`,
   },
   sourcing: {
     vendor: true,
@@ -717,5 +719,12 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     admin: true,
     subject: (n) => `Order #${n} Cancelled`,
     message: (n) => `Order #${n} has been cancelled. If you have questions, please contact our team.`,
+  },
+  closed: {
+    customer: true,
+    vendor: true,
+    admin: true,
+    subject: (n) => `Order #${n} Closed`,
+    message: (n) => `Order #${n} has been completed and closed. Thank you for your business!`,
   },
 }
