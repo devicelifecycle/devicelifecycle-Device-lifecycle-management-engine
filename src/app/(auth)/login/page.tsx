@@ -43,6 +43,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     router.prefetch('/dashboard')
+    router.prefetch('/customer/orders')
+    router.prefetch('/vendor/orders')
   }, [router])
 
   async function handleSubmit(event: React.FormEvent) {

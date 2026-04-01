@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { User, UserRole } from '@/types'
 
@@ -285,7 +286,35 @@ export function useAuth() {
         isInitializing: false,
         isAuthenticated: true,
       }))
-      fastNavigate('/dashboard', router)
+
+      const profilePromise: Promise<User | null> = (async () => {
+        try {
+          const result = await supabase
+            .from('users')
+            .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at')
+            .eq('id', userId)
+            .single()
+
+          const data = result.data as User | null
+          if (!data?.is_active) return null
+          writeCachedUser(data)
+          return data
+        } catch (profileError) {
+          if (!isAbortError(profileError)) {
+            console.error('Error resolving post-login profile:', profileError)
+          }
+          return null
+        }
+      })()
+
+      const resolvedProfile = await Promise.race([
+        profilePromise,
+        new Promise<User | null>((resolve) => {
+          window.setTimeout(() => resolve(null), 350)
+        }),
+      ])
+
+      fastNavigate(getDefaultAppPathForRole(resolvedProfile?.role), router)
     } catch (error) {
       setState((prev) => ({ ...prev, isLoading: false }))
       if (isAbortError(error)) {
