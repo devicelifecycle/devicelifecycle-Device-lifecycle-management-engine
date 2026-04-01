@@ -217,11 +217,11 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
 
   // Load device catalog
   useEffect(() => {
-    fetch('/api/pricing/catalog')
+    fetch('/api/devices?page_size=500')
       .then(r => r.json())
       .then(data => {
-        const list = (data.devices || data || []) as WizardDevice[]
-        setAllDevices(list)
+        const raw = data.data || data.devices || data
+        setAllDevices(Array.isArray(raw) ? raw : [])
       })
       .catch(() => {})
   }, [])
@@ -261,8 +261,8 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
     setStep(next)
   }, [step])
 
-  const back = () => go(step - 1)
-  const next = () => go(step + 1)
+  const goBack = () => go(step - 1)
+  const goNext = () => go(step + 1)
 
   const selectedCategory = CATEGORIES.find(c => c.id === category)
   const brandsForCategory = selectedCategory?.brands ?? DEVICE_BRANDS
@@ -664,7 +664,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
           <div className="flex items-center justify-between mt-10 pt-6 border-t border-stone-200">
             <Button
               variant="ghost"
-              onClick={back}
+              onClick={goBack}
               disabled={step === 0}
               className="gap-1.5 text-stone-600"
             >
@@ -674,7 +674,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
 
             {step < STEPS.length - 1 ? (
               <Button
-                onClick={next}
+                onClick={goNext}
                 disabled={
                   (step === 0 && !category) ||
                   (step === 1 && !brand) ||
