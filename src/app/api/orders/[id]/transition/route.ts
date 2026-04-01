@@ -89,9 +89,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // CPO: accepted → sourced only when vendor already assigned (bid was accepted during sourcing)
-    if (newStatus === 'sourced' && currentOrder.status === 'accepted' && !currentOrder.vendor_id) {
+    if (newStatus === 'sourced' && currentOrder.status === 'accepted' && currentOrder.type === 'cpo' && !currentOrder.vendor_id) {
       return NextResponse.json(
         { error: 'Cannot move to sourced — no vendor assigned. Move to sourcing first.' },
+        { status: 400 }
+      )
+    }
+
+    // Trade-ins can move directly from accepted to shipped_to_coe once the customer
+    // has submitted the inbound shipment; CPO orders must follow their own flow.
+    if (newStatus === 'shipped_to_coe' && currentOrder.status === 'accepted' && currentOrder.type !== 'trade_in') {
+      return NextResponse.json(
+        { error: 'Only trade-in orders can move directly to shipped to COE from accepted' },
         { status: 400 }
       )
     }

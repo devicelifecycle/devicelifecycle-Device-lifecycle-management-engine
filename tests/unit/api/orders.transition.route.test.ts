@@ -200,4 +200,38 @@ describe('POST /api/orders/[id]/transition', () => {
     })
     expect(transitionOrderMock).not.toHaveBeenCalled()
   })
+
+  it('allows accepted trade-in orders to move directly to shipped_to_coe', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'admin-2' },
+        profile: { role: 'admin', organization_id: 'org-admin' },
+      }),
+    )
+
+    getOrderByIdMock.mockResolvedValue({
+      id: 'order-4',
+      order_number: 'TI-2004',
+      status: 'accepted',
+      type: 'trade_in',
+      customer_id: 'customer-1',
+      customer: { organization_id: 'org-1' },
+      vendor_id: null,
+      assigned_to_id: 'staff-1',
+      created_by_id: 'creator-1',
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/transition/route')
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/orders/order-4/transition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to_status: 'shipped_to_coe', notes: 'Customer shipped devices' }),
+      }),
+      { params: { id: 'order-4' } },
+    )
+
+    expect(response.status).toBe(200)
+    expect(transitionOrderMock).toHaveBeenCalledWith('order-4', 'shipped_to_coe', 'admin-2', 'Customer shipped devices')
+  })
 })

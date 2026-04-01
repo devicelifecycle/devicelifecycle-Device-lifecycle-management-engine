@@ -5,6 +5,8 @@ const createShipmentMock = vi.fn()
 const attachLabelPurchaseMock = vi.fn()
 const isShippingConfiguredMock = vi.fn()
 const purchaseLabelMock = vi.fn()
+const transitionOrderMock = vi.fn()
+const createNotificationMock = vi.fn()
 
 const createServerSupabaseClientMock = vi.fn()
 const createServiceRoleClientMock = vi.fn()
@@ -23,6 +25,18 @@ vi.mock('@/services/stallion.service', () => ({
   },
 }))
 
+vi.mock('@/services/order.service', () => ({
+  OrderService: {
+    transitionOrder: transitionOrderMock,
+  },
+}))
+
+vi.mock('@/services/notification.service', () => ({
+  NotificationService: {
+    createNotification: createNotificationMock,
+  },
+}))
+
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: createServerSupabaseClientMock,
 }))
@@ -33,10 +47,12 @@ vi.mock('@/lib/supabase/service-role', () => ({
 
 function makeSupabase({
   user,
-  role = 'coe_manager',
+  profile = { role: 'coe_manager' },
+  order = null,
 }: {
   user: { id: string } | null
-  role?: string
+  profile?: { role?: string; organization_id?: string }
+  order?: Record<string, unknown> | null
 }) {
   const deleteEqMock = vi.fn().mockResolvedValue({ error: null })
   const deleteMock = vi.fn().mockReturnValue({ eq: deleteEqMock })
@@ -46,7 +62,15 @@ function makeSupabase({
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: role ? { role } : null }),
+        single: vi.fn().mockResolvedValue({ data: profile }),
+      }
+    }
+
+    if (table === 'orders') {
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: order }),
       }
     }
 
@@ -80,6 +104,36 @@ describe('POST /api/shipments', () => {
       carrier: 'FedEx',
       tracking_status: 'label_created',
       stallion_raw: {},
+    })
+    transitionOrderMock.mockResolvedValue({ id: 'order-1', status: 'shipped_to_coe' })
+    createServiceRoleClientMock.mockReturnValue({
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'shipments') {
+          return {
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          }
+        }
+
+        if (table === 'orders') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: { order_number: 'ORD-TEST-1' } }),
+          }
+        }
+
+        if (table === 'users') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null }),
+          }
+        }
+
+        throw new Error(`Unexpected service-role table: ${table}`)
+      }),
     })
   })
 
@@ -170,5 +224,45 @@ describe('POST /api/shipments', () => {
     expect(createShipmentMock).toHaveBeenCalledTimes(1)
     expect(purchaseLabelMock).toHaveBeenCalledTimes(1)
     expect(attachLabelPurchaseMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('auto-transitions accepted trade-in orders when a customer submits an inbound shipment', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'customer-1' },
+        profile: { role: 'customer', organization_id: 'org-1' },
+        order: {
+          status: 'accepted',
+          type: 'trade_in',
+          customer: { organization_id: 'org-1' },
+        },
+      }),
+    )
+
+    const { POST } = await import('@/app/api/shipments/route')
+    const request = new NextRequest('http://localhost:3000/api/shipments', {
+      method: 'POST',
+      body: JSON.stringify({
+        order_id: 'order-1',
+        direction: 'inbound',
+        carrier: 'FedEx',
+        stallion_purchase: false,
+        tracking_number: 'TRACK-CUSTOMER-1',
+        from_address: { name: 'Customer', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
+        to_address: { name: 'COE', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(201)
+    expect(createShipmentMock).toHaveBeenCalledTimes(1)
+    expect(transitionOrderMock).toHaveBeenCalledWith(
+      'order-1',
+      'shipped_to_coe',
+      'customer-1',
+      'Customer submitted inbound shipment',
+    )
   })
 })

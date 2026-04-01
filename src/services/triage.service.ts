@@ -267,7 +267,7 @@ export class TriageService {
       .select(`
         *,
         imei_record:imei_records(*),
-        triaged_by:users(full_name, email)
+        triaged_by:users!triage_results_triaged_by_id_fkey(full_name, email)
       `)
       .eq('order_id', orderId)
       .order('triaged_at', { ascending: false })

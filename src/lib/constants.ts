@@ -260,7 +260,7 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   draft: ['submitted', 'cancelled'],
   submitted: ['quoted', 'sourcing', 'cancelled'],
   quoted: ['accepted', 'rejected'],
-  accepted: ['sourcing', 'sourced', 'cancelled'],
+  accepted: ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled'],
   rejected: [], // Terminal state
   sourcing: ['sourced', 'cancelled'],
   sourced: ['shipped_to_coe', 'cancelled'],
