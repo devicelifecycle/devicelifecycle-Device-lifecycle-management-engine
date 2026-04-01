@@ -488,6 +488,17 @@ export class TriageService {
     let workingStatus = currentStatus as OrderStatus | undefined
 
     try {
+      const serviceRole = createServiceRoleClient()
+      const { data: orderRow, error: orderError } = await serviceRole
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .single()
+
+      if (!orderError && orderRow?.status) {
+        workingStatus = orderRow.status as OrderStatus
+      }
+
       if (workingStatus === 'received' && OrderService.isValidTransition('received', 'in_triage')) {
         await OrderService.transitionOrder(orderId, 'in_triage', actorId, 'Triage started')
         workingStatus = 'in_triage'

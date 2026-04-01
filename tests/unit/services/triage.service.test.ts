@@ -80,6 +80,25 @@ describe('TriageService order lookups', () => {
   })
 
   it('advances resolved triage orders into qc_complete once all devices are done', async () => {
+    createServiceRoleClientMock.mockReturnValue({
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { status: 'received' },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
     createServerSupabaseClientMock.mockReturnValue({
       from: vi.fn().mockImplementation((table: string) => {
         if (table === 'imei_records') {
@@ -176,6 +195,29 @@ describe('TriageService order lookups', () => {
   })
 
   it('moves exception-approved orders to qc_complete when all devices are resolved', async () => {
+    createServerSupabaseClientMock.mockReturnValue({
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'imei_records') {
+          return {
+            select: vi.fn().mockImplementation((selection: string) => {
+              if (selection === 'triage_status') {
+                return {
+                  eq: vi.fn().mockResolvedValue({
+                    data: [],
+                    error: null,
+                  }),
+                }
+              }
+
+              throw new Error(`Unexpected imei_records select: ${selection}`)
+            }),
+          }
+        }
+
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
     createServiceRoleClientMock.mockReturnValue({
       from: vi.fn().mockImplementation((table: string) => {
         if (table === 'triage_results') {
@@ -193,7 +235,6 @@ describe('TriageService order lookups', () => {
                           id: 'order-2',
                           order_number: 'ORD-2',
                           customer_id: 'customer-1',
-                          status: 'in_triage',
                         },
                         imei_record: {
                           id: 'imei-2',
@@ -221,6 +262,19 @@ describe('TriageService order lookups', () => {
                     },
                     error: null,
                   }),
+                }),
+              }),
+            }),
+          }
+        }
+
+        if (table === 'orders') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { status: 'in_triage' },
+                  error: null,
                 }),
               }),
             }),
@@ -258,6 +312,25 @@ describe('TriageService order lookups', () => {
   })
 
   it('falls back to the order item unit price when the IMEI record is missing quoted_price', async () => {
+    createServiceRoleClientMock.mockReturnValue({
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { status: 'received' },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
     createServerSupabaseClientMock.mockReturnValue({
       from: vi.fn().mockImplementation((table: string) => {
         if (table === 'imei_records') {
