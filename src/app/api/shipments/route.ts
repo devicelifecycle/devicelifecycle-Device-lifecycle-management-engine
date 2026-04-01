@@ -8,7 +8,15 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ShipmentService, isShippingConfigured } from '@/services/shipment.service'
 import { StallionService } from '@/services/stallion.service'
 import { NotificationService } from '@/services/notification.service'
+import { OrderService } from '@/services/order.service'
+import type { Shipment } from '@/types'
 export const dynamic = 'force-dynamic'
+
+type CustomerShipmentOrder = {
+  status?: string | null
+  type?: string | null
+  customer?: { organization_id?: string } | null
+}
 
 
 export async function GET(request: NextRequest) {
@@ -99,13 +107,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'order_id is required' }, { status: 400 })
     }
 
+    let customerOrder: CustomerShipmentOrder | null = null
+
     // Customer can only create shipments for their own accepted orders
     if (profile.role === 'customer') {
       const { data: order } = await supabase
         .from('orders')
-        .select('status, customer_id, customer:customers(organization_id)')
+        .select('status, type, customer_id, customer:customers(organization_id)')
         .eq('id', body.order_id)
         .single()
+      customerOrder = order as CustomerShipmentOrder | null
       const custOrg = (order?.customer as { organization_id?: string } | null)?.organization_id
       if (!order || custOrg !== profile.organization_id) {
         return NextResponse.json({ error: 'You can only create shipments for your own orders' }, { status: 403 })
@@ -129,11 +140,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const advanceTradeInToInboundTransit = async () => {
+      if (profile.role !== 'customer') return
+      if (body.direction !== 'inbound') return
+      const currentCustomerOrder = customerOrder
+      if (!currentCustomerOrder) return
+      if (currentCustomerOrder.type !== 'trade_in' || currentCustomerOrder.status !== 'accepted') return
+
+      await OrderService.transitionOrder(
+        body.order_id,
+        'shipped_to_coe',
+        user.id,
+        'Customer submitted inbound shipment',
+      )
+    }
+
     const shipment = await ShipmentService.createShipment({
       ...body,
       tracking_number: body.tracking_number || (stallionPurchase ? `STALLION-PENDING-${Date.now()}` : body.tracking_number),
       created_by_id: user.id,
     })
+
+    let responsePayload: Shipment | (Shipment & { provider: string }) = shipment
 
     if (stallionPurchase) {
       try {
@@ -166,7 +194,7 @@ export async function POST(request: NextRequest) {
           purchased_by_id: user.id,
         })
 
-        return NextResponse.json({ ...updatedShipment, provider: 'stallion' }, { status: 201 })
+        responsePayload = { ...updatedShipment, provider: 'stallion' }
       } catch (error) {
         // Label purchase failed — delete the pending shipment record
         const svcClient = createServiceRoleClient()
@@ -178,6 +206,8 @@ export async function POST(request: NextRequest) {
         )
       }
     }
+
+    await advanceTradeInToInboundTransit()
 
     // Notify admins when a customer submits shipment details (fire-and-forget)
     if (profile.role === 'customer') {
@@ -199,7 +229,7 @@ export async function POST(request: NextRequest) {
       })().catch(err => console.error('Customer shipment notification error:', err))
     }
 
-    return NextResponse.json(shipment, { status: 201 })
+    return NextResponse.json(responsePayload, { status: 201 })
   } catch (error) {
     console.error('Error creating shipment:', error)
     return NextResponse.json({ error: 'Failed to create shipment' }, { status: 500 })
