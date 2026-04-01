@@ -17,6 +17,8 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const EMAIL = process.env.EMAIL || 'admin@login.local'
 const PASSWORD = process.env.PASSWORD || 'Test123!'
 const FULL_NAME = process.env.FULL_NAME || 'Admin User'
+const DEFAULT_ORG_ID = process.env.ORG_ID || '00000000-0000-0000-0000-000000000001'
+const DEFAULT_ORG_NAME = process.env.ORG_NAME || 'Device Lifecycle Operations'
 
 if (!URL || !SERVICE_KEY) {
   console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.')
@@ -61,8 +63,7 @@ async function main() {
 }
 
 async function ensureProfile(userId) {
-  const { data: org } = await supabase.from('organizations').select('id').limit(1).single()
-  const orgId = org?.id || '00000000-0000-0000-0000-000000000001'
+  const orgId = await ensureInternalOrganization()
 
   const { error: profileError } = await supabase.from('users').upsert({
     id: userId,
@@ -78,6 +79,44 @@ async function ensureProfile(userId) {
     process.exit(1)
   }
   console.log('Profile linked in users table.')
+}
+
+async function ensureInternalOrganization() {
+  const { data: existingOrg, error: lookupError } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('type', 'internal')
+    .limit(1)
+    .maybeSingle()
+
+  if (lookupError) {
+    console.error('Organization lookup error:', lookupError.message)
+    process.exit(1)
+  }
+
+  if (existingOrg?.id) {
+    return existingOrg.id
+  }
+
+  const { data: createdOrg, error: createOrgError } = await supabase
+    .from('organizations')
+    .insert({
+      id: DEFAULT_ORG_ID,
+      name: DEFAULT_ORG_NAME,
+      type: 'internal',
+      contact_email: EMAIL,
+      is_active: true,
+    })
+    .select('id')
+    .single()
+
+  if (createOrgError || !createdOrg?.id) {
+    console.error('Failed to create internal organization:', createOrgError?.message || 'Unknown error')
+    process.exit(1)
+  }
+
+  console.log('Created internal organization:', DEFAULT_ORG_NAME)
+  return createdOrg.id
 }
 
 main().catch(err => { console.error(err); process.exit(1) })

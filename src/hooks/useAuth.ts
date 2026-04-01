@@ -34,12 +34,16 @@ function hardNavigate(path: string, router: ReturnType<typeof useRouter>) {
 
 function fastNavigate(path: string, router: ReturnType<typeof useRouter>) {
   if (typeof window !== 'undefined') {
+    const pendingKey = '__dlm_post_login_navigation_pending'
+    window.sessionStorage.setItem(pendingKey, path)
+
     // Prefer the prefetched App Router transition for a snappier handoff after auth.
     router.replace(path)
 
-    // If the client transition stalls for any reason, fall back to a full navigation.
+    // If the client transition stalls on the dashboard loading shell, fall back to
+    // a full navigation so middleware/session hydration can recover.
     window.setTimeout(() => {
-      if (window.location.pathname !== path) {
+      if (window.sessionStorage.getItem(pendingKey) === path) {
         window.location.replace(path)
       }
     }, 1200)
