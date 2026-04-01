@@ -32,6 +32,22 @@ function hardNavigate(path: string, router: ReturnType<typeof useRouter>) {
   router.replace(path)
 }
 
+function fastNavigate(path: string, router: ReturnType<typeof useRouter>) {
+  if (typeof window !== 'undefined') {
+    // Prefer the prefetched App Router transition for a snappier handoff after auth.
+    router.replace(path)
+
+    // If the client transition stalls for any reason, fall back to a full navigation.
+    window.setTimeout(() => {
+      if (window.location.pathname !== path) {
+        window.location.replace(path)
+      }
+    }, 1200)
+    return
+  }
+  router.replace(path)
+}
+
 export function useAuth() {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -65,6 +81,13 @@ export function useAuth() {
 
       if (!profile) {
         // Auth session exists but no user profile row — treat as unauthenticated
+        await supabase.auth.signOut().catch(() => {})
+        setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+        return
+      }
+
+      if (!profile.is_active) {
+        await supabase.auth.signOut().catch(() => {})
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
@@ -168,44 +191,29 @@ export function useAuth() {
         throw lastError || new Error('Invalid login credentials')
       }
 
-      // Fetch profile directly from sign-in response (avoids redundant getSession)
       const userId = authData?.user?.id
       if (!userId) {
         await fetchUser()
         router.push('/dashboard')
         return
       }
-      const { data: profile } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      if (!profile) {
-        // Auth user exists but no users table row — account not fully set up
-        await supabase.auth.signOut()
-        setState((prev) => ({ ...prev, isLoading: false }))
-        throw new Error('Account not fully set up. Please contact your administrator.')
-      }
-      if (!profile.is_active) {
-        await supabase.auth.signOut()
-        setState((prev) => ({ ...prev, isLoading: false }))
-        throw new Error('Your account has been deactivated. Please contact your administrator.')
-      }
-      setState({
-        user: profile as User,
+
+      // Navigate immediately after auth succeeds so the login form does not sit in a
+      // "dead" loading state while we perform a second profile lookup on this page.
+      setState((prev) => ({
+        ...prev,
         isLoading: false,
         isInitializing: false,
         isAuthenticated: true,
-      })
-      // Use a hard navigation so middleware sees the freshly-written auth cookies.
-      hardNavigate('/dashboard', router)
+      }))
+      fastNavigate('/dashboard', router)
     } catch (error) {
       setState((prev) => ({ ...prev, isLoading: false }))
       if (isAbortError(error)) {
         await fetchUser()
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          hardNavigate('/dashboard', router)
+          fastNavigate('/dashboard', router)
         }
         return
       }
