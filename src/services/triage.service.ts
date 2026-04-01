@@ -364,7 +364,7 @@ export class TriageService {
     approvedById: string,
     notes?: string
   ): Promise<TriageResult> {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServiceRoleClient()
 
     // Get the triage result with related data for notification
     const { data: existingTriage } = await supabase

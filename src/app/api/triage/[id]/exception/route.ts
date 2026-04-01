@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { TriageService } from '@/services/triage.service'
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,9 @@ export async function POST(
     if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     // Resolve triage result and verify order ownership for customer
-    const { data: triage } = await supabase
+    const serviceRole = createServiceRoleClient()
+
+    const { data: triage } = await serviceRole
       .from('triage_results')
       .select('*, order:orders(id, customer_id, customer:customers(organization_id))')
       .eq('id', params.id)

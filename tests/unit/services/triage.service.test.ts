@@ -176,7 +176,7 @@ describe('TriageService order lookups', () => {
   })
 
   it('moves exception-approved orders to qc_complete when all devices are resolved', async () => {
-    createServerSupabaseClientMock.mockReturnValue({
+    createServiceRoleClientMock.mockReturnValue({
       from: vi.fn().mockImplementation((table: string) => {
         if (table === 'triage_results') {
           return {
