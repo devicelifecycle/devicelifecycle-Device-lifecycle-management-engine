@@ -518,10 +518,21 @@ export class TriageService {
   }> {
     const supabase = createServerSupabaseClient()
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('imei_records')
       .select('triage_status')
       .eq('order_id', orderId)
+
+    if (error || !(data?.length)) {
+      const serviceRole = createServiceRoleClient()
+      const fallback = await serviceRole
+        .from('imei_records')
+        .select('triage_status')
+        .eq('order_id', orderId)
+
+      data = fallback.data
+      error = fallback.error
+    }
 
     if (error) {
       throw new Error(error.message)
