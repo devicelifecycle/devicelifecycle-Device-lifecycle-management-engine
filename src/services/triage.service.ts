@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { NotificationService } from '@/services/notification.service'
 import type { 
   IMEIRecord, 
@@ -257,14 +258,16 @@ export class TriageService {
    * Get triage results for an order
    */
   static async getTriageResultsForOrder(orderId: string): Promise<TriageResult[]> {
-    const supabase = createServerSupabaseClient()
+    // Use service-role after route-level authorization so customer views can
+    // safely read exception/triage details without tripping over RLS joins.
+    const supabase = createServiceRoleClient()
 
     const { data, error } = await supabase
       .from('triage_results')
       .select(`
         *,
         imei_record:imei_records(*),
-        triaged_by:users(*)
+        triaged_by:users(full_name, email)
       `)
       .eq('order_id', orderId)
       .order('triaged_at', { ascending: false })

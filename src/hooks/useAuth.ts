@@ -15,6 +15,8 @@ interface AuthState {
   isAuthenticated: boolean
 }
 
+const AUTH_CACHE_KEY = '__dlm_auth_user'
+
 // Module-level singleton — stable reference, never recreated
 const supabase = createBrowserSupabaseClient()
 
@@ -22,6 +24,40 @@ function isAbortError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === 'AbortError') return true
   if (error instanceof Error && (error.name === 'AbortError' || /aborted|signal is aborted/i.test(error.message || ''))) return true
   return false
+}
+
+function readCachedUser(): User | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_CACHE_KEY)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as Partial<User> | null
+    if (!parsed || typeof parsed !== 'object') return null
+    if (typeof parsed.id !== 'string' || typeof parsed.email !== 'string' || typeof parsed.role !== 'string') {
+      return null
+    }
+
+    return parsed as User
+  } catch {
+    return null
+  }
+}
+
+function writeCachedUser(user: User | null) {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (!user) {
+      window.sessionStorage.removeItem(AUTH_CACHE_KEY)
+      return
+    }
+
+    window.sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(user))
+  } catch {
+    // Ignore storage issues — auth should continue to work without the cache.
+  }
 }
 
 function hardNavigate(path: string, router: ReturnType<typeof useRouter>) {
@@ -63,11 +99,24 @@ function fastNavigate(path: string, router: ReturnType<typeof useRouter>) {
 }
 
 export function useAuth() {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    isLoading: false,
-    isInitializing: true,
-    isAuthenticated: false,
+  const [state, setState] = useState<AuthState>(() => {
+    const cachedUser = readCachedUser()
+
+    if (cachedUser) {
+      return {
+        user: cachedUser,
+        isLoading: false,
+        isInitializing: false,
+        isAuthenticated: true,
+      }
+    }
+
+    return {
+      user: null,
+      isLoading: false,
+      isInitializing: true,
+      isAuthenticated: false,
+    }
   })
   const router = useRouter()
   const mountedRef = useRef(true)
@@ -81,6 +130,7 @@ export function useAuth() {
       if (!mountedRef.current) return
 
       if (!authUser) {
+        writeCachedUser(null)
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
@@ -96,16 +146,19 @@ export function useAuth() {
       if (!profile) {
         // Auth session exists but no user profile row — treat as unauthenticated
         await supabase.auth.signOut().catch(() => {})
+        writeCachedUser(null)
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
 
       if (!profile.is_active) {
         await supabase.auth.signOut().catch(() => {})
+        writeCachedUser(null)
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
 
+      writeCachedUser(profile as User)
       setState({
         user: profile as User,
         isLoading: false,
@@ -116,6 +169,17 @@ export function useAuth() {
       if (isAbortError(error)) return
       console.error('Error fetching user:', error)
       if (mountedRef.current) {
+        const cachedUser = readCachedUser()
+        if (cachedUser) {
+          setState({
+            user: cachedUser,
+            isLoading: false,
+            isInitializing: false,
+            isAuthenticated: true,
+          })
+          return
+        }
+
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
       }
     }
@@ -134,10 +198,12 @@ export function useAuth() {
           if (session) {
             await fetchUser()
           } else {
+            writeCachedUser(null)
             setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
             router.push('/login?reason=session_expired')
           }
         } else if (event === 'SIGNED_OUT') {
+          writeCachedUser(null)
           setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         }
       }
@@ -149,6 +215,7 @@ export function useAuth() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!mountedRef.current) return
         if (!session) {
+          writeCachedUser(null)
           setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
           router.push('/login?reason=session_expired')
         }
@@ -238,6 +305,7 @@ export function useAuth() {
   // Logout
   const logout = useCallback(async () => {
     try {
+      writeCachedUser(null)
       await supabase.auth.signOut()
       hardNavigate('/login', router)
     } catch (error) {
