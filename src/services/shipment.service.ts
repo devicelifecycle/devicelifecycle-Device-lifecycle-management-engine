@@ -500,7 +500,7 @@ export class ShipmentService {
     } else {
       const { data: items } = await supabase
         .from('order_items')
-        .select('id, device_id, quantity, claimed_condition')
+        .select('id, device_id, quantity, claimed_condition, quoted_price, unit_price')
         .eq('order_id', orderId)
 
       const orderItems = (items || []).map(i => ({ ...i, quantity: i.quantity || 1 }))
@@ -525,6 +525,7 @@ export class ShipmentService {
               order_item_id: item.id,
               device_id: item.device_id,
               claimed_condition: item.claimed_condition,
+              quoted_price: item.quoted_price ?? item.unit_price ?? null,
               triage_status: 'pending',
             })
           }
