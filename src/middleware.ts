@@ -22,6 +22,9 @@ const roleRoutes: [string, string[]][] = [
   // CPO: internal only; trade-in: internal + customer
   ['/orders/new/cpo', ['admin', 'coe_manager', 'coe_tech']],
   ['/orders/new', ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer']],
+  // Order detail and nested order routes are shared across internal, customer,
+  // and vendor roles. The page/API layer still enforces record-level access.
+  ['/orders/', ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor']],
   ['/orders', ['admin', 'coe_manager', 'coe_tech', 'sales']],
   ['/devices', ['admin', 'coe_manager']],
   ['/reports', ['admin', 'coe_manager']],
