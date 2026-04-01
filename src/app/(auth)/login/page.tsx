@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, Eye, EyeOff, Loader2, Package, RadioTower, ShieldCheck, Sparkles, Truck } from 'lucide-react'
@@ -24,6 +25,7 @@ const loginSignals = [
 ]
 
 export default function LoginPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -38,6 +40,10 @@ export default function LoginPage() {
       setSessionExpired(true)
     }
   }, [searchParams])
+
+  useEffect(() => {
+    router.prefetch('/dashboard')
+  }, [router])
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
