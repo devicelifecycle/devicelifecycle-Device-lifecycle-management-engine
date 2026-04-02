@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, Eye, EyeOff, Loader2, Package, RadioTower, ShieldCheck, Sparkles, Truck } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, KeyRound, Loader2, Package, RadioTower, ShieldCheck, Sparkles, Truck } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { OrbitingDeviceField } from '@/components/landing/OrbitingDeviceField'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
-  const { login, isLoading } = useAuth()
+  const [mfaStep, setMfaStep] = useState(false)
+  const [mfaFactorId, setMfaFactorId] = useState('')
+  const [mfaCode, setMfaCode] = useState('')
+  const { login, isLoading, verifyMfa } = useAuth()
   const shouldReduceMotion = useReducedMotion()
 
   useEffect(() => {
@@ -53,9 +56,30 @@ export default function LoginPage() {
     try {
       await login(email, password)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to sign in'
+      const e = err as { type?: string; factorId?: string } & Error
+      if (e?.type === 'MFA_REQUIRED' && e.factorId) {
+        setMfaFactorId(e.factorId)
+        setMfaStep(true)
+        return
+      }
+      const message = e instanceof Error ? e.message : 'Failed to sign in'
       if (message.toLowerCase().includes('invalid login credentials') || message.toLowerCase().includes('invalid email or password')) {
         setError('Invalid Login ID or password.')
+        return
+      }
+      setError(message)
+    }
+  }
+
+  async function handleMfaSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
+    try {
+      await verifyMfa(mfaFactorId, mfaCode)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Invalid code'
+      if (message.toLowerCase().includes('invalid') || message.toLowerCase().includes('expired')) {
+        setError('Invalid or expired code. Please try again.')
         return
       }
       setError(message)
@@ -230,6 +254,40 @@ export default function LoginPage() {
                 </div>
               )}
 
+              {mfaStep ? (
+                <form onSubmit={handleMfaSubmit} className="space-y-5">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <KeyRound className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-stone-300">Authenticator Code</span>
+                    </div>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000000"
+                      autoComplete="one-time-code"
+                      required
+                      className="text-center text-xl tracking-[0.4em]"
+                    />
+                    <p className="text-xs text-stone-500">Enter the 6-digit code from your authenticator app</p>
+                  </div>
+                  <Button type="submit" className="w-full" size="lg" disabled={isLoading || mfaCode.length !== 6}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {isLoading ? 'Verifying...' : 'Verify Code'}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => { setMfaStep(false); setMfaCode(''); setError('') }}
+                    className="w-full text-center text-sm text-stone-500 hover:text-stone-200"
+                  >
+                    ← Back to sign in
+                  </button>
+                </form>
+              ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <label htmlFor="email" className="text-sm font-medium text-stone-300">Login ID or Email</label>
@@ -264,6 +322,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-200"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -276,6 +335,7 @@ export default function LoginPage() {
                   {isLoading ? 'Signing in...' : 'Sign In'}
                 </Button>
               </form>
+              )}
 
               <p className="text-sm text-stone-500">
                 Need an account?{' '}

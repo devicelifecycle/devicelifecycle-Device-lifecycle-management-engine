@@ -4,8 +4,8 @@
 
 'use client'
 
-import { useState } from 'react'
-import { User, Mail, Shield, Clock, Save, Lock } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, Clock, Lock, Mail, Save, Shield, Smartphone, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
@@ -110,6 +110,178 @@ function ChangePasswordCard({ authEmail }: { authEmail: string }) {
         >
           {isChanging ? 'Changing...' : 'Change Password'}
         </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function MfaCard() {
+  const { enrollMfa, unenrollMfa, getMfaFactors } = useAuth()
+  const supabase = createBrowserSupabaseClient()
+  type TotpFactor = { id: string; friendly_name?: string; status: string }
+  const [factors, setFactors] = useState<TotpFactor[]>([])
+  const [enrolling, setEnrolling] = useState(false)
+  const [qrCode, setQrCode] = useState('')
+  const [secret, setSecret] = useState('')
+  const [pendingFactorId, setPendingFactorId] = useState('')
+  const [verifyCode, setVerifyCode] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [fetchedOnce, setFetchedOnce] = useState(false)
+
+  useEffect(() => {
+    getMfaFactors()
+      .then((data) => {
+        const totp = (data?.totp ?? []) as TotpFactor[]
+        setFactors(totp.filter((f) => f.status === 'verified'))
+        setFetchedOnce(true)
+      })
+      .catch(() => setFetchedOnce(true))
+  }, [getMfaFactors])
+
+  const startEnroll = async () => {
+    setIsLoading(true)
+    try {
+      const data = await enrollMfa()
+      setQrCode(data.totp.qr_code)
+      setSecret(data.totp.secret)
+      setPendingFactorId(data.id)
+      setEnrolling(true)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to start enrollment')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const confirmEnroll = async () => {
+    setIsLoading(true)
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: pendingFactorId,
+        code: verifyCode,
+      })
+      if (error) throw error
+      toast.success('Authenticator app connected')
+      setEnrolling(false)
+      setQrCode('')
+      setSecret('')
+      setVerifyCode('')
+      const data = await getMfaFactors()
+      const totp = (data?.totp ?? []) as TotpFactor[]
+      setFactors(totp.filter((f) => f.status === 'verified'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Invalid code — please try again')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const removeFactor = async (factorId: string) => {
+    setIsLoading(true)
+    try {
+      await unenrollMfa(factorId)
+      toast.success('Authenticator removed')
+      setFactors((prev) => prev.filter((f) => f.id !== factorId))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to remove')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (!fetchedOnce) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Smartphone className="h-4 w-4" /> Two-Factor Authentication
+        </CardTitle>
+        <CardDescription>
+          Add an authenticator app for an extra layer of security on sign-in.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {factors.length === 0 && !enrolling && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              No authenticator app connected. Set one up to require a one-time code when you sign in.
+            </p>
+            <Button onClick={startEnroll} disabled={isLoading} variant="outline">
+              {isLoading ? 'Loading...' : 'Set up Authenticator'}
+            </Button>
+          </div>
+        )}
+
+        {enrolling && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Scan this QR code with Google Authenticator, Authy, or any TOTP app, then enter the 6-digit code below.
+            </p>
+            <div className="flex justify-center">
+              {/* qr_code is an SVG string from Supabase */}
+              <div
+                className="h-48 w-48 rounded-lg border p-2 bg-white"
+                dangerouslySetInnerHTML={{ __html: qrCode }}
+              />
+            </div>
+            <div className="rounded-lg bg-muted px-4 py-3">
+              <p className="text-xs text-muted-foreground mb-1">Can&apos;t scan? Enter this key manually:</p>
+              <p className="text-sm font-mono font-medium break-all select-all">{secret}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Verification Code</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="000000"
+                value={verifyCode}
+                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                autoComplete="one-time-code"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={confirmEnroll} disabled={isLoading || verifyCode.length !== 6}>
+                {isLoading ? 'Verifying...' : 'Confirm Setup'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { setEnrolling(false); setQrCode(''); setSecret(''); setVerifyCode('') }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {factors.length > 0 && !enrolling && (
+          <div className="space-y-3">
+            {factors.map((factor) => (
+              <div key={factor.id} className="flex items-center justify-between rounded-lg border p-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-500/10">
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Authenticator App</p>
+                    <p className="text-xs text-muted-foreground">
+                      {factor.friendly_name ?? 'TOTP — active'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => removeFactor(factor.id)}
+                  disabled={isLoading}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -272,6 +444,11 @@ export default function ProfilePage() {
 
       {/* Change Password */}
       <ChangePasswordCard authEmail={user.email!} />
+
+      {/* Two-Factor Authentication — admin and COE managers only */}
+      {(user.role === 'admin' || user.role === 'coe_manager') && (
+        <MfaCard />
+      )}
 
       {/* Account Info */}
       <Card>
