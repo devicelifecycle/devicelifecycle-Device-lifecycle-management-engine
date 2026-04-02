@@ -271,6 +271,26 @@ export function useAuth() {
         throw lastError || new Error('Invalid login credentials')
       }
 
+      // MFA check — if the user has TOTP enrolled, pause here and signal the
+      // login page to collect the one-time code before navigating.
+      try {
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+        if (aalData?.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
+          const { data: factorsData } = await supabase.auth.mfa.listFactors()
+          const totpFactor = factorsData?.totp?.[0]
+          if (totpFactor) {
+            setState((prev) => ({ ...prev, isLoading: false }))
+            throw Object.assign(new Error('MFA_REQUIRED'), {
+              type: 'MFA_REQUIRED',
+              factorId: totpFactor.id,
+            })
+          }
+        }
+      } catch (mfaCheckError) {
+        // Re-throw MFA_REQUIRED; swallow other errors so login proceeds normally
+        if ((mfaCheckError as { type?: string })?.type === 'MFA_REQUIRED') throw mfaCheckError
+      }
+
       const userId = authData?.user?.id
       if (!userId) {
         await fetchUser()
@@ -359,6 +379,58 @@ export function useAuth() {
     return hasRole('admin')
   }, [hasRole])
 
+  // Complete MFA challenge after password auth succeeds
+  const verifyMfa = useCallback(async (factorId: string, code: string) => {
+    setState((prev) => ({ ...prev, isLoading: true }))
+    try {
+      const { error: cvError } = await supabase.auth.mfa.challengeAndVerify({ factorId, code })
+      if (cvError) throw cvError
+
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) throw new Error('Session lost after MFA verification')
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at')
+        .eq('id', authUser.id)
+        .single()
+
+      const typedProfile = profile as User | null
+      if (typedProfile?.is_active) {
+        writeCachedUser(typedProfile)
+        setState({ user: typedProfile, isLoading: false, isInitializing: false, isAuthenticated: true })
+        fastNavigate(getDefaultAppPathForRole(typedProfile.role), router)
+        return
+      }
+
+      setState((prev) => ({ ...prev, isLoading: false }))
+      fastNavigate('/dashboard', router)
+    } catch (error) {
+      setState((prev) => ({ ...prev, isLoading: false }))
+      throw error
+    }
+  }, [router])
+
+  // Enroll a new TOTP factor — returns { id, totp: { qr_code, secret, uri } }
+  const enrollMfa = useCallback(async () => {
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' })
+    if (error) throw error
+    return data
+  }, [])
+
+  // Unenroll an existing factor by ID
+  const unenrollMfa = useCallback(async (factorId: string) => {
+    const { error } = await supabase.auth.mfa.unenroll({ factorId })
+    if (error) throw error
+  }, [])
+
+  // List all enrolled factors
+  const getMfaFactors = useCallback(async () => {
+    const { data, error } = await supabase.auth.mfa.listFactors()
+    if (error) throw error
+    return data
+  }, [])
+
   return {
     ...state,
     login,
@@ -367,5 +439,9 @@ export function useAuth() {
     isCOEUser,
     isAdmin,
     refetch: fetchUser,
+    verifyMfa,
+    enrollMfa,
+    unenrollMfa,
+    getMfaFactors,
   }
 }
