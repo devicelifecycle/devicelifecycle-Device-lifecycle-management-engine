@@ -6,7 +6,7 @@ loadEnv()
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-const PASSWORD = 'Test123!'
+const PASSWORD = process.env.E2E_TEST_PASSWORD || 'Test123!'
 
 type SeedUser = {
   email: string
@@ -95,9 +95,9 @@ export default async function globalSetup() {
   const acmeOrgId = acmeOrg?.id || defaultOrgId
 
   const users: SeedUser[] = [
-    { email: 'jamal.h@genovation.ai', full_name: 'Test Admin', role: 'admin', organization_id: defaultOrgId },
-    { email: 'faisalahmed4629@gmail.com', full_name: 'Test CoE Manager', role: 'coe_manager', organization_id: defaultOrgId },
-    { email: 'jamalhuss@gmail.com', full_name: 'Test CoE Tech', role: 'coe_tech', organization_id: defaultOrgId },
+    { email: 'admin@login.local', full_name: 'Test Admin', role: 'admin', organization_id: defaultOrgId },
+    { email: 'coemgr@login.local', full_name: 'Test CoE Manager', role: 'coe_manager', organization_id: defaultOrgId },
+    { email: 'coetech@login.local', full_name: 'Test CoE Tech', role: 'coe_tech', organization_id: defaultOrgId },
     { email: 'sales@login.local', full_name: 'Test Sales', role: 'sales', organization_id: defaultOrgId },
     { email: 'customer@login.local', full_name: 'Test Customer', role: 'customer', organization_id: defaultOrgId },
     { email: 'vendor@login.local', full_name: 'Test Vendor', role: 'vendor', organization_id: defaultOrgId },

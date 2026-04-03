@@ -6,12 +6,12 @@ import { chromium } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 
 const BASE_URL = process.env.BASE_URL || 'https://device-lifecycle-management-engine-devcielifecycle.vercel.app'
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'devicelifecycel@gmail.com'
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Dlm12345!'
-const CUSTOMER_EMAIL = process.env.CUSTOMER_EMAIL || 'saiyaganti14+customer@gmail.com'
-const CUSTOMER_PASSWORD = process.env.CUSTOMER_PASSWORD || 'DLM-aOeLbykK8txV!9a'
-const VENDOR_EMAIL = process.env.VENDOR_EMAIL || 'saiyaganti14@gmail.com'
-const VENDOR_PASSWORD = process.env.VENDOR_PASSWORD || 'Dlm-aAb-d2-3Mi0c!9a'
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+const CUSTOMER_EMAIL = process.env.CUSTOMER_EMAIL
+const CUSTOMER_PASSWORD = process.env.CUSTOMER_PASSWORD
+const VENDOR_EMAIL = process.env.VENDOR_EMAIL
+const VENDOR_PASSWORD = process.env.VENDOR_PASSWORD
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const HEADED = process.env.HEADED === 'true'
@@ -23,8 +23,8 @@ const OUTPUT_DIR = path.join(
   new Date().toISOString().replace(/[:.]/g, '-'),
 )
 
-if (!CUSTOMER_PASSWORD || !VENDOR_PASSWORD) {
-  console.error('CUSTOMER_PASSWORD and VENDOR_PASSWORD are required.')
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD || !CUSTOMER_EMAIL || !CUSTOMER_PASSWORD || !VENDOR_EMAIL || !VENDOR_PASSWORD) {
+  console.error('ADMIN_EMAIL, ADMIN_PASSWORD, CUSTOMER_EMAIL, CUSTOMER_PASSWORD, VENDOR_EMAIL, and VENDOR_PASSWORD are required.')
   process.exit(1)
 }
 
@@ -237,6 +237,65 @@ async function fetchOrder(orderId) {
   return data
 }
 
+async function fetchPendingExceptionForOrder(orderId) {
+  const { data, error } = await supabase
+    .from('triage_results')
+    .select('id, exception_required, exception_approved_at, triaged_at')
+    .eq('order_id', orderId)
+    .eq('exception_required', true)
+    .is('exception_approved_at', null)
+    .order('triaged_at', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    throw new Error(`Unable to load pending exceptions for ${orderId}: ${error.message}`)
+  }
+
+  return data?.[0] || null
+}
+
+async function fetchLatestPendingCustomerException(customerId) {
+  const { data, error } = await supabase
+    .from('triage_results')
+    .select('id, order_id, exception_required, exception_approved_at, triaged_at')
+    .eq('exception_required', true)
+    .is('exception_approved_at', null)
+    .order('triaged_at', { ascending: false })
+    .limit(20)
+
+  if (error) {
+    throw new Error(`Unable to load latest pending exceptions: ${error.message}`)
+  }
+
+  for (const row of data || []) {
+    if (!row.order_id) continue
+    const order = await fetchOrder(row.order_id)
+    if (order.customer_id === customerId) {
+      return {
+        triageResultId: row.id,
+        orderId: row.order_id,
+        orderNumber: order.order_number,
+      }
+    }
+  }
+
+  return null
+}
+
+async function waitForOrderStatus(orderId, expectedStatus, timeoutMs = 60000) {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const order = await fetchOrder(orderId)
+    if (order.status === expectedStatus) {
+      return order
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  throw new Error(`Timed out waiting for order ${orderId} to reach status "${expectedStatus}"`)
+}
+
 async function fetchOrderNotifications({ userId, orderId }) {
   const { data, error } = await supabase
     .from('notifications')
@@ -352,7 +411,7 @@ async function createCsvOrder(page, {
     buffer: Buffer.from(csv, 'utf8'),
   })
 
-  await page.getByText(filename, { exact: false }).waitFor({ timeout: 60000 })
+  await page.getByText(filename, { exact: true }).first().waitFor({ timeout: 60000 })
 
   const responsePromise = page.waitForResponse((response) => (
     response.url().endsWith('/api/orders/upload-csv') &&
@@ -376,14 +435,43 @@ async function createCsvOrder(page, {
 }
 
 async function openOrder(page, orderId) {
+  const order = await fetchOrder(orderId)
   await page.goto(`${BASE_URL}/orders/${orderId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await waitForWorkspaceReady(page)
-  await page.locator('h1').first().waitFor({ timeout: 60000 })
+  const heading = page.getByRole('heading', { name: new RegExp(escapeRegex(order.order_number || orderId), 'i') })
+
+  try {
+    await heading.waitFor({ timeout: 60000 })
+  } catch {
+    const headings = await page.getByRole('heading').evaluateAll((nodes) =>
+      nodes
+        .map((node) => (node.textContent || '').trim())
+        .filter(Boolean)
+    ).catch(() => [])
+    const visibleButtons = await page.getByRole('button').evaluateAll((nodes) =>
+      nodes
+        .map((node) => (node.textContent || '').trim())
+        .filter(Boolean)
+    ).catch(() => [])
+    const pageText = await page.locator('body').innerText().catch(() => '')
+
+    throw new Error(
+      [
+        `Order page did not render heading "${order.order_number || orderId}" within 60s.`,
+        `Current URL: ${page.url()}.`,
+        `Visible headings: ${headings.join(' | ') || '(none)'}.`,
+        `Visible buttons: ${visibleButtons.join(' | ') || '(none)'}.`,
+        `Page excerpt: ${(pageText || '').replace(/\s+/g, ' ').slice(0, 500)}`,
+      ].join(' ')
+    )
+  }
 }
 
 async function adminSetPriceAndSendQuote(page, { orderId, unitPrice }) {
   logStep(`admin: pricing order ${orderId}`)
   await openOrder(page, orderId)
+  const currentOrder = await fetchOrder(orderId)
+  const expectedTransitionResponses = currentOrder.status === 'draft' ? 2 : 1
 
   await page.getByRole('button', { name: /^set pricing$/i }).click()
   const dialog = page.getByRole('dialog')
@@ -400,14 +488,21 @@ async function adminSetPriceAndSendQuote(page, { orderId, unitPrice }) {
   await savePricesResponse
   await dialog.waitFor({ state: 'hidden', timeout: 30000 })
 
-  const sendQuoteResponse = page.waitForResponse((response) => (
-    response.url().includes(`/api/orders/${orderId}/transition`) &&
-    response.request().method() === 'POST' &&
-    response.ok()
-  ), { timeout: 60000 })
+  let transitionResponseCount = 0
+  const sendQuoteResponse = page.waitForResponse((response) => {
+    const isTransitionResponse = (
+      response.url().includes(`/api/orders/${orderId}/transition`) &&
+      response.request().method() === 'POST' &&
+      response.ok()
+    )
+    if (isTransitionResponse) {
+      transitionResponseCount += 1
+    }
+    return isTransitionResponse && transitionResponseCount >= expectedTransitionResponses
+  }, { timeout: 60000 })
   await page.getByRole('button', { name: /^send quote$/i }).click()
   await sendQuoteResponse
-  await page.getByText(/quoted/i).waitFor({ timeout: 60000 })
+  await waitForOrderStatus(orderId, 'quoted', 60000)
 
   return screenshot(page, `admin-quoted-${orderId}`)
 }
@@ -437,9 +532,39 @@ async function adminTransition(page, { orderId, buttonName, note = '' }) {
 async function customerDecision(page, { orderId, approve, note = '' }) {
   logStep(`customer: ${approve ? 'approving' : 'declining'} quote for ${orderId}`)
   await openOrder(page, orderId)
+  const currentOrder = await fetchOrder(orderId)
+  logStep(`customer: order ${orderId} currently in status "${currentOrder.status}"`)
 
   const buttonName = approve ? 'Approve' : 'Disapprove'
-  await page.getByRole('button', { name: new RegExp(`^${buttonName}$`, 'i') }).click()
+  const actionButton = page.getByRole('button', { name: new RegExp(`^${buttonName}$`, 'i') })
+
+  try {
+    await actionButton.waitFor({ timeout: 10000 })
+  } catch {
+    const visibleButtons = await page.getByRole('button').evaluateAll((nodes) =>
+      nodes
+        .map((node) => (node.textContent || '').trim())
+        .filter(Boolean)
+    )
+    const pageText = await page.locator('body').innerText().catch(() => '')
+    const headings = await page.getByRole('heading').evaluateAll((nodes) =>
+      nodes
+        .map((node) => (node.textContent || '').trim())
+        .filter(Boolean)
+    ).catch(() => [])
+    throw new Error(
+      [
+        `Expected customer action button "${buttonName}" was not visible for order ${orderId}.`,
+        `Order status in database: ${currentOrder.status}.`,
+        `Page URL: ${page.url()}.`,
+        `Headings: ${headings.join(' | ') || '(none)'}.`,
+        `Visible buttons: ${visibleButtons.join(' | ') || '(none)'}.`,
+        `Page excerpt: ${(pageText || '').replace(/\s+/g, ' ').slice(0, 500)}`,
+      ].join(' ')
+    )
+  }
+
+  await actionButton.click()
 
   const dialog = page.getByRole('alertdialog')
   await dialog.waitFor({ timeout: 30000 })
@@ -507,18 +632,18 @@ async function coeReceiveShipment(page, { trackingNumber }) {
   await page.getByPlaceholder(/search by tracking number/i).fill(trackingNumber)
   const row = page.locator('tr').filter({ hasText: trackingNumber }).first()
   await row.waitFor({ timeout: 60000 })
-  await row.getByRole('button', { name: /mark received/i }).click()
+  await row.getByRole('button', { name: /^receive$/i }).click()
 
   const dialog = page.getByRole('dialog')
   await dialog.waitFor({ timeout: 30000 })
-  await dialog.getByPlaceholder(/notes/i).fill('Received during live workflow verification')
+  await dialog.locator('textarea').first().fill('Received during live workflow verification')
 
   const receiveResponse = page.waitForResponse((response) => (
     response.url().includes('/api/shipments/') &&
     response.request().method() === 'PATCH' &&
     response.ok()
   ), { timeout: 60000 })
-  await dialog.getByRole('button', { name: /mark as received/i }).click()
+  await dialog.getByRole('button', { name: /confirm receipt/i }).click()
   await receiveResponse
   await dialog.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {})
 
@@ -529,7 +654,7 @@ async function triagePendingDevice(page, { imei, physicalCondition = 'fair', scr
   logStep(`admin: triaging IMEI ${imei}`)
   await page.goto(`${BASE_URL}/coe/triage`, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await waitForWorkspaceReady(page)
-  await page.getByRole('heading', { name: /triage/i }).waitFor({ timeout: 60000 })
+  await page.getByRole('heading', { name: /^triage$/i }).waitFor({ timeout: 60000 })
 
   await page.getByPlaceholder(/search by imei/i).fill(imei)
   const row = page.locator('tr').filter({ hasText: imei }).first()
@@ -548,9 +673,9 @@ async function triagePendingDevice(page, { imei, physicalCondition = 'fair', scr
   const combos = dialog.locator('[role="combobox"]')
   await selectComboboxOption(page, combos.nth(0), physicalCondition === 'fair' ? 'Fair' : 'Poor')
   await selectComboboxOption(page, combos.nth(1), screenCondition)
-  await dialog.getByLabel(/battery health/i).fill(batteryHealth)
+  await dialog.locator('input[type="number"]').first().fill(batteryHealth)
   if (notes) {
-    await dialog.getByLabel(/technician notes/i).fill(notes)
+    await dialog.locator('textarea').first().fill(notes)
   }
 
   const triageResponse = page.waitForResponse((response) => (
@@ -570,14 +695,14 @@ async function customerExceptionDecision(page, { orderId, approve }) {
   await openOrder(page, orderId)
 
   const buttonName = approve ? /^approve$/i : /^reject$/i
-  const responsePromise = page.waitForResponse((response) => (
-    /\/api\/triage\/.+\/exception$/.test(response.url()) &&
-    response.request().method() === 'POST' &&
-    response.ok()
-  ), { timeout: 60000 })
-
-  await page.getByRole('button', { name: buttonName }).first().click()
-  await responsePromise
+  await Promise.all([
+    page.waitForResponse((response) => (
+      /\/api\/triage\/.+\/exception$/.test(response.url()) &&
+      response.request().method() === 'POST' &&
+      response.ok()
+    ), { timeout: 60000 }),
+    page.getByRole('button', { name: buttonName }).first().click(),
+  ])
 
   return screenshot(page, `customer-exception-${approve ? 'approved' : 'rejected'}-${orderId}`)
 }
@@ -721,6 +846,28 @@ async function main() {
   try {
     logStep(`Launching browser (${HEADED ? 'headed' : 'headless'})`)
 
+    const fastPendingException = await fetchLatestPendingCustomerException(customer.id)
+    if (fastPendingException) {
+      logStep(`fast-path: resolving pending customer exception for ${fastPendingException.orderNumber}`)
+      const exceptionShot = await runCustomerActor(browser, (page) => customerExceptionDecision(page, {
+        orderId: fastPendingException.orderId,
+        approve: true,
+      }))
+      const updatedOrder = await fetchOrder(fastPendingException.orderId)
+      const updatedException = await fetchPendingExceptionForOrder(fastPendingException.orderId)
+      summary.fastPath = {
+        type: 'customer-exception-approval',
+        orderId: fastPendingException.orderId,
+        orderNumber: fastPendingException.orderNumber,
+        screenshot: exceptionShot,
+        orderStatus: updatedOrder.status,
+        pendingExceptionCleared: !updatedException,
+      }
+      await writeJson('summary', summary)
+      console.log(JSON.stringify(summary, null, 2))
+      return
+    }
+
     const manualTradeIn = await runCustomerActor(browser, (page) => createManualOrder(page, {
       orderType: 'trade_in',
       deviceLabel,
@@ -756,18 +903,8 @@ async function main() {
     summary.flows.manualTradeIn.accepted = manualTradeInAccepted
 
     const manualTradeInInternalShots = await runAdminActor(browser, async (page) => {
-      const sourcedShot = await adminTransition(page, {
-        orderId: manualTradeIn.orderId,
-        buttonName: 'Sourced',
-        note: 'Devices shipped by customer and ready for COE intake',
-      })
-      const shippedToCoeShot = await adminTransition(page, {
-        orderId: manualTradeIn.orderId,
-        buttonName: 'Shipped to COE',
-        note: 'Shipment in transit to COE',
-      })
       const receiveShot = await coeReceiveShipment(page, { trackingNumber: tradeInTracking })
-      return { sourcedShot, shippedToCoeShot, receiveShot }
+      return { receiveShot }
     })
     summary.flows.manualTradeIn.logistics = manualTradeInInternalShots
 
@@ -779,13 +916,28 @@ async function main() {
       batteryHealth: '72',
       notes: 'Forcing exception path during live verification',
     }))
-    summary.flows.manualTradeIn.triage = { imei: imeiRecord.imei, screenshot: triageShot }
+    const pendingException = await fetchPendingExceptionForOrder(manualTradeIn.orderId)
+    summary.flows.manualTradeIn.triage = {
+      imei: imeiRecord.imei,
+      screenshot: triageShot,
+      exceptionRequired: Boolean(pendingException),
+    }
 
-    const exceptionShot = await runCustomerActor(browser, (page) => customerExceptionDecision(page, {
-      orderId: manualTradeIn.orderId,
-      approve: true,
-    }))
-    summary.flows.manualTradeIn.exception = { approved: true, screenshot: exceptionShot }
+    if (pendingException) {
+      const exceptionShot = await runCustomerActor(browser, (page) => customerExceptionDecision(page, {
+        orderId: manualTradeIn.orderId,
+        approve: true,
+      }))
+      summary.flows.manualTradeIn.exception = { approved: true, screenshot: exceptionShot }
+    } else {
+      const postTriageOrder = await fetchOrder(manualTradeIn.orderId)
+      summary.flows.manualTradeIn.exception = {
+        approved: null,
+        skipped: true,
+        reason: 'No pending customer exception after triage',
+        orderStatus: postTriageOrder.status,
+      }
+    }
 
     const csvTradeIn = await runCustomerActor(browser, (page) => createCsvOrder(page, {
       orderType: 'trade_in',

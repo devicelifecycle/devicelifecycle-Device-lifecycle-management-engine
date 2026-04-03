@@ -6,8 +6,8 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3002'
 const OUTPUT_DIR = path.join(process.cwd(), 'artifacts', 'design-screens')
 
 const ADMIN = {
-  email: 'jamal.h@genovation.ai',
-  password: 'Test123!',
+  email: process.env.PLAYWRIGHT_LOGIN_EMAIL || 'admin',
+  password: process.env.PLAYWRIGHT_LOGIN_PASSWORD || 'Test123!',
 }
 
 async function ensureDir(dir) {

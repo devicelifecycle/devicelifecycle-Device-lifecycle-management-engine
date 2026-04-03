@@ -500,4 +500,30 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
     expect(response.status).toBe(201)
     expect((insertedItems[0] as Record<string, unknown>).storage).toBe('128GB')
   })
+
+  it('blocks sales from uploading CPO CSV orders', async () => {
+    mockUserProfile = { role: 'sales', organization_id: 'org-1' }
+
+    const { POST } = await import('@/app/api/orders/upload-csv/route')
+
+    const request = new NextRequest('http://localhost/api/orders/upload-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rows: [
+          { 'Make*': 'Samsung', 'Model*': 'A36', 'Storage/GB*': '128', 'Condition': 'New', 'Quantity': '600' },
+        ],
+        columns: ['Make*', 'Model*', 'Storage/GB*', 'Condition', 'Quantity'],
+        customer_id: '00000000-0000-0000-0000-000000000001',
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Sales can create trade-in orders only',
+    })
+    expect(insertedItems).toHaveLength(0)
+  })
 })

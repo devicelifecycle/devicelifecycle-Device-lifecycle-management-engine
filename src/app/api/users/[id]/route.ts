@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -20,14 +20,14 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
     }
 
     const { data: profile } = await supabase
       .from('users')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .single()
 
     if (!profile) {
@@ -46,7 +46,7 @@ export async function GET(
     }
 
     // Users can always view their own profile
-    if (user.id === params.id) {
+    if (user.id === (await params).id) {
       return NextResponse.json(profile)
     }
 
@@ -78,10 +78,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
     }
     const supabase = await createServerSupabaseClient()
@@ -98,7 +98,7 @@ export async function PATCH(
       .eq('id', user.id)
       .single()
 
-    const isSelf = user.id === params.id
+    const isSelf = user.id === (await params).id
     if (!isSelf && currentProfile?.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -125,7 +125,7 @@ export async function PATCH(
     const { data: updatedUser, error } = await supabase
       .from('users')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .select()
       .single()
 
@@ -143,10 +143,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
     }
     const supabase = await createServerSupabaseClient()
@@ -171,7 +171,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('users')
       .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', (await params).id)
 
     if (error) throw error
 

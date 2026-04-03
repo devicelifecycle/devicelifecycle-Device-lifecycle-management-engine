@@ -20,7 +20,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   timeout: 30000,
   webServer: {
-    command: `npx next dev --hostname ${PLAYWRIGHT_HOST} --port ${PLAYWRIGHT_PORT}`,
+    command: `npx next dev --webpack --hostname ${PLAYWRIGHT_HOST} --port ${PLAYWRIGHT_PORT}`,
     url: PLAYWRIGHT_BASE_URL,
     reuseExistingServer: false,
     timeout: 60000,

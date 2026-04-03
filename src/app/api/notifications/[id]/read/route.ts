@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -22,7 +22,7 @@ export async function POST(
     const { error } = await supabase
       .from('notifications')
       .update({ is_read: true, read_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .eq('user_id', user.id)
 
     if (error) throw error

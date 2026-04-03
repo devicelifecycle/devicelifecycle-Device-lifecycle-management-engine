@@ -12,7 +12,7 @@ const INTERNAL_ROLES = ['admin', 'coe_manager', 'coe_tech', 'sales']
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -28,7 +28,7 @@ export async function GET(
       .eq('id', user.id)
       .single()
 
-    const vendor = await VendorService.getVendorById(params.id)
+    const vendor = await VendorService.getVendorById((await params).id)
     if (!vendor) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
     }
@@ -42,7 +42,7 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams
     const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100)
 
-    const orders = await VendorService.getVendorOrders(params.id, limit)
+    const orders = await VendorService.getVendorOrders((await params).id, limit)
     return NextResponse.json({ data: orders })
   } catch (error) {
     console.error('Error fetching vendor orders:', error)

@@ -68,6 +68,7 @@ export default function CustomerOrdersPage() {
               </Link>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -83,7 +84,7 @@ export default function CustomerOrdersPage() {
                   const status = CUSTOMER_STATUS_CONFIG[order.status as OrderStatus] ?? ORDER_STATUS_CONFIG[order.status as OrderStatus]
                   return (
                     <TableRow key={order.id}>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
                           {order.order_number}
                         </Link>
@@ -93,15 +94,15 @@ export default function CustomerOrdersPage() {
                           {order.type === 'trade_in' ? 'Trade-In' : 'CPO'}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Badge variant="secondary" className="text-[11px]">
                           {status?.label || order.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">
+                      <TableCell className="text-right tabular-nums font-medium whitespace-nowrap">
                         {formatCurrency(order.total_amount || 0)}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {formatRelativeTime(order.updated_at || order.created_at)}
                       </TableCell>
                     </TableRow>
@@ -109,6 +110,7 @@ export default function CustomerOrdersPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </CardContent>

@@ -17,13 +17,7 @@ type VendorShipment = {
   tracking_number?: string | null
 }
 
-interface RouteParams {
-  params: {
-    id: string
-  }
-}
-
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -54,7 +48,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { to_status: newStatus, notes } = validationResult.data
 
     // Get current order
-    const currentOrder = await OrderService.getOrderById(params.id)
+    const currentOrder = await OrderService.getOrderById((await params).id)
     if (!currentOrder) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
@@ -181,7 +175,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Perform transition
     const updatedOrder = await OrderService.transitionOrder(
-      params.id,
+      (await params).id,
       newStatus,
       user.id,
       notes
@@ -191,7 +185,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await AuditService.logStatusChange(
       user.id,
       'order',
-      params.id,
+      (await params).id,
       currentOrder.status,
       newStatus,
       { notes, order_number: currentOrder.order_number }
@@ -200,7 +194,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Send email + in-app notifications (fire-and-forget, don't block response)
     NotificationService.sendOrderTransitionNotifications(
       {
-        id: params.id,
+        id: (await params).id,
         order_number: currentOrder.order_number,
         type: currentOrder.type,
         customer_id: currentOrder.customer_id,

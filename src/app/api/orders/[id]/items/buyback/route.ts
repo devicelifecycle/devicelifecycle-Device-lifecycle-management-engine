@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -38,7 +38,7 @@ export async function PATCH(
     const { data: order } = await supabase
       .from('orders')
       .select('id, type')
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .single()
 
     if (!order) {
@@ -86,7 +86,7 @@ export async function PATCH(
         .from('order_items')
         .update(updatePayload)
         .eq('id', item.id)
-        .eq('order_id', params.id)
+        .eq('order_id', (await params).id)
 
       if (error) {
         console.error(`Error updating buyback for item ${item.id}:`, error.message)

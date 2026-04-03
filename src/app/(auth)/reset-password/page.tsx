@@ -34,20 +34,27 @@ export default function ResetPasswordPage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (event === 'PASSWORD_RECOVERY') {
         setIsValidSession(true)
+        setSessionChecked(true)
       } else if (event === 'SIGNED_IN' && session) {
         setIsValidSession(true)
+        setSessionChecked(true)
+      } else if (event === 'INITIAL_SESSION') {
+        // Only mark checked here if there's already a valid session in storage;
+        // otherwise wait — PASSWORD_RECOVERY fires after the hash is processed.
+        if (session) {
+          setIsValidSession(true)
+          setSessionChecked(true)
+        }
       }
-      setSessionChecked(true)
     })
 
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      if (session) {
-        setIsValidSession(true)
-      }
-      setSessionChecked(true)
-    })
+    // Fallback: if no auth event fires within 3 s (e.g. no hash in URL), mark invalid.
+    const fallbackTimer = window.setTimeout(() => { setSessionChecked(true) }, 3000)
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      window.clearTimeout(fallbackTimer)
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -105,7 +112,7 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#050508] bg-mesh cinematic-grain px-4">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#120f0d] bg-mesh cinematic-grain px-4">
         <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in bg-card">
           <CardContent className="pt-8 pb-6 text-center space-y-4">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-green-500/10">
@@ -127,12 +134,12 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050508] bg-mesh cinematic-grain px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#120f0d] bg-mesh cinematic-grain px-4">
       <Link href="/" className="mb-8 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
           <Package className="h-6 w-6" />
         </div>
-        <span className="text-xl font-bold tracking-tight">Enterprise Engine</span>
+        <span className="text-xl font-bold tracking-tight">DLM Engine</span>
       </Link>
       <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in bg-card">
         <CardHeader className="text-center pb-2">
@@ -168,6 +175,7 @@ export default function ResetPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

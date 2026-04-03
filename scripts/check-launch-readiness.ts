@@ -120,24 +120,24 @@ const checks: Check[] = [
   },
   {
     area: 'env',
-    label: 'Stallion API token configured',
+    label: 'Shipping label API token configured',
     pass: hasEnv('STALLION_API_TOKEN'),
     blocking: true,
     note: 'Required for live shipment label purchase.',
   },
   {
     area: 'env',
-    label: 'Stallion API base URL configured',
+    label: 'Shipping label API base URL configured',
     pass: hasEnv('STALLION_API_BASE_URL'),
     blocking: false,
     note: 'Defaults to production if omitted, but explicit config is safer.',
   },
   {
     area: 'env',
-    label: 'Stallion store ID configured',
+    label: 'Shipping label store ID configured',
     pass: hasEnv('STALLION_STORE_ID'),
     blocking: false,
-    note: 'Only needed if your Stallion account requires a store_id.',
+    note: 'Only needed if your shipping provider account requires a store_id.',
   },
   {
     area: 'external',

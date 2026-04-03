@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -32,7 +32,7 @@ export async function POST(
     const { data: triage } = await serviceRole
       .from('triage_results')
       .select('*, order:orders(id, customer_id, customer:customers(organization_id))')
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .single()
 
     if (!triage) return NextResponse.json({ error: 'Exception not found' }, { status: 404 })
@@ -56,7 +56,7 @@ export async function POST(
     }
 
     const result = await TriageService.handleException(
-      params.id,
+      (await params).id,
       approved,
       user.id,
       notes

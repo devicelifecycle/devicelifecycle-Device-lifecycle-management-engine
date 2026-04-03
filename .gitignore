@@ -5,6 +5,9 @@ node_modules
 
 # testing
 coverage
+playwright-report/
+test-results/
+artifacts/
 
 # next.js
 .next/
@@ -17,6 +20,7 @@ build
 .DS_Store
 *.pem
 *.pyc
+DLM-Project-Report.pdf
 __pycache__/
 *.tsbuildinfo
 next-env.d.ts

@@ -219,9 +219,9 @@ function MfaCard() {
               Scan this QR code with Google Authenticator, Authy, or any TOTP app, then enter the 6-digit code below.
             </p>
             <div className="flex justify-center">
-              {/* qr_code is an SVG string from Supabase */}
+              {/* qr_code is an SVG string from Supabase — force it to fill the box */}
               <div
-                className="h-48 w-48 rounded-lg border p-2 bg-white"
+                className="h-48 w-48 rounded-lg border p-2 bg-white [&>svg]:h-full [&>svg]:w-full"
                 dangerouslySetInnerHTML={{ __html: qrCode }}
               />
             </div>
@@ -247,7 +247,16 @@ function MfaCard() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => { setEnrolling(false); setQrCode(''); setSecret(''); setVerifyCode('') }}
+                onClick={async () => {
+                  if (pendingFactorId) {
+                    await unenrollMfa(pendingFactorId).catch(() => {})
+                  }
+                  setEnrolling(false)
+                  setQrCode('')
+                  setSecret('')
+                  setVerifyCode('')
+                  setPendingFactorId('')
+                }}
               >
                 Cancel
               </Button>
@@ -337,17 +346,17 @@ export default function ProfilePage() {
 
       {/* Profile Info */}
       <Card>
-        <CardHeader className="flex flex-row items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-2xl font-bold shadow-lg">
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-2xl font-bold shadow-lg">
             {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
-          <div className="flex-1">
-            <CardTitle>{user.full_name}</CardTitle>
-            <CardDescription>
+          <div className="flex-1 min-w-0">
+            <CardTitle className="truncate">{user.full_name}</CardTitle>
+            <CardDescription className="truncate">
             {user.email?.endsWith('@login.local') ? user.email.slice(0, -12) : user.email}
           </CardDescription>
           </div>
-          <Badge variant="outline" className="capitalize">
+          <Badge variant="outline" className="capitalize self-start sm:self-auto">
             {roleConfig?.label || user.role}
           </Badge>
         </CardHeader>
@@ -375,7 +384,7 @@ export default function ProfilePage() {
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5 text-muted-foreground">
                 <User className="h-3.5 w-3.5" />Full Name

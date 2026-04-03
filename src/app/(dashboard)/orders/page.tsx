@@ -39,7 +39,7 @@ export default function OrdersPage() {
   const isInternal = hasRole(['admin', 'coe_manager', 'coe_tech', 'sales'])
   const isCustomer = hasRole(['customer'])
   const canCreateTradeIn = isInternal || isCustomer
-  const canCreateCpo = isInternal
+  const canCreateCpo = hasRole(['admin', 'coe_manager', 'coe_tech'])
   const canBulkTransition = isInternal
 
   const customerIdFromUrl = searchParams.get('customer_id') || undefined
@@ -365,6 +365,7 @@ export default function OrdersPage() {
             </div>
           ) : (
             <>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -389,7 +390,7 @@ export default function OrdersPage() {
                         <TableCell>
                           <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(order.id)} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
                             {order.order_number}
                           </Link>
@@ -397,22 +398,23 @@ export default function OrdersPage() {
                         <TableCell>
                           <Badge variant="outline">{order.type === 'trade_in' ? 'Trade-In' : 'CPO'}</Badge>
                         </TableCell>
-                        <TableCell className="text-stone-300">
+                        <TableCell className="text-stone-300 whitespace-nowrap">
                           {order.type === 'trade_in' ? order.customer?.company_name : order.vendor?.company_name}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           <StatusBadge status={order.status} label={statusConfig?.label} />
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{order.total_quantity}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">
+                        <TableCell className="text-right tabular-nums font-medium whitespace-nowrap">
                           {formatCurrency(order.total_amount || 0)}
                         </TableCell>
-                        <TableCell className="text-stone-400">{formatRelativeTime(order.created_at)}</TableCell>
+                        <TableCell className="text-stone-400 whitespace-nowrap">{formatRelativeTime(order.created_at)}</TableCell>
                       </TableRow>
                     )
                   })}
                 </TableBody>
               </Table>
+              </div>
               <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
           )}

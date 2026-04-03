@@ -16,7 +16,7 @@ function mapDeviceConditionToPricingCondition(condition?: string): 'new' | 'exce
   return 'good'
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: order } = await supabase
       .from('orders')
       .select('id, order_number, created_by_id, assigned_to_id, customer_id, customer:customers(contact_email, contact_phone, company_name, organization_id)')
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .single()
 
     if (!order) {
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: orderItems, error: itemError } = await supabase
       .from('order_items')
       .select('id, device_id, quantity, storage, claimed_condition, actual_condition')
-      .eq('order_id', params.id)
+      .eq('order_id', (await params).id)
       .in('id', itemIds)
 
     if (itemError) {
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         .from('order_items')
         .update({ actual_condition: requestedActualCondition, updated_at: new Date().toISOString() })
         .eq('id', item.id)
-        .eq('order_id', params.id)
+        .eq('order_id', (await params).id)
     }
 
     const mismatchedCount = recommendations.filter((r) => r.claimed_condition !== r.actual_condition).length

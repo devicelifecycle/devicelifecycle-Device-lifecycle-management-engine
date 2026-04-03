@@ -16,8 +16,8 @@ vi.mock('@/services/shipment.service', () => ({
   },
 }))
 
-vi.mock('@/services/stallion.service', () => ({
-  StallionService: {
+vi.mock('@/services/shipping-provider.service', () => ({
+  ShippingProviderService: {
     purchaseLabel: purchaseLabelMock,
   },
 }))
@@ -96,7 +96,7 @@ describe('POST /api/shipments/[id]/purchase-label', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Stallion Express label purchase is only supported for outbound shipments',
+      error: 'Label purchase is only supported for outbound shipments',
     })
   })
 

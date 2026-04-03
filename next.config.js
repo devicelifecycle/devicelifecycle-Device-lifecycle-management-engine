@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Webpack cache improves dev server responsiveness. Use config.cache = false only if disk issues occur.
-  webpack: (config) => config,
+  turbopack: {
+    root: __dirname,
+  },
   images: {
     remotePatterns: [
       { protocol: 'http', hostname: 'localhost' },

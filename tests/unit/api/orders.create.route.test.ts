@@ -70,7 +70,10 @@ function makeQuery({
   return query
 }
 
-function makeServerSupabase() {
+function makeServerSupabase(profile = {
+  role: 'sales',
+  organization_id: '22222222-2222-2222-2222-222222222222',
+}) {
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: '11111111-1111-1111-1111-111111111111' } } }),
@@ -78,10 +81,7 @@ function makeServerSupabase() {
     from: vi.fn().mockImplementation((table: string) => {
       if (table === 'users') {
         return makeQuery({
-          singleResult: () => ({
-            role: 'sales',
-            organization_id: '22222222-2222-2222-2222-222222222222',
-          }),
+          singleResult: () => profile,
         })
       }
 
@@ -231,5 +231,70 @@ describe('POST /api/orders', () => {
         }),
       }),
     )
+  })
+
+  it('blocks vendors from creating orders', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeServerSupabase({
+        role: 'vendor',
+        organization_id: '99999999-9999-9999-9999-999999999999',
+      }),
+    )
+
+    const { POST } = await import('@/app/api/orders/route')
+
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'cpo',
+          customer_id: '33333333-3333-3333-3333-333333333333',
+          items: [
+            {
+              device_id: '88888888-8888-8888-8888-888888888888',
+              quantity: 1,
+              storage: '128GB',
+              condition: 'good',
+            },
+          ],
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Vendors cannot create orders',
+    })
+    expect(createOrderMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks sales from creating CPO orders', async () => {
+    const { POST } = await import('@/app/api/orders/route')
+
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'cpo',
+          customer_id: '33333333-3333-3333-3333-333333333333',
+          items: [
+            {
+              device_id: '88888888-8888-8888-8888-888888888888',
+              quantity: 5,
+              storage: '128GB',
+              condition: 'good',
+            },
+          ],
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Sales can create trade-in orders only',
+    })
+    expect(createOrderMock).not.toHaveBeenCalled()
   })
 })

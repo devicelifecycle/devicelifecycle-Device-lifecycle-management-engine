@@ -8,11 +8,7 @@ import { TriageService } from '@/services/triage.service'
 import { OrderService } from '@/services/order.service'
 export const dynamic = 'force-dynamic'
 
-interface RouteParams {
-  params: { id: string }
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -26,7 +22,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const order = await OrderService.getOrderById(params.id)
+    const order = await OrderService.getOrderById((await params).id)
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
     // Customer: only their org's orders
@@ -42,7 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const exceptions = await TriageService.getPendingExceptionsForOrder(params.id)
+    const exceptions = await TriageService.getPendingExceptionsForOrder((await params).id)
     return NextResponse.json({ data: exceptions })
   } catch (error) {
     console.error('Error fetching order exceptions:', error)

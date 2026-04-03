@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -40,7 +40,7 @@ export async function PATCH(
         { status: 400 }
       )
     }
-    const entry = await PricingService.updatePricingEntry(params.id, validationResult.data)
+    const entry = await PricingService.updatePricingEntry((await params).id, validationResult.data)
     return NextResponse.json(entry)
   } catch (error) {
     console.error('Error updating pricing entry:', error)
@@ -53,7 +53,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -74,7 +74,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await PricingService.deletePricingEntry(params.id)
+    await PricingService.deletePricingEntry((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting pricing entry:', error)

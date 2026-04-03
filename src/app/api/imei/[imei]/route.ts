@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { imei: string } }
+  { params }: { params: Promise<{ imei: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -20,7 +20,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const record = await IMEIService.getByIMEI(params.imei)
+    const record = await IMEIService.getByIMEI((await params).imei)
     if (!record) {
       return NextResponse.json({ error: 'IMEI not found' }, { status: 404 })
     }
@@ -62,7 +62,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { imei: string } }
+  { params }: { params: Promise<{ imei: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -82,7 +82,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const record = await IMEIService.getByIMEI(params.imei)
+    const record = await IMEIService.getByIMEI((await params).imei)
     if (!record) {
       return NextResponse.json({ error: 'IMEI not found' }, { status: 404 })
     }
@@ -105,7 +105,7 @@ export async function PATCH(
 
     const body = await request.json()
     const updated = await IMEIService.updateIMEIRecord(
-      params.imei,
+      (await params).imei,
       body,
       authUser.id,
       body.event_description

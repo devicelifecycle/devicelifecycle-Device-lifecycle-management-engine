@@ -1407,9 +1407,9 @@ export default function AdminPricingPage() {
           </Card>
 
           {/* Trade-In Competitor Matrix */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative w-72">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:flex-wrap">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+              <div className="relative w-full sm:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search model, storage, competitor..." value={compSearch} onChange={e => setCompSearch(e.target.value)} className="pl-9" />
               </div>
@@ -1433,7 +1433,7 @@ export default function AdminPricingPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={handleRunScraper} disabled={cpScraping}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${cpScraping ? 'animate-spin' : ''}`} />
                 {cpScraping ? 'Scraping...' : 'Run Scraper'}
@@ -3145,13 +3145,13 @@ export default function AdminPricingPage() {
           setCpDeviceSearch('')
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Competitor Price</DialogTitle>
             <DialogDescription>Track a competitor&apos;s trade-in or resale offer</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Device</Label>
                 <Input
@@ -3231,7 +3231,7 @@ export default function AdminPricingPage() {
 
       {/* Benchmark Preview Dialog */}
       <Dialog open={benchmarkPreviewOpen} onOpenChange={setBenchmarkPreviewOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] sm:max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Benchmark Preview</DialogTitle>
             <DialogDescription>
@@ -3240,6 +3240,7 @@ export default function AdminPricingPage() {
               {benchmark.adjustment_type === 'fixed' ? `$${benchmark.value}` : `${benchmark.value}%`} per device.
             </DialogDescription>
           </DialogHeader>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -3253,15 +3254,16 @@ export default function AdminPricingPage() {
             <TableBody>
               {benchmarkPreview.map((item, i) => (
                 <TableRow key={i}>
-                  <TableCell className="font-medium">{item.device_label}</TableCell>
+                  <TableCell className="font-medium whitespace-nowrap">{item.device_label}</TableCell>
                   <TableCell>{item.storage}</TableCell>
                   <TableCell className="capitalize">{item.condition}</TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground">{formatCurrency(item.current_price)}</TableCell>
-                  <TableCell className="text-right font-mono font-medium">{formatCurrency(item.proposed_price)}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground whitespace-nowrap">{formatCurrency(item.current_price)}</TableCell>
+                  <TableCell className="text-right font-mono font-medium whitespace-nowrap">{formatCurrency(item.proposed_price)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBenchmarkPreviewOpen(false)}>Cancel</Button>
             <Button onClick={handleApplyBenchmark} disabled={benchmarkApplying}>
