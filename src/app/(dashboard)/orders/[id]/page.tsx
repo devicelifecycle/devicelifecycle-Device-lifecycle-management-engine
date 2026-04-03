@@ -1301,7 +1301,7 @@ export default function OrderDetailPage() {
           <CardContent className="py-4">
             <p className="font-medium text-green-800 dark:text-green-200">Quote ready for your review</p>
             <p className="text-sm text-green-700 dark:text-green-300/90 mt-1">
-              Your quote total is {formatCurrency(order.quoted_amount || order.total_amount || 0)}. Accept to proceed or reject if you&apos;d like to decline.
+              Your quote total is {formatCurrency(order.quoted_amount || order.total_amount || 0)}. Approve to proceed or disapprove if you&apos;d like to decline.
             </p>
             {isCpoOrder && (order.items ?? []).some((i: OrderItem) => (i.guaranteed_buyback_price ?? 0) > 0) && (
               <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800">
