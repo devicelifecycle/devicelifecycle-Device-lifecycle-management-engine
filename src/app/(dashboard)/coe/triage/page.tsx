@@ -183,7 +183,10 @@ export default function COETriagePage() {
           notes: `${notes}${issues.length > 0 ? `\nIssues found: ${issues.join(', ')}` : ''}`,
         }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to submit triage')
+      }
       const result = await res.json()
       if (result.outcome?.exception_required) {
         toast.warning('Triage complete — exception flagged for review')

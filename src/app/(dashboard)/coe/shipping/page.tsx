@@ -159,7 +159,10 @@ export default function COEShippingPage() {
           },
         }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to create shipment')
+      }
       toast.success(form.stallion_purchase ? 'Shipment created and label purchased' : 'Shipment tracking saved')
       setCreateDialogOpen(false)
       setSelectedOrder(null)
