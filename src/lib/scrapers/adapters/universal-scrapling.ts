@@ -147,9 +147,9 @@ function compareScraperResults(tsResult: ScraperResult, scraplingResult: Scraper
 }
 
 export function getUniverCellScraperImpl(): UniverCellScraperImpl {
-  const raw = (process.env.SCRAPER_UNIVERCELL_IMPL || 'scrapling').trim().toLowerCase()
+  const raw = (process.env.SCRAPER_UNIVERCELL_IMPL || 'ts').trim().toLowerCase()
   if (raw === 'scrapling' || raw === 'dual' || raw === 'ts') return raw
-  return 'scrapling'
+  return 'ts'
 }
 
 function getWorkerScriptPath(): string {

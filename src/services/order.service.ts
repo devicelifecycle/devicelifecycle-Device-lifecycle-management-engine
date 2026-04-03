@@ -547,6 +547,8 @@ export class OrderService {
       return 'good'
     }
 
+    const pricingSupabase = createServiceRoleClient()
+
     for (const item of items) {
       if (!item.device_id) continue
       const storage = (item.storage || '128GB').replace(/\s+/g, '').toUpperCase()
@@ -554,14 +556,14 @@ export class OrderService {
       const qty = Math.max(1, item.quantity || 1)
 
       try {
-        const result = await PricingService.calculatePriceV2({
+        const result = await PricingService.calculateAdaptivePrice({
           device_id: item.device_id,
           storage: STORAGE_OPTIONS.includes(storage) ? storage : '128GB',
           carrier: 'Unlocked',
           condition,
           quantity: qty,
           risk_mode: riskMode,
-        })
+        }, pricingSupabase)
         if (!result.success || result.trade_price == null || result.trade_price <= 0) continue
 
         const unitPrice = result.trade_price / qty
