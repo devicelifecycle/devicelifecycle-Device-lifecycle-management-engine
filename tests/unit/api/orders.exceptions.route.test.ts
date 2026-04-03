@@ -68,7 +68,7 @@ describe('GET /api/orders/[id]/exceptions', () => {
     const { GET } = await import('@/app/api/orders/[id]/exceptions/route')
     const response = await GET(
       new NextRequest('http://localhost:3000/api/orders/order-1/exceptions'),
-      { params: { id: 'order-1' } },
+      { params: Promise.resolve({ id: 'order-1' }) },
     )
 
     expect(response.status).toBe(200)
@@ -91,7 +91,7 @@ describe('GET /api/orders/[id]/exceptions', () => {
     const { GET } = await import('@/app/api/orders/[id]/exceptions/route')
     const response = await GET(
       new NextRequest('http://localhost:3000/api/orders/order-2/exceptions'),
-      { params: { id: 'order-2' } },
+      { params: Promise.resolve({ id: 'order-2' }) },
     )
 
     expect(response.status).toBe(403)

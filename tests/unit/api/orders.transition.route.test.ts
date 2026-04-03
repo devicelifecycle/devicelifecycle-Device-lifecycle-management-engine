@@ -79,7 +79,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'accepted' }),
       }),
-      { params: { id: 'order-1' } },
+      { params: Promise.resolve({ id: 'order-1' }) },
     )
 
     expect(response.status).toBe(401)
@@ -113,7 +113,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'accepted', notes: 'Looks good' }),
       }),
-      { params: { id: 'order-1' } },
+      { params: Promise.resolve({ id: 'order-1' }) },
     )
 
     expect(response.status).toBe(200)
@@ -161,7 +161,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'rejected' }),
       }),
-      { params: { id: 'order-2' } },
+      { params: Promise.resolve({ id: 'order-2' }) },
     )
 
     expect(response.status).toBe(403)
@@ -191,7 +191,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'sourcing' }),
       }),
-      { params: { id: 'order-3' } },
+      { params: Promise.resolve({ id: 'order-3' }) },
     )
 
     expect(response.status).toBe(400)
@@ -228,7 +228,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'shipped_to_coe', notes: 'Customer shipped devices' }),
       }),
-      { params: { id: 'order-4' } },
+      { params: Promise.resolve({ id: 'order-4' }) },
     )
 
     expect(response.status).toBe(200)
@@ -264,7 +264,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'shipped', notes: 'Tracking uploaded' }),
       }),
-      { params: { id: 'order-5' } },
+      { params: Promise.resolve({ id: 'order-5' }) },
     )
 
     expect(response.status).toBe(200)
@@ -298,7 +298,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'quoted', notes: 'Quote sent to customer' }),
       }),
-      { params: { id: 'order-5b' } },
+      { params: Promise.resolve({ id: 'order-5b' }) },
     )
 
     expect(response.status).toBe(200)
@@ -332,7 +332,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'quoted', notes: 'Should fail' }),
       }),
-      { params: { id: 'order-5c' } },
+      { params: Promise.resolve({ id: 'order-5c' }) },
     )
 
     expect(response.status).toBe(403)
@@ -382,7 +382,7 @@ describe('POST /api/orders/[id]/transition', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ to_status: step.to, notes: step.notes }),
         }),
-        { params: { id: 'order-6' } },
+        { params: Promise.resolve({ id: 'order-6' }) },
       )
 
       expect(response.status).toBe(200)
@@ -417,7 +417,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'shipped', notes: 'Should fail' }),
       }),
-      { params: { id: 'order-7' } },
+      { params: Promise.resolve({ id: 'order-7' }) },
     )
 
     expect(response.status).toBe(403)
@@ -450,7 +450,7 @@ describe('POST /api/orders/[id]/transition', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to_status: 'shipped', notes: 'No tracking yet' }),
       }),
-      { params: { id: 'order-8' } },
+      { params: Promise.resolve({ id: 'order-8' }) },
     )
 
     expect(response.status).toBe(400)
