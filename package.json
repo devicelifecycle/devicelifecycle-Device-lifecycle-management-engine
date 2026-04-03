@@ -18,6 +18,8 @@
     "seed-acme": "node --env-file=.env.local scripts/seed-acme-user.mjs",
     "cleanup-users": "node --env-file=.env.local scripts/cleanup-duplicate-users.mjs",
     "cleanup:duplicate-devices": "npx tsx scripts/cleanup-duplicate-devices.ts",
+    "audit:fuzzy-devices": "npx tsx scripts/audit-fuzzy-device-names.ts",
+    "cleanup:fuzzy-device-aliases": "npx tsx scripts/cleanup-fuzzy-device-aliases.ts",
     "clear-orders": "node --env-file=.env.local scripts/clear-all-orders.mjs",
     "db:push": "supabase db push",
     "db:migrate": "supabase migration up",
