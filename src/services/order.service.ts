@@ -554,7 +554,17 @@ export class OrderService {
     if (!items?.length) return
 
     const riskMode = (order.customer as { default_risk_mode?: 'retail' | 'enterprise' } | null)?.default_risk_mode || 'retail'
-    const STORAGE_OPTIONS = ['128GB', '256GB', '512GB', '1TB']
+    const normalizeStorageForPricing = (raw?: string): string => {
+      const value = (raw || '').replace(/\s+/g, '').toUpperCase()
+      if (!value || value === 'UNKNOWN' || value === 'DEFAULT' || value === 'N/A' || value === 'NA') {
+        return '128GB'
+      }
+      if (value === '1024GB') return '1TB'
+      if (value === '2048GB') return '2TB'
+      if (value === '4096GB') return '4TB'
+      if (value === '8192GB') return '8TB'
+      return value
+    }
     const mapCondition = (c?: string): 'new' | 'excellent' | 'good' | 'fair' | 'poor' => {
       if (!c) return 'good'
       const s = String(c).toLowerCase()
@@ -570,14 +580,14 @@ export class OrderService {
 
     for (const item of items) {
       if (!item.device_id) continue
-      const storage = (item.storage || '128GB').replace(/\s+/g, '').toUpperCase()
+      const storage = normalizeStorageForPricing(item.storage)
       const condition = mapCondition(item.claimed_condition)
       const qty = Math.max(1, item.quantity || 1)
 
       try {
         const result = await PricingService.calculateAdaptivePrice({
           device_id: item.device_id,
-          storage: STORAGE_OPTIONS.includes(storage) ? storage : '128GB',
+          storage,
           carrier: 'Unlocked',
           condition,
           quantity: qty,

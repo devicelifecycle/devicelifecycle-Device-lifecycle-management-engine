@@ -232,7 +232,7 @@ function selectBestTelusEntry(device: DeviceToScrape, entries: TelusCatalogEntry
   const modelToken = normalizeText(device.model)
   const storageToken = normalizeStorage(device.storage)
   const makeToken = normalizeText(device.make)
-  const variantKeywords = ['max', 'plus', 'ultra', 'mini', 'fold', 'flip', 'fe']
+  const variantKeywords = ['max', 'plus', 'ultra', 'mini', 'fold', 'flip', 'fe', 'pro']
 
   const scored = entries
     .map((entry) => {
