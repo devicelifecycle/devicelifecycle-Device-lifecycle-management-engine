@@ -17,6 +17,7 @@
     "seed-test-users": "node --env-file=.env.local scripts/seed-test-users.mjs",
     "seed-acme": "node --env-file=.env.local scripts/seed-acme-user.mjs",
     "cleanup-users": "node --env-file=.env.local scripts/cleanup-duplicate-users.mjs",
+    "cleanup:duplicate-devices": "npx tsx scripts/cleanup-duplicate-devices.ts",
     "clear-orders": "node --env-file=.env.local scripts/clear-all-orders.mjs",
     "db:push": "supabase db push",
     "db:migrate": "supabase migration up",
