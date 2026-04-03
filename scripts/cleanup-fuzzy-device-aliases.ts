@@ -58,6 +58,11 @@ const MERGE_PLAN: AliasMerge[] = [
     aliasId: '8081a0ef-4216-414e-ab45-1930e4d06cd8',
     canonicalId: 'af4aeddc-477d-42f9-8d95-b32f725e6dc2',
   },
+  {
+    label: 'Apple iPad Pro 12.9" (M2) -> iPad Pro 12.9-inch (M2)',
+    aliasId: 'd0040000-0000-0000-0000-000000000001',
+    canonicalId: '534b1e35-4cf9-4f54-826c-acb62832208d',
+  },
 ]
 
 const STRAIGHT_MOVE_TABLES = [
@@ -133,6 +138,26 @@ function uniqueKeyFor(table: string, row: GenericRow): string {
   }
 }
 
+async function fetchAllRowsForDevice(table: string, deviceId: string): Promise<GenericRow[]> {
+  const rows: GenericRow[] = []
+  const pageSize = 1000
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .eq('device_id', deviceId)
+      .range(from, from + pageSize - 1)
+
+    if (error) throw new Error(`Failed to read ${table} rows for ${deviceId}: ${error.message}`)
+    const batch = (data || []) as GenericRow[]
+    rows.push(...batch)
+    if (batch.length < pageSize) break
+  }
+
+  return rows
+}
+
 async function moveStraightRefs(table: (typeof STRAIGHT_MOVE_TABLES)[number], fromId: string, toId: string): Promise<number> {
   const { data, error } = await supabase.from(table).select('id').eq('device_id', fromId)
   if (error) throw new Error(`Failed to read ${table}: ${error.message}`)
@@ -145,14 +170,10 @@ async function moveStraightRefs(table: (typeof STRAIGHT_MOVE_TABLES)[number], fr
 }
 
 async function moveUniqueRows(table: (typeof UNIQUE_MERGE_TABLES)[number], fromId: string, toId: string): Promise<number> {
-  const { data: fromRows, error: fromError } = await supabase.from(table).select('*').eq('device_id', fromId)
-  if (fromError) throw new Error(`Failed to read ${table} source rows: ${fromError.message}`)
-  const sourceRows = (fromRows || []) as GenericRow[]
+  const sourceRows = await fetchAllRowsForDevice(table, fromId)
   if (!sourceRows.length) return 0
 
-  const { data: toRows, error: toError } = await supabase.from(table).select('*').eq('device_id', toId)
-  if (toError) throw new Error(`Failed to read ${table} target rows: ${toError.message}`)
-  const targetRows = (toRows || []) as GenericRow[]
+  const targetRows = await fetchAllRowsForDevice(table, toId)
   const targetByKey = new Map(targetRows.map((row) => [uniqueKeyFor(table, row), row]))
 
   let moved = 0
@@ -210,9 +231,9 @@ async function describeDevice(id: string) {
     .from('device_catalog')
     .select('id, make, model, category, variant, sku, is_active')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) throw new Error(`Failed to load device ${id}: ${error?.message || 'Not found'}`)
+  if (error) throw new Error(`Failed to load device ${id}: ${error.message}`)
   return data
 }
 
@@ -220,12 +241,27 @@ async function main() {
   console.log(applyChanges ? 'Mode: APPLY' : 'Mode: DRY RUN')
 
   const preview = []
+  const actionableMerges: AliasMerge[] = []
+  const skippedAlreadyMerged: string[] = []
+
   for (const merge of MERGE_PLAN) {
     const alias = await describeDevice(merge.aliasId)
     const canonical = await describeDevice(merge.canonicalId)
-    preview.push({ label: merge.label, alias, canonical })
+
+    if (!canonical) {
+      throw new Error(`Canonical device ${merge.canonicalId} for "${merge.label}" is missing`)
+    }
+
+    if (!alias) {
+      skippedAlreadyMerged.push(merge.label)
+      preview.push({ label: merge.label, status: 'already_merged', alias: null, canonical })
+      continue
+    }
+
+    actionableMerges.push(merge)
+    preview.push({ label: merge.label, status: 'pending', alias, canonical })
   }
-  console.log(JSON.stringify({ preview }, null, 2))
+  console.log(JSON.stringify({ preview, skipped_already_merged: skippedAlreadyMerged }, null, 2))
 
   if (!applyChanges) return
 
@@ -243,7 +279,7 @@ async function main() {
 
   let deletedDevices = 0
 
-  for (const merge of MERGE_PLAN) {
+  for (const merge of actionableMerges) {
     updatedRefs.competitor_prices += await moveUniqueRows('competitor_prices', merge.aliasId, merge.canonicalId)
     updatedRefs.market_prices += await moveUniqueRows('market_prices', merge.aliasId, merge.canonicalId)
     updatedRefs.pricing_tables += await moveUniqueRows('pricing_tables', merge.aliasId, merge.canonicalId)
@@ -263,7 +299,8 @@ async function main() {
 
   console.log('\nCleanup complete')
   console.log(JSON.stringify({
-    merged_alias_groups: MERGE_PLAN.length,
+    merged_alias_groups: actionableMerges.length,
+    skipped_already_merged: skippedAlreadyMerged,
     deleted_devices: deletedDevices,
     updated_refs: updatedRefs,
   }, null, 2))
