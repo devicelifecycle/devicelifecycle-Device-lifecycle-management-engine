@@ -3,7 +3,6 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import { NotificationService } from '@/services/notification.service'
-import { EmailService } from '@/services/email.service'
 import { AuditService } from '@/services/audit.service'
 import { bulkRepriceMismatchedItemsSchema } from '@/lib/validations'
 import { safeErrorMessage } from '@/lib/utils'
@@ -143,21 +142,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const mismatchedCount = recommendations.filter((r) => r.claimed_condition !== r.actual_condition).length
     const notificationTitle = `Condition mismatch detected on order ${order.order_number}`
     const notificationMessage = `${mismatchedCount} device(s) were received in a different condition than quoted. Pricing recommendations were generated for review.`
-    const mismatchLines = recommendations
-      .slice(0, 10)
-      .map((r) => `- Item ${r.order_item_id}: quoted ${r.claimed_condition}, received ${r.actual_condition}, recommended ${r.recommended_unit_price.toFixed(2)}`)
-      .join('\n')
-    const customerEmailBody = [
-      `Order ${order.order_number} has condition mismatches after receiving devices.`,
-      ``,
-      `Mismatched devices: ${mismatchedCount}`,
-      ``,
-      `Recommended repricing summary:`,
-      mismatchLines || '- No line details available',
-      recommendations.length > 10 ? `\n...and ${recommendations.length - 10} more device(s).` : '',
-      ``,
-      `Please review this order for final quote adjustment.`,
-    ].join('\n')
 
     const recipientIds = Array.from(new Set([order.created_by_id, order.assigned_to_id].filter(Boolean))) as string[]
     for (const recipientId of recipientIds) {
@@ -183,23 +167,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       })
     }
 
-    let customerEmailSent = false
+    // Customer email is NOT sent automatically here — an admin must trigger it explicitly
+    // via POST /api/orders/{id}/notify-price-change
+    const customerEmailSent = false
+    const customerSmsSent = false
     const customerRecord = order.customer as { contact_email?: string; contact_phone?: string; company_name?: string; organization_id?: string } | null
-    const customerEmail = customerRecord?.contact_email
-    if (customerEmail) {
-      customerEmailSent = await EmailService.sendEmail(
-        customerEmail,
-        `Quote condition mismatch update — ${order.order_number}`,
-        customerEmailBody
-      )
-    }
-
-    const customerSmsSent = customerRecord?.contact_phone && EmailService.isTwilioConfigured()
-      ? await EmailService.sendSMS(
-          customerRecord.contact_phone,
-          `[DLM] Order ${order.order_number}: updated mismatch pricing is ready for review on ${mismatchedCount} device(s).`.slice(0, 160)
-        )
-      : false
 
     let customerInAppSentTo = 0
     if (customerRecord?.organization_id) {

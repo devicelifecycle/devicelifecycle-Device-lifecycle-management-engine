@@ -152,6 +152,7 @@ export default function OrderDetailPage() {
   const [isRepricingMismatches, setIsRepricingMismatches] = useState(false)
   const [isSendingMismatchNotice, setIsSendingMismatchNotice] = useState(false)
   const [isSendingQuote, setIsSendingQuote] = useState(false)
+  const [isNotifyingPriceChange, setIsNotifyingPriceChange] = useState(false)
   const [suggestingItemId, setSuggestingItemId] = useState<string | null>(null)
   const [transitionTarget, setTransitionTarget] = useState<OrderStatus | null>(null)
   const [transitionNotes, setTransitionNotes] = useState('')
@@ -860,6 +861,23 @@ export default function OrderDetailPage() {
       toast.error(msg)
     } finally {
       setIsSendingQuote(false)
+    }
+  }
+
+  const handleNotifyPriceChange = async () => {
+    if (!order) return
+    setIsNotifyingPriceChange(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/notify-price-change`, { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to send notification')
+      }
+      toast.success('Price change email sent to customer')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to send price change notification')
+    } finally {
+      setIsNotifyingPriceChange(false)
     }
   }
 
@@ -2595,6 +2613,28 @@ export default function OrderDetailPage() {
                     <span className="text-xs font-normal opacity-75">Set pricing first</span>
                   )}
                 </Button>
+              )}
+
+              {/* Notify Customer of Price Change — internal roles only, quoted orders */}
+              {canSendQuote && order.status === 'quoted' && (
+                <>
+                  <Separator className="my-2" />
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between"
+                    disabled={isNotifyingPriceChange}
+                    onClick={handleNotifyPriceChange}
+                  >
+                    <span className="flex items-center gap-2">
+                      {isNotifyingPriceChange ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                      {isNotifyingPriceChange ? 'Sending...' : 'Notify Customer of Price Change'}
+                    </span>
+                  </Button>
+                </>
               )}
 
               {/* Split Order Button — admin and coe_manager only */}

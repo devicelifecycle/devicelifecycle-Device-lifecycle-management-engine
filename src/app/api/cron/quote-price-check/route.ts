@@ -312,40 +312,42 @@ async function notifyCustomer(
     smsText = `[DLM] Prices ${direction} ~${diffPercent}% for order #${order.order_number}. Log in to review.`
   }
 
-  // 1. In-app notification to all customer users
-  const { data: custUsers } = await supabase
-    .from('users')
-    .select('id')
-    .eq('organization_id', customer.organization_id)
-    .eq('role', 'customer')
-    .eq('is_active', true)
+  // 1. In-app notification to all customer users (price_change: skipped — admin must trigger email manually)
+  if (reason !== 'price_change') {
+    const { data: custUsers } = await supabase
+      .from('users')
+      .select('id')
+      .eq('organization_id', customer.organization_id)
+      .eq('role', 'customer')
+      .eq('is_active', true)
 
-  for (const u of custUsers || []) {
-    await NotificationService.createNotification({
-      user_id: u.id,
-      type: 'in_app',
-      title,
-      message,
-      link: `/orders/${order.id}`,
-      metadata: {
-        order_id: order.id,
-        order_number: order.order_number,
-        type: reason === 'expired' ? 'quote_expired' : `price_change_${today}`,
-      },
-    })
+    for (const u of custUsers || []) {
+      await NotificationService.createNotification({
+        user_id: u.id,
+        type: 'in_app',
+        title,
+        message,
+        link: `/orders/${order.id}`,
+        metadata: {
+          order_id: order.id,
+          order_number: order.order_number,
+          type: reason === 'expired' ? 'quote_expired' : `price_change_${today}`,
+        },
+      })
+    }
+
+    // 2. Email (only for non-price_change reasons — price change emails are admin-triggered)
+    if (customer.contact_email) {
+      await EmailService.sendEmail(customer.contact_email, emailSubject, emailBody)
+    }
+
+    // 3. SMS (Twilio only, non-price_change)
+    if (customer.contact_phone && EmailService.isTwilioConfigured()) {
+      await EmailService.sendSMS(customer.contact_phone, smsText.slice(0, 160))
+    }
   }
 
-  // 2. Email
-  if (customer.contact_email) {
-    await EmailService.sendEmail(customer.contact_email, emailSubject, emailBody)
-  }
-
-  // 3. SMS (Twilio only)
-  if (customer.contact_phone && EmailService.isTwilioConfigured()) {
-    await EmailService.sendSMS(customer.contact_phone, smsText.slice(0, 160))
-  }
-
-  // 4. Notify admins about price change
+  // 4. Notify admins about price change (always — so they can manually trigger customer email)
   if (reason === 'price_change') {
     const { data: admins } = await supabase
       .from('users')
@@ -358,7 +360,7 @@ async function notifyCustomer(
         user_id: admin.id,
         type: 'in_app',
         title: `Price Change Alert — ${order.order_number}`,
-        message: `Market prices ${direction} ~${diffPercent}% for quoted order #${order.order_number}. Customer has been notified.`,
+        message: `Market prices ${direction} ~${diffPercent}% for quoted order #${order.order_number}. Use the order page to notify the customer.`,
         link: `/orders/${order.id}`,
         metadata: {
           order_id: order.id,
