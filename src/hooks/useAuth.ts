@@ -61,6 +61,20 @@ function writeCachedUser(user: User | null) {
   }
 }
 
+// Cookie name for the cached role — read by middleware to skip a DB round-trip
+const ROLE_COOKIE = 'dlm_role'
+
+function setRoleCookie(role: string) {
+  if (typeof document === 'undefined') return
+  // 8-hour session-scoped cookie; SameSite=Lax is safe since all routes are same-origin
+  document.cookie = `${ROLE_COOKIE}=${encodeURIComponent(role)}; path=/; max-age=28800; SameSite=Lax`
+}
+
+function clearRoleCookie() {
+  if (typeof document === 'undefined') return
+  document.cookie = `${ROLE_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+}
+
 function hardNavigate(path: string, router: ReturnType<typeof useRouter>) {
   if (typeof window !== 'undefined') {
     window.location.replace(path)
@@ -119,6 +133,7 @@ export function useAuth() {
 
       if (!authUser) {
         writeCachedUser(null)
+        clearRoleCookie()
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
@@ -135,6 +150,7 @@ export function useAuth() {
         // Auth session exists but no user profile row — treat as unauthenticated
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
+        clearRoleCookie()
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
@@ -142,10 +158,12 @@ export function useAuth() {
       if (!profile.is_active) {
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
+        clearRoleCookie()
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
 
+      setRoleCookie(profile.role)
       writeCachedUser(profile as User)
       setState({
         user: profile as User,
@@ -203,6 +221,7 @@ export function useAuth() {
           }
         } else if (event === 'SIGNED_OUT') {
           writeCachedUser(null)
+          clearRoleCookie()
           setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         }
       }
@@ -271,12 +290,13 @@ export function useAuth() {
         throw lastError || new Error('Invalid login credentials')
       }
 
-      // MFA check — if the user has TOTP enrolled, pause here and signal the
-      // login page to collect the one-time code before navigating.
+      // MFA check — run AAL and factors lookup in parallel to halve the latency.
       try {
-        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+        const [{ data: aalData }, { data: factorsData }] = await Promise.all([
+          supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+          supabase.auth.mfa.listFactors(),
+        ])
         if (aalData?.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
-          const { data: factorsData } = await supabase.auth.mfa.listFactors()
           const totpFactor = factorsData?.totp?.[0]
           if (totpFactor) {
             setState((prev) => ({ ...prev, isLoading: false }))
@@ -318,6 +338,7 @@ export function useAuth() {
           const data = result.data as User | null
           if (!data?.is_active) return null
           writeCachedUser(data)
+          setRoleCookie(data.role)
           return data
         } catch (profileError) {
           if (!isAbortError(profileError)) {
@@ -330,7 +351,7 @@ export function useAuth() {
       const resolvedProfile = await Promise.race([
         profilePromise,
         new Promise<User | null>((resolve) => {
-          window.setTimeout(() => resolve(null), 350)
+          window.setTimeout(() => resolve(null), 200)
         }),
       ])
 
@@ -349,17 +370,17 @@ export function useAuth() {
     }
   }, [fetchUser, router])
 
-  // Logout
+  // Logout — clear local state and navigate immediately; signOut completes in the background
   const logout = useCallback(async () => {
-    try {
-      writeCachedUser(null)
-      await supabase.auth.signOut()
-      hardNavigate('/login', router)
-    } catch (error) {
+    writeCachedUser(null)
+    clearRoleCookie()
+    // Fire-and-forget: don't await signOut so the redirect is instantaneous
+    supabase.auth.signOut().catch((error: unknown) => {
       if (!isAbortError(error)) {
         console.error('Error signing out:', error)
       }
-    }
+    })
+    hardNavigate('/login', router)
   }, [router])
 
   // Check if user has a specific role

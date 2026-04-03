@@ -54,6 +54,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Cookie name must match the one set in useAuth.ts
+  const ROLE_COOKIE = 'dlm_role'
+
   try {
     const { supabase, response } = createMiddlewareSupabaseClient(request)
 
@@ -66,21 +69,31 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
 
-    // Check role-based access
-    const { data: user } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', authUser.id)
-      .single()
+    // Fast path: read role from the short-lived cookie set by useAuth on login.
+    // This eliminates one DB round-trip (~100-200ms) on every authenticated navigation.
+    const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
+      ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
+      : null
 
-    // If profile not found, user has auth but no profile row — redirect to login
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
+    let role: string | null = cachedRole
+
+    if (!role) {
+      // Cookie absent (first load, cookie cleared, or different browser) — fall back to DB
+      const { data: dbUser } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', authUser.id)
+        .single()
+
+      if (!dbUser) {
+        return NextResponse.redirect(new URL('/login', request.url))
+      }
+      role = dbUser.role
     }
 
     for (const [route, allowedRoles] of roleRoutes) {
       if (pathname.startsWith(route)) {
-        if (!allowedRoles.includes(user.role)) {
+        if (!allowedRoles.includes(role ?? '')) {
           return NextResponse.redirect(new URL('/', request.url))
         }
         break // Most specific route matched — don't check broader routes
