@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'No matching order items found for this order' }, { status: 404 })
     }
 
+    const pricingSupabase = createServiceRoleClient()
     const recommendations: Array<{
       order_item_id: string
       claimed_condition: string
@@ -101,7 +103,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const pricingCondition = mapDeviceConditionToPricingCondition(requestedActualCondition)
       const quantity = item.quantity || 1
 
-      const calc = await PricingService.calculatePriceV2({
+      const calc = await PricingService.calculateAdaptivePrice({
         device_id: item.device_id,
         storage: item.storage || '128GB',
         carrier: 'Unlocked',
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         quantity,
         ...(beat_competitor_percent != null ? { beat_competitor_percent } : {}),
         ...(trade_in_profit_percent != null ? { trade_in_profit_percent } : {}),
-      })
+      }, pricingSupabase)
 
       if (!calc.success || calc.trade_price == null) {
         failures.push({ order_item_id: item.id, reason: calc.error || 'Failed to calculate recommendation' })

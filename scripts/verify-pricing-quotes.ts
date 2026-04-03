@@ -7,6 +7,7 @@
 
 import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import { PricingService } from '../src/services/pricing.service'
 
 config({ path: '.env.local', override: true })
 config({ path: '.env', override: true })
@@ -21,6 +22,7 @@ async function main() {
   }
 
   const supabase = createClient(url, key)
+  const pricingSupabase = createClient(url, key)
   const SEP = '='.repeat(60)
 
   console.log('\n' + SEP)
@@ -62,11 +64,12 @@ async function main() {
   const { data: settings } = await supabase
     .from('pricing_settings')
     .select('setting_key, setting_value')
-    .in('setting_key', ['beat_competitor_percent', 'competitor_ceiling_percent'])
+    .in('setting_key', ['beat_competitor_percent', 'competitor_ceiling_percent', 'prefer_data_driven'])
 
   const settingsMap = Object.fromEntries((settings || []).map(s => [s.setting_key, s.setting_value]))
-  console.log(`  beat_competitor_percent: ${settingsMap.beat_competitor_percent ?? 'not set (default 2)'}`)
-  console.log(`  competitor_ceiling_percent: ${settingsMap.competitor_ceiling_percent ?? 'not set (default 2)'}`)
+  console.log(`  prefer_data_driven: ${settingsMap.prefer_data_driven ?? 'not set (default false)'}`)
+  console.log(`  beat_competitor_percent: ${settingsMap.beat_competitor_percent ?? 'not set (default 0)'}`)
+  console.log(`  competitor_ceiling_percent: ${settingsMap.competitor_ceiling_percent ?? 'not set (default 0)'}`)
 
   console.log('\n' + SEP)
   console.log('  3. QUOTE VS COMPETITOR (sample device)')
@@ -110,8 +113,8 @@ async function main() {
 
   const highest = Math.max(...competitorsForDevice.map(c => c.trade_in_price))
   const avg = competitorsForDevice.reduce((s, c) => s + c.trade_in_price, 0) / competitorsForDevice.length
-  const beatPct = parseFloat(settingsMap.beat_competitor_percent || '2')
-  const ceilingPct = parseFloat(settingsMap.competitor_ceiling_percent || '2')
+  const beatPct = parseFloat(settingsMap.beat_competitor_percent || '0')
+  const ceilingPct = parseFloat(settingsMap.competitor_ceiling_percent || '0')
   const ourBeatPrice = Math.round(highest * (1 + beatPct / 100) * 100) / 100
   const ceiling = Math.round(highest * (1 + ceilingPct / 100) * 100) / 100
 
@@ -127,17 +130,39 @@ async function main() {
     console.log(`    - ${c.competitor_name}: $${c.trade_in_price}`)
   }
   console.log(`  Highest: $${highest} | Avg: $${avg.toFixed(2)}`)
-  console.log(`  Our quote (beat ${beatPct}%): $${ourBeatPrice}`)
+  console.log(`  Fallback V2 quote if beat=${beatPct}%: $${ourBeatPrice}`)
   console.log(`  Ceiling (top + ${ceilingPct}%): $${ceiling}`)
-  console.log(`  → Our beat price is ${((ourBeatPrice - highest) / highest * 100).toFixed(1)}% above top competitor`)
+  console.log(`  → Fallback beat price is ${((ourBeatPrice - highest) / highest * 100).toFixed(1)}% above top competitor`)
+
+  const adaptiveQuote = await PricingService.calculateAdaptivePrice({
+    device_id: deviceId,
+    storage,
+    carrier: 'Unlocked',
+    condition: condition as 'new' | 'excellent' | 'good' | 'fair' | 'poor',
+    risk_mode: 'retail',
+  }, pricingSupabase)
+
+  if (adaptiveQuote.success) {
+    console.log(`  Live adaptive quote: $${adaptiveQuote.trade_price}`)
+    console.log(`  Live quote source: ${adaptiveQuote.price_source}`)
+    if (adaptiveQuote.breakdown?.market_sanity_clamped) {
+      console.log(`  Market sanity clamp: yes (from $${adaptiveQuote.breakdown.data_driven_trade_price_before_market_sanity} to $${adaptiveQuote.trade_price})`)
+    }
+  } else {
+    console.log(`  Live adaptive quote failed: ${adaptiveQuote.error ?? 'unknown error'}`)
+  }
+
+  if (settingsMap.prefer_data_driven === 'true' || settingsMap.prefer_data_driven === '1') {
+    console.log('  Note: prefer_data_driven=true, so live quote generation should use the adaptive/data-driven path before this fallback formula.')
+  }
 
   console.log('\n' + SEP)
   console.log('  4. NEXT STEPS')
   console.log(SEP)
   console.log('  - Run scraper: npm run scrape:prices')
   console.log('  - Test pipeline: npx tsx scripts/test-pricing-pipeline.ts')
-  console.log('  - Admin Pricing: tune beat_competitor_percent (2-5) and competitor_ceiling_percent (2)')
-  console.log('  - API: POST /api/pricing/calculate with version=v2 for live quotes')
+  console.log('  - Admin Pricing: keep beat_competitor_percent=0 and competitor_ceiling_percent=0 unless you intentionally want aggressive bidding')
+  console.log('  - API: POST /api/pricing/calculate to verify adaptive live quotes on the exact device/condition')
   console.log('')
 }
 

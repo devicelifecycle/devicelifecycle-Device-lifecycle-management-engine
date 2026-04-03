@@ -83,6 +83,28 @@ def _parse_price(value: str) -> float | None:
     return number if number > 0 else None
 
 
+def _fetch_with_scrapling(fetcher_cls: Any, url: str) -> Any:
+    if hasattr(fetcher_cls, "fetch"):
+        return fetcher_cls.fetch(url, impersonate='chrome')
+    if hasattr(fetcher_cls, "get"):
+        return fetcher_cls.get(url, impersonate='chrome')
+    raise AttributeError("Scrapling Fetcher does not expose fetch() or get()")
+
+
+def _get_page_text(page: Any) -> str:
+    text = getattr(page, "text", None)
+    if isinstance(text, str) and text:
+        return text
+
+    body = getattr(page, "body", None)
+    if isinstance(body, bytes):
+        return body.decode("utf-8", errors="replace")
+    if isinstance(body, str):
+        return body
+
+    return ""
+
+
 def _strip_tags(value: str) -> str:
     no_tags = re.sub(r"<[^>]+>", " ", value)
     return re.sub(r"\s+", " ", html.unescape(no_tags.replace("\u00a0", " "))).strip()
@@ -213,15 +235,12 @@ def main() -> int:
 
         try:
             from scrapling.fetchers import Fetcher  # type: ignore
-            page = Fetcher.fetch(
-                TRADE_IN_URL,
-                impersonate='chrome',
-            )
+            page = _fetch_with_scrapling(Fetcher, TRADE_IN_URL)
             live_prices = _extract_prices_with_scrapling(page)
 
             # If CSS selectors didn't find enough, also try raw HTML fallback
             if len(live_prices) < 3:
-                raw_html = str(page.body) if hasattr(page, 'body') else ""
+                raw_html = _get_page_text(page)
                 if raw_html:
                     fallback_prices = _extract_prices_from_raw_html(raw_html)
                     # Merge: add any prices not already found

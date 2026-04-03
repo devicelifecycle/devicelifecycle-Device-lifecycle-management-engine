@@ -266,6 +266,9 @@ export interface PriceCalculationResultV2 {
     margin_applied: number;
     final_trade_price: number;
     final_cpo_price: number;
+    data_driven_trade_price_before_market_sanity?: number;
+    market_sanity_reference_trade_price?: number;
+    market_sanity_clamped?: boolean;
   };
   error?: string;
 }

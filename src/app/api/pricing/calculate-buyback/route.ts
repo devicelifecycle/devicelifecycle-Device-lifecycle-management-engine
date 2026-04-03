@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import type { DeviceCondition } from '@/types'
 export const dynamic = 'force-dynamic'
@@ -230,6 +231,7 @@ export async function POST(request: NextRequest) {
     }
 
     const limit = Math.min(items.length, 80)
+    const pricingSupabase = createServiceRoleClient()
     const results: Array<{
       id: string
       device_id: string
@@ -273,13 +275,13 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const result = await PricingService.calculatePriceV2({
+        const result = await PricingService.calculateAdaptivePrice({
           device_id,
           storage: normalizedStorage,
           carrier: 'Unlocked',
           condition,
           quantity: 1,
-        })
+        }, pricingSupabase)
 
         // Primary price source failed — try our internal data fallback
         let tradePrice = result.success ? (result.trade_price ?? 0) : 0

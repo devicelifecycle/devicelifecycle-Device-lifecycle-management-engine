@@ -480,9 +480,9 @@ export default function OrderDetailPage() {
     // Load saved beat_competitor_percent setting
     fetch('/api/pricing/settings')
       .then(r => r.ok ? r.json() : {})
-      .then((s: Record<string, unknown>) => {
-        const saved = Number(s.beat_competitor_percent)
-        if (!isNaN(saved) && saved > 0) setBeatCompetitorPercent(saved)
+      .then((payload: { data?: Record<string, unknown> }) => {
+        const saved = Number(payload.data?.beat_competitor_percent)
+        if (!isNaN(saved) && saved >= 0) setBeatCompetitorPercent(saved)
       })
       .catch(() => {})
     if (order?.items) fetchMarketContext(order.items)

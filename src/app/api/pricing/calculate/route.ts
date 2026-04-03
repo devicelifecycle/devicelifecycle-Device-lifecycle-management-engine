@@ -59,38 +59,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const version = isCustomer ? 'v2' : (body.version || 'v2')
-    // If model_id is explicitly provided, use the pricing model (e.g. data_driven).
-    // Otherwise, fall through to V1/V2 PricingService.
+    // If model_id is explicitly provided, use that pricing model.
+    // Otherwise, route through PricingService adaptive selection so saved
+    // prefer_data_driven settings are honored everywhere.
     const modelId = body.model_id || undefined
-
-    if (modelId) {
-      const validation = priceCalculationV2Schema.safeParse(body)
-      if (!validation.success) {
-        return NextResponse.json(
-          { error: 'Validation failed', details: validation.error.errors },
-          { status: 400 }
-        )
-      }
-      const model = PricingModelRegistry.get(modelId)
-      if (!model) {
-        return NextResponse.json(
-          { error: `Unknown model: ${modelId}`, available: PricingModelRegistry.list().map(m => m.id) },
-          { status: 400 }
-        )
-      }
-      const { device_id, storage, carrier, condition, quantity, issues } = validation.data
-      const modelResult = await Promise.resolve(model.calculate({
-        device_id,
-        storage: storage ?? '128GB',
-        carrier: carrier ?? 'Unlocked',
-        condition,
-        issues,
-        quantity: quantity ?? 1,
-        purpose: 'buy',
-      }))
-      const qty = quantity ?? 1
-      return NextResponse.json(adaptModelToV2(modelResult, qty))
-    }
 
     // A/B: run all registered models in parallel and return comparison
     if (modelId === 'all') {
@@ -137,6 +109,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ab_comparison: true, models: comparisons, quantity: qty })
     }
 
+    if (modelId) {
+      const validation = priceCalculationV2Schema.safeParse(body)
+      if (!validation.success) {
+        return NextResponse.json(
+          { error: 'Validation failed', details: validation.error.errors },
+          { status: 400 }
+        )
+      }
+      const model = PricingModelRegistry.get(modelId)
+      if (!model) {
+        return NextResponse.json(
+          { error: `Unknown model: ${modelId}`, available: PricingModelRegistry.list().map(m => m.id) },
+          { status: 400 }
+        )
+      }
+      const { device_id, storage, carrier, condition, quantity, issues } = validation.data
+      const modelResult = await Promise.resolve(model.calculate({
+        device_id,
+        storage: storage ?? '128GB',
+        carrier: carrier ?? 'Unlocked',
+        condition,
+        issues,
+        quantity: quantity ?? 1,
+        purpose: 'buy',
+      }))
+      const qty = quantity ?? 1
+      return NextResponse.json(adaptModelToV2(modelResult, qty))
+    }
+
     if (version === 'competitor_avg') {
       const { device_id, storage, condition } = body
       if (!device_id || !storage || !condition) {
@@ -161,10 +162,10 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Customers use service-role client to bypass RLS on competitor_prices
-      const result = await PricingService.calculatePriceV2(
+      const pricingSupabase = createServiceRoleClient()
+      const result = await PricingService.calculateAdaptivePrice(
         validation.data,
-        isCustomer ? createServiceRoleClient() : undefined
+        pricingSupabase
       )
       // Customers only get the headline numbers — no competitor breakdown
       if (isCustomer) {

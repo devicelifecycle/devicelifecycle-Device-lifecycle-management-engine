@@ -81,6 +81,28 @@ def _validate_request(data: dict[str, Any]) -> tuple[str, list[dict[str, Any]], 
     return mode, normalized_devices, limit_products
 
 
+def _fetch_with_scrapling(fetcher_cls: Any, url: str) -> Any:
+    if hasattr(fetcher_cls, "fetch"):
+        return fetcher_cls.fetch(url, impersonate='chrome')
+    if hasattr(fetcher_cls, "get"):
+        return fetcher_cls.get(url, impersonate='chrome')
+    raise AttributeError("Scrapling Fetcher does not expose fetch() or get()")
+
+
+def _get_page_text(page: Any) -> str:
+    text = getattr(page, "text", None)
+    if isinstance(text, str) and text:
+        return text
+
+    body = getattr(page, "body", None)
+    if isinstance(body, bytes):
+        return body.decode("utf-8", errors="replace")
+    if isinstance(body, str):
+        return body
+
+    return ""
+
+
 # --- HTTP fetching with Scrapling fallback ---
 
 _fetcher = None  # Will be set to Scrapling Fetcher or None
@@ -101,9 +123,9 @@ def _init_fetcher() -> bool:
 def _fetch_json(url: str) -> Any:
     """Fetch JSON, using Scrapling Fetcher if available, else urllib."""
     if _fetcher is not None:
-        page = _fetcher.fetch(url, impersonate='chrome')
-        # Scrapling returns a parsed page; extract the text body for JSON parsing
-        body_text = page.text if hasattr(page, 'text') else str(page.body) if hasattr(page, 'body') else ""
+        page = _fetch_with_scrapling(_fetcher, url)
+        # Scrapling returns a Response whose body may be bytes; decode it before JSON parsing.
+        body_text = _get_page_text(page)
         return json.loads(body_text)
 
     from urllib.request import Request, urlopen
@@ -122,7 +144,7 @@ def _fetch_json(url: str) -> Any:
 def _fetch_page(url: str) -> Any:
     """Fetch HTML page, returning a Scrapling page object or raw HTML string."""
     if _fetcher is not None:
-        return _fetcher.fetch(url, impersonate='chrome')
+        return _fetch_with_scrapling(_fetcher, url)
 
     from urllib.request import Request, urlopen
     request = Request(
@@ -159,7 +181,7 @@ def _extract_query_data_from_page(page: Any) -> dict[str, Any] | None:
                     return result
 
         # Also check inline scripts in the body
-        body_html = str(page.body) if hasattr(page, 'body') else ""
+        body_html = _get_page_text(page)
         if body_html:
             return _extract_query_data_from_text(body_html)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Set pricing defaults: beat_competitor_percent=2, competitor_ceiling_percent=2
+ * Set pricing defaults: beat_competitor_percent=0, competitor_ceiling_percent=0
  * Usage: node --env-file=.env.local scripts/set-pricing-defaults.mjs
  */
 import { createClient } from '@supabase/supabase-js'
@@ -17,8 +17,8 @@ if (!url || !key) {
 const supabase = createClient(url, key)
 
 const settings = [
-  { setting_key: 'beat_competitor_percent', setting_value: '2', description: 'Offer X% above highest competitor (2-5 aggressive)' },
-  { setting_key: 'competitor_ceiling_percent', setting_value: '2', description: 'Max % above top competitor' },
+  { setting_key: 'beat_competitor_percent', setting_value: '0', description: 'Offer 0% above highest competitor by default so quotes stay market-aligned' },
+  { setting_key: 'competitor_ceiling_percent', setting_value: '0', description: 'Clamp to the top competitor by default' },
 ]
 
 for (const s of settings) {

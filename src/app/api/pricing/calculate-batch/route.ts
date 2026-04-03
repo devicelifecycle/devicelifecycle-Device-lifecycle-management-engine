@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ data: [] })
     }
 
+    const pricingSupabase = createServiceRoleClient()
     const CONCURRENCY = 8
     const results: Array<{
       key: string
@@ -68,13 +70,13 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const result = await PricingService.calculatePriceV2({
+        const result = await PricingService.calculateAdaptivePrice({
           device_id,
           storage,
           carrier: 'Unlocked',
           condition: mapConditionToInternal(condition),
           quantity: 1,
-        })
+        }, pricingSupabase)
 
         if (!result.success || result.error) {
           return { key, device_id, storage, condition, error: result.error || 'Calculation failed' }

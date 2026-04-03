@@ -4,6 +4,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { sanitizeSearchInput } from '@/lib/utils'
+import { PricingModelRegistry } from '@/models/pricing'
 import {
   CHANNEL_DECISION_THRESHOLDS,
   MARKETPLACE_FEE_PERCENT,
@@ -144,7 +145,7 @@ const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
   marketplace_fee_percent: MARKETPLACE_FEE_PERCENT,
   breakage_risk_percent: BREAKAGE_RISK_PERCENT,
   competitive_relevance_min: COMPETITIVE_RELEVANCE_MIN,
-  competitor_ceiling_percent: 2,
+  competitor_ceiling_percent: 0,
   beat_competitor_percent: 0,
   outlier_deviation_threshold: OUTLIER_DEVIATION_THRESHOLD,
   trade_in_profit_percent: 20,
@@ -158,15 +159,148 @@ const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
 }
 
 export class PricingService {
+  private static adaptModelResultToV2(
+    modelResult: {
+      success: boolean
+      final_price: number
+      trade_price?: number
+      cpo_price?: number
+      confidence: number
+      breakdown: Record<string, unknown>
+      price_date?: string
+      valid_for_hours?: number
+      error?: string
+    },
+    quantity: number,
+    riskMode: RiskMode,
+    priceSource = 'Data-Driven Model'
+  ): PriceCalculationResultV2 {
+    const tradePrice = round2(modelResult.trade_price ?? modelResult.final_price)
+    const cpoPrice = round2(modelResult.cpo_price ?? tradePrice)
+    const priceDate = modelResult.price_date || new Date().toISOString()
+    const validForHours = modelResult.valid_for_hours ?? (modelResult.confidence >= 0.8 ? 24 : 12)
+
+    return {
+      success: modelResult.success,
+      trade_price: round2(tradePrice),
+      cpo_price: round2(cpoPrice),
+      competitors: [],
+      channel_decision: {
+        recommended_channel: 'marketplace',
+        margin_percent: 0,
+        margin_tier: modelResult.confidence >= 0.8 ? 'green' : modelResult.confidence >= 0.6 ? 'yellow' : 'red',
+        reasoning: `${priceSource} (${riskMode} mode)`,
+        value_add_viable: false,
+      },
+      risk_mode: riskMode,
+      confidence: modelResult.confidence,
+      price_date: priceDate,
+      valid_for_hours: validForHours,
+      price_expires_at: new Date(Date.now() + validForHours * 60 * 60 * 1000).toISOString(),
+      price_source: priceSource,
+      breakdown: {
+        anchor_price: safeNum(modelResult.breakdown?.anchor_price as number),
+        condition_adjustment: 0,
+        deductions: safeNum(modelResult.breakdown?.deductions as number),
+        breakage_deduction: 0,
+        margin_applied: 0,
+        final_trade_price: round2(tradePrice),
+        final_cpo_price: round2(cpoPrice),
+      },
+      ...(modelResult.error && { error: modelResult.error }),
+    }
+  }
+
+  static async calculateAdaptivePrice(input: {
+    device_id: string;
+    storage: string;
+    carrier?: string;
+    condition: DeviceCondition;
+    issues?: string[];
+    quantity?: number;
+    risk_mode?: RiskMode;
+    beat_competitor_percent?: number;
+    trade_in_profit_percent?: number;
+    enterprise_margin_percent?: number;
+    cpo_markup_percent?: number;
+  }, supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<PriceCalculationResultV2> {
+    const settings = await this.getPricingSettings(supabaseClient)
+    const hasFormulaOverrides =
+      input.beat_competitor_percent != null ||
+      input.trade_in_profit_percent != null ||
+      input.enterprise_margin_percent != null ||
+      input.cpo_markup_percent != null
+    const shouldUseDataDriven =
+      settings.prefer_data_driven &&
+      !hasFormulaOverrides &&
+      input.risk_mode !== 'enterprise'
+
+    if (shouldUseDataDriven) {
+      const model = PricingModelRegistry.get('data_driven')
+      if (model) {
+        const qty = input.quantity ?? 1
+        const modelResult = await Promise.resolve(model.calculate({
+          device_id: input.device_id,
+          storage: input.storage ?? '128GB',
+          carrier: input.carrier ?? 'Unlocked',
+          condition: input.condition,
+          issues: input.issues,
+          quantity: qty,
+          purpose: 'buy',
+        }))
+
+        if (modelResult.success && (modelResult.trade_price ?? modelResult.final_price) > 0) {
+          const adaptedResult = this.adaptModelResultToV2(
+            modelResult,
+            qty,
+            input.risk_mode || 'retail'
+          )
+
+          const fallbackResult = await this.calculatePriceV2(input, supabaseClient)
+          const adaptedTradePrice = adaptedResult.trade_price
+          const fallbackTradePrice = fallbackResult.trade_price
+
+          if (
+            adaptedTradePrice > 0 &&
+            fallbackResult.success &&
+            fallbackTradePrice > 0 &&
+            adaptedTradePrice > fallbackTradePrice
+          ) {
+            const clampedTradePrice = round2(fallbackTradePrice)
+
+            return {
+              ...adaptedResult,
+              trade_price: clampedTradePrice,
+              breakdown: {
+                ...adaptedResult.breakdown,
+                final_trade_price: clampedTradePrice,
+                data_driven_trade_price_before_market_sanity: round2(adaptedTradePrice),
+                market_sanity_reference_trade_price: clampedTradePrice,
+                market_sanity_clamped: true,
+              },
+              channel_decision: fallbackResult.channel_decision,
+              data_staleness_warning: fallbackResult.data_staleness_warning,
+            }
+          }
+
+          return adaptedResult
+        }
+      }
+    }
+
+    return this.calculatePriceV2(input, supabaseClient)
+  }
 
   /**
    * Single source of truth for margin, beat %, and all pricing knobs.
    * Used by: order flow, quote API, calculate-batch, reprice-mismatches, and admin pricing page.
    * Changes in Admin → Pricing → Settings apply to the entire system, not just the pricing page.
    */
-  static async getPricingSettings(): Promise<PricingSettingsOverrides> {
+  static async getPricingSettings(
+    supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>
+  ): Promise<PricingSettingsOverrides> {
     try {
-      const supabase = await createServerSupabaseClient()
+      const supabase = supabaseClient || await createServerSupabaseClient()
       const { data, error } = await supabase
         .from('pricing_settings')
         .select('setting_key, setting_value')
@@ -222,7 +356,7 @@ export class PricingService {
   }, supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<PriceCalculationResultV2> {
     const supabase = supabaseClient ?? await createServerSupabaseClient()
     const carrier = input.carrier || 'Unlocked'
-    const settings = await this.getPricingSettings()
+      const settings = await this.getPricingSettings(supabase)
 
     try {
       // Step 1: Get market reference prices
@@ -407,16 +541,45 @@ export class PricingService {
         }
       }
 
+      // Step 2: Pull competitor prices early so competitor-backed devices can still quote
+      const competitorCondition = mapDeviceConditionToCompetitorCondition(input.condition)
+      let { data: competitorData } = await supabase
+        .from('competitor_prices')
+        .select('*')
+        .eq('device_id', input.device_id)
+        .eq('storage', input.storage)
+        .eq('condition', competitorCondition)
+
+      if (!competitorData || competitorData.length === 0) {
+        const fallback = await supabase
+          .from('competitor_prices')
+          .select('*')
+          .eq('device_id', input.device_id)
+          .eq('storage', input.storage)
+        competitorData = fallback.data || []
+      }
+
+      if (!anchorPrice && competitorData && competitorData.length > 0) {
+        const competitorAnchorCandidates = competitorData
+          .map((cp) => cp.trade_in_price || 0)
+          .filter((price) => price > 0)
+
+        if (competitorAnchorCandidates.length > 0) {
+          anchorPrice = competitorAnchorCandidates.reduce((sum, price) => sum + price, 0) / competitorAnchorCandidates.length
+          anchorIsBaseNormalized = false
+        }
+      }
+
       if (!anchorPrice) {
         return this.v2ErrorResult('Device not found in market prices, pricing table, competitor data, or trained baselines. Add pricing data or run the scraper.')
       }
 
-      // Step 2: Apply condition multiplier (only when anchor is a base/"new" equivalent)
+      // Step 3: Apply condition multiplier (only when anchor is a base/"new" equivalent)
       const conditionMultiplier = CONDITION_MULTIPLIERS[input.condition] || 1.0
       const conditionAdjustment = anchorIsBaseNormalized ? anchorPrice * (1 - conditionMultiplier) : 0
       let adjustedPrice = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
 
-      // Step 3: Apply functional deductions (map triage labels to deduction keys)
+      // Step 4: Apply functional deductions (map triage labels to deduction keys)
       let totalDeductions = 0
       const deductionKeys = mapIssuesToDeductionKeys(input.issues || [])
       if (deductionKeys.length > 0) {
@@ -439,24 +602,6 @@ export class PricingService {
       adjustedPrice = Math.max(adjustedPrice, 0)
 
       const isBroken = isBrokenDevice(input.condition, deductionKeys)
-
-      // Step 4: Get competitor prices (filter outliers — e.g. Bell promotion)
-      const competitorCondition = mapDeviceConditionToCompetitorCondition(input.condition)
-      let { data: competitorData } = await supabase
-        .from('competitor_prices')
-        .select('*')
-        .eq('device_id', input.device_id)
-        .eq('storage', input.storage)
-        .eq('condition', competitorCondition)
-
-      if (!competitorData || competitorData.length === 0) {
-        const fallback = await supabase
-          .from('competitor_prices')
-          .select('*')
-          .eq('device_id', input.device_id)
-          .eq('storage', input.storage)
-        competitorData = fallback.data || []
-      }
 
       const rawCompetitors: Array<{ name: string; price: number }> = []
       const rawCompetitorSellPrices: number[] = []

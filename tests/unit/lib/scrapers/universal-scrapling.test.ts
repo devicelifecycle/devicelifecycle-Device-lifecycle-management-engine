@@ -13,9 +13,9 @@ describe('universal scrapling adapter', () => {
     vi.restoreAllMocks()
   })
 
-  it('defaults to scrapling implementation', () => {
+  it('defaults to ts implementation', () => {
     delete process.env.SCRAPER_UNIVERCELL_IMPL
-    expect(getUniverCellScraperImpl()).toBe('scrapling')
+    expect(getUniverCellScraperImpl()).toBe('ts')
   })
 
   it('normalizes supported implementation values', () => {
@@ -26,9 +26,9 @@ describe('universal scrapling adapter', () => {
     expect(getUniverCellScraperImpl()).toBe('scrapling')
   })
 
-  it('falls back to scrapling on invalid implementation values', () => {
+  it('falls back to ts on invalid implementation values', () => {
     process.env.SCRAPER_UNIVERCELL_IMPL = 'unexpected'
-    expect(getUniverCellScraperImpl()).toBe('scrapling')
+    expect(getUniverCellScraperImpl()).toBe('ts')
   })
 
   it('parses a valid worker response', () => {
