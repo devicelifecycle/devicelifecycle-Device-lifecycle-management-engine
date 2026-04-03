@@ -303,6 +303,14 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [notificationEmail, setNotificationEmail] = useState(user?.notification_email ?? '')
 
+  // Sync form fields when user data loads from useAuth
+  useEffect(() => {
+    if (user && !isEditing) {
+      setFullName(user.full_name || '')
+      setNotificationEmail(user.notification_email ?? '')
+    }
+  }, [user, isEditing])
+
   const isLoginIdUser = user?.email?.endsWith('@login.local')
 
   const handleSave = async () => {
