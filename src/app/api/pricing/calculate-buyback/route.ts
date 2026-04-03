@@ -31,7 +31,7 @@ const CONDITION_MULTIPLIERS: Record<string, number> = {
  * Returns { price, source } or null when nothing found.
  */
 async function estimatePriceFromInternalData(
-  supabase: ReturnType<typeof createServerSupabaseClient>,
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   deviceId: string,
   storage: string,
   condition: DeviceCondition
@@ -179,7 +179,7 @@ function addMonths(date: Date, months: number): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

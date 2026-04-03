@@ -133,7 +133,7 @@ export class AuthService {
    * Get current user on the server
    */
   static async getServerUser() {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     
     const { data: { user }, error } = await supabase.auth.getUser()
 

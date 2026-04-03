@@ -8,13 +8,14 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
 import { NotificationService } from '@/services/notification.service'
+import { sanitizeOrdersForVendor } from '@/lib/order-visibility'
 import { orderSchema, orderFiltersSchema } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
 
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -60,14 +61,9 @@ export async function GET(request: NextRequest) {
 
     const result = await OrderService.getOrders(scopedFilters as Parameters<typeof OrderService.getOrders>[0])
 
-    // Vendors must not see customer names — redact customer PII
+    // Vendors only see fulfillment-safe order data.
     if (profile?.role === 'vendor' && result.data?.length) {
-      result.data = result.data.map((o) => ({
-        ...o,
-        customer: o.customer
-          ? { ...o.customer, company_name: '—', contact_name: '—', contact_email: '—' }
-          : o.customer,
-      }))
+      result.data = sanitizeOrdersForVendor(result.data)
     }
 
     return NextResponse.json(result)
@@ -82,7 +78,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -100,6 +96,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
     }
 
+    if (profile.role === 'vendor') {
+      return NextResponse.json(
+        { error: 'Vendors cannot create orders' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     
     // Validate input
@@ -114,6 +117,13 @@ export async function POST(request: NextRequest) {
     }
 
     let orderData = validationResult.data
+
+    if (profile.role === 'sales' && orderData.type === 'cpo') {
+      return NextResponse.json(
+        { error: 'Sales can create trade-in orders only' },
+        { status: 403 }
+      )
+    }
 
     // Resolve organization: user's org or customer's org (for internal users without org)
     let orgId = profile.organization_id

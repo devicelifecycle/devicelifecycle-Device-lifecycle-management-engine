@@ -42,7 +42,7 @@ export class CompetitorBeatPricingModel implements IPricingModel {
 
   async calculate(input: PricingModelInput): Promise<PricingModelResult> {
     const cfg = this.config as CompetitorBeatConfig
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const storage = input.storage || '128GB'
     const carrier = input.carrier || 'Unlocked'

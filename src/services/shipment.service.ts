@@ -1,22 +1,22 @@
 // ============================================================================
-// SHIPMENT SERVICE — Stallion Express Integration
+// SHIPMENT SERVICE
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { readServerEnv } from '@/lib/server-env'
-import { StallionService } from '@/services/stallion.service'
+import { ShippingProviderService } from '@/services/shipping-provider.service'
 import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
 import type { Shipment } from '@/types'
 
-/** Check if Stallion Express is configured */
+/** Check if the shipping label provider is configured */
 export function isShippingConfigured(): boolean {
   return Boolean(readServerEnv('STALLION_API_TOKEN'))
 }
 
-export function getActiveShippingProvider(): 'stallion' | 'manual' {
-  return isShippingConfigured() ? 'stallion' : 'manual'
+export function getActiveShippingProvider(): 'shipping_provider' | 'manual' {
+  return isShippingConfigured() ? 'shipping_provider' : 'manual'
 }
 
 export interface CreateShipmentInput {
@@ -88,7 +88,7 @@ export class ShipmentService {
    * Get shipment by ID
    */
   static async getShipmentById(id: string): Promise<Shipment | null> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('shipments')
@@ -111,7 +111,7 @@ export class ShipmentService {
    * Get shipments by order ID
    */
   static async getShipmentsByOrderId(orderId: string): Promise<Shipment[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('shipments')
@@ -130,7 +130,7 @@ export class ShipmentService {
    * Get shipment by tracking number
    */
   static async getShipmentByTrackingNumber(trackingNumber: string): Promise<Shipment | null> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('shipments')
@@ -157,7 +157,7 @@ export class ShipmentService {
     status: Shipment['status'],
     metadata?: Record<string, unknown>
   ): Promise<Shipment> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const updates: Record<string, unknown> = {
       status,
@@ -218,7 +218,7 @@ export class ShipmentService {
       purchased_by_id: string
     }
   ): Promise<Shipment> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('shipments')
@@ -235,7 +235,7 @@ export class ShipmentService {
         rate_amount: input.rate_amount,
         rate_currency: input.rate_currency,
         estimated_delivery: input.estimated_delivery,
-        shippo_raw: { ...input.raw_response, provider: 'stallion' },
+        shippo_raw: { ...input.raw_response, provider: 'shipping_provider' },
         status: 'label_created',
         purchased_by_id: input.purchased_by_id,
         updated_at: new Date().toISOString(),
@@ -272,7 +272,7 @@ export class ShipmentService {
 
     if (!shipment) return
 
-    const internalStatus = StallionService.mapTrackingStatusToInternal(input.tracking_status)
+    const internalStatus = ShippingProviderService.mapTrackingStatusToInternal(input.tracking_status)
 
     await supabase
       .from('shipments')
@@ -355,7 +355,7 @@ export class ShipmentService {
       tracking_status?: string
     }
   ): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { error } = await supabase
       .from('shipments')
       .update({
@@ -381,7 +381,7 @@ export class ShipmentService {
       timestamp: string
     }
   ): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Get current events
     const { data: shipment } = await supabase
@@ -410,7 +410,7 @@ export class ShipmentService {
    * Get pending shipments (inbound, awaiting receipt)
    */
   static async getPendingInboundShipments(): Promise<Shipment[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('shipments')
@@ -433,7 +433,7 @@ export class ShipmentService {
    * Get outbound shipments ready to ship
    */
   static async getPendingOutboundShipments(): Promise<Shipment[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('shipments')
@@ -463,7 +463,7 @@ export class ShipmentService {
     receivedById: string,
     notes?: string
   ): Promise<Shipment> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Load shipment with order
     const shipment = await this.getShipmentById(id)
@@ -557,7 +557,7 @@ export class ShipmentService {
     exceptions: number
     average_delivery_days: number
   }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     let query = supabase.from('shipments').select('*')
 

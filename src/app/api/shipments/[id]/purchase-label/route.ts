@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { safeErrorMessage } from '@/lib/utils'
 import { ShipmentService, isShippingConfigured } from '@/services/shipment.service'
-import { StallionService } from '@/services/stallion.service'
+import { ShippingProviderService } from '@/services/shipping-provider.service'
 import type { AddressInput } from '@/services/shipment.service'
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +12,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -28,7 +28,7 @@ export async function POST(
 
     if (!isShippingConfigured()) {
       return NextResponse.json(
-        { error: 'Stallion Express is not configured. Set STALLION_API_TOKEN in environment.' },
+        { error: 'Label purchase service is not configured. Set STALLION_API_TOKEN or enter tracking manually.' },
         { status: 503 }
       )
     }
@@ -36,7 +36,7 @@ export async function POST(
     const shipment = await ShipmentService.getShipmentById(params.id)
     if (!shipment) return NextResponse.json({ error: 'Shipment not found' }, { status: 404 })
     if (shipment.direction !== 'outbound') {
-      return NextResponse.json({ error: 'Stallion Express label purchase is only supported for outbound shipments' }, { status: 400 })
+      return NextResponse.json({ error: 'Label purchase is only supported for outbound shipments' }, { status: 400 })
     }
 
     const body = await request.json().catch(() => ({})) as {
@@ -70,8 +70,8 @@ export async function POST(
       ? (await supabase.from('orders').select('order_number').eq('id', shipment.order_id).single()).data?.order_number
       : undefined
 
-    // Purchase label via Stallion Express
-    const result = await StallionService.purchaseLabel({
+    // Purchase label via the configured shipping service
+    const result = await ShippingProviderService.purchaseLabel({
       fromAddress,
       toAddress,
       parcel,
@@ -95,7 +95,7 @@ export async function POST(
       purchased_by_id: user.id,
     })
 
-    return NextResponse.json({ ...updated, provider: 'stallion' })
+    return NextResponse.json({ ...updated, provider: 'shipping_provider' })
   } catch (error) {
     console.error('Error purchasing label:', error)
     return NextResponse.json(

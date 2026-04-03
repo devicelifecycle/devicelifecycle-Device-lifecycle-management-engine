@@ -17,7 +17,7 @@ export async function POST(
     if (!isValidUUID(params.id)) {
       return NextResponse.json({ error: 'Invalid order ID format' }, { status: 400 })
     }
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -122,7 +122,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

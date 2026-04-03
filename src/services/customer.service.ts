@@ -18,7 +18,7 @@ export class CustomerService {
   static async getCustomers(
     params: PaginationParams & { search?: string; organization_id?: string }
   ): Promise<PaginatedResponse<Customer>> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     
     const {
       page = 1,
@@ -70,7 +70,7 @@ export class CustomerService {
    * Get a single customer by ID
    */
   static async getCustomerById(id: string): Promise<Customer | null> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('customers')
@@ -90,7 +90,7 @@ export class CustomerService {
    * Create a new customer. orgId links to organizations table (type 'customer').
    */
   static async createCustomer(input: CreateCustomerInput, orgId?: string): Promise<Customer> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('customers')
@@ -121,7 +121,7 @@ export class CustomerService {
    * Update a customer
    */
   static async updateCustomer(id: string, input: Partial<CreateCustomerInput>): Promise<Customer> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('customers')
@@ -144,7 +144,7 @@ export class CustomerService {
    * Deactivate a customer (soft delete)
    */
   static async deactivateCustomer(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
       .from('customers')
@@ -160,7 +160,7 @@ export class CustomerService {
    * Get customer's orders
    */
   static async getCustomerOrders(customerId: string, limit = 10) {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('orders')
@@ -180,7 +180,7 @@ export class CustomerService {
    * Search customers (for autocomplete)
    */
   static async searchCustomers(query: string, limit = 10): Promise<Partial<Customer>[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('customers')

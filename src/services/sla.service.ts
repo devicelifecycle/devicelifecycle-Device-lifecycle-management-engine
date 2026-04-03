@@ -66,7 +66,7 @@ export class SLAService {
     hoursRemaining: number | null
     slaRule: SLARule | null
   }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Get applicable SLA rule
     const { data: slaRule } = await supabase
@@ -234,7 +234,7 @@ export class SLAService {
     const hoursSinceQuoted = (now.getTime() - quotedAt.getTime()) / (1000 * 60 * 60)
     let sent = 0
 
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     for (const intervalHours of CUSTOMER_REMINDER_INTERVALS_HOURS) {
       if (hoursSinceQuoted < intervalHours) continue
@@ -351,7 +351,7 @@ export class SLAService {
    * Get all SLA rules
    */
   static async getSLARules(): Promise<SLARule[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('sla_rules')
@@ -369,7 +369,7 @@ export class SLAService {
    * Create an SLA rule
    */
   static async createSLARule(input: Omit<SLARule, 'id' | 'created_at' | 'updated_at'>): Promise<SLARule> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('sla_rules')
@@ -388,7 +388,7 @@ export class SLAService {
    * Update an SLA rule
    */
   static async updateSLARule(id: string, input: Partial<SLARule>): Promise<SLARule> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('sla_rules')
@@ -411,7 +411,7 @@ export class SLAService {
    * Delete an SLA rule
    */
   static async deleteSLARule(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
       .from('sla_rules')

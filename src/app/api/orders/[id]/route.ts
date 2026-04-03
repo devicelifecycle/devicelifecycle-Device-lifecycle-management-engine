@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
+import { sanitizeOrderForVendor } from '@/lib/order-visibility'
 import { updateOrderSchema } from '@/lib/validations'
 import { isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!isValidUUID(params.id)) {
       return NextResponse.json({ error: 'Invalid order ID format' }, { status: 400 })
     }
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -73,19 +74,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Vendor can only access orders for their organization — and must not see customer names
+    // Vendor can only access orders for their organization and only gets fulfillment-safe data.
     if (role === 'vendor') {
       if (order.vendor?.organization_id === organization_id) {
-        const sanitized = { ...order }
-        if (sanitized.customer) {
-          sanitized.customer = {
-            ...sanitized.customer,
-            company_name: '—',
-            contact_name: '—',
-            contact_email: '—',
-          }
-        }
-        return NextResponse.json(sanitized)
+        return NextResponse.json(sanitizeOrderForVendor(order))
       }
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
@@ -103,7 +95,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -176,7 +168,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

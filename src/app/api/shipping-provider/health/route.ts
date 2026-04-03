@@ -1,26 +1,26 @@
 // ============================================================================
-// STALLION EXPRESS HEALTH CHECK API
+// SHIPPING PROVIDER HEALTH CHECK API
 // ============================================================================
 
 import { NextResponse } from 'next/server'
-import { StallionService } from '@/services/stallion.service'
+import { ShippingProviderService } from '@/services/shipping-provider.service'
 import { getActiveShippingProvider } from '@/services/shipment.service'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
     const provider = getActiveShippingProvider()
-    const health = await StallionService.healthCheck()
+    const health = await ShippingProviderService.healthCheck()
 
     return NextResponse.json({
       provider,
-      stallion: health,
-      isActive: provider === 'stallion',
+      shipping_provider: health,
+      isActive: provider === 'shipping_provider',
     })
   } catch (error) {
     return NextResponse.json({
       provider: getActiveShippingProvider(),
-      stallion: {
+      shipping_provider: {
         keyConfigured: Boolean(process.env.STALLION_API_TOKEN),
         apiReachable: false,
         keyValid: false,

@@ -41,7 +41,7 @@ export class NotificationService {
     unreadOnly = false,
     limit = 20
   ): Promise<Notification[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     let query = supabase
       .from('notifications')
@@ -67,7 +67,7 @@ export class NotificationService {
    * Get unread notification count
    */
   static async getUnreadCount(userId: string): Promise<number> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { count, error } = await supabase
       .from('notifications')
@@ -134,7 +134,7 @@ export class NotificationService {
    * Mark notification as read
    */
   static async markAsRead(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
       .from('notifications')
@@ -153,7 +153,7 @@ export class NotificationService {
    * Mark all notifications as read for a user
    */
   static async markAllAsRead(userId: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
       .from('notifications')
@@ -505,11 +505,11 @@ export class NotificationService {
   ): Promise<void> {
     try {
       // Use service-role — this may be called from cron context
-      let supabase: ReturnType<typeof createServerSupabaseClient>
+      let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>
       try {
-        supabase = createServerSupabaseClient()
+        supabase = await createServerSupabaseClient()
       } catch {
-        supabase = createServiceRoleClient() as unknown as ReturnType<typeof createServerSupabaseClient>
+        supabase = createServiceRoleClient() as unknown as Awaited<ReturnType<typeof createServerSupabaseClient>>
       }
       const { data: user } = await supabase
         .from('users')
