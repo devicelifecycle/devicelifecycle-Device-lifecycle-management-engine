@@ -6,6 +6,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { resolveComparablePricingDeviceId } from '@/lib/pricing-device-resolution'
 import { normalizeCompetitorName } from '@/lib/utils'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from './types'
@@ -29,6 +30,8 @@ const DISCOVERY_SCRAPERS = [
   { id: 'telus', fn: scrapeTelusFullCatalog },
   { id: 'universal', fn: scrapeUniversalFullCatalog },
 ] as const
+
+export type ScraperProviderId = typeof SCRAPERS[number]['id']
 
 const SCRAPER_CONDITIONS: Array<'excellent' | 'good' | 'fair' | 'broken'> = ['excellent', 'good', 'fair', 'broken']
 
@@ -288,7 +291,9 @@ async function resolveDeviceId(
     const scrapedExtendsCatalog = modelTokenMatch(modelNorm, dm) && modelNorm !== dm
     const catalogExtendsScraped = modelTokenMatch(dm, modelNorm) && dm !== modelNorm
     const modelMatches = exactMatch || (scrapedExtendsCatalog && !catalogExtendsScraped)
-    if (modelMatches && checkStorage(d)) return d.id
+    if (modelMatches && checkStorage(d)) {
+      return resolveComparablePricingDeviceId(supabase, d.id)
+    }
   }
 
   // Pass 2: Core model name match (strips year/chip/generation suffixes)
@@ -297,7 +302,9 @@ async function resolveDeviceId(
   if (scrapedCore.length >= 5) { // Avoid matching very short cores
     for (const d of devices) {
       const catalogCore = coreModelName((d as { model?: string }).model ?? '')
-      if (scrapedCore === catalogCore && checkStorage(d)) return d.id
+      if (scrapedCore === catalogCore && checkStorage(d)) {
+        return resolveComparablePricingDeviceId(supabase, d.id)
+      }
     }
   }
 
@@ -398,7 +405,7 @@ async function ensureDevice(supabase: SupabaseClient, make: string, model: strin
           updated_at: new Date().toISOString(),
         }).eq('id', d.id)
       }
-      return d.id
+      return resolveComparablePricingDeviceId(supabase, d.id)
     }
   }
 
@@ -417,7 +424,7 @@ async function ensureDevice(supabase: SupabaseClient, make: string, model: strin
     .single()
 
   if (error) throw new Error(`Failed to create device: ${error.message}`)
-  return created.id
+  return resolveComparablePricingDeviceId(supabase, created.id)
 }
 
 // ============================================================================
@@ -458,12 +465,16 @@ async function runScraperSafe(
 export async function runScraperPipeline(
   devices?: DeviceToScrape[],
   supabaseClient?: SupabaseClient,
-  discovery = true
+  discovery = true,
+  providerIds?: ScraperProviderId[]
 ): Promise<PipelineResult> {
   const supabase = supabaseClient ?? await createServerSupabaseClient()
   const errors: string[] = []
   let devicesCreated = 0
   const resolveDevice = createDeviceIdResolver(supabase)
+  const selectedProviders = providerIds && providerIds.length > 0
+    ? new Set(providerIds)
+    : null
 
   const results: ScraperResult[] = []
   const allPrices: ScrapedPrice[] = []
@@ -474,11 +485,15 @@ export async function runScraperPipeline(
     const expandedDevices = expandDevicesByCondition(devicesToScrape)
 
     const scraperPromises = [
-      ...DISCOVERY_SCRAPERS.map(({ id, fn }) =>
+      ...DISCOVERY_SCRAPERS
+        .filter(({ id }) => !selectedProviders || selectedProviders.has(id))
+        .map(({ id, fn }) =>
         runScraperSafe(id, () => (fn as () => Promise<ScraperResult>)())
-      ),
+        ),
       // Apple doesn't have a discovery mode — run with expanded devices
-      runScraperSafe('apple', () => scrapeApple(expandedDevices)),
+      ...(!selectedProviders || selectedProviders.has('apple')
+        ? [runScraperSafe('apple', () => scrapeApple(expandedDevices))]
+        : []),
     ]
 
     const settled = await Promise.allSettled(scraperPromises)
@@ -500,9 +515,9 @@ export async function runScraperPipeline(
     }
     const expandedDevices = expandDevicesByCondition(devicesToScrape!)
 
-    const scraperPromises = SCRAPERS.map(({ id, fn }) =>
-      runScraperSafe(id, () => fn(expandedDevices))
-    )
+    const scraperPromises = SCRAPERS
+      .filter(({ id }) => !selectedProviders || selectedProviders.has(id))
+      .map(({ id, fn }) => runScraperSafe(id, () => fn(expandedDevices)))
 
     const settled = await Promise.allSettled(scraperPromises)
     for (const outcome of settled) {

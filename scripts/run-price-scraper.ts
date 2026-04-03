@@ -13,6 +13,21 @@ config({ path: '.env.local', override: true })
 config({ path: '.env', override: true })
 
 import { runScraperPipeline } from '../src/lib/scrapers'
+import type { ScraperProviderId } from '../src/lib/scrapers'
+
+const VALID_PROVIDERS: ScraperProviderId[] = ['gorecell', 'telus', 'bell', 'universal', 'apple']
+
+function parseProviders(): ScraperProviderId[] | undefined {
+  const raw = process.argv.find((arg) => arg.startsWith('--providers='))?.split('=')[1]
+  if (!raw) return undefined
+
+  const providers = raw
+    .split(',')
+    .map((provider) => provider.trim().toLowerCase())
+    .filter((provider): provider is ScraperProviderId => VALID_PROVIDERS.includes(provider as ScraperProviderId))
+
+  return providers.length > 0 ? providers : undefined
+}
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
@@ -25,9 +40,13 @@ async function main() {
   }
 
   console.log('Starting price scraper pipeline...\n')
+  const providers = parseProviders()
+  if (providers?.length) {
+    console.log(`Providers: ${providers.join(', ')}\n`)
+  }
 
   const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-  const result = await runScraperPipeline(undefined, supabase)
+  const result = await runScraperPipeline(undefined, supabase, true, providers)
 
   console.log('Scraper complete.')
   console.log(`  Total scraped: ${result.total_scraped}`)

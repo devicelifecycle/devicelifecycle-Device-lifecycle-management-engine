@@ -7,10 +7,17 @@
 
 import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import { resolveComparablePricingDeviceId } from '../src/lib/pricing-device-resolution'
 import { PricingService } from '../src/services/pricing.service'
 
 config({ path: '.env.local', override: true })
 config({ path: '.env', override: true })
+
+function readArg(name: string): string | undefined {
+  const prefix = `--${name}=`
+  const raw = process.argv.find((arg) => arg.startsWith(prefix))
+  return raw ? raw.slice(prefix.length).trim() : undefined
+}
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
@@ -24,6 +31,10 @@ async function main() {
   const supabase = createClient(url, key)
   const pricingSupabase = createClient(url, key)
   const SEP = '='.repeat(60)
+  const requestedMake = readArg('make')
+  const requestedModel = readArg('model')
+  const requestedStorage = readArg('storage')
+  const requestedCondition = readArg('condition')
 
   console.log('\n' + SEP)
   console.log('  1. COMPETITOR_PRICES OVERVIEW')
@@ -96,10 +107,42 @@ async function main() {
 
   let sampleKey: string | null = null
   let maxCount = 0
-  for (const [k, v] of byKey.entries()) {
-    if (v.length > maxCount) {
-      maxCount = v.length
-      sampleKey = k
+
+  if (requestedMake && requestedModel) {
+    const { data: matchingDevices } = await supabase
+      .from('device_catalog')
+      .select('id, make, model')
+      .eq('make', requestedMake)
+      .eq('model', requestedModel)
+      .eq('is_active', true)
+
+    const candidateIds = (matchingDevices || []).map((device) => device.id)
+    if (candidateIds.length === 0) {
+      console.log(`  No active device_catalog rows found for ${requestedMake} ${requestedModel}`)
+      return
+    }
+
+    console.log(`  Requested device: ${requestedMake} ${requestedModel}`)
+    console.log(`  Candidate device IDs: ${candidateIds.join(', ')}`)
+
+    const matchingKeys = Array.from(byKey.entries())
+      .filter(([key]) => {
+        const [candidateDeviceId, storage, condition] = key.split('|')
+        if (!candidateIds.includes(candidateDeviceId)) return false
+        if (requestedStorage && storage !== requestedStorage) return false
+        if (requestedCondition && condition !== requestedCondition) return false
+        return true
+      })
+      .sort((left, right) => right[1].length - left[1].length)
+
+    sampleKey = matchingKeys[0]?.[0] || null
+    maxCount = matchingKeys[0]?.[1].length || 0
+  } else {
+    for (const [k, v] of byKey.entries()) {
+      if (v.length > maxCount) {
+        maxCount = v.length
+        sampleKey = k
+      }
     }
   }
 
@@ -110,6 +153,7 @@ async function main() {
 
   const [deviceId, storage, condition] = sampleKey.split('|')
   const competitorsForDevice = byKey.get(sampleKey)!
+  const resolvedDeviceId = await resolveComparablePricingDeviceId(pricingSupabase, deviceId)
 
   const highest = Math.max(...competitorsForDevice.map(c => c.trade_in_price))
   const avg = competitorsForDevice.reduce((s, c) => s + c.trade_in_price, 0) / competitorsForDevice.length
@@ -125,11 +169,17 @@ async function main() {
     .single()
 
   console.log(`  Device: ${(device?.make ?? '')} ${(device?.model ?? '')} | ${storage} | ${condition}`)
+  console.log(`  Quoted device_id: ${deviceId}`)
+  console.log(`  Resolved pricing device_id: ${resolvedDeviceId}`)
   console.log('  Competitors:')
   for (const c of competitorsForDevice) {
     console.log(`    - ${c.competitor_name}: $${c.trade_in_price}`)
   }
   console.log(`  Highest: $${highest} | Avg: $${avg.toFixed(2)}`)
+  const gorecellRow = competitorsForDevice.find((entry) => entry.competitor_name === 'GoRecell')
+  if (gorecellRow) {
+    console.log(`  GoRecell exact price: $${gorecellRow.trade_in_price}`)
+  }
   console.log(`  Fallback V2 quote if beat=${beatPct}%: $${ourBeatPrice}`)
   console.log(`  Ceiling (top + ${ceilingPct}%): $${ceiling}`)
   console.log(`  → Fallback beat price is ${((ourBeatPrice - highest) / highest * 100).toFixed(1)}% above top competitor`)

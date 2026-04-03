@@ -51,7 +51,7 @@ describe('PricingService.getCompetitorPrices ordering', () => {
       },
     ]
 
-    const query = {
+    const competitorQuery = {
       select: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       range: vi.fn().mockReturnThis(),
@@ -59,9 +59,17 @@ describe('PricingService.getCompetitorPrices ordering', () => {
       then: (resolve: (value: { data: typeof rows; error: null }) => unknown) =>
         resolve({ data: rows, error: null }),
     }
+    const deviceQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
 
     createServerSupabaseClientMock.mockReturnValue({
-      from: vi.fn().mockReturnValue(query),
+      from: vi.fn((table: string) => {
+        if (table === 'device_catalog') return deviceQuery
+        return competitorQuery
+      }),
     })
 
     const { PricingService } = await import('@/services/pricing.service')
@@ -107,6 +115,14 @@ describe('PricingService.getCompetitorPrices ordering', () => {
     ]
 
     const fromMock = vi.fn().mockImplementation((table: string) => {
+      if (table === 'device_catalog') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }
+      }
+
       expect(table).toBe('competitor_prices')
       let start = 0
 
@@ -136,7 +152,7 @@ describe('PricingService.getCompetitorPrices ordering', () => {
     const result = await PricingService.getCompetitorPrices('d1')
 
     expect(result).toHaveLength(1002)
-    expect(fromMock).toHaveBeenCalledTimes(2)
+    expect(fromMock.mock.calls.filter(([table]) => table === 'competitor_prices')).toHaveLength(2)
     expect(result.at(-1)?.storage).toBe('512GB')
   })
 })

@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { resolveComparablePricingDeviceId } from '@/lib/pricing-device-resolution'
 import { sanitizeSearchInput } from '@/lib/utils'
 import { PricingModelRegistry } from '@/models/pricing'
 import {
@@ -224,7 +225,12 @@ export class PricingService {
     enterprise_margin_percent?: number;
     cpo_markup_percent?: number;
   }, supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<PriceCalculationResultV2> {
-    const settings = await this.getPricingSettings(supabaseClient)
+    const supabase = supabaseClient ?? await createServerSupabaseClient()
+    const resolvedDeviceId = await resolveComparablePricingDeviceId(supabase, input.device_id)
+    const normalizedInput = resolvedDeviceId === input.device_id
+      ? input
+      : { ...input, device_id: resolvedDeviceId }
+    const settings = await this.getPricingSettings(supabase)
     const hasFormulaOverrides =
       input.beat_competitor_percent != null ||
       input.trade_in_profit_percent != null ||
@@ -238,13 +244,13 @@ export class PricingService {
     if (shouldUseDataDriven) {
       const model = PricingModelRegistry.get('data_driven')
       if (model) {
-        const qty = input.quantity ?? 1
+        const qty = normalizedInput.quantity ?? 1
         const modelResult = await Promise.resolve(model.calculate({
-          device_id: input.device_id,
-          storage: input.storage ?? '128GB',
-          carrier: input.carrier ?? 'Unlocked',
-          condition: input.condition,
-          issues: input.issues,
+          device_id: normalizedInput.device_id,
+          storage: normalizedInput.storage ?? '128GB',
+          carrier: normalizedInput.carrier ?? 'Unlocked',
+          condition: normalizedInput.condition,
+          issues: normalizedInput.issues,
           quantity: qty,
           purpose: 'buy',
         }))
@@ -253,10 +259,10 @@ export class PricingService {
           const adaptedResult = this.adaptModelResultToV2(
             modelResult,
             qty,
-            input.risk_mode || 'retail'
+            normalizedInput.risk_mode || 'retail'
           )
 
-          const fallbackResult = await this.calculatePriceV2(input, supabaseClient)
+          const fallbackResult = await this.calculatePriceV2(normalizedInput, supabase)
           const adaptedTradePrice = adaptedResult.trade_price
           const fallbackTradePrice = fallbackResult.trade_price
 
@@ -288,7 +294,7 @@ export class PricingService {
       }
     }
 
-    return this.calculatePriceV2(input, supabaseClient)
+    return this.calculatePriceV2(normalizedInput, supabase)
   }
 
   /**
@@ -355,16 +361,20 @@ export class PricingService {
     cpo_markup_percent?: number;
   }, supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<PriceCalculationResultV2> {
     const supabase = supabaseClient ?? await createServerSupabaseClient()
-    const carrier = input.carrier || 'Unlocked'
-      const settings = await this.getPricingSettings(supabase)
+    const resolvedDeviceId = await resolveComparablePricingDeviceId(supabase, input.device_id)
+    const normalizedInput = resolvedDeviceId === input.device_id
+      ? input
+      : { ...input, device_id: resolvedDeviceId }
+    const carrier = normalizedInput.carrier || 'Unlocked'
+    const settings = await this.getPricingSettings(supabase)
 
     try {
       // Step 1: Get market reference prices
       const { data: marketEntry } = await supabase
         .from('market_prices')
         .select('*, device:device_catalog(*)')
-        .eq('device_id', input.device_id)
-        .eq('storage', input.storage)
+        .eq('device_id', normalizedInput.device_id)
+        .eq('storage', normalizedInput.storage)
         .eq('carrier', carrier)
         .eq('is_active', true)
         .lte('effective_date', new Date().toISOString().split('T')[0])
@@ -375,12 +385,12 @@ export class PricingService {
       // Anchor priority: prefer competitor data when available (trade-in offers) over market wholesale.
       // Wholesale/market can inflate quotes; competitors reflect what customers actually get.
       // First try same-condition competitors, then fall back to all conditions.
-      const competitorConditionForAnchor = mapDeviceConditionToCompetitorCondition(input.condition)
+      const competitorConditionForAnchor = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
       const { data: compForAnchorCondition } = await supabase
         .from('competitor_prices')
         .select('trade_in_price, updated_at, scraped_at')
-        .eq('device_id', input.device_id)
-        .eq('storage', input.storage)
+        .eq('device_id', normalizedInput.device_id)
+        .eq('storage', normalizedInput.storage)
         .eq('condition', competitorConditionForAnchor)
         .not('trade_in_price', 'is', null)
         .gt('trade_in_price', 0)
@@ -403,8 +413,8 @@ export class PricingService {
         const { data: compForAnchorAll } = await supabase
           .from('competitor_prices')
           .select('trade_in_price, updated_at, scraped_at')
-          .eq('device_id', input.device_id)
-          .eq('storage', input.storage)
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
           .not('trade_in_price', 'is', null)
           .gt('trade_in_price', 0)
         freshCompetitorPrices = extractFreshPrices(compForAnchorAll)
@@ -427,8 +437,8 @@ export class PricingService {
         const { data: pricingEntry } = await supabase
           .from('pricing_tables')
           .select('*')
-          .eq('device_id', input.device_id)
-          .eq('storage', input.storage)
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
           .eq('condition', 'new')
           .eq('carrier', carrier)
           .eq('is_active', true)
@@ -443,8 +453,8 @@ export class PricingService {
         const { data: compFallback } = await supabase
           .from('competitor_prices')
           .select('trade_in_price')
-          .eq('device_id', input.device_id)
-          .eq('storage', input.storage)
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
         const tradePrices = (compFallback || [])
           .map((c: { trade_in_price?: number }) => c.trade_in_price || 0)
           .filter((p: number) => p > 0)
@@ -459,7 +469,7 @@ export class PricingService {
         const { data: compAnyStorage } = await supabase
           .from('competitor_prices')
           .select('trade_in_price')
-          .eq('device_id', input.device_id)
+          .eq('device_id', normalizedInput.device_id)
         const tradePrices = (compAnyStorage || [])
           .map((c: { trade_in_price?: number }) => c.trade_in_price || 0)
           .filter((p: number) => p > 0)
@@ -472,7 +482,7 @@ export class PricingService {
         const { data: marketAnyStorage } = await supabase
           .from('market_prices')
           .select('wholesale_c_stock')
-          .eq('device_id', input.device_id)
+          .eq('device_id', normalizedInput.device_id)
           .eq('is_active', true)
           .not('wholesale_c_stock', 'is', null)
           .limit(10)
@@ -488,15 +498,15 @@ export class PricingService {
       // Fallback: trained_pricing_baselines — our own historical data
       // Checks: exact (device+storage+condition) → any storage → cross-condition
       if (!anchorPrice) {
-        const condMult = CONDITION_MULTIPLIERS[input.condition] ?? 0.85
+        const condMult = CONDITION_MULTIPLIERS[normalizedInput.condition] ?? 0.85
 
         // 1. Exact match
         const { data: exactBaseline } = await supabase
           .from('trained_pricing_baselines')
           .select('median_trade_price')
-          .eq('device_id', input.device_id)
-          .eq('storage', input.storage)
-          .eq('condition', input.condition)
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
+          .eq('condition', normalizedInput.condition)
           .order('last_trained_at', { ascending: false })
           .limit(1)
           .single()
@@ -510,8 +520,8 @@ export class PricingService {
           const { data: anyStorage } = await supabase
             .from('trained_pricing_baselines')
             .select('median_trade_price, condition')
-            .eq('device_id', input.device_id)
-            .eq('condition', input.condition)
+            .eq('device_id', normalizedInput.device_id)
+            .eq('condition', normalizedInput.condition)
             .gt('median_trade_price', 0)
             .limit(1)
             .single()
@@ -526,7 +536,7 @@ export class PricingService {
           const { data: otherCond } = await supabase
             .from('trained_pricing_baselines')
             .select('median_trade_price, condition')
-            .eq('device_id', input.device_id)
+            .eq('device_id', normalizedInput.device_id)
             .gt('median_trade_price', 0)
             .order('last_trained_at', { ascending: false })
             .limit(5)
@@ -542,20 +552,20 @@ export class PricingService {
       }
 
       // Step 2: Pull competitor prices early so competitor-backed devices can still quote
-      const competitorCondition = mapDeviceConditionToCompetitorCondition(input.condition)
+      const competitorCondition = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
       let { data: competitorData } = await supabase
         .from('competitor_prices')
         .select('*')
-        .eq('device_id', input.device_id)
-        .eq('storage', input.storage)
+        .eq('device_id', normalizedInput.device_id)
+        .eq('storage', normalizedInput.storage)
         .eq('condition', competitorCondition)
 
       if (!competitorData || competitorData.length === 0) {
         const fallback = await supabase
           .from('competitor_prices')
           .select('*')
-          .eq('device_id', input.device_id)
-          .eq('storage', input.storage)
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
         competitorData = fallback.data || []
       }
 
@@ -575,13 +585,13 @@ export class PricingService {
       }
 
       // Step 3: Apply condition multiplier (only when anchor is a base/"new" equivalent)
-      const conditionMultiplier = CONDITION_MULTIPLIERS[input.condition] || 1.0
+      const conditionMultiplier = CONDITION_MULTIPLIERS[normalizedInput.condition] || 1.0
       const conditionAdjustment = anchorIsBaseNormalized ? anchorPrice * (1 - conditionMultiplier) : 0
       let adjustedPrice = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
 
       // Step 4: Apply functional deductions (map triage labels to deduction keys)
       let totalDeductions = 0
-      const deductionKeys = mapIssuesToDeductionKeys(input.issues || [])
+      const deductionKeys = mapIssuesToDeductionKeys(normalizedInput.issues || [])
       if (deductionKeys.length > 0) {
         for (const issue of deductionKeys) {
           const deduction = FUNCTIONAL_DEDUCTIONS[issue]
@@ -601,7 +611,7 @@ export class PricingService {
       // Ensure price never goes negative after deductions
       adjustedPrice = Math.max(adjustedPrice, 0)
 
-      const isBroken = isBrokenDevice(input.condition, deductionKeys)
+      const isBroken = isBrokenDevice(normalizedInput.condition, deductionKeys)
 
       const rawCompetitors: Array<{ name: string; price: number }> = []
       const rawCompetitorSellPrices: number[] = []
@@ -642,7 +652,7 @@ export class PricingService {
         : 0
 
       // Step 5: Risk mode — enterprise has lower margin target. API overrides take precedence over saved settings.
-      const riskMode: RiskMode = input.risk_mode || 'retail'
+      const riskMode: RiskMode = normalizedInput.risk_mode || 'retail'
       const enterpriseOverride = input.enterprise_margin_percent != null && input.enterprise_margin_percent >= 0
       const retailOverride = input.trade_in_profit_percent != null && input.trade_in_profit_percent >= 0
       let marginTargetPercent: number
@@ -873,8 +883,8 @@ export class PricingService {
       const { data: recentSales } = await supabase
         .from('sales_history')
         .select('sold_price')
-        .eq('device_id', input.device_id)
-        .eq('storage', input.storage)
+        .eq('device_id', normalizedInput.device_id)
+        .eq('storage', normalizedInput.storage)
         .gte('sold_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
         .limit(20)
 
@@ -1008,14 +1018,17 @@ export class PricingService {
 
   static async getMarketPrices(deviceId?: string): Promise<MarketPrice[]> {
     const supabase = await createServerSupabaseClient()
+    const resolvedDeviceId = deviceId
+      ? await resolveComparablePricingDeviceId(supabase, deviceId)
+      : undefined
     let query = supabase
       .from('market_prices')
       .select('*, device:device_catalog(*)')
       .eq('is_active', true)
       .order('effective_date', { ascending: false })
 
-    if (deviceId) {
-      query = query.eq('device_id', deviceId)
+    if (resolvedDeviceId) {
+      query = query.eq('device_id', resolvedDeviceId)
     }
 
     const { data, error } = await query
@@ -1070,8 +1083,11 @@ export class PricingService {
     const supabase = await createServerSupabaseClient()
     const pageSize = 1000
     let matchedDeviceIds: string[] | null = null
+    const resolvedDeviceId = deviceId
+      ? await resolveComparablePricingDeviceId(supabase, deviceId)
+      : undefined
 
-    if (search && !deviceId) {
+    if (search && !resolvedDeviceId) {
       const s = sanitizeSearchInput(search)
       if (s) {
         const { data: devices } = await supabase
@@ -1095,8 +1111,8 @@ export class PricingService {
         .order('updated_at', { ascending: false })
         .range(page * pageSize, ((page + 1) * pageSize) - 1)
 
-      if (deviceId) {
-        query = query.eq('device_id', deviceId)
+      if (resolvedDeviceId) {
+        query = query.eq('device_id', resolvedDeviceId)
       }
 
       if (condition) {
@@ -1222,7 +1238,10 @@ export class PricingService {
 
   static async calculatePrice(input: PriceCalculationInput): Promise<PriceCalculationResult> {
     const supabase = await createServerSupabaseClient()
-    const deviceId = input.device_id || input.device_catalog_id
+    const rawDeviceId = input.device_id || input.device_catalog_id
+    const deviceId = rawDeviceId
+      ? await resolveComparablePricingDeviceId(supabase, rawDeviceId)
+      : rawDeviceId
 
     try {
       const { data: pricingEntry, error: pricingError } = await supabase
@@ -1390,13 +1409,16 @@ export class PricingService {
 
   static async getPricingTables(deviceCatalogId?: string): Promise<PricingTable[]> {
     const supabase = await createServerSupabaseClient()
+    const resolvedDeviceId = deviceCatalogId
+      ? await resolveComparablePricingDeviceId(supabase, deviceCatalogId)
+      : undefined
     let query = supabase
       .from('pricing_tables')
       .select('*, device:device_catalog(*)')
       .order('effective_date', { ascending: false })
 
-    if (deviceCatalogId) {
-      query = query.eq('device_id', deviceCatalogId)
+    if (resolvedDeviceId) {
+      query = query.eq('device_id', resolvedDeviceId)
     }
 
     const { data, error } = await query
@@ -1453,10 +1475,11 @@ export class PricingService {
     average_price: number | null
   }> {
     const supabase = await createServerSupabaseClient()
+    const deviceId = await resolveComparablePricingDeviceId(supabase, input.device_id)
     const { data } = await supabase
       .from('competitor_prices')
       .select('competitor_name, trade_in_price, retrieved_at, scraped_at, updated_at')
-      .eq('device_id', input.device_id)
+      .eq('device_id', deviceId)
       .eq('storage', input.storage)
       .eq('condition', input.condition)
       .not('trade_in_price', 'is', null)
