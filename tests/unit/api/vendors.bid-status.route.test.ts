@@ -183,7 +183,7 @@ describe('PATCH /api/vendors/bids/[id]', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ status: 'accepted', cpo_markup_percent: 20 }),
       }),
-      { params: { id: 'bid-1' } },
+      { params: Promise.resolve({ id: 'bid-1' }) },
     )
 
     expect(response.status).toBe(200)
@@ -224,7 +224,7 @@ describe('PATCH /api/vendors/bids/[id]', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ status: 'pending' }),
       }),
-      { params: { id: 'bid-1' } },
+      { params: Promise.resolve({ id: 'bid-1' }) },
     )
 
     expect(response.status).toBe(400)

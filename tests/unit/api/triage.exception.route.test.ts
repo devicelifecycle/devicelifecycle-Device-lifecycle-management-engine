@@ -95,7 +95,7 @@ describe('POST /api/triage/[id]/exception', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ approved: true, notes: 'Approved by customer' }),
       }),
-      { params: { id: 'triage-1' } },
+      { params: Promise.resolve({ id: 'triage-1' }) },
     )
 
     expect(response.status).toBe(200)
@@ -131,7 +131,7 @@ describe('POST /api/triage/[id]/exception', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ approved: false }),
       }),
-      { params: { id: 'triage-2' } },
+      { params: Promise.resolve({ id: 'triage-2' }) },
     )
 
     expect(response.status).toBe(403)
@@ -162,7 +162,7 @@ describe('POST /api/triage/[id]/exception', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ approved: 'yes' }),
       }),
-      { params: { id: 'triage-3' } },
+      { params: Promise.resolve({ id: 'triage-3' }) },
     )
 
     expect(response.status).toBe(400)

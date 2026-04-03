@@ -175,7 +175,7 @@ export default function VendorOrdersPage() {
       </div>
 
       <Tabs defaultValue="open" className="space-y-4">
-        <TabsList>
+        <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="open">
             Open to Bid ({openTotal})
           </TabsTrigger>

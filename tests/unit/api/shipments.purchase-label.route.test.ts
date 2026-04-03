@@ -75,7 +75,7 @@ describe('POST /api/shipments/[id]/purchase-label', () => {
         method: 'POST',
         body: JSON.stringify({}),
       }),
-      { params: { id: 'shipment-1' } }
+      { params: Promise.resolve({ id: 'shipment-1' }) }
     )
 
     expect(response.status).toBe(401)
@@ -91,7 +91,7 @@ describe('POST /api/shipments/[id]/purchase-label', () => {
         method: 'POST',
         body: JSON.stringify({}),
       }),
-      { params: { id: 'shipment-1' } }
+      { params: Promise.resolve({ id: 'shipment-1' }) }
     )
 
     expect(response.status).toBe(400)
@@ -109,7 +109,7 @@ describe('POST /api/shipments/[id]/purchase-label', () => {
         method: 'POST',
         body: JSON.stringify({ preferredCarrier: 'FedEx' }),
       }),
-      { params: { id: 'shipment-1' } }
+      { params: Promise.resolve({ id: 'shipment-1' }) }
     )
 
     expect(response.status).toBe(200)

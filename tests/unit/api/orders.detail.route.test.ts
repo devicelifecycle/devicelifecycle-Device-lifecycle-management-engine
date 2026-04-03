@@ -92,7 +92,7 @@ describe('GET /api/orders/[id]', () => {
     const { GET } = await import('@/app/api/orders/[id]/route')
     const response = await GET(
       new NextRequest('http://localhost:3000/api/orders/7e50e74e-313e-432e-9d04-8dd5f9fa15aa'),
-      { params: { id: '7e50e74e-313e-432e-9d04-8dd5f9fa15aa' } },
+      { params: Promise.resolve({ id: '7e50e74e-313e-432e-9d04-8dd5f9fa15aa' }) },
     )
     const json = await response.json()
 
