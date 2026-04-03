@@ -407,6 +407,37 @@ export class TriageService {
       })
       .eq('id', triageResult.imei_record_id)
 
+    // When approved, persist the adjusted final_price on the order item and recalculate order final_amount
+    if (approved && imeiRecord?.order_item_id && existingTriage?.order?.id) {
+      const resolvedQuotedPrice = imeiRecord.quoted_price ?? 0
+      const priceAdjustment = existingTriage.price_adjustment ?? 0
+      const newPrice = resolvedQuotedPrice + priceAdjustment
+
+      await supabase
+        .from('order_items')
+        .update({ final_price: newPrice, updated_at: new Date().toISOString() })
+        .eq('id', imeiRecord.order_item_id)
+
+      // Recalculate final_amount for the order as sum of final_price * quantity
+      const { data: allItems } = await supabase
+        .from('order_items')
+        .select('final_price, quoted_price, unit_price, quantity')
+        .eq('order_id', existingTriage.order.id as string)
+
+      if (allItems && allItems.length > 0) {
+        const finalAmount = allItems.reduce((sum, item) => {
+          const price = (item.final_price ?? item.quoted_price ?? item.unit_price ?? 0) as number
+          const qty = (item.quantity ?? 1) as number
+          return sum + price * qty
+        }, 0)
+
+        await supabase
+          .from('orders')
+          .update({ final_amount: finalAmount, updated_at: new Date().toISOString() })
+          .eq('id', existingTriage.order.id as string)
+      }
+    }
+
     // When rejected, clear order_item.actual_condition for manual mismatches (admin-added via order page)
     if (!approved && imeiRecord?.order_item_id && String(imeiRecord?.imei || '').startsWith('MANUAL-')) {
       await supabase

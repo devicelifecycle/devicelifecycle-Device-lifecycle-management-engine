@@ -443,6 +443,25 @@ export class OrderService {
         // Trade-in quotes valid for 30 days
         const expiryDays = 30
         updateData.quote_expires_at = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000).toISOString()
+
+        // Calculate quoted_amount from order_items if not already set
+        if (!order.quoted_amount) {
+          const { data: orderItems } = await supabase
+            .from('order_items')
+            .select('unit_price, quantity')
+            .eq('order_id', id)
+
+          if (orderItems && orderItems.length > 0) {
+            const totalSum = orderItems.reduce(
+              (sum, item) => sum + ((item.unit_price ?? 0) * (item.quantity ?? 1)),
+              0
+            )
+            updateData.quoted_amount = totalSum
+            if (!order.total_amount) {
+              updateData.total_amount = totalSum
+            }
+          }
+        }
         break
       }
       case 'accepted':
