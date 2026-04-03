@@ -1146,12 +1146,15 @@ export default function OrderDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approved }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to update device condition')
+      }
       toast.success(approved ? 'Device condition approved' : 'Device condition rejected')
       setPendingExceptions(prev => prev.filter(e => e.id !== triageResultId))
-      refetch()
-    } catch {
-      toast.error('Failed to update device condition')
+      await refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update device condition')
     } finally {
       setExceptionProcessingId(null)
     }
@@ -1473,16 +1476,16 @@ export default function OrderDetailPage() {
                     <p className="font-medium">{formatCurrency(order.total_amount || 0)}</p>
                   </div>
                 )}
-                {canViewCommercials && order.quoted_amount && (
+                {canViewCommercials && (order.quoted_amount ?? 0) > 0 && (
                   <div>
                     <p className="text-sm text-muted-foreground">Quoted Amount</p>
-                    <p className="font-medium">{formatCurrency(order.quoted_amount)}</p>
+                    <p className="font-medium">{formatCurrency(order.quoted_amount ?? 0)}</p>
                   </div>
                 )}
-                {canViewCommercials && order.final_amount && (
+                {canViewCommercials && (order.final_amount ?? 0) > 0 && (
                   <div>
                     <p className="text-sm text-muted-foreground">Final Amount</p>
-                    <p className="font-medium text-green-600">{formatCurrency(order.final_amount)}</p>
+                    <p className="font-medium text-green-600">{formatCurrency(order.final_amount ?? 0)}</p>
                   </div>
                 )}
               </div>
