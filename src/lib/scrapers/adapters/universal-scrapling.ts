@@ -27,6 +27,14 @@ type ComparisonSummary = {
   }>
 }
 
+function pricedRowCount(result: ScraperResult): number {
+  return result.prices.filter((price) => price.trade_in_price != null || price.sell_price != null).length
+}
+
+function getDualPreferredImplementation(): 'ts' | 'scrapling' {
+  return (process.env.SCRAPER_DUAL_PREFER || 'scrapling').trim().toLowerCase() === 'ts' ? 'ts' : 'scrapling'
+}
+
 function isValidCondition(value: unknown): value is NonNullable<ScrapedPrice['condition']> {
   return value === 'excellent' || value === 'good' || value === 'fair' || value === 'broken'
 }
@@ -311,11 +319,31 @@ export async function runUniverCellScraperPilot(options: {
     runUniverCellScraplingWorker(options.devices, discovery),
   ])
   const comparison = compareScraperResults(tsResult, scraplingResult)
+  const preferred = getDualPreferredImplementation()
+  let selected: 'ts' | 'scrapling' = 'ts'
+
+  if (scraplingResult.success && !tsResult.success) {
+    selected = 'scrapling'
+  } else if (tsResult.success && !scraplingResult.success) {
+    selected = 'ts'
+  } else if (scraplingResult.success && tsResult.success) {
+    const tsCount = pricedRowCount(tsResult)
+    const scraplingCount = pricedRowCount(scraplingResult)
+    if (scraplingCount > tsCount) {
+      selected = 'scrapling'
+    } else if (tsCount > scraplingCount) {
+      selected = 'ts'
+    } else {
+      selected = preferred
+    }
+  } else {
+    selected = preferred
+  }
 
   console.info(
     '[scraper:univercell:dual]',
     JSON.stringify({
-      implementation_returned: 'ts',
+      implementation_returned: selected,
       ts_success: tsResult.success,
       scrapling_success: scraplingResult.success,
       scrapling_error: scraplingResult.error,
@@ -323,7 +351,7 @@ export async function runUniverCellScraperPilot(options: {
     })
   )
 
-  return tsResult
+  return selected === 'scrapling' ? scraplingResult : tsResult
 }
 
 export const __internal = {

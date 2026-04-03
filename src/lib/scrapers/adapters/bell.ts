@@ -123,6 +123,7 @@ function selectBestBellProduct(
   const modelToken = normalizeText(device.model)
   const storageToken = normalizeStorage(device.storage)
   const makeToken = normalizeText(device.make)
+  const variantKeywords = ['max', 'plus', 'ultra', 'mini', 'fold', 'flip', 'fe', 'pro']
 
   const scored = products
     .map((product) => {
@@ -135,6 +136,12 @@ function selectBestBellProduct(
       if (modelToken && titleToken.includes(modelToken)) score += 5
       if (storageToken && titleStorage.includes(storageToken)) score += 3
       if (!storageToken) score += 1
+
+      for (const keyword of variantKeywords) {
+        const deviceHas = modelToken.includes(keyword)
+        const candidateHas = titleToken.includes(keyword)
+        if (deviceHas !== candidateHas) score -= 10
+      }
 
       return {
         product,

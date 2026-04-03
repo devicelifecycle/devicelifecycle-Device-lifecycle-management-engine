@@ -140,20 +140,78 @@ async function discoverActionIds(): Promise<boolean> {
 
     if (candidates.length === 0) return false
 
-    // Validate: the getDeviceTypes action accepts no arguments and returns
+    const isDeviceTypesPayload = (value: unknown): value is UniverCellDeviceType[] =>
+      Array.isArray(value) &&
+      value.length > 0 &&
+      typeof value[0]?.id === 'string' &&
+      typeof value[0]?.name === 'string' &&
+      typeof value[0]?.rd_id === 'number'
+
+    const isMakesPayload = (value: unknown): value is UniverCellMake[] =>
+      Array.isArray(value) &&
+      value.length > 0 &&
+      typeof value[0]?.id === 'string' &&
+      typeof value[0]?.name === 'string' &&
+      typeof value[0]?.rb_id === 'number'
+
+    const isModelsPayload = (value: unknown): value is UniverCellModel[] =>
+      Array.isArray(value) &&
+      value.length > 0 &&
+      typeof value[0]?.id === 'string' &&
+      typeof value[0]?.name === 'string' &&
+      Array.isArray(value[0]?.sydCapacityPrices)
+
+    // Validate: getDeviceTypes accepts no arguments and returns
     // [{id: string, name: string, rd_id?: number}]. Try each candidate until one works.
     for (let i = 0; i < Math.min(candidates.length, 12); i++) {
       try {
         const types = await fetchUniverCellAction<UniverCellDeviceType>(candidates[i], [])
-        if (!Array.isArray(types) || types.length === 0 || !types[0].id || !types[0].name) continue
+        if (!isDeviceTypesPayload(types)) continue
 
-        // Found getDeviceTypes. The makes and models actions come from the same
-        // deployment bundle so the next distinct IDs in the candidate list are correct.
-        const rest = candidates.filter((_, idx) => idx !== i)
+        const mobileType = types.find((type) => type.id && type.rd_id && type.id === 'mobile')
+          ?? types.find((type) => type.id && type.rd_id)
+        if (!mobileType?.rd_id) continue
+
+        const remainingCandidates = candidates.filter((_, idx) => idx !== i)
+        let makesActionId: string | null = null
+        let makesPayload: UniverCellMake[] | null = null
+
+        for (const candidate of remainingCandidates.slice(0, 12)) {
+          try {
+            const makes = await fetchUniverCellAction<UniverCellMake>(candidate, [mobileType.id])
+            if (!isMakesPayload(makes)) continue
+            makesActionId = candidate
+            makesPayload = makes
+            break
+          } catch {
+            continue
+          }
+        }
+
+        if (!makesActionId || !makesPayload) continue
+
+        const appleMake = makesPayload.find((make) => make.rb_id && normalizeText(make.name) === 'apple')
+          ?? makesPayload.find((make) => make.rb_id)
+        if (!appleMake?.rb_id) continue
+
+        let modelsActionId: string | null = null
+        for (const candidate of remainingCandidates.filter((id) => id !== makesActionId).slice(0, 12)) {
+          try {
+            const models = await fetchUniverCellAction<UniverCellModel>(candidate, [appleMake.rb_id, mobileType.rd_id])
+            if (!isModelsPayload(models)) continue
+            modelsActionId = candidate
+            break
+          } catch {
+            continue
+          }
+        }
+
+        if (!modelsActionId) continue
+
         cachedActionIds = {
           getDeviceTypes: candidates[i],
-          getMakesForDeviceType: rest[0] ?? candidates[i],
-          getModelsForMakeAndType: rest[1] ?? candidates[i],
+          getMakesForDeviceType: makesActionId,
+          getModelsForMakeAndType: modelsActionId,
           discoveredAt: Date.now(),
         }
         return true
@@ -168,13 +226,13 @@ async function discoverActionIds(): Promise<boolean> {
  * Get action ID with fallback chain:
  * 1. Runtime-discovered (validated)
  * 2. Environment variable override
- * 3. Hardcoded last-known-good IDs (updated 2026-03-25)
+ * 3. Hardcoded last-known-good IDs (updated 2026-04-03)
  */
 function getActionId(type: 'deviceTypes' | 'makes' | 'models'): string {
   const envDefaults = {
-    deviceTypes: process.env.UNIVERCELL_ACTION_GET_DEVICE_TYPES || '002d8f7ec727c08e299f84b04d3b412735ede54700',
-    makes: process.env.UNIVERCELL_ACTION_GET_MAKES_FOR_DEVICE_TYPE || '40748246c8bd4b73125db4804f15b18c543b2d4ed4',
-    models: process.env.UNIVERCELL_ACTION_GET_MODELS_FOR_MAKE_AND_TYPE || '60268b8459b6bb79ac082b14589c9a110e3eb43da1',
+    deviceTypes: process.env.UNIVERCELL_ACTION_GET_DEVICE_TYPES || '0097e8e0391681693da2d926f6b62b375c2b2dd0e9',
+    makes: process.env.UNIVERCELL_ACTION_GET_MAKES_FOR_DEVICE_TYPE || '40d183e681be0deb36a1a65eabc8fce7592e606dfe',
+    models: process.env.UNIVERCELL_ACTION_GET_MODELS_FOR_MAKE_AND_TYPE || '60e1ef26659475d916bffba699ced5fed18199328c',
   }
 
   switch (type) {
@@ -265,6 +323,7 @@ function inferTypeIdForDevice(device: DeviceToScrape): string {
 function selectBestModel(device: DeviceToScrape, models: UniverCellModel[]): { model: UniverCellModel; price: number } | null {
   const modelToken = normalizeText(device.model)
   const storageToken = normalizeStorage(device.storage)
+  const variantKeywords = ['max', 'plus', 'ultra', 'mini', 'fold', 'flip', 'fe', 'pro']
 
   const candidates = models
     .map((model) => {
@@ -293,6 +352,12 @@ function selectBestModel(device: DeviceToScrape, models: UniverCellModel[]): { m
       if (name === modelToken) score += 12
       if (name.includes(modelToken)) score += 6
       if (storageMatched) score += 4
+
+      for (const keyword of variantKeywords) {
+        const deviceHas = modelToken.includes(keyword)
+        const candidateHas = name.includes(keyword)
+        if (deviceHas !== candidateHas) score -= 10
+      }
 
       return {
         model,
