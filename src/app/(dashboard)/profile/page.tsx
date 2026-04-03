@@ -319,9 +319,9 @@ export default function ProfilePage() {
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error()
+      await refetch()
       toast.success('Profile updated')
       setIsEditing(false)
-      refetch()
     } catch {
       toast.error('Failed to update profile')
     } finally { setIsSaving(false) }
