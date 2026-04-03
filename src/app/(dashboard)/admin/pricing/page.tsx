@@ -1694,7 +1694,7 @@ export default function AdminPricingPage() {
               <CardDescription>Select device, storage, and condition to calculate the trade-in price we offer customers.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Device</Label>
                   <div className="space-y-1.5">
@@ -1865,7 +1865,7 @@ export default function AdminPricingPage() {
                         const tradeMarginPct = rawMargin >= 1 ? rawMargin : 20
                         const suggestedTradeIn = calculatorCompetitorSnapshot.averagePrice * (1 - tradeMarginPct / 100)
                         return (
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="rounded-xl border p-5">
                               <p className="text-sm text-muted-foreground">Suggested Trade-In Price</p>
                               <p className="text-2xl font-bold text-blue-600 mt-1">
@@ -1894,7 +1894,7 @@ export default function AdminPricingPage() {
                           {calcResult.data_staleness_warning}
                         </div>
                       )}
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="rounded-xl border p-5">
                           <p className="text-sm text-muted-foreground">Trade-In Unit Price</p>
                           <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(calcResult.trade_price)}</p>
@@ -1924,7 +1924,7 @@ export default function AdminPricingPage() {
                       </div>
 
                       {/* Breakdown */}
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <Card>
                           <CardHeader className="pb-3">
                             <CardTitle className="text-sm">Price Breakdown</CardTitle>
@@ -2202,7 +2202,7 @@ export default function AdminPricingPage() {
               <CardDescription>Select device and storage only (no condition -- CPO devices are all certified).</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Device</Label>
                   <div className="space-y-1.5">
@@ -2259,7 +2259,7 @@ export default function AdminPricingPage() {
               </div>
 
               {cpoCalcResult && (
-                <div className="mt-6 grid grid-cols-2 gap-4">
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-xl border p-5">
                     <p className="text-sm text-muted-foreground">Avg Competitor Sell Price</p>
                     <p className="text-2xl font-bold text-muted-foreground mt-1">{formatCurrency(cpoCalcResult.avgSellPrice)}</p>
