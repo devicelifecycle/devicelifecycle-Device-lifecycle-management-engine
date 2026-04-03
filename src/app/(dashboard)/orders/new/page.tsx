@@ -660,6 +660,11 @@ export default function NewOrderPage() {
               ? 'Create trade-in or CPO orders — or both at once'
               : 'Create trade-in orders for customer intake'}
           </p>
+          {user?.role === 'sales' && (
+            <p className="text-sm text-amber-600 mt-1">
+              Sales can only create trade-in orders. CPO orders must be placed by admin, COE, or through the customer portal.
+            </p>
+          )}
         </div>
       </div>
 

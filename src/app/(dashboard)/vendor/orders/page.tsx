@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Search, Truck, Send, Inbox } from 'lucide-react'
+import { Search, Truck, Send, Inbox, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -26,7 +26,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
-import type { Order, OrderStatus } from '@/types'
+import type { Order, OrderStatus, VendorBid } from '@/types'
 
 function getVendorOrderActionLabel(status: OrderStatus): string {
   switch (status) {
@@ -48,6 +48,12 @@ function getVendorOrderActionLabel(status: OrderStatus): string {
 async function fetchOpenOrders(page = 1) {
   const res = await fetch(`/api/vendors/open-orders?page=${page}&page_size=20`)
   if (!res.ok) throw new Error('Failed to fetch open orders')
+  return res.json()
+}
+
+async function fetchMyBids() {
+  const res = await fetch('/api/vendors/bids')
+  if (!res.ok) throw new Error('Failed to fetch bids')
   return res.json()
 }
 
@@ -74,6 +80,15 @@ export default function VendorOrdersPage() {
   const openOrders: Order[] = openData?.data || []
   const openTotal = openData?.total ?? 0
   const openTotalPages = openData?.total_pages ?? 1
+
+  const {
+    data: bidsData,
+    isLoading: bidsLoading,
+  } = useQuery({
+    queryKey: ['vendor-my-bids'],
+    queryFn: fetchMyBids,
+  })
+  const myBids: (VendorBid & { order?: { id: string; order_number: string; type: string; status: string; total_quantity: number; created_at: string } })[] = bidsData?.data || []
 
   // Bid dialog state
   const [bidDialogOpen, setBidDialogOpen] = useState(false)
@@ -166,6 +181,9 @@ export default function VendorOrdersPage() {
           </TabsTrigger>
           <TabsTrigger value="assigned">
             Assigned to Me ({total})
+          </TabsTrigger>
+          <TabsTrigger value="my-bids">
+            My Bids ({myBids.length})
           </TabsTrigger>
         </TabsList>
 
@@ -347,6 +365,81 @@ export default function VendorOrdersPage() {
       </Card>
         </TabsContent>
       </Tabs>
+
+        <TabsContent value="my-bids">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">My Bids</CardTitle>
+              <CardDescription>
+                Bids you have submitted and their current status.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {bidsLoading ? (
+                <div className="space-y-3">
+                  {[...Array(4)].map((_, index) => (
+                    <div key={index} className="h-14 rounded-lg bg-muted/50 animate-pulse" />
+                  ))}
+                </div>
+              ) : myBids.length === 0 ? (
+                <div className="text-center py-14">
+                  <FileText className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                  <p className="mt-3 text-sm font-medium text-muted-foreground">No bids submitted yet</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Submit bids on open CPO orders to see them here.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order #</TableHead>
+                        <TableHead className="text-right">Bid Amount</TableHead>
+                        <TableHead className="text-right">Lead Time</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Submitted</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {myBids.map((bid) => (
+                        <TableRow key={bid.id}>
+                          <TableCell className="whitespace-nowrap">
+                            {bid.order ? (
+                              <Link href={`/orders/${bid.order.id}`} className="font-medium text-primary hover:underline">
+                                {bid.order.order_number}
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">{bid.order_id.slice(0, 8)}…</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums font-medium whitespace-nowrap">
+                            {formatCurrency(bid.total_price)}
+                            <p className="text-xs text-muted-foreground font-normal">
+                              {bid.quantity} × {formatCurrency(bid.unit_price)}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums whitespace-nowrap">
+                            {bid.lead_time_days} day{bid.lead_time_days === 1 ? '' : 's'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <Badge
+                              variant={bid.status === 'accepted' ? 'default' : bid.status === 'rejected' ? 'destructive' : 'secondary'}
+                              className="text-[11px]"
+                            >
+                              {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {formatRelativeTime(bid.created_at)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
       {/* Submit Bid Dialog — outside Tabs so it works from both Open and Assigned */}
       <Dialog open={bidDialogOpen} onOpenChange={setBidDialogOpen}>
