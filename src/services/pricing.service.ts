@@ -159,7 +159,44 @@ const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
   custom_margin_amount: 0,
 }
 
+type QueryErrorLike = {
+  message?: string
+  code?: string
+}
+
 export class PricingService {
+  private static isNoRowsError(error: unknown): boolean {
+    return Boolean(
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as QueryErrorLike).code === 'PGRST116'
+    )
+  }
+
+  private static async runPricingRead<T>(
+    label: string,
+    task: () => Promise<{ data: T | null; error: QueryErrorLike | null }>,
+    options: { allowNoRows?: boolean; retries?: number } = {}
+  ): Promise<T | null> {
+    const retries = options.retries ?? 1
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const { data, error } = await task()
+
+      if (!error) return data
+      if (options.allowNoRows && this.isNoRowsError(error)) return data
+
+      if (attempt === retries) {
+        throw new Error(`${label}: ${error.message || 'Unknown query error'}`)
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 75 * (attempt + 1)))
+    }
+
+    return null
+  }
+
   private static adaptModelResultToV2(
     modelResult: {
       success: boolean
@@ -370,30 +407,38 @@ export class PricingService {
 
     try {
       // Step 1: Get market reference prices
-      const { data: marketEntry } = await supabase
-        .from('market_prices')
-        .select('*, device:device_catalog(*)')
-        .eq('device_id', normalizedInput.device_id)
-        .eq('storage', normalizedInput.storage)
-        .eq('carrier', carrier)
-        .eq('is_active', true)
-        .lte('effective_date', new Date().toISOString().split('T')[0])
-        .order('effective_date', { ascending: false })
-        .limit(1)
-        .single()
+      const marketEntry = await this.runPricingRead(
+        'market_prices exact lookup',
+        () => supabase
+          .from('market_prices')
+          .select('*, device:device_catalog(*)')
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
+          .eq('carrier', carrier)
+          .eq('is_active', true)
+          .lte('effective_date', new Date().toISOString().split('T')[0])
+          .order('effective_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        { allowNoRows: true, retries: 2 }
+      )
 
       // Anchor priority: prefer competitor data when available (trade-in offers) over market wholesale.
       // Wholesale/market can inflate quotes; competitors reflect what customers actually get.
       // First try same-condition competitors, then fall back to all conditions.
       const competitorConditionForAnchor = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
-      const { data: compForAnchorCondition } = await supabase
-        .from('competitor_prices')
-        .select('trade_in_price, updated_at, scraped_at')
-        .eq('device_id', normalizedInput.device_id)
-        .eq('storage', normalizedInput.storage)
-        .eq('condition', competitorConditionForAnchor)
-        .not('trade_in_price', 'is', null)
-        .gt('trade_in_price', 0)
+      const compForAnchorCondition = await this.runPricingRead(
+        'competitor_prices anchor exact condition',
+        () => supabase
+          .from('competitor_prices')
+          .select('trade_in_price, updated_at, scraped_at')
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
+          .eq('condition', competitorConditionForAnchor)
+          .not('trade_in_price', 'is', null)
+          .gt('trade_in_price', 0),
+        { allowNoRows: true, retries: 2 }
+      )
 
       const staleDays = 14
       const staleCutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000)
@@ -410,13 +455,17 @@ export class PricingService {
 
       // Fall back to all conditions if no same-condition prices found
       if (freshCompetitorPrices.length === 0) {
-        const { data: compForAnchorAll } = await supabase
-          .from('competitor_prices')
-          .select('trade_in_price, updated_at, scraped_at')
-          .eq('device_id', normalizedInput.device_id)
-          .eq('storage', normalizedInput.storage)
-          .not('trade_in_price', 'is', null)
-          .gt('trade_in_price', 0)
+        const compForAnchorAll = await this.runPricingRead(
+          'competitor_prices anchor all conditions',
+          () => supabase
+            .from('competitor_prices')
+            .select('trade_in_price, updated_at, scraped_at')
+            .eq('device_id', normalizedInput.device_id)
+            .eq('storage', normalizedInput.storage)
+            .not('trade_in_price', 'is', null)
+            .gt('trade_in_price', 0),
+          { allowNoRows: true, retries: 2 }
+        )
         freshCompetitorPrices = extractFreshPrices(compForAnchorAll)
       }
 
@@ -434,27 +483,35 @@ export class PricingService {
         if (anchorPrice) anchorIsBaseNormalized = true // wholesale is a "new" base price
       }
       if (!anchorPrice) {
-        const { data: pricingEntry } = await supabase
-          .from('pricing_tables')
-          .select('*')
-          .eq('device_id', normalizedInput.device_id)
-          .eq('storage', normalizedInput.storage)
-          .eq('condition', 'new')
-          .eq('carrier', carrier)
-          .eq('is_active', true)
-          .lte('effective_date', new Date().toISOString().split('T')[0])
-          .order('effective_date', { ascending: false })
-          .limit(1)
-          .single()
+        const pricingEntry = await this.runPricingRead(
+          'pricing_tables exact lookup',
+          () => supabase
+            .from('pricing_tables')
+            .select('*')
+            .eq('device_id', normalizedInput.device_id)
+            .eq('storage', normalizedInput.storage)
+            .eq('condition', 'new')
+            .eq('carrier', carrier)
+            .eq('is_active', true)
+            .lte('effective_date', new Date().toISOString().split('T')[0])
+            .order('effective_date', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          { allowNoRows: true, retries: 2 }
+        )
         anchorPrice = pricingEntry?.base_price || 0
         if (anchorPrice) anchorIsBaseNormalized = true // pricing table condition='new'
       }
       if (!anchorPrice) {
-        const { data: compFallback } = await supabase
-          .from('competitor_prices')
-          .select('trade_in_price')
-          .eq('device_id', normalizedInput.device_id)
-          .eq('storage', normalizedInput.storage)
+        const compFallback = await this.runPricingRead(
+          'competitor_prices anchor fallback',
+          () => supabase
+            .from('competitor_prices')
+            .select('trade_in_price')
+            .eq('device_id', normalizedInput.device_id)
+            .eq('storage', normalizedInput.storage),
+          { allowNoRows: true, retries: 2 }
+        )
         const tradePrices = (compFallback || [])
           .map((c: { trade_in_price?: number }) => c.trade_in_price || 0)
           .filter((p: number) => p > 0)
@@ -466,10 +523,14 @@ export class PricingService {
 
       // Fallback: same device, any storage — use competitor or market data from other storage variants (e.g. UNKNOWN → 128GB)
       if (!anchorPrice) {
-        const { data: compAnyStorage } = await supabase
-          .from('competitor_prices')
-          .select('trade_in_price')
-          .eq('device_id', normalizedInput.device_id)
+        const compAnyStorage = await this.runPricingRead(
+          'competitor_prices any storage fallback',
+          () => supabase
+            .from('competitor_prices')
+            .select('trade_in_price')
+            .eq('device_id', normalizedInput.device_id),
+          { allowNoRows: true, retries: 2 }
+        )
         const tradePrices = (compAnyStorage || [])
           .map((c: { trade_in_price?: number }) => c.trade_in_price || 0)
           .filter((p: number) => p > 0)
@@ -479,13 +540,17 @@ export class PricingService {
         }
       }
       if (!anchorPrice) {
-        const { data: marketAnyStorage } = await supabase
-          .from('market_prices')
-          .select('wholesale_c_stock')
-          .eq('device_id', normalizedInput.device_id)
-          .eq('is_active', true)
-          .not('wholesale_c_stock', 'is', null)
-          .limit(10)
+        const marketAnyStorage = await this.runPricingRead(
+          'market_prices any storage fallback',
+          () => supabase
+            .from('market_prices')
+            .select('wholesale_c_stock')
+            .eq('device_id', normalizedInput.device_id)
+            .eq('is_active', true)
+            .not('wholesale_c_stock', 'is', null)
+            .limit(10),
+          { allowNoRows: true, retries: 2 }
+        )
         const stocks = (marketAnyStorage || [])
           .map((m: { wholesale_c_stock?: number }) => m.wholesale_c_stock || 0)
           .filter((p: number) => p > 0)
@@ -501,15 +566,19 @@ export class PricingService {
         const condMult = CONDITION_MULTIPLIERS[normalizedInput.condition] ?? 0.85
 
         // 1. Exact match
-        const { data: exactBaseline } = await supabase
-          .from('trained_pricing_baselines')
-          .select('median_trade_price')
-          .eq('device_id', normalizedInput.device_id)
-          .eq('storage', normalizedInput.storage)
-          .eq('condition', normalizedInput.condition)
-          .order('last_trained_at', { ascending: false })
-          .limit(1)
-          .single()
+        const exactBaseline = await this.runPricingRead(
+          'trained_pricing_baselines exact',
+          () => supabase
+            .from('trained_pricing_baselines')
+            .select('median_trade_price')
+            .eq('device_id', normalizedInput.device_id)
+            .eq('storage', normalizedInput.storage)
+            .eq('condition', normalizedInput.condition)
+            .order('last_trained_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          { allowNoRows: true, retries: 2 }
+        )
         if ((exactBaseline?.median_trade_price ?? 0) > 0) {
           anchorPrice = exactBaseline!.median_trade_price / condMult
           anchorIsBaseNormalized = true // divided by condMult → base equivalent
@@ -517,14 +586,18 @@ export class PricingService {
 
         // 2. Same device, any storage, same condition
         if (!anchorPrice) {
-          const { data: anyStorage } = await supabase
-            .from('trained_pricing_baselines')
-            .select('median_trade_price, condition')
-            .eq('device_id', normalizedInput.device_id)
-            .eq('condition', normalizedInput.condition)
-            .gt('median_trade_price', 0)
-            .limit(1)
-            .single()
+          const anyStorage = await this.runPricingRead(
+            'trained_pricing_baselines any storage',
+            () => supabase
+              .from('trained_pricing_baselines')
+              .select('median_trade_price, condition')
+              .eq('device_id', normalizedInput.device_id)
+              .eq('condition', normalizedInput.condition)
+              .gt('median_trade_price', 0)
+              .limit(1)
+              .maybeSingle(),
+            { allowNoRows: true, retries: 2 }
+          )
           if ((anyStorage?.median_trade_price ?? 0) > 0) {
             anchorPrice = anyStorage!.median_trade_price / condMult
             anchorIsBaseNormalized = true
@@ -785,14 +858,16 @@ export class PricingService {
           }
         }
 
-        if (filteredCompetitors.length > 0 && highestCompetitor > 0) {
-          const ceilingMultiplier = Math.max(0, settings.competitor_ceiling_percent) / 100
-          const competitorCeiling = highestCompetitor * (1 + ceilingMultiplier)
-          competitorCeilingValue = round2(competitorCeiling)
-          const clampedTradePrice = Math.min(tradePrice, competitorCeiling)
-          competitorCeilingApplied = clampedTradePrice < tradePrice
-          tradePrice = clampedTradePrice
-        }
+      }
+
+      // Apply competitor ceiling for all non-beat pricing paths, including broken-condition quotes.
+      if (!beatPricingApplied && filteredCompetitors.length > 0 && highestCompetitor > 0) {
+        const ceilingMultiplier = Math.max(0, settings.competitor_ceiling_percent) / 100
+        const competitorCeiling = highestCompetitor * (1 + ceilingMultiplier)
+        competitorCeilingValue = round2(competitorCeiling)
+        const clampedTradePrice = Math.min(tradePrice, competitorCeiling)
+        competitorCeilingApplied = clampedTradePrice < tradePrice
+        tradePrice = clampedTradePrice
       }
 
       // Step 9: Calculate margin vs C-stock

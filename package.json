@@ -42,6 +42,7 @@
     "verify:univercell:scrapling": "npx tsx scripts/validate-univercell-scrapling.ts",
     "set-pricing-defaults": "node --env-file=.env.local scripts/set-pricing-defaults.mjs",
     "verify:pricing": "npx tsx scripts/verify-pricing-quotes.ts",
+    "audit:pricing:catalog": "npx tsx scripts/run-full-catalog-pricing-audit.ts",
     "send-test-email": "npx tsx --env-file=.env.local scripts/send-test-email.ts"
   },
   "dependencies": {
