@@ -649,27 +649,41 @@ export class PricingService {
       }
 
       // Step 2: Pull competitor prices early so competitor-backed devices can still quote
+      // Apply same 14-day staleness cutoff used for anchor pricing — stale prices cause
+      // quotes to drift from current competitor websites.
       const competitorCondition = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
-      let competitorData = await this.runPricingRead<CompetitorPrice[]>(
-        'competitor_prices exact condition',
-        () => supabase
-          .from('competitor_prices')
-          .select('*')
-          .eq('device_id', normalizedInput.device_id)
-          .eq('storage', normalizedInput.storage)
-          .eq('condition', competitorCondition),
-        { allowNoRows: true, retries: 2 }
-      )
+      const filterFreshCompetitors = (rows: CompetitorPrice[] | null): CompetitorPrice[] =>
+        (rows || []).filter((cp) => {
+          const ts = cp.updated_at || cp.scraped_at || cp.created_at
+          return ts && new Date(ts) > staleCutoff
+        })
 
-      if (!competitorData || competitorData.length === 0) {
-        competitorData = await this.runPricingRead<CompetitorPrice[]>(
-          'competitor_prices storage fallback',
+      let competitorData = filterFreshCompetitors(
+        await this.runPricingRead<CompetitorPrice[]>(
+          'competitor_prices exact condition',
           () => supabase
             .from('competitor_prices')
             .select('*')
             .eq('device_id', normalizedInput.device_id)
-            .eq('storage', normalizedInput.storage),
+            .eq('storage', normalizedInput.storage)
+            .eq('condition', competitorCondition)
+            .gte('scraped_at', staleCutoff.toISOString()),
           { allowNoRows: true, retries: 2 }
+        )
+      )
+
+      if (competitorData.length === 0) {
+        competitorData = filterFreshCompetitors(
+          await this.runPricingRead<CompetitorPrice[]>(
+            'competitor_prices storage fallback',
+            () => supabase
+              .from('competitor_prices')
+              .select('*')
+              .eq('device_id', normalizedInput.device_id)
+              .eq('storage', normalizedInput.storage)
+              .gte('scraped_at', staleCutoff.toISOString()),
+            { allowNoRows: true, retries: 2 }
+          )
         ) || []
       }
 
