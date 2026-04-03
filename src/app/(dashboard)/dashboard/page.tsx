@@ -71,7 +71,7 @@ function usePipeline(orders: Array<{ status: string }>) {
 }
 
 function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
-  const { orders, total } = useOrders({ page_size: 50 })
+  const { orders, total } = useOrders({ page_size: 500 })
   const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
   const slaAlerts = orders.filter((order) => order.is_sla_breached).length
   const recentRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
