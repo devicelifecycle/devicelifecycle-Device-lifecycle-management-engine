@@ -12,10 +12,10 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid customer ID format' }, { status: 400 })
     }
     const supabase = await createServerSupabaseClient()
@@ -25,7 +25,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const customer = await CustomerService.getCustomerById(params.id)
+    const customer = await CustomerService.getCustomerById((await params).id)
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
@@ -79,7 +79,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -101,7 +101,7 @@ export async function PATCH(
     }
 
     // Fetch the customer for authorization check
-    const customer = await CustomerService.getCustomerById(params.id)
+    const customer = await CustomerService.getCustomerById((await params).id)
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
@@ -127,7 +127,7 @@ export async function PATCH(
         { status: 400 }
       )
     }
-    const updatedCustomer = await CustomerService.updateCustomer(params.id, validationResult.data)
+    const updatedCustomer = await CustomerService.updateCustomer((await params).id, validationResult.data)
     return NextResponse.json(updatedCustomer)
   } catch (error) {
     console.error('Error updating customer:', error)
@@ -140,7 +140,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -166,7 +166,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    await CustomerService.deactivateCustomer(params.id)
+    await CustomerService.deactivateCustomer((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting customer:', error)

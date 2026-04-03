@@ -5,7 +5,7 @@ import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -24,7 +24,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Only administrators and CoE managers can view mismatch audit trail' }, { status: 403 })
     }
 
-    const logs = await AuditService.getEntityHistory('order', params.id)
+    const logs = await AuditService.getEntityHistory('order', (await params).id)
     const mismatchLogs = logs.filter((log) => {
       if (log.action !== 'price_change') return false
       const metadata = (log.metadata || {}) as { event?: string }
@@ -33,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     return NextResponse.json({
       success: true,
-      order_id: params.id,
+      order_id: (await params).id,
       count: mismatchLogs.length,
       data: mismatchLogs,
     })

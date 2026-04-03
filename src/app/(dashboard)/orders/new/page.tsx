@@ -157,6 +157,8 @@ export default function NewOrderPage() {
   const { customer: myCustomer, isLoading: myCustomerLoading, error: myCustomerError } = useMyCustomer()
   const isCustomer = user?.role === 'customer'
   const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
+  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech', 'customer'].includes(user?.role || '')
+  const cpoCreationBlockedMessage = 'Sales can create trade-in orders only. CPO orders must be created by admin, COE, or the customer portal.'
 
   const [devices, setDevices] = useState<Device[]>([])
   const [customerId, setCustomerId] = useState('')
@@ -231,6 +233,11 @@ export default function NewOrderPage() {
 
   // Manual entry helpers
   const addItem = (orderType: 'trade_in' | 'cpo') => {
+    if (orderType === 'cpo' && !canCreateCpoOrder) {
+      toast.error(cpoCreationBlockedMessage)
+      return
+    }
+
     setItems([...items, { 
       device_id: '', 
       device_label: '', 
@@ -271,6 +278,9 @@ export default function NewOrderPage() {
           device_label: dev ? `${dev.make} ${dev.model}` : '',
           storage: defaultStorage,
         }
+      }
+      if (field === 'order_type' && value === 'cpo' && !canCreateCpoOrder) {
+        return { ...item, order_type: 'trade_in' as const }
       }
       // When switching to CPO, condition doesn't matter (all "Certified")
       if (field === 'order_type' && value === 'cpo') {
@@ -419,6 +429,11 @@ export default function NewOrderPage() {
             }
           })
 
+          if (!canCreateCpoOrder && rows.some((row) => row.order_type === 'cpo')) {
+            toast.error(cpoCreationBlockedMessage)
+            return
+          }
+
           rows.forEach((row, i) => {
             if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
             if (!row.device_model) errors.push(`Row ${i + 1}: Missing model`)
@@ -455,7 +470,8 @@ export default function NewOrderPage() {
     setParsedFiles(prev => prev.map((f, fi) => {
       if (fi !== fileIndex) return f
       const newRows = [...f.rows]
-      newRows[rowIndex] = { ...newRows[rowIndex], [field]: value }
+      const nextValue = field === 'order_type' && !canCreateCpoOrder ? 'trade_in' : value
+      newRows[rowIndex] = { ...newRows[rowIndex], [field]: nextValue }
       return { ...f, rows: newRows }
     }))
   }
@@ -488,6 +504,11 @@ export default function NewOrderPage() {
       // Split rows by order type and create separate orders
       const tradeInCsvRows = allCsvRows.filter(r => r.order_type !== 'cpo')
       const cpoCsvRows = allCsvRows.filter(r => r.order_type === 'cpo')
+
+      if (!canCreateCpoOrder && cpoCsvRows.length > 0) {
+        toast.error(cpoCreationBlockedMessage)
+        return
+      }
 
       try {
         const results: { id: string; type: string }[] = []
@@ -572,6 +593,11 @@ export default function NewOrderPage() {
     const tradeInItems = orderItems.filter(i => i.order_type === 'trade_in')
     const cpoItems = orderItems.filter(i => i.order_type === 'cpo')
 
+    if (!canCreateCpoOrder && cpoItems.length > 0) {
+      toast.error(cpoCreationBlockedMessage)
+      return
+    }
+
     try {
       const results: { id: string; type: string }[] = []
 
@@ -629,7 +655,11 @@ export default function NewOrderPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold">New Order</h1>
-          <p className="text-muted-foreground">Create trade-in or CPO orders — or both at once</p>
+          <p className="text-muted-foreground">
+            {canCreateCpoOrder
+              ? 'Create trade-in or CPO orders — or both at once'
+              : 'Create trade-in orders for customer intake'}
+          </p>
         </div>
       </div>
 
@@ -662,7 +692,11 @@ export default function NewOrderPage() {
         <Card>
           <CardHeader>
             <CardTitle>Devices</CardTitle>
-            <CardDescription>Add devices manually or upload CSV files</CardDescription>
+            <CardDescription>
+              {canCreateCpoOrder
+                ? 'Add devices manually or upload CSV files'
+                : 'Add trade-in devices manually or upload a trade-in CSV file'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs value={tab} onValueChange={setTab}>
@@ -673,14 +707,18 @@ export default function NewOrderPage() {
 
               <TabsContent value="manual" className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 rounded-lg bg-muted/50">
-                  <p className="text-sm text-muted-foreground">Add Trade-In and/or CPO items to your order:</p>
+                  <p className="text-sm text-muted-foreground">
+                    {canCreateCpoOrder ? 'Add Trade-In and/or CPO items to your order:' : 'Add trade-in items to your order:'}
+                  </p>
                   <div className="flex gap-2">
                     <Button type="button" size="sm" onClick={() => addItem('trade_in')} className="bg-green-600 hover:bg-green-700 text-white">
                       <Plus className="mr-2 h-3 w-3" />Trade-In Item
                     </Button>
-                    <Button type="button" size="sm" onClick={() => addItem('cpo')} className="bg-blue-600 hover:bg-blue-700 text-white">
-                      <Plus className="mr-2 h-3 w-3" />CPO Item
-                    </Button>
+                    {canCreateCpoOrder && (
+                      <Button type="button" size="sm" onClick={() => addItem('cpo')} className="bg-blue-600 hover:bg-blue-700 text-white">
+                        <Plus className="mr-2 h-3 w-3" />CPO Item
+                      </Button>
+                    )}
                   </div>
                 </div>
                 {items.length === 0 ? (
@@ -699,28 +737,34 @@ export default function NewOrderPage() {
                             {/* Row 1: Type, Device, Qty, Condition/Certified, Storage */}
                             <div className={`grid gap-2 ${isInternal ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
                               {/* Order Type Badge */}
-                              <Select value={item.order_type} onValueChange={v => updateItem(index, 'order_type', v)}>
-                                <SelectTrigger className={item.order_type === 'cpo' 
-                                  ? 'border-2 border-blue-600 bg-blue-100 text-blue-800 font-medium' 
-                                  : 'border-2 border-green-600 bg-green-100 text-green-800 font-medium'
-                                }>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="trade_in">
-                                    <span className="flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                      Trade-In
-                                    </span>
-                                  </SelectItem>
-                                  <SelectItem value="cpo">
-                                    <span className="flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                                      CPO
-                                    </span>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
+                              {canCreateCpoOrder ? (
+                                <Select value={item.order_type} onValueChange={v => updateItem(index, 'order_type', v)}>
+                                  <SelectTrigger className={item.order_type === 'cpo'
+                                    ? 'border-2 border-blue-600 bg-blue-100 text-blue-800 font-medium'
+                                    : 'border-2 border-green-600 bg-green-100 text-green-800 font-medium'
+                                  }>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="trade_in">
+                                      <span className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                        Trade-In
+                                      </span>
+                                    </SelectItem>
+                                    <SelectItem value="cpo">
+                                      <span className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                        CPO
+                                      </span>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <div className="flex h-10 items-center rounded-md border-2 border-green-600 bg-green-100 px-3 text-sm font-medium text-green-800">
+                                  Trade-In
+                                </div>
+                              )}
                               <Select value={item.device_id} onValueChange={v => updateItem(index, 'device_id', v)}>
                                 <SelectTrigger><SelectValue placeholder="Device" /></SelectTrigger>
                                 <SelectContent>
@@ -807,35 +851,43 @@ export default function NewOrderPage() {
               <TabsContent value="csv" className="space-y-4">
                 {/* Clear template labels at top */}
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                  <p className="font-semibold text-sm">Choose the correct template for your order type:</p>
-                  <div className="grid sm:grid-cols-2 gap-4 text-left">
+                  <p className="font-semibold text-sm">
+                    {canCreateCpoOrder ? 'Choose the correct template for your order type:' : 'Use the trade-in template for customer intake:'}
+                  </p>
+                  <div className={`grid gap-4 text-left ${canCreateCpoOrder ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
                     <div className="rounded-md border border-green-200 bg-green-50 dark:bg-green-950/30 p-3">
                       <p className="font-medium text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>
                       <p className="text-xs text-muted-foreground mt-0.5">For device buybacks. Columns: device_make, device_model, quantity, condition, storage, serial_number, color, notes</p>
                     </div>
-                    <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-3">
-                      <p className="font-medium text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">For Certified Pre-Owned purchases. Columns: device_make, device_model, quantity, storage, notes</p>
-                    </div>
+                    {canCreateCpoOrder && (
+                      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-3">
+                        <p className="font-medium text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">For Certified Pre-Owned purchases. Columns: device_make, device_model, quantity, storage, notes</p>
+                      </div>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    You can also use your own CSV file if it has the same columns (or equivalent: make/model, storage, etc.).
+                    {canCreateCpoOrder
+                      ? 'You can also use your own CSV file if it has the same columns (or equivalent: make/model, storage, etc.).'
+                      : 'You can also use your own CSV file if it matches the trade-in columns (or equivalent: make/model, storage, etc.).'}
                   </p>
                 </div>
 
                 <div className="rounded-lg border-2 border-dashed p-6 text-center">
                   <Files className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground mb-3">
-                    Download the template you need, or upload your own CSV
+                    {canCreateCpoOrder ? 'Download the template you need, or upload your own CSV' : 'Download the trade-in template, or upload your own trade-in CSV'}
                   </p>
                   <input ref={fileRef} type="file" accept=".csv" multiple onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={handleDownloadTradeInTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <Download className="mr-2 h-4 w-4" />Download Trade-In Template
                     </Button>
-                    <Button type="button" variant="outline" onClick={handleDownloadCpoTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
-                      <Download className="mr-2 h-4 w-4" />Download CPO Template
-                    </Button>
+                    {canCreateCpoOrder && (
+                      <Button type="button" variant="outline" onClick={handleDownloadCpoTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
+                        <Download className="mr-2 h-4 w-4" />Download CPO Template
+                      </Button>
+                    )}
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
                       <Upload className="mr-2 h-4 w-4" />Upload Your Own CSV
                     </Button>
@@ -898,15 +950,21 @@ export default function NewOrderPage() {
                           {allCsvRows.slice(0, 50).map((row, i) => (
                             <TableRow key={i}>
                               <TableCell className="p-1">
-                                <Select value={row.order_type || 'trade_in'} onValueChange={v => editCsvRow(row._fi, row._ri, 'order_type', v)}>
-                                  <SelectTrigger className="h-8 text-xs">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="trade_in">Trade-In</SelectItem>
-                                    <SelectItem value="cpo">CPO</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                {canCreateCpoOrder ? (
+                                  <Select value={row.order_type || 'trade_in'} onValueChange={v => editCsvRow(row._fi, row._ri, 'order_type', v)}>
+                                    <SelectTrigger className="h-8 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="trade_in">Trade-In</SelectItem>
+                                      <SelectItem value="cpo">CPO</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <div className="flex h-8 items-center rounded-md border border-green-200 bg-green-50 px-2 text-xs font-medium text-green-800">
+                                    Trade-In
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell className="p-1">
                                 <Input className="h-8 text-xs" value={row.device_make} onChange={e => editCsvRow(row._fi, row._ri, 'device_make', e.target.value)} placeholder="Apple" />

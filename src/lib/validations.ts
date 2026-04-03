@@ -219,6 +219,7 @@ export const customerSchema = z.object({
   contact_name: z.string().min(2, 'Contact name must be at least 2 characters'),
   contact_email: emailSchema,
   contact_phone: phoneSchema.optional(),
+  mobile_carrier: z.string().optional(),
   billing_address: z.record(z.unknown()).optional(),
   shipping_address: z.record(z.unknown()).optional(),
   payment_terms: z.string().optional(),

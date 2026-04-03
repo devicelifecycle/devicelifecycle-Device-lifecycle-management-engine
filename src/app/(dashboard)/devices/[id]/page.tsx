@@ -5,7 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,8 +18,9 @@ import { Badge } from '@/components/ui/badge'
 import { DEVICE_BRANDS } from '@/lib/constants'
 import type { Device } from '@/types'
 
-export default function DeviceDetailPage({ params }: { params: { id: string } }) {
+export default function DeviceDetailPage() {
   const router = useRouter()
+  const params = useParams<{ id: string }>()
   const [device, setDevice] = useState<Device | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -28,7 +28,7 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const shipment = await ShipmentService.getShipmentById(params.id)
+    const shipment = await ShipmentService.getShipmentById((await params).id)
     if (!shipment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     // Enforce org boundary for coe_tech (IDOR prevention)
@@ -57,7 +57,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -74,7 +74,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const shipment = await ShipmentService.getShipmentById(params.id)
+    const shipment = await ShipmentService.getShipmentById((await params).id)
     if (!shipment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     // Enforce org boundary for coe_tech (IDOR prevention)
@@ -106,7 +106,7 @@ export async function PATCH(
 
     if (data.action === 'receive') {
       const shipment = await ShipmentService.markAsReceived(
-        params.id,
+        (await params).id,
         user.id,
         data.notes
       )
@@ -115,7 +115,7 @@ export async function PATCH(
 
     if (data.status) {
       const shipment = await ShipmentService.updateShipmentStatus(
-        params.id,
+        (await params).id,
         data.status,
         data.metadata
       )

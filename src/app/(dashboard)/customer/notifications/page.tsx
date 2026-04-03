@@ -127,7 +127,7 @@ export default function CustomerNotificationsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
           <p className="text-muted-foreground mt-1">
@@ -137,7 +137,7 @@ export default function CustomerNotificationsPage() {
           </p>
         </div>
         {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={() => markAllAsRead()}>
+          <Button variant="outline" size="sm" className="self-start sm:self-auto" onClick={() => markAllAsRead()}>
             <CheckCheck className="mr-2 h-4 w-4" />
             Mark All Read
           </Button>
@@ -145,12 +145,12 @@ export default function CustomerNotificationsPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => handleTabChange(t.key)}
-            className={`relative px-4 py-2 text-sm font-medium transition-colors ${
+            className={`relative shrink-0 px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
               tab === t.key
                 ? 'text-foreground border-b-2 border-primary -mb-px'
                 : 'text-muted-foreground hover:text-foreground'
@@ -244,16 +244,16 @@ export default function CustomerNotificationsPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-1.5">
                       {link && (
                         <Link href={link}>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 text-xs gap-1"
+                            className="h-7 px-2 text-xs gap-1"
                             onClick={() => !n.is_read && markAsRead(n.id)}
                           >
-                            View
+                            <span className="hidden sm:inline">View</span>
                             <ArrowRight className="h-3 w-3" />
                           </Button>
                         </Link>

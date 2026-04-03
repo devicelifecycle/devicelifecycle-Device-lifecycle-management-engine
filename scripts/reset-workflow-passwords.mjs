@@ -7,17 +7,22 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const ACCOUNTS = [
   {
-    email: process.env.CUSTOMER_EMAIL || 'saiyaganti14+customer@gmail.com',
-    password: process.env.CUSTOMER_PASSWORD || 'DLM-aOeLbykK8txV!9a',
+    email: process.env.CUSTOMER_EMAIL,
+    password: process.env.CUSTOMER_PASSWORD,
   },
   {
-    email: process.env.VENDOR_EMAIL || 'saiyaganti14@gmail.com',
-    password: process.env.VENDOR_PASSWORD || 'Dlm-aAb-d2-3Mi0c!9a',
+    email: process.env.VENDOR_EMAIL,
+    password: process.env.VENDOR_PASSWORD,
   },
 ]
 
 if (!URL || !SERVICE_KEY) {
   console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.')
+  process.exit(1)
+}
+
+if (ACCOUNTS.some((account) => !account.email || !account.password)) {
+  console.error('CUSTOMER_EMAIL, CUSTOMER_PASSWORD, VENDOR_EMAIL, and VENDOR_PASSWORD are required.')
   process.exit(1)
 }
 

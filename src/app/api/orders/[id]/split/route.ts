@@ -13,13 +13,7 @@ import type { OrderSplitConfig } from '@/types'
 export const dynamic = 'force-dynamic'
 
 
-interface RouteParams {
-  params: {
-    id: string
-  }
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -49,7 +43,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const { data: order } = await supabase
         .from('orders')
         .select('vendor_id, vendors:vendor_id(organization_id)')
-        .eq('id', params.id)
+        .eq('id', (await params).id)
         .single()
       const vendorOrg = (order?.vendors as { organization_id?: string } | null)?.organization_id
       if (!vendorOrg || vendorOrg !== profile.organization_id) {
@@ -58,7 +52,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // Internal roles (admin, coe_manager, coe_tech, sales) have full access
-    const splitStatus = await OrderSplitService.getSplitStatus(params.id)
+    const splitStatus = await OrderSplitService.getSplitStatus((await params).id)
     return NextResponse.json(splitStatus)
   } catch (error) {
     console.error('Error fetching split status:', error)
@@ -69,7 +63,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -100,7 +94,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const config: OrderSplitConfig = {
-      parent_order_id: params.id,
+      parent_order_id: (await params).id,
       strategy: body.strategy || 'quantity',
       allocations: body.allocations,
       notes: body.notes,
@@ -121,7 +115,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -141,7 +135,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await OrderSplitService.undoSplit(params.id, user.id)
+    await OrderSplitService.undoSplit((await params).id, user.id)
 
     return NextResponse.json({ message: 'Order split has been undone' })
   } catch (error) {

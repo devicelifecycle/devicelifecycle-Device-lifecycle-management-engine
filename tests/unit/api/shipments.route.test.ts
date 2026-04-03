@@ -19,8 +19,8 @@ vi.mock('@/services/shipment.service', () => ({
   },
 }))
 
-vi.mock('@/services/stallion.service', () => ({
-  StallionService: {
+vi.mock('@/services/shipping-provider.service', () => ({
+  ShippingProviderService: {
     purchaseLabel: purchaseLabelMock,
   },
 }))
@@ -162,7 +162,65 @@ describe('POST /api/shipments', () => {
     expect(createShipmentMock).not.toHaveBeenCalled()
   })
 
-  it('rolls back local shipment when Stallion purchase fails', async () => {
+  it('returns 400 when a custom carrier name is missing', async () => {
+    createServerSupabaseClientMock.mockReturnValue(makeSupabase({ user: { id: 'user-1' } }))
+
+    const { POST } = await import('@/app/api/shipments/route')
+    const request = new NextRequest('http://localhost:3000/api/shipments', {
+      method: 'POST',
+      body: JSON.stringify({
+        order_id: 'order-1',
+        direction: 'outbound',
+        carrier: 'Other',
+        stallion_purchase: false,
+        tracking_number: 'TRACK-1',
+        from_address: { name: 'A', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
+        to_address: { name: 'B', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'custom_carrier is required when carrier is Other',
+    })
+    expect(createShipmentMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts manual tracking from a custom shipping platform', async () => {
+    createServerSupabaseClientMock.mockReturnValue(makeSupabase({ user: { id: 'user-1' } }))
+
+    const { POST } = await import('@/app/api/shipments/route')
+    const request = new NextRequest('http://localhost:3000/api/shipments', {
+      method: 'POST',
+      body: JSON.stringify({
+        order_id: 'order-1',
+        direction: 'outbound',
+        carrier: 'Other',
+        custom_carrier: 'ShipStation',
+        stallion_purchase: false,
+        tracking_number: '  TRACK-CUSTOM-1  ',
+        from_address: { name: 'A', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
+        to_address: { name: 'B', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(201)
+    expect(createShipmentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order_id: 'order-1',
+        direction: 'outbound',
+        carrier: 'ShipStation',
+        tracking_number: 'TRACK-CUSTOM-1',
+        created_by_id: 'user-1',
+      }),
+    )
+  })
+
+  it('rolls back local shipment when label purchase fails', async () => {
     createServerSupabaseClientMock.mockReturnValue(makeSupabase({ user: { id: 'user-1' } }))
 
     const serviceRoleEqMock = vi.fn().mockResolvedValue({ error: null })
@@ -172,7 +230,7 @@ describe('POST /api/shipments', () => {
     })
 
     createShipmentMock.mockResolvedValue({ id: 'shipment-rollback' })
-    purchaseLabelMock.mockRejectedValue(new Error('Stallion outage'))
+    purchaseLabelMock.mockRejectedValue(new Error('Provider outage'))
 
     const { POST } = await import('@/app/api/shipments/route')
     const request = new NextRequest('http://localhost:3000/api/shipments', {
@@ -192,14 +250,14 @@ describe('POST /api/shipments', () => {
     // Route returns 400 with descriptive message (not 500) when Stallion purchase fails
     expect(response.status).toBe(400)
     const json = await response.json()
-    expect(json.error).toContain('Stallion label purchase failed')
-    expect(json.error).toContain('Stallion outage')
+    expect(json.error).toContain('Label purchase failed')
+    expect(json.error).toContain('Provider outage')
 
     expect(createServiceRoleClientMock).toHaveBeenCalled()
     expect(attachLabelPurchaseMock).not.toHaveBeenCalled()
   })
 
-  it('creates and attaches Stallion purchase successfully', async () => {
+  it('creates and attaches a purchased label successfully', async () => {
     createServerSupabaseClientMock.mockReturnValue(makeSupabase({ user: { id: 'user-1' } }))
 
     const { POST } = await import('@/app/api/shipments/route')
@@ -264,5 +322,102 @@ describe('POST /api/shipments', () => {
       'customer-1',
       'Customer submitted inbound shipment',
     )
+  })
+
+  it('allows a vendor to upload tracking for their own sourced order', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'vendor-user-1' },
+        profile: { role: 'vendor', organization_id: 'vendor-org-1' },
+        order: {
+          status: 'sourced',
+          vendor: { organization_id: 'vendor-org-1' },
+        },
+      }),
+    )
+
+    const { POST } = await import('@/app/api/shipments/route')
+    const request = new NextRequest('http://localhost:3000/api/shipments', {
+      method: 'POST',
+      body: JSON.stringify({
+        order_id: 'order-5',
+        carrier: 'FedEx',
+        tracking_number: 'TRACK-VENDOR-1',
+        direction: 'inbound',
+        from_address: { name: 'Vendor', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
+        to_address: { name: 'COE', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(201)
+    expect(createShipmentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order_id: 'order-5',
+        direction: 'inbound',
+        carrier: 'FedEx',
+        tracking_number: 'TRACK-VENDOR-1',
+        created_by_id: 'vendor-user-1',
+      }),
+    )
+    expect(transitionOrderMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks vendors from creating outbound shipments or buying labels', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'vendor-user-1' },
+        profile: { role: 'vendor', organization_id: 'vendor-org-1' },
+        order: {
+          status: 'sourced',
+          vendor: { organization_id: 'vendor-org-1' },
+        },
+      }),
+    )
+
+    const { POST } = await import('@/app/api/shipments/route')
+    const outboundResponse = await POST(
+      new NextRequest('http://localhost:3000/api/shipments', {
+        method: 'POST',
+        body: JSON.stringify({
+          order_id: 'order-5',
+          carrier: 'FedEx',
+          tracking_number: 'TRACK-VENDOR-2',
+          direction: 'outbound',
+          from_address: { name: 'Vendor', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
+          to_address: { name: 'COE', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    expect(outboundResponse.status).toBe(400)
+    await expect(outboundResponse.json()).resolves.toEqual({
+      error: 'Vendor shipments must be inbound to COE',
+    })
+
+    const stallionResponse = await POST(
+      new NextRequest('http://localhost:3000/api/shipments', {
+        method: 'POST',
+        body: JSON.stringify({
+          order_id: 'order-5',
+          carrier: 'FedEx',
+          tracking_number: 'TRACK-VENDOR-3',
+          direction: 'inbound',
+          stallion_purchase: true,
+          from_address: { name: 'Vendor', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
+          to_address: { name: 'COE', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    expect(stallionResponse.status).toBe(400)
+    await expect(stallionResponse.json()).resolves.toEqual({
+      error: 'Vendors must upload carrier tracking manually',
+    })
+    expect(createShipmentMock).not.toHaveBeenCalled()
   })
 })

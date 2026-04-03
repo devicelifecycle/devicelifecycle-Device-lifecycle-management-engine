@@ -116,4 +116,65 @@ describe('GET /api/orders', () => {
     expect(arg.vendor_id).toBe('2fb2be63-52d2-45f2-8b6e-ead8d4b5f6fb')
     expect(arg.requester_role).toBe('vendor')
   })
+
+  it('redacts customer and pricing data from vendor order list responses', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      createMockSupabase({
+        user: { id: 'user-3' },
+        profile: { role: 'vendor', organization_id: 'org-v1' },
+      })
+    )
+
+    getOrdersMock.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'order-1',
+          order_number: 'CPO-6001',
+          total_amount: 1250,
+          quoted_amount: 1400,
+          final_amount: 1500,
+          customer_id: 'customer-1',
+          notes: 'Call John at 555-1111',
+          internal_notes: 'Margin target 18%',
+          customer: {
+            company_name: 'Acme Corp',
+            contact_name: 'John Doe',
+            contact_email: 'john@acme.test',
+          },
+          items: [
+            {
+              id: 'item-1',
+              unit_price: 250,
+              quoted_price: 275,
+              final_price: 300,
+              pricing_metadata: { pricing_source: 'manual' },
+            },
+          ],
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+    })
+
+    const { GET } = await import('@/app/api/orders/route')
+    const response = await GET(new NextRequest('http://localhost:3000/api/orders'))
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.data[0]).toMatchObject({
+      id: 'order-1',
+      order_number: 'CPO-6001',
+      total_amount: 0,
+    })
+    expect(json.data[0].customer_id).toBeUndefined()
+    expect(json.data[0].quoted_amount).toBeUndefined()
+    expect(json.data[0].final_amount).toBeUndefined()
+    expect(json.data[0].notes).toBeUndefined()
+    expect(json.data[0].internal_notes).toBeUndefined()
+    expect(json.data[0].customer).toBeUndefined()
+    expect(json.data[0].items[0].unit_price).toBeUndefined()
+    expect(json.data[0].items[0].pricing_metadata).toBeNull()
+  })
 })

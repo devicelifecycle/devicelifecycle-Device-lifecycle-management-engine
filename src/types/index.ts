@@ -481,7 +481,7 @@ export interface Shipment extends BaseEntity {
 
   tracking_events?: unknown[];
 
-  // Shipping provider data (named shippo_* for DB backward compatibility, now stores Stallion data)
+  // Shipping provider data (named shippo_* for DB backward compatibility)
   shippo_shipment_id?: string;
   shippo_rate_id?: string;
   shippo_transaction_id?: string;

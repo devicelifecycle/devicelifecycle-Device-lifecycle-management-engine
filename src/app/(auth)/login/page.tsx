@@ -214,18 +214,25 @@ export default function LoginPage() {
               />
             <CardHeader className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="eyebrow-label">Sign In</span>
-                <Link href="/" className="hidden text-sm text-stone-500 hover:text-stone-200 lg:inline">
-                  <ArrowLeft className="mr-1 inline h-4 w-4" />
-                  Back
-                </Link>
+                <span className="eyebrow-label">{mfaStep ? 'Two-Factor Auth' : 'Sign In'}</span>
+                {!mfaStep && (
+                  <Link href="/" className="hidden text-sm text-stone-500 hover:text-stone-200 lg:inline">
+                    <ArrowLeft className="mr-1 inline h-4 w-4" />
+                    Back
+                  </Link>
+                )}
               </div>
               <div className="space-y-2">
-                <CardTitle className="text-3xl text-stone-100">Welcome back</CardTitle>
+                <CardTitle className="text-3xl text-stone-100">
+                  {mfaStep ? 'Verify your identity' : 'Welcome back'}
+                </CardTitle>
                 <CardDescription className="text-base text-stone-400">
-                  Use your login ID or email to enter the platform.
+                  {mfaStep
+                    ? 'Enter the 6-digit code from your authenticator app to continue.'
+                    : 'Use your login ID or email to enter the platform.'}
                 </CardDescription>
               </div>
+              {!mfaStep && (
               <div className="grid gap-2 sm:grid-cols-3">
                 {['Role-aware entry', 'Pricing control', 'Operational handoff'].map((item, index) => (
                   <motion.div
@@ -239,6 +246,7 @@ export default function LoginPage() {
                   </motion.div>
                 ))}
               </div>
+              )}
             </CardHeader>
 
             <CardContent className="space-y-5">

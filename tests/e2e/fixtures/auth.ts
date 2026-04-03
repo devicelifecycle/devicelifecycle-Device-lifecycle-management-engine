@@ -1,17 +1,31 @@
 import { expect, Page } from '@playwright/test'
 
+const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD || 'Test123!'
+
 export const TEST_USERS = {
-  admin: { email: 'jamal.h@genovation.ai', password: 'Test123!' },
-  coe_manager: { email: 'faisalahmed4629@gmail.com', password: 'Test123!' },
-  coe_tech: { email: 'jamalhuss@gmail.com', password: 'Test123!' },
-  sales: { email: 'sales', password: 'Test123!' },
-  customer: { email: 'customer', password: 'Test123!' },
-  vendor: { email: 'vendor', password: 'Test123!' },
+  admin: { email: process.env.E2E_ADMIN_EMAIL || 'admin', password: TEST_PASSWORD },
+  coe_manager: { email: process.env.E2E_COE_MANAGER_EMAIL || 'coemgr', password: TEST_PASSWORD },
+  coe_tech: { email: process.env.E2E_COE_TECH_EMAIL || 'coetech', password: TEST_PASSWORD },
+  sales: { email: process.env.E2E_SALES_EMAIL || 'sales', password: TEST_PASSWORD },
+  customer: { email: process.env.E2E_CUSTOMER_EMAIL || 'customer', password: TEST_PASSWORD },
+  vendor: { email: process.env.E2E_VENDOR_EMAIL || 'vendor', password: TEST_PASSWORD },
   /** Org-linked customer (run npm run seed-acme) */
-  acme: { email: 'acme', password: 'Test123!' },
+  acme: { email: process.env.E2E_ACME_EMAIL || 'acme', password: TEST_PASSWORD },
 } as const
 
 export type TestUserRole = keyof typeof TEST_USERS
+
+function getPostLoginUrlMatcher(user: TestUserRole): RegExp {
+  switch (user) {
+    case 'customer':
+    case 'acme':
+      return /\/(dashboard|customer\/orders)/
+    case 'vendor':
+      return /\/(dashboard|vendor\/orders)/
+    default:
+      return /\/dashboard/
+  }
+}
 
 /**
  * Log in as a test user. Navigates to login page, fills credentials, submits.
@@ -19,6 +33,7 @@ export type TestUserRole = keyof typeof TEST_USERS
  */
 export async function loginAs(page: Page, user: TestUserRole): Promise<void> {
   const { email, password } = TEST_USERS[user]
+  const postLoginMatcher = getPostLoginUrlMatcher(user)
   await page.goto('/login', { waitUntil: 'domcontentloaded' })
   await page.waitForLoadState('networkidle')
   const emailInput = page.getByLabel(/login id/i)
@@ -31,7 +46,7 @@ export async function loginAs(page: Page, user: TestUserRole): Promise<void> {
   await expect(passwordInput).toHaveValue(password)
   await Promise.all([
     // In next dev, the first authenticated dashboard hit can spend time compiling.
-    page.waitForURL(/\/dashboard/, { timeout: 60000, waitUntil: 'domcontentloaded' }),
+    page.waitForURL(postLoginMatcher, { timeout: 60000, waitUntil: 'domcontentloaded' }),
     submitButton.click(),
   ])
 }

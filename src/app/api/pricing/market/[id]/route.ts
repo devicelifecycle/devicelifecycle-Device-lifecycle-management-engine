@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -40,7 +40,7 @@ export async function PATCH(
       )
     }
 
-    const entry = await PricingService.updateMarketPrice(params.id, validation.data as any, user.id)
+    const entry = await PricingService.updateMarketPrice((await params).id, validation.data as any, user.id)
     return NextResponse.json(entry)
   } catch (error) {
     console.error('Error updating market price:', error)
@@ -50,7 +50,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -70,7 +70,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await PricingService.deleteMarketPrice(params.id)
+    await PricingService.deleteMarketPrice((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting market price:', error)

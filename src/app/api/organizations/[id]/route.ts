@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -29,12 +29,12 @@ export async function GET(
       .single()
 
     if (profile && ['customer', 'vendor'].includes(profile.role)) {
-      if (profile.organization_id !== params.id) {
+      if (profile.organization_id !== (await params).id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     }
 
-    const organization = await OrganizationService.getOrganizationById(params.id)
+    const organization = await OrganizationService.getOrganizationById((await params).id)
     if (!organization) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
     }
@@ -51,7 +51,7 @@ export async function GET(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -74,7 +74,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('organizations')
       .delete()
-      .eq('id', params.id)
+      .eq('id', (await params).id)
 
     if (error) {
       console.error('Error deleting organization:', error)
@@ -96,7 +96,7 @@ export async function DELETE(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -145,7 +145,7 @@ export async function PATCH(
     if (email !== undefined) updateData.contact_email = email
     if (phone !== undefined) updateData.contact_phone = phone
 
-    const organization = await OrganizationService.updateOrganization(params.id, updateData)
+    const organization = await OrganizationService.updateOrganization((await params).id, updateData)
     return NextResponse.json(organization)
   } catch (error) {
     console.error('Error updating organization:', error)

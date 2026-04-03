@@ -234,4 +234,229 @@ describe('POST /api/orders/[id]/transition', () => {
     expect(response.status).toBe(200)
     expect(transitionOrderMock).toHaveBeenCalledWith('order-4', 'shipped_to_coe', 'admin-2', 'Customer shipped devices')
   })
+
+  it('allows a vendor to progress their own assigned order from sourced to shipped', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'vendor-user-1' },
+        profile: { role: 'vendor', organization_id: 'vendor-org-1' },
+      }),
+    )
+
+    getOrderByIdMock.mockResolvedValue({
+      id: 'order-5',
+      order_number: 'CPO-5001-A',
+      status: 'sourced',
+      type: 'cpo',
+      customer_id: 'customer-1',
+      customer: { organization_id: 'org-1' },
+      vendor_id: 'vendor-1',
+      vendor: { organization_id: 'vendor-org-1' },
+      shipments: [{ id: 'shipment-1', direction: 'inbound', tracking_number: 'TRACK-1' }],
+      assigned_to_id: 'staff-1',
+      created_by_id: 'creator-1',
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/transition/route')
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/orders/order-5/transition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to_status: 'shipped', notes: 'Tracking uploaded' }),
+      }),
+      { params: { id: 'order-5' } },
+    )
+
+    expect(response.status).toBe(200)
+    expect(transitionOrderMock).toHaveBeenCalledWith('order-5', 'shipped', 'vendor-user-1', 'Tracking uploaded')
+  })
+
+  it('allows sales to send a quote on a submitted order', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'sales-user-1' },
+        profile: { role: 'sales', organization_id: 'org-sales' },
+      }),
+    )
+
+    getOrderByIdMock.mockResolvedValue({
+      id: 'order-5b',
+      order_number: 'TI-2005',
+      status: 'submitted',
+      type: 'trade_in',
+      customer_id: 'customer-1',
+      customer: { organization_id: 'org-1' },
+      vendor_id: null,
+      assigned_to_id: 'staff-1',
+      created_by_id: 'creator-1',
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/transition/route')
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/orders/order-5b/transition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to_status: 'quoted', notes: 'Quote sent to customer' }),
+      }),
+      { params: { id: 'order-5b' } },
+    )
+
+    expect(response.status).toBe(200)
+    expect(transitionOrderMock).toHaveBeenCalledWith('order-5b', 'quoted', 'sales-user-1', 'Quote sent to customer')
+  })
+
+  it('blocks COE techs from sending quotes', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'coe-tech-user-1' },
+        profile: { role: 'coe_tech', organization_id: 'org-coe' },
+      }),
+    )
+
+    getOrderByIdMock.mockResolvedValue({
+      id: 'order-5c',
+      order_number: 'TI-2006',
+      status: 'submitted',
+      type: 'trade_in',
+      customer_id: 'customer-1',
+      customer: { organization_id: 'org-1' },
+      vendor_id: null,
+      assigned_to_id: 'staff-1',
+      created_by_id: 'creator-1',
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/transition/route')
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/orders/order-5c/transition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to_status: 'quoted', notes: 'Should fail' }),
+      }),
+      { params: { id: 'order-5c' } },
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Only admin, COE managers, or sales can send quotes',
+    })
+    expect(transitionOrderMock).not.toHaveBeenCalled()
+  })
+
+  it('allows a vendor to progress their own assigned order through the full fulfillment lifecycle', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'vendor-user-1' },
+        profile: { role: 'vendor', organization_id: 'vendor-org-1' },
+      }),
+    )
+
+    const { POST } = await import('@/app/api/orders/[id]/transition/route')
+    const steps = [
+      { from: 'accepted', to: 'sourcing', notes: 'Accepted job' },
+      { from: 'sourcing', to: 'sourced', notes: 'Devices sourced' },
+      { from: 'sourced', to: 'shipped', notes: 'Devices shipped' },
+      { from: 'shipped', to: 'delivered', notes: 'Devices delivered' },
+      { from: 'delivered', to: 'closed', notes: 'Fulfillment complete' },
+    ] as const
+
+    for (const step of steps) {
+      getOrderByIdMock.mockResolvedValueOnce({
+        id: 'order-6',
+        order_number: 'CPO-5002-A',
+        status: step.from,
+        type: 'cpo',
+        customer_id: 'customer-1',
+        customer: { organization_id: 'org-1' },
+        vendor_id: 'vendor-1',
+        vendor: { organization_id: 'vendor-org-1' },
+        shipments: step.from === 'sourced' || step.from === 'shipped' || step.from === 'delivered'
+          ? [{ id: 'shipment-2', direction: 'inbound', tracking_number: 'TRACK-2' }]
+          : [],
+        assigned_to_id: 'staff-1',
+        created_by_id: 'creator-1',
+      })
+
+      const response = await POST(
+        new NextRequest('http://localhost:3000/api/orders/order-6/transition', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ to_status: step.to, notes: step.notes }),
+        }),
+        { params: { id: 'order-6' } },
+      )
+
+      expect(response.status).toBe(200)
+      expect(transitionOrderMock).toHaveBeenLastCalledWith('order-6', step.to, 'vendor-user-1', step.notes)
+    }
+
+    expect(transitionOrderMock).toHaveBeenCalledTimes(steps.length)
+  })
+
+  it('blocks vendors from transitioning orders assigned to another vendor organization', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'vendor-user-2' },
+        profile: { role: 'vendor', organization_id: 'vendor-org-2' },
+      }),
+    )
+
+    getOrderByIdMock.mockResolvedValue({
+      id: 'order-7',
+      order_number: 'CPO-5003-A',
+      status: 'sourced',
+      type: 'cpo',
+      customer: { organization_id: 'org-1' },
+      vendor_id: 'vendor-1',
+      vendor: { organization_id: 'vendor-org-1' },
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/transition/route')
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/orders/order-7/transition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to_status: 'shipped', notes: 'Should fail' }),
+      }),
+      { params: { id: 'order-7' } },
+    )
+
+    expect(response.status).toBe(403)
+    expect(transitionOrderMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks vendors from marking sourced orders as shipped before tracking is uploaded', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'vendor-user-3' },
+        profile: { role: 'vendor', organization_id: 'vendor-org-1' },
+      }),
+    )
+
+    getOrderByIdMock.mockResolvedValue({
+      id: 'order-8',
+      order_number: 'CPO-5004-A',
+      status: 'sourced',
+      type: 'cpo',
+      customer: { organization_id: 'org-1' },
+      vendor_id: 'vendor-1',
+      vendor: { organization_id: 'vendor-org-1' },
+      shipments: [],
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/transition/route')
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/orders/order-8/transition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to_status: 'shipped', notes: 'No tracking yet' }),
+      }),
+      { params: { id: 'order-8' } },
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Upload vendor tracking before marking the order as shipped',
+    })
+    expect(transitionOrderMock).not.toHaveBeenCalled()
+  })
 })

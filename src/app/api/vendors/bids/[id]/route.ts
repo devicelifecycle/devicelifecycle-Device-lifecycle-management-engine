@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -53,7 +53,7 @@ export async function PATCH(
     const markupPercent = cpo_markup_percent != null ? Number(cpo_markup_percent) : undefined
 
     const updatedBid = await VendorService.updateBidStatus(
-      params.id,
+      (await params).id,
       status,
       markupPercent
     )

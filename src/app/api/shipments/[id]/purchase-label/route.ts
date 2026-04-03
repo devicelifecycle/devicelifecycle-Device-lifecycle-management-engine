@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -33,7 +33,7 @@ export async function POST(
       )
     }
 
-    const shipment = await ShipmentService.getShipmentById(params.id)
+    const shipment = await ShipmentService.getShipmentById((await params).id)
     if (!shipment) return NextResponse.json({ error: 'Shipment not found' }, { status: 404 })
     if (shipment.direction !== 'outbound') {
       return NextResponse.json({ error: 'Label purchase is only supported for outbound shipments' }, { status: 400 })
@@ -81,7 +81,7 @@ export async function POST(
     })
 
     // Attach label data to shipment
-    const updated = await ShipmentService.attachLabelPurchase(params.id, {
+    const updated = await ShipmentService.attachLabelPurchase((await params).id, {
       stallion_shipment_id: result.stallion_shipment_id,
       tracking_number: result.tracking_number,
       carrier: result.carrier,

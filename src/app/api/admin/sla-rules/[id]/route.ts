@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -39,7 +39,7 @@ export async function PATCH(
         { status: 400 }
       )
     }
-    const rule = await SLAService.updateSLARule(params.id, validationResult.data)
+    const rule = await SLAService.updateSLARule((await params).id, validationResult.data)
     return NextResponse.json(rule)
   } catch (error) {
     console.error('Error updating SLA rule:', error)
@@ -52,7 +52,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -72,7 +72,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await SLAService.deleteSLARule(params.id)
+    await SLAService.deleteSLARule((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting SLA rule:', error)

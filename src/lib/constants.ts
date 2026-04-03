@@ -263,7 +263,7 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   accepted: ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled'],
   rejected: [], // Terminal state
   sourcing: ['sourced', 'cancelled'],
-  sourced: ['shipped_to_coe', 'cancelled'],
+  sourced: ['shipped_to_coe', 'shipped', 'cancelled'],
   shipped_to_coe: ['received'],
   received: ['in_triage'],
   in_triage: ['qc_complete'],
@@ -477,7 +477,7 @@ export const API_ROUTES = {
   SHIPMENT: (id: string) => `/api/shipments/${id}`,
   SHIPMENT_PURCHASE_LABEL: (id: string) => `/api/shipments/${id}/purchase-label`,
   SHIPMENTS_STATS: '/api/shipments/stats',
-  STALLION_HEALTH: '/api/stallion/health',
+  SHIPPING_PROVIDER_HEALTH: '/api/shipping-provider/health',
 
   // Triage
   TRIAGE: '/api/triage',

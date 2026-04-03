@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Remove duplicate/legacy test users from auth and users table.
- * Keeps only: admin, coemgr, coetech, sales, customer, vendor @login.local
+ * Keeps only the canonical seeded identities for admin/COE plus the portal login IDs.
  *
  * Removes: *@test.example.com, admin@example.com, manager@example.com, etc.
  *
@@ -17,13 +17,19 @@ const URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const KEEP_EMAILS = new Set([
-  'admin@login.local',
-  'coemgr@login.local',
+  'devicelifecycle@gmail.com',
+  'faisal.a@genovation.ai',
   'coetech@login.local',
   'sales@login.local',
   'customer@login.local',
   'vendor@login.local',
 ])
+
+const CANONICAL_INTERNAL_ROLE_EMAILS = {
+  admin: 'devicelifecycle@gmail.com',
+  coe_manager: 'faisal.a@genovation.ai',
+  coe_tech: 'coetech@login.local',
+}
 
 const REMOVE_PATTERNS = [
   /@test\.example\.com$/,
@@ -36,8 +42,13 @@ const REMOVE_PATTERNS = [
   /@enterprise-engine\.com$/,
 ]
 
-function shouldRemove(email) {
+function shouldRemove({ email, role }) {
+  if (!email) return false
   if (KEEP_EMAILS.has(email)) return false
+  if (role && CANONICAL_INTERNAL_ROLE_EMAILS[role]) {
+    return email !== CANONICAL_INTERNAL_ROLE_EMAILS[role]
+  }
+  if (/^(admin|coemgr)@login\.local$/i.test(email)) return true
   return REMOVE_PATTERNS.some((p) => p.test(email))
 }
 
@@ -61,7 +72,22 @@ async function main() {
     process.exit(1)
   }
 
-  const toRemove = (authUsers?.users || []).filter((u) => shouldRemove(u.email))
+  const authUserIds = (authUsers?.users || []).map((user) => user.id)
+  const { data: profiles, error: profileError } = await supabase
+    .from('users')
+    .select('id, role, email')
+    .in('id', authUserIds)
+
+  if (profileError) {
+    console.error('Failed to load user profiles:', profileError.message)
+    process.exit(1)
+  }
+
+  const rolesByUserId = new Map((profiles || []).map((profile) => [profile.id, profile.role]))
+  const toRemove = (authUsers?.users || []).filter((u) => shouldRemove({
+    email: u.email,
+    role: rolesByUserId.get(u.id),
+  }))
   if (toRemove.length === 0) {
     console.log('No duplicate users found to remove.')
     return

@@ -34,6 +34,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrderShipments } from '@/hooks/useShipments'
+import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import type { OrderStatus, OrderItem, PricingMetadata, AuditLog, VendorBid, Vendor, TriageResult } from '@/types'
@@ -115,6 +116,23 @@ function getCarrierTrackingUrl(carrier: string, trackingNumber: string): string 
   return null
 }
 
+function getVendorTransitionLabel(status: OrderStatus): string {
+  switch (status) {
+    case 'sourcing':
+      return 'Accept Job'
+    case 'sourced':
+      return 'Mark Sourced'
+    case 'shipped':
+      return 'Mark Shipped'
+    case 'delivered':
+      return 'Mark Delivered'
+    case 'closed':
+      return 'Complete Fulfillment'
+    default:
+      return ORDER_STATUS_CONFIG[status]?.label || snakeToTitle(status)
+  }
+}
+
 export default function OrderDetailPage() {
   const params = useParams()
   const { user } = useAuth()
@@ -124,7 +142,7 @@ export default function OrderDetailPage() {
   const { order, isLoading, transition, isTransitioning, refetch } = useOrder(params.id as string)
   const isCpoOrder = order?.type === 'cpo'
   const canSetPricing = isCpoOrder ? user?.role === 'admin' : canSetPricingByRole
-  const canSendQuote = !isCustomer && !isVendor && ['admin', 'coe_manager', 'sales', 'coe_tech'].includes(user?.role ?? '')
+  const canSendQuote = !isCustomer && !isVendor && ['admin', 'coe_manager', 'sales'].includes(user?.role ?? '')
   const { shipments: orderShipments, refetch: refetchShipments } = useOrderShipments(params.id as string)
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({})
@@ -175,9 +193,10 @@ export default function OrderDetailPage() {
   const [isCreatingShipment, setIsCreatingShipment] = useState(false)
   const [shipmentDirection, setShipmentDirection] = useState<'inbound' | 'outbound'>('inbound')
   const [shipmentCarrier, setShipmentCarrier] = useState('FedEx')
+  const [shipmentCustomCarrier, setShipmentCustomCarrier] = useState('')
   const [shipmentTrackingNumber, setShipmentTrackingNumber] = useState('')
   const [shipmentNotes, setShipmentNotes] = useState('')
-  const [shipmentStallionPurchase, setShipmentStallionPurchase] = useState(true)
+  const [shipmentStallionPurchase, setShipmentStallionPurchase] = useState(false)
   const [shipmentWeight, setShipmentWeight] = useState('2')
   const [shipmentDimensions, setShipmentDimensions] = useState({ length: '12', width: '8', height: '4' })
 
@@ -890,43 +909,39 @@ export default function OrderDetailPage() {
   }
 
   const handleCreateShipment = async () => {
-    if (!shipmentCarrier.trim()) {
-      toast.error('Carrier is required')
+    if (!order) return
+    const resolvedCarrier = shipmentCarrier === 'Other' ? shipmentCustomCarrier.trim() : shipmentCarrier.trim()
+    if (!resolvedCarrier) {
+      toast.error('Carrier or shipping platform is required')
       return
     }
-    const useStallion = shipmentStallionPurchase
+    const useStallion = isVendor ? false : shipmentStallionPurchase
     if (!useStallion && !shipmentTrackingNumber.trim()) {
-      toast.error('Tracking number is required when not purchasing a label')
+      toast.error('Tracking number is required for manual shipment entry')
       return
     }
     setIsCreatingShipment(true)
     try {
+      const direction = isVendor ? 'inbound' : shipmentDirection
       const payload: Record<string, unknown> = {
         order_id: params.id,
-        direction: shipmentDirection,
+        direction,
         carrier: shipmentCarrier.trim(),
-        tracking_number: useStallion ? undefined : (shipmentTrackingNumber.trim() || `PENDING-${Date.now()}`),
+        custom_carrier: shipmentCarrier === 'Other' ? resolvedCarrier : undefined,
+        tracking_number: useStallion ? undefined : shipmentTrackingNumber.trim(),
         notes: shipmentNotes.trim() || undefined,
       }
-      if (useStallion && order) {
+      const isInboundToCoe = direction === 'inbound'
+      payload.from_address = isInboundToCoe ? buildShipToAddress(order) : COE_ADDRESS
+      payload.to_address = isInboundToCoe ? COE_ADDRESS : buildShipToAddress(order)
+      if (useStallion) {
         payload.stallion_purchase = true
-        // For inbound: customer ships to COE; for outbound: COE ships to customer
-        if (shipmentDirection === 'inbound') {
-          payload.from_address = buildShipToAddress(order)
-          payload.to_address = COE_ADDRESS
-        } else {
-          payload.from_address = COE_ADDRESS
-          payload.to_address = buildShipToAddress(order)
-        }
         payload.weight = Number.parseFloat(shipmentWeight) || 2
         payload.dimensions = {
           length: Number.parseFloat(shipmentDimensions.length) || 12,
           width: Number.parseFloat(shipmentDimensions.width) || 8,
           height: Number.parseFloat(shipmentDimensions.height) || 4,
         }
-      } else {
-        payload.from_address = {}
-        payload.to_address = {}
       }
       const res = await fetch('/api/shipments', {
         method: 'POST',
@@ -935,12 +950,19 @@ export default function OrderDetailPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Failed to create shipment')
-      toast.success(useStallion ? 'Shipment created and label purchased' : 'Shipment created successfully')
+      toast.success(
+        useStallion
+          ? 'Shipment created and label purchased'
+          : isVendor
+            ? 'Shipment created and tracking uploaded'
+            : 'Shipment created successfully'
+      )
       setShipmentDialogOpen(false)
       setShipmentCarrier('FedEx')
+      setShipmentCustomCarrier('')
       setShipmentTrackingNumber('')
       setShipmentNotes('')
-      setShipmentStallionPurchase(true)
+      setShipmentStallionPurchase(false)
       setShipmentWeight('2')
       setShipmentDimensions({ length: '12', width: '8', height: '4' })
       refetch()
@@ -953,9 +975,10 @@ export default function OrderDetailPage() {
   }
 
   const openShipmentDialog = () => {
-    setShipmentDirection(order?.type === 'trade_in' ? 'inbound' : 'outbound')
-    setShipmentStallionPurchase(true)
+    setShipmentDirection(isVendor ? 'inbound' : order?.type === 'trade_in' ? 'inbound' : 'outbound')
+    setShipmentStallionPurchase(false)
     setShipmentCarrier('FedEx')
+    setShipmentCustomCarrier('')
     setShipmentTrackingNumber('')
     setShipmentNotes('')
     setShipmentWeight('2')
@@ -1180,27 +1203,50 @@ export default function OrderDetailPage() {
     return (
       <div className="text-center py-20">
         <p className="text-muted-foreground">Order not found</p>
-        <Link href="/orders"><Button variant="outline" className="mt-4">Back to Orders</Button></Link>
+        <Link href={getDefaultAppPathForRole(user?.role)}><Button variant="outline" className="mt-4">Back</Button></Link>
       </div>
     )
   }
 
+  const backHref = isVendor ? '/vendor/orders' : isCustomer ? '/customer/orders' : '/orders'
   const statusConfig = isCustomer
     ? CUSTOMER_STATUS_CONFIG[order.status]
     : ORDER_STATUS_CONFIG[order.status]
   const rawTransitions = VALID_ORDER_TRANSITIONS[order.status] || []
+  const canViewCommercials = !isVendor
   const orderTotal = order.quoted_amount ?? order.total_amount ?? 0
   const computedFromItems = order.items?.reduce((sum, i) => sum + ((i.unit_price ?? 0) * (i.quantity ?? 0)), 0) ?? 0
   const hasPricesForQuote = orderTotal > 0 || computedFromItems > 0
   const mismatchedItemCount = order.items?.filter((item) => item.actual_condition && item.claimed_condition && item.actual_condition !== item.claimed_condition).length || 0
+  const vendorHasTracking = orderShipments.some((shipment) => shipment.direction === 'inbound' && !!shipment.tracking_number)
   // Customer can only: submit (draft->submitted), cancel draft, accept/reject quote
   const customerAllowedTransitions: OrderStatus[] =
     order.status === 'draft' ? ['submitted', 'cancelled'] :
     order.status === 'quoted' ? ['accepted', 'rejected'] : []
+  const vendorAllowedTransitions: OrderStatus[] =
+    order.status === 'accepted' ? ['sourcing'] :
+    order.status === 'sourcing' ? ['sourced'] :
+    order.status === 'sourced' ? (vendorHasTracking ? ['shipped'] : []) :
+    order.status === 'shipped' ? ['delivered'] :
+    order.status === 'delivered' ? ['closed'] : []
+  const canVendorCreateShipment = isVendor && ['sourced', 'shipped'].includes(order.status)
+  const showLineItemPrices = !isVendor
+  const showLineItemSuggestions = !isCustomer && !isVendor && canSetPricing && !isCpoOrder
+  const showLineItemPricingSource = !isCustomer && !isVendor && (((order.items ?? []).some((i: OrderItem) => i.pricing_metadata?.pricing_source)) || order.status === 'submitted' || order.status === 'quoted')
+  const lineItemColSpan =
+    3 +
+    (showLineItemPrices ? 2 : 0) +
+    (showLineItemSuggestions ? 1 : 0) +
+    (showLineItemPricingSource ? 1 : 0)
   const availableTransitions = isCustomer
     ? rawTransitions.filter((s: OrderStatus) => customerAllowedTransitions.includes(s))
+    : isVendor
+      ? rawTransitions.filter((s: OrderStatus) => vendorAllowedTransitions.includes(s))
     // 'sourcing' is only valid for CPO orders — hide it from trade-in / other types
-    : rawTransitions.filter((s: OrderStatus) => s !== 'sourcing' || isCpoOrder)
+      : rawTransitions.filter((s: OrderStatus) =>
+        (s !== 'sourcing' || isCpoOrder) &&
+        !(order.status === 'sourced' && s === 'shipped')
+      )
 
   // Build timeline from order timestamps
   const timeline = [
@@ -1218,7 +1264,7 @@ export default function OrderDetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/orders"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+          <Link href={backHref}><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{order.order_number}</h1>
@@ -1355,6 +1401,17 @@ export default function OrderDetailPage() {
         </Card>
       )}
 
+      {isVendor && order.status === 'sourced' && !vendorHasTracking && (
+        <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/20">
+          <CardContent className="py-4">
+            <p className="font-medium text-blue-800 dark:text-blue-200">Upload tracking before marking this order as shipped</p>
+            <p className="text-sm text-blue-700 dark:text-blue-300/90 mt-1">
+              Add the inbound tracking number to COE first, then the shipment action will unlock.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Parent order banner (shown for sub-orders, hidden from customers) */}
       {!isCustomer && order.parent_order_id && order.parent_order && (
         <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
@@ -1394,17 +1451,19 @@ export default function OrderDetailPage() {
                   <p className="text-sm text-muted-foreground">Total Quantity</p>
                   <p className="font-medium">{order.total_quantity} devices</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Amount</p>
-                  <p className="font-medium">{formatCurrency(order.total_amount || 0)}</p>
-                </div>
-                {order.quoted_amount && (
+                {canViewCommercials && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Amount</p>
+                    <p className="font-medium">{formatCurrency(order.total_amount || 0)}</p>
+                  </div>
+                )}
+                {canViewCommercials && order.quoted_amount && (
                   <div>
                     <p className="text-sm text-muted-foreground">Quoted Amount</p>
                     <p className="font-medium">{formatCurrency(order.quoted_amount)}</p>
                   </div>
                 )}
-                {order.final_amount && (
+                {canViewCommercials && order.final_amount && (
                   <div>
                     <p className="text-sm text-muted-foreground">Final Amount</p>
                     <p className="font-medium text-green-600">{formatCurrency(order.final_amount)}</p>
@@ -1444,7 +1503,7 @@ export default function OrderDetailPage() {
                   </>
                 )}
               </div>
-              {order.items && order.items.length > 0 && (order.quoted_amount ?? order.total_amount ?? 0) > 0 && (() => {
+              {canViewCommercials && order.items && order.items.length > 0 && (order.quoted_amount ?? order.total_amount ?? 0) > 0 && (() => {
                 const autoCount = order.items.filter((i: OrderItem) => i.pricing_metadata?.pricing_source === 'auto').length
                 const manualCount = order.items.filter((i: OrderItem) => i.pricing_metadata?.pricing_source === 'manual').length
                 const hasBoth = autoCount > 0 && manualCount > 0
@@ -1457,20 +1516,21 @@ export default function OrderDetailPage() {
             </CardHeader>
             <CardContent>
               {order.items && order.items.length > 0 ? (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Device</TableHead>
                       <TableHead>Qty</TableHead>
                       <TableHead>Condition</TableHead>
-                      <TableHead>Unit Price</TableHead>
-                      {!isCustomer && canSetPricing && !isCpoOrder && (
+                      {showLineItemPrices && <TableHead>Unit Price</TableHead>}
+                      {showLineItemSuggestions && (
                         <TableHead className="w-36">Suggested</TableHead>
                       )}
-                      {!isCustomer && ((order.items ?? []).some((i: OrderItem) => i.pricing_metadata?.pricing_source) || order.status === 'submitted' || order.status === 'quoted') && (
+                      {showLineItemPricingSource && (
                         <TableHead className="w-24">Pricing</TableHead>
                       )}
-                      <TableHead className="text-right">Total</TableHead>
+                      {showLineItemPrices && <TableHead className="text-right">Total</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1520,21 +1580,23 @@ export default function OrderDetailPage() {
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell>
-                              {isInlineEditing && canSetPricing ? (
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  className="w-24 h-8 text-sm"
-                                  value={inlineEditPrices[item.id] ?? item.unit_price ?? ''}
-                                  onChange={(e) => setInlineEditPrices(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                />
-                              ) : (
-                                item.unit_price ? formatCurrency(item.unit_price) : '—'
-                              )}
-                            </TableCell>
-                            {!isCustomer && canSetPricing && !isCpoOrder && (
+                            {showLineItemPrices && (
+                              <TableCell>
+                                {isInlineEditing && canSetPricing ? (
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    className="w-24 h-8 text-sm"
+                                    value={inlineEditPrices[item.id] ?? item.unit_price ?? ''}
+                                    onChange={(e) => setInlineEditPrices(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  />
+                                ) : (
+                                  item.unit_price ? formatCurrency(item.unit_price) : '—'
+                                )}
+                              </TableCell>
+                            )}
+                            {showLineItemSuggestions && (
                               <TableCell>
                                 {lineItemSuggestionsLoading ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -1563,7 +1625,7 @@ export default function OrderDetailPage() {
                                 )}
                               </TableCell>
                             )}
-                            {!isCustomer && ((order.items ?? []).some((i: OrderItem) => i.pricing_metadata?.pricing_source) || order.status === 'submitted' || order.status === 'quoted') && (
+                            {showLineItemPricingSource && (
                               <TableCell>
                                 {item.pricing_metadata?.pricing_source === 'auto' ? (
                                   <Badge variant="secondary" className="text-xs">Auto</Badge>
@@ -1574,19 +1636,21 @@ export default function OrderDetailPage() {
                                 )}
                               </TableCell>
                             )}
-                            <TableCell className="text-right">
-                              {(() => {
-                                const unit = isInlineEditing
-                                  ? parseFloat(String(inlineEditPrices[item.id] ?? item.unit_price ?? '').replace(/[^0-9.-]/g, ''))
-                                  : (item.unit_price ?? 0)
-                                const total = (Number.isFinite(unit) ? unit : 0) * (item.quantity ?? 1)
-                                return total > 0 ? formatCurrency(total) : '—'
-                              })()}
-                            </TableCell>
+                            {showLineItemPrices && (
+                              <TableCell className="text-right">
+                                {(() => {
+                                  const unit = isInlineEditing
+                                    ? parseFloat(String(inlineEditPrices[item.id] ?? item.unit_price ?? '').replace(/[^0-9.-]/g, ''))
+                                    : (item.unit_price ?? 0)
+                                  const total = (Number.isFinite(unit) ? unit : 0) * (item.quantity ?? 1)
+                                  return total > 0 ? formatCurrency(total) : '—'
+                                })()}
+                              </TableCell>
+                            )}
                           </TableRow>
                           {isExpanded && (
                             <TableRow>
-                              <TableCell colSpan={isCustomer ? 5 : 7} className="bg-muted/30 py-3">
+                              <TableCell colSpan={lineItemColSpan} className="bg-muted/30 py-3">
                                 <div className="text-sm text-muted-foreground space-y-2 pl-6">
                                   {/* Extended device metadata */}
                                   {(item.cpu || item.ram || item.screen_size || item.year || item.model_number || item.accessories || item.faults) && (
@@ -1604,7 +1668,7 @@ export default function OrderDetailPage() {
                                     </div>
                                   )}
                                   {/* Pricing context */}
-                                  {hasContext && (
+                                  {!isVendor && hasContext && (
                                     <div>
                                       <p className="font-medium mb-1">Pricing Context</p>
                                       <div className="flex flex-wrap gap-4">
@@ -1624,6 +1688,7 @@ export default function OrderDetailPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               ) : (
                 <p className="text-center py-4 text-muted-foreground">No items added yet</p>
               )}
@@ -1707,7 +1772,7 @@ export default function OrderDetailPage() {
           )}
 
           {/* Buyback Guarantee & Depreciation Schedule (CPO only, internal roles only — customers see "up to" in quote banner) */}
-          {isCpoOrder && !isCustomer && (displaySchedule ?? depreciationSchedule) && (displaySchedule ?? depreciationSchedule)!.items.length > 0 && (
+          {isCpoOrder && !isCustomer && !isVendor && (displaySchedule ?? depreciationSchedule) && (displaySchedule ?? depreciationSchedule)!.items.length > 0 && (
             <Card>
               <CardHeader>
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1889,7 +1954,7 @@ export default function OrderDetailPage() {
           )}
 
           {/* Notes */}
-          {(order.notes || (!isCustomer && order.internal_notes)) && (
+          {!isVendor && (order.notes || (!isCustomer && order.internal_notes)) && (
             <Card>
               <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
               <CardContent className="space-y-4">
@@ -1910,7 +1975,7 @@ export default function OrderDetailPage() {
           )}
 
           {/* Shipments / Track Shipment Section */}
-          {(orderShipments.length > 0 || (!isVendor && SHIPMENT_STATUSES.includes(order.status as (typeof SHIPMENT_STATUSES)[number])) || (isCustomer && order.status === 'accepted')) && (
+          {(orderShipments.length > 0 || (!isVendor && SHIPMENT_STATUSES.includes(order.status as (typeof SHIPMENT_STATUSES)[number])) || (isCustomer && order.status === 'accepted') || canVendorCreateShipment) && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -1918,13 +1983,13 @@ export default function OrderDetailPage() {
                     <Truck className="h-4 w-4 text-muted-foreground" />
                     <CardTitle>{isCustomer ? 'Track Your Shipment' : 'Shipments'}</CardTitle>
                   </div>
-                  {!isVendor && (
+                  {((!isVendor && (
                     (!isCustomer && SHIPMENT_STATUSES.includes(order.status as (typeof SHIPMENT_STATUSES)[number])) ||
                     (isCustomer && order.status === 'accepted')
-                  ) && (
+                  )) || canVendorCreateShipment) && (
                     <Button size="sm" onClick={openShipmentDialog}>
                       <Plus className="h-4 w-4 mr-1" />
-                      Create Shipment
+                      {isVendor ? 'Upload Tracking' : 'Create Shipment'}
                     </Button>
                   )}
                 </div>
@@ -1940,6 +2005,8 @@ export default function OrderDetailPage() {
                     <p className="text-sm text-muted-foreground">
                       {isCustomer
                         ? 'Tracking info will appear here when your order is shipped.'
+                        : isVendor
+                          ? 'Upload the vendor shipment tracking number once devices leave your facility.'
                         : 'No shipments yet. Create one to start the shipping process.'}
                     </p>
                   </div>
@@ -1996,28 +2063,37 @@ export default function OrderDetailPage() {
           <Dialog open={shipmentDialogOpen} onOpenChange={setShipmentDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create Shipment</DialogTitle>
+                <DialogTitle>{isVendor ? 'Upload Tracking' : 'Create Shipment'}</DialogTitle>
                 <DialogDescription>
-                  Add a new shipment for order {order.order_number}
+                  {isVendor
+                    ? `Upload the carrier and tracking number for order ${order.order_number}`
+                    : `Add tracking for order ${order.order_number}. Manual entry works with any carrier or shipping platform.`}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
+                {isVendor ? (
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <p className="text-sm font-medium">Direction</p>
+                    <p className="text-xs text-muted-foreground mt-1">Inbound to COE</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="shipment-direction">Direction</Label>
+                    <Select value={shipmentDirection} onValueChange={(v) => {
+                      setShipmentDirection(v as 'inbound' | 'outbound')
+                    }}>
+                      <SelectTrigger id="shipment-direction">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="inbound">Inbound</SelectItem>
+                        <SelectItem value="outbound">Outbound</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2">
-                  <Label htmlFor="shipment-direction">Direction</Label>
-                  <Select value={shipmentDirection} onValueChange={(v) => {
-                    setShipmentDirection(v as 'inbound' | 'outbound')
-                  }}>
-                    <SelectTrigger id="shipment-direction">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="inbound">Inbound</SelectItem>
-                      <SelectItem value="outbound">Outbound</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="shipment-carrier">Carrier</Label>
+                  <Label htmlFor="shipment-carrier">Carrier or Platform</Label>
                   <Select value={shipmentCarrier} onValueChange={setShipmentCarrier}>
                     <SelectTrigger id="shipment-carrier">
                       <SelectValue />
@@ -2027,25 +2103,48 @@ export default function OrderDetailPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="text-sm font-medium">Purchase shipping label</p>
-                    <p className="text-xs text-muted-foreground">Generate a label and tracking number automatically via Stallion Express.</p>
+                {shipmentCarrier === 'Other' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="shipment-custom-carrier">Custom Carrier / Platform</Label>
+                    <Input
+                      id="shipment-custom-carrier"
+                      placeholder="Enter carrier or platform name"
+                      value={shipmentCustomCarrier}
+                      onChange={(e) => setShipmentCustomCarrier(e.target.value)}
+                    />
                   </div>
-                  <Switch checked={shipmentStallionPurchase} onCheckedChange={setShipmentStallionPurchase} />
-                </div>
+                )}
+                {isVendor ? (
+                  <div className="rounded-lg border p-3">
+                    <p className="text-sm font-medium">Manual tracking upload</p>
+                    <p className="text-xs text-muted-foreground">Enter the tracking number from any carrier or platform. Vendors do not purchase labels in the app.</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <p className="text-sm font-medium">Use in-app label purchase</p>
+                      <p className="text-xs text-muted-foreground">Optional. Leave this off if you already have tracking from another platform.</p>
+                    </div>
+                    <Switch checked={shipmentStallionPurchase} onCheckedChange={setShipmentStallionPurchase} />
+                  </div>
+                )}
+                {shipmentStallionPurchase && shipmentCarrier === 'Other' && (
+                  <p className="text-xs text-amber-600">
+                    Choose a listed carrier for in-app label purchase, or turn it off and paste tracking from your platform.
+                  </p>
+                )}
                 {!shipmentStallionPurchase && (
                   <div className="space-y-2">
                     <Label htmlFor="shipment-tracking">Tracking Number</Label>
                     <Input
                       id="shipment-tracking"
-                      placeholder="Enter tracking number"
+                      placeholder="Enter tracking number from any carrier or platform"
                       value={shipmentTrackingNumber}
                       onChange={(e) => setShipmentTrackingNumber(e.target.value)}
                     />
                   </div>
                 )}
-                {shipmentStallionPurchase && (
+                {shipmentStallionPurchase && !isVendor && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label>Weight (lb)</Label>
@@ -2084,12 +2183,13 @@ export default function OrderDetailPage() {
                   onClick={handleCreateShipment}
                   disabled={
                     isCreatingShipment ||
-                    !shipmentCarrier.trim() ||
+                    !(shipmentCarrier === 'Other' ? shipmentCustomCarrier.trim() : shipmentCarrier.trim()) ||
+                    (shipmentStallionPurchase && shipmentCarrier === 'Other') ||
                     (shipmentStallionPurchase ? false : !shipmentTrackingNumber.trim())
                   }
                 >
                   {isCreatingShipment ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Truck className="h-4 w-4 mr-1" />}
-                  Create Shipment
+                  {isVendor ? 'Upload Tracking' : shipmentStallionPurchase ? 'Create Shipment' : 'Save Tracking'}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -2545,6 +2645,8 @@ export default function OrderDetailPage() {
                     const isDestructive = nextStatus === 'cancelled' || nextStatus === 'rejected'
                     const label = isCustomer
                       ? (['accepted', 'submitted'].includes(nextStatus) ? 'Approve' : ['rejected', 'cancelled'].includes(nextStatus) ? 'Disapprove' : nextConfig?.label || snakeToTitle(nextStatus))
+                      : isVendor
+                        ? getVendorTransitionLabel(nextStatus)
                       : (nextConfig?.label || snakeToTitle(nextStatus))
                     return (
                       <Button
@@ -2848,11 +2950,15 @@ export default function OrderDetailPage() {
             <AlertDialogTitle>
               {isCustomer
                 ? (transitionTarget === 'accepted' || transitionTarget === 'submitted' ? 'Approve' : transitionTarget === 'rejected' || transitionTarget === 'cancelled' ? 'Disapprove' : 'Confirm')
-                : `Move to: ${transitionTarget ? (ORDER_STATUS_CONFIG[transitionTarget]?.label || transitionTarget) : ''}`}
-              {!isCustomer ? '?' : ' this order?'}
+                : isVendor
+                  ? `${transitionTarget ? getVendorTransitionLabel(transitionTarget) : 'Confirm'}?`
+                  : `Move to: ${transitionTarget ? (ORDER_STATUS_CONFIG[transitionTarget]?.label || transitionTarget) : ''}?`}
+              {isCustomer ? ' this order?' : ''}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will update the order status. You can optionally add a note.
+              {isVendor
+                ? 'This will update your fulfillment progress for the assigned order. You can optionally add a note.'
+                : 'This will update the order status. You can optionally add a note.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">

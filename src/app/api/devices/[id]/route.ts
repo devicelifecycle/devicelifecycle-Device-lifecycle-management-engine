@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -32,7 +32,7 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const device = await DeviceService.getDeviceById(params.id)
+    const device = await DeviceService.getDeviceById((await params).id)
     if (!device) {
       return NextResponse.json({ error: 'Device not found' }, { status: 404 })
     }
@@ -49,7 +49,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -78,7 +78,7 @@ export async function PATCH(
         { status: 400 }
       )
     }
-    const device = await DeviceService.updateDevice(params.id, validationResult.data)
+    const device = await DeviceService.updateDevice((await params).id, validationResult.data)
     return NextResponse.json(device)
   } catch (error) {
     console.error('Error updating device:', error)
@@ -91,7 +91,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -112,7 +112,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await DeviceService.deleteDevice(params.id)
+    await DeviceService.deleteDevice((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting device:', error)

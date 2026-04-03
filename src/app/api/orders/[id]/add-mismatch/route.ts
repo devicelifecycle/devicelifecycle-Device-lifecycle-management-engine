@@ -28,7 +28,7 @@ function calculatePriceAdjustment(
   return -Math.round(reduction * 100) / 100
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: order } = await supabase
       .from('orders')
       .select('id, order_number, customer_id, customer:customers(organization_id, contact_email, company_name)')
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .single()
 
     if (!order) {
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: orderItems } = await supabase
       .from('order_items')
       .select('id, device_id, storage, claimed_condition, unit_price, quoted_price, device:device_catalog(make, model)')
-      .eq('order_id', params.id)
+      .eq('order_id', (await params).id)
       .in('id', items.map((i) => i.order_item_id))
 
     if (!orderItems || orderItems.length === 0) {
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { data: existingImei } = await supabase
         .from('imei_records')
         .select('id')
-        .eq('order_id', params.id)
+        .eq('order_id', (await params).id)
         .eq('imei', imeiValue)
         .single()
 
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         .from('imei_records')
         .insert({
           imei: imeiValue,
-          order_id: params.id,
+          order_id: (await params).id,
           order_item_id: req.order_item_id,
           device_id: orderItem.device_id,
           claimed_condition: claimed,
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         .from('triage_results')
         .insert({
           imei_record_id: imeiRecord.id,
-          order_id: params.id,
+          order_id: (await params).id,
           physical_condition: actual,
           functional_grade: actual,
           cosmetic_grade: actual,
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           updated_at: new Date().toISOString(),
         })
         .eq('id', req.order_item_id)
-        .eq('order_id', params.id)
+        .eq('order_id', (await params).id)
 
       added.push({
         order_item_id: req.order_item_id,
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     for (const a of added) {
       if (a.exception_required && order.customer_id) {
         await NotificationService.sendExceptionNotification({
-          order_id: params.id,
+          order_id: (await params).id,
           order_number: order.order_number,
           customer_id: order.customer_id,
           imei: `MANUAL-${a.order_item_id}`,
@@ -252,9 +252,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             type: 'in_app',
             title: `Condition mismatch recorded — ${order.order_number}`,
             message: `${added.length} device(s) were marked as condition mismatch and require your review.`,
-            link: `/orders/${params.id}`,
+            link: `/orders/${(await params).id}`,
             metadata: {
-              order_id: params.id,
+              order_id: (await params).id,
               order_number: order.order_number,
               mismatched_count: added.length,
               source: 'admin_added_mismatch',
@@ -268,7 +268,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       user_id: user.id,
       action: 'price_change',
       entity_type: 'order',
-      entity_id: params.id,
+      entity_id: (await params).id,
       old_values: {
         items: added.map((a) => ({
           order_item_id: a.order_item_id,
@@ -292,7 +292,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     return NextResponse.json({
       success: true,
-      order_id: params.id,
+      order_id: (await params).id,
       added_count: added.length,
       skipped_count: skipped.length,
       added,

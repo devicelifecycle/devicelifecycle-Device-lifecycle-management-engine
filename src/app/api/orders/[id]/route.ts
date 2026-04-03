@@ -12,15 +12,9 @@ import { isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 
-interface RouteParams {
-  params: {
-    id: string
-  }
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid order ID format' }, { status: 400 })
     }
     const supabase = await createServerSupabaseClient()
@@ -30,7 +24,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const order = await OrderService.getOrderById(params.id)
+    const order = await OrderService.getOrderById((await params).id)
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -93,7 +87,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -114,7 +108,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // Fetch the order for authorization check
-    const order = await OrderService.getOrderById(params.id)
+    const order = await OrderService.getOrderById((await params).id)
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
@@ -154,7 +148,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       assigned_to_id: validationResult.data.assigned_to_id === null ? undefined : validationResult.data.assigned_to_id,
     }
 
-    const updatedOrder = await OrderService.updateOrder(params.id, updateData, user.id)
+    const updatedOrder = await OrderService.updateOrder((await params).id, updateData, user.id)
 
     return NextResponse.json(updatedOrder)
   } catch (error) {
@@ -166,7 +160,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -191,7 +185,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    await OrderService.deleteOrder(params.id, user.id)
+    await OrderService.deleteOrder((await params).id, user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting order:', error)

@@ -12,7 +12,7 @@ const INTERNAL_ROLES = ['admin', 'coe_manager', 'coe_tech', 'sales']
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -28,7 +28,7 @@ export async function GET(
       .eq('id', user.id)
       .single()
 
-    const customer = await CustomerService.getCustomerById(params.id)
+    const customer = await CustomerService.getCustomerById((await params).id)
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
@@ -46,7 +46,7 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams
     const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20'), 1), 100)
 
-    const orders = await CustomerService.getCustomerOrders(params.id, limit)
+    const orders = await CustomerService.getCustomerOrders((await params).id, limit)
     return NextResponse.json({ data: orders })
   } catch (error) {
     console.error('Error fetching customer orders:', error)

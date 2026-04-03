@@ -11,10 +11,10 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!isValidUUID(params.id)) {
+    if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid order ID format' }, { status: 400 })
     }
     const supabase = await createServerSupabaseClient()
@@ -48,7 +48,7 @@ export async function POST(
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .select('id, status, customer:customers(organization_id)')
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .single()
 
     if (orderError || !order) {
@@ -73,7 +73,7 @@ export async function POST(
     const { data: item, error } = await supabase
       .from('order_items')
       .insert({
-        order_id: params.id,
+        order_id: (await params).id,
         device_id: device_id || null,
         quantity,
         storage,
@@ -99,13 +99,13 @@ export async function POST(
     const { data: items } = await supabase
       .from('order_items')
       .select('quantity')
-      .eq('order_id', params.id)
+      .eq('order_id', (await params).id)
 
     const totalQuantity = items?.reduce((sum, i) => sum + (i.quantity || 0), 0) || 0
     await supabase
       .from('orders')
       .update({ total_quantity: totalQuantity, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', (await params).id)
 
     return NextResponse.json(item, { status: 201 })
   } catch (error) {
@@ -119,7 +119,7 @@ export async function POST(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -151,7 +151,7 @@ export async function PATCH(
     const { data: order } = await supabase
       .from('orders')
       .select('id, type, customer:customers(organization_id)')
-      .eq('id', params.id)
+      .eq('id', (await params).id)
       .single()
 
     if (!order) {
@@ -214,7 +214,7 @@ export async function PATCH(
         .from('order_items')
         .update(updatePayload)
         .eq('id', item.id)
-        .eq('order_id', params.id)
+        .eq('order_id', (await params).id)
 
       if (error) {
         console.error(`Error updating item ${item.id}:`, error.message)
@@ -224,7 +224,7 @@ export async function PATCH(
             .from('order_items')
             .update({ unit_price: item.unit_price })
             .eq('id', item.id)
-            .eq('order_id', params.id)
+            .eq('order_id', (await params).id)
           if (retryError) return item.id
         } else {
           return item.id
@@ -245,7 +245,7 @@ export async function PATCH(
     const { data: orderItems } = await supabase
       .from('order_items')
       .select('unit_price, quantity')
-      .eq('order_id', params.id)
+      .eq('order_id', (await params).id)
 
     const totalAmount = orderItems?.reduce(
       (sum, item) => sum + ((item.unit_price || 0) * (item.quantity || 0)),
@@ -259,7 +259,7 @@ export async function PATCH(
         quoted_amount: totalAmount,
         updated_at: new Date().toISOString()
       })
-      .eq('id', params.id)
+      .eq('id', (await params).id)
 
     return NextResponse.json({ success: true, total_amount: totalAmount })
   } catch (error) {

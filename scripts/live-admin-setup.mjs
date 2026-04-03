@@ -27,11 +27,11 @@ const BASE_URL = process.env.BASE_URL || 'https://device-lifecycle-management-en
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 const CUSTOMER_ORG_NAME = process.env.CUSTOMER_ORG_NAME || 'Sai Yaganti'
-const CUSTOMER_ORG_EMAIL = process.env.CUSTOMER_ORG_EMAIL || 'saiyaganti14+customer@gmail.com'
+const CUSTOMER_ORG_EMAIL = process.env.CUSTOMER_ORG_EMAIL || 'customer@example.com'
 const CUSTOMER_ORG_PHONE = process.env.CUSTOMER_ORG_PHONE || ''
 const VENDOR_COMPANY_NAME = process.env.VENDOR_COMPANY_NAME || 'Sai Vendor Supply'
 const VENDOR_CONTACT_NAME = process.env.VENDOR_CONTACT_NAME || 'Sai Yaganti'
-const VENDOR_CONTACT_EMAIL = process.env.VENDOR_CONTACT_EMAIL || 'saiyaganti14@gmail.com'
+const VENDOR_CONTACT_EMAIL = process.env.VENDOR_CONTACT_EMAIL || 'vendor@example.com'
 const VENDOR_CONTACT_PHONE = process.env.VENDOR_CONTACT_PHONE || ''
 const OUTPUT_DIR = path.join(process.cwd(), 'artifacts', 'live-admin-setup', new Date().toISOString().replace(/[:.]/g, '-'))
 const HEADED = process.env.HEADED === 'true'

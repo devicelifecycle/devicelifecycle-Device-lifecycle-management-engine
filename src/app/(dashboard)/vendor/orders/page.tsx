@@ -28,7 +28,22 @@ import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
 import type { Order, OrderStatus } from '@/types'
 
-const BID_ELIGIBLE_STATUSES: OrderStatus[] = ['accepted', 'sourcing']
+function getVendorOrderActionLabel(status: OrderStatus): string {
+  switch (status) {
+    case 'accepted':
+      return 'Accept Job'
+    case 'sourcing':
+      return 'Mark Sourced'
+    case 'sourced':
+      return 'Upload Tracking'
+    case 'shipped':
+      return 'Mark Delivered'
+    case 'delivered':
+      return 'Complete Fulfillment'
+    default:
+      return 'Open Order'
+  }
+}
 
 async function fetchOpenOrders(page = 1) {
   const res = await fetch(`/api/vendors/open-orders?page=${page}&page_size=20`)
@@ -176,13 +191,13 @@ export default function VendorOrdersPage() {
                   <p className="mt-1 text-xs text-muted-foreground">New CPO orders will appear here when customers accept quotes.</p>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Order #</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Quantity</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -192,13 +207,13 @@ export default function VendorOrdersPage() {
                       const status = ORDER_STATUS_CONFIG[order.status as OrderStatus]
                       return (
                         <TableRow key={order.id}>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
                               {order.order_number}
                             </Link>
                             <p className="text-xs text-muted-foreground mt-0.5">Click for line items</p>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <Badge variant="secondary" className="text-[11px]">
                               {status?.label || order.status}
                             </Badge>
@@ -206,10 +221,7 @@ export default function VendorOrdersPage() {
                           <TableCell className="text-right tabular-nums font-medium">
                             {order.total_quantity ?? 0}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {formatCurrency(order.quoted_amount ?? order.total_amount ?? 0)}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                             {formatRelativeTime(order.created_at)}
                           </TableCell>
                           <TableCell className="text-right">
@@ -237,6 +249,7 @@ export default function VendorOrdersPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               )}
               <Pagination page={openOrdersPage} totalPages={openTotalPages} onPageChange={setOpenOrdersPage} />
             </CardContent>
@@ -275,6 +288,7 @@ export default function VendorOrdersPage() {
               <p className="mt-1 text-xs text-muted-foreground">Assigned work will appear here.</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -282,7 +296,6 @@ export default function VendorOrdersPage() {
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Updated</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -290,10 +303,9 @@ export default function VendorOrdersPage() {
               <TableBody>
                 {orders.map((order) => {
                   const status = ORDER_STATUS_CONFIG[order.status as OrderStatus]
-                  const canBid = BID_ELIGIBLE_STATUSES.includes(order.status as OrderStatus)
                   return (
                     <TableRow key={order.id}>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
                           {order.order_number}
                         </Link>
@@ -304,7 +316,7 @@ export default function VendorOrdersPage() {
                           {order.type === 'trade_in' ? 'Trade-In' : 'CPO'}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Badge variant="secondary" className="text-[11px]">
                           {status?.label || order.status}
                         </Badge>
@@ -312,29 +324,23 @@ export default function VendorOrdersPage() {
                       <TableCell className="text-right tabular-nums font-medium">
                         {order.total_quantity ?? 0}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatCurrency(order.total_amount || 0)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {formatRelativeTime(order.updated_at || order.created_at)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {canBid && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openBidDialog(order)}
-                          >
-                            <Send className="mr-1.5 h-3.5 w-3.5" />
-                            Submit Bid
-                          </Button>
-                        )}
+                      <TableCell className="text-right whitespace-nowrap">
+                        <Button asChild size="sm" variant={order.status === 'sourced' ? 'default' : 'outline'}>
+                          <Link href={`/orders/${order.id}`}>
+                            <Truck className="mr-1.5 h-3.5 w-3.5" />
+                            {getVendorOrderActionLabel(order.status as OrderStatus)}
+                          </Link>
+                        </Button>
                       </TableCell>
                     </TableRow>
                   )
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </CardContent>
@@ -344,7 +350,7 @@ export default function VendorOrdersPage() {
 
       {/* Submit Bid Dialog — outside Tabs so it works from both Open and Assigned */}
       <Dialog open={bidDialogOpen} onOpenChange={setBidDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Submit Bid</DialogTitle>
             <DialogDescription>

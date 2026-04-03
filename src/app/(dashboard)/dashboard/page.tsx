@@ -128,7 +128,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
             {quickActions.map((action) => (
               <Link key={action.href} href={action.href}>
                 <div className="metric-tile h-full p-5 transition-transform duration-300 hover:-translate-y-1">
@@ -169,13 +169,13 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
           <CardHeader>
             <CardTitle className="text-2xl text-stone-100">Order Momentum</CardTitle>
             <CardDescription className="text-stone-400">Volume over the last seven days.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[320px]">
+          <CardContent className="h-[260px] sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trendData}>
                 <defs>
@@ -206,7 +206,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
             <CardTitle className="text-2xl text-stone-100">Pipeline Weight</CardTitle>
             <CardDescription className="text-stone-400">Where operational effort is concentrated now.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[320px]">
+          <CardContent className="h-[260px] sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineData}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
@@ -231,7 +231,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
         </Card>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+      <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
           <CardHeader className="flex-row items-end justify-between space-y-0">
             <div>
