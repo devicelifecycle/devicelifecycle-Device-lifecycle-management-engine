@@ -125,7 +125,7 @@ export function useAuth() {
 
       const { data: profile } = await supabase
         .from('users')
-        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at')
+        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
         .eq('id', authUser.id)
         .single()
 
@@ -311,7 +311,7 @@ export function useAuth() {
         try {
           const result = await supabase
             .from('users')
-            .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at')
+            .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
             .eq('id', userId)
             .single()
 
@@ -391,7 +391,7 @@ export function useAuth() {
 
       const { data: profile } = await supabase
         .from('users')
-        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at')
+        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
         .eq('id', authUser.id)
         .single()
 
