@@ -176,7 +176,7 @@ export class PricingService {
 
   private static async runPricingRead<T>(
     label: string,
-    task: () => Promise<{ data: T | null; error: QueryErrorLike | null }>,
+    task: () => PromiseLike<{ data: T | null; error: QueryErrorLike | null }>,
     options: { allowNoRows?: boolean; retries?: number } = {}
   ): Promise<T | null> {
     const retries = options.retries ?? 1
@@ -407,7 +407,13 @@ export class PricingService {
 
     try {
       // Step 1: Get market reference prices
-      const marketEntry = await this.runPricingRead(
+      const marketEntry = await this.runPricingRead<{
+        wholesale_c_stock?: number
+        marketplace_price?: number
+        marketplace_good?: number
+        trade_price?: number
+        cpo_price?: number
+      }>(
         'market_prices exact lookup',
         () => supabase
           .from('market_prices')
@@ -427,7 +433,11 @@ export class PricingService {
       // Wholesale/market can inflate quotes; competitors reflect what customers actually get.
       // First try same-condition competitors, then fall back to all conditions.
       const competitorConditionForAnchor = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
-      const compForAnchorCondition = await this.runPricingRead(
+      const compForAnchorCondition = await this.runPricingRead<Array<{
+        trade_in_price?: number
+        updated_at?: string
+        scraped_at?: string
+      }>>(
         'competitor_prices anchor exact condition',
         () => supabase
           .from('competitor_prices')
@@ -455,7 +465,11 @@ export class PricingService {
 
       // Fall back to all conditions if no same-condition prices found
       if (freshCompetitorPrices.length === 0) {
-        const compForAnchorAll = await this.runPricingRead(
+        const compForAnchorAll = await this.runPricingRead<Array<{
+          trade_in_price?: number
+          updated_at?: string
+          scraped_at?: string
+        }>>(
           'competitor_prices anchor all conditions',
           () => supabase
             .from('competitor_prices')
@@ -483,7 +497,7 @@ export class PricingService {
         if (anchorPrice) anchorIsBaseNormalized = true // wholesale is a "new" base price
       }
       if (!anchorPrice) {
-        const pricingEntry = await this.runPricingRead(
+        const pricingEntry = await this.runPricingRead<{ base_price?: number }>(
           'pricing_tables exact lookup',
           () => supabase
             .from('pricing_tables')
@@ -503,7 +517,7 @@ export class PricingService {
         if (anchorPrice) anchorIsBaseNormalized = true // pricing table condition='new'
       }
       if (!anchorPrice) {
-        const compFallback = await this.runPricingRead(
+        const compFallback = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
           'competitor_prices anchor fallback',
           () => supabase
             .from('competitor_prices')
@@ -523,7 +537,7 @@ export class PricingService {
 
       // Fallback: same device, any storage — use competitor or market data from other storage variants (e.g. UNKNOWN → 128GB)
       if (!anchorPrice) {
-        const compAnyStorage = await this.runPricingRead(
+        const compAnyStorage = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
           'competitor_prices any storage fallback',
           () => supabase
             .from('competitor_prices')
@@ -540,7 +554,7 @@ export class PricingService {
         }
       }
       if (!anchorPrice) {
-        const marketAnyStorage = await this.runPricingRead(
+        const marketAnyStorage = await this.runPricingRead<Array<{ wholesale_c_stock?: number }>>(
           'market_prices any storage fallback',
           () => supabase
             .from('market_prices')
@@ -566,7 +580,7 @@ export class PricingService {
         const condMult = CONDITION_MULTIPLIERS[normalizedInput.condition] ?? 0.85
 
         // 1. Exact match
-        const exactBaseline = await this.runPricingRead(
+        const exactBaseline = await this.runPricingRead<{ median_trade_price?: number }>(
           'trained_pricing_baselines exact',
           () => supabase
             .from('trained_pricing_baselines')
@@ -580,13 +594,16 @@ export class PricingService {
           { allowNoRows: true, retries: 2 }
         )
         if ((exactBaseline?.median_trade_price ?? 0) > 0) {
-          anchorPrice = exactBaseline!.median_trade_price / condMult
+          anchorPrice = (exactBaseline?.median_trade_price ?? 0) / condMult
           anchorIsBaseNormalized = true // divided by condMult → base equivalent
         }
 
         // 2. Same device, any storage, same condition
         if (!anchorPrice) {
-          const anyStorage = await this.runPricingRead(
+          const anyStorage = await this.runPricingRead<{
+            median_trade_price?: number
+            condition?: string
+          }>(
             'trained_pricing_baselines any storage',
             () => supabase
               .from('trained_pricing_baselines')
@@ -599,20 +616,27 @@ export class PricingService {
             { allowNoRows: true, retries: 2 }
           )
           if ((anyStorage?.median_trade_price ?? 0) > 0) {
-            anchorPrice = anyStorage!.median_trade_price / condMult
+            anchorPrice = (anyStorage?.median_trade_price ?? 0) / condMult
             anchorIsBaseNormalized = true
           }
         }
 
         // 3. Same device, different condition — scale to "new" equivalent using condition multiplier ratio
         if (!anchorPrice) {
-          const { data: otherCond } = await supabase
-            .from('trained_pricing_baselines')
-            .select('median_trade_price, condition')
-            .eq('device_id', normalizedInput.device_id)
-            .gt('median_trade_price', 0)
-            .order('last_trained_at', { ascending: false })
-            .limit(5)
+          const otherCond = await this.runPricingRead<Array<{
+            median_trade_price: number
+            condition: string
+          }>>(
+            'trained_pricing_baselines cross condition',
+            () => supabase
+              .from('trained_pricing_baselines')
+              .select('median_trade_price, condition')
+              .eq('device_id', normalizedInput.device_id)
+              .gt('median_trade_price', 0)
+              .order('last_trained_at', { ascending: false })
+              .limit(5),
+            { allowNoRows: true, retries: 2 }
+          )
           if (otherCond && otherCond.length > 0) {
             const ref = otherCond.find((r: { condition: string }) => r.condition === 'good') ?? otherCond[0]
             const refMult = CONDITION_MULTIPLIERS[ref.condition as DeviceCondition] ?? 0.85
@@ -626,20 +650,27 @@ export class PricingService {
 
       // Step 2: Pull competitor prices early so competitor-backed devices can still quote
       const competitorCondition = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
-      let { data: competitorData } = await supabase
-        .from('competitor_prices')
-        .select('*')
-        .eq('device_id', normalizedInput.device_id)
-        .eq('storage', normalizedInput.storage)
-        .eq('condition', competitorCondition)
-
-      if (!competitorData || competitorData.length === 0) {
-        const fallback = await supabase
+      let competitorData = await this.runPricingRead<CompetitorPrice[]>(
+        'competitor_prices exact condition',
+        () => supabase
           .from('competitor_prices')
           .select('*')
           .eq('device_id', normalizedInput.device_id)
           .eq('storage', normalizedInput.storage)
-        competitorData = fallback.data || []
+          .eq('condition', competitorCondition),
+        { allowNoRows: true, retries: 2 }
+      )
+
+      if (!competitorData || competitorData.length === 0) {
+        competitorData = await this.runPricingRead<CompetitorPrice[]>(
+          'competitor_prices storage fallback',
+          () => supabase
+            .from('competitor_prices')
+            .select('*')
+            .eq('device_id', normalizedInput.device_id)
+            .eq('storage', normalizedInput.storage),
+          { allowNoRows: true, retries: 2 }
+        ) || []
       }
 
       if (!anchorPrice && competitorData && competitorData.length > 0) {
@@ -861,9 +892,38 @@ export class PricingService {
       }
 
       // Apply competitor ceiling for all non-beat pricing paths, including broken-condition quotes.
-      if (!beatPricingApplied && filteredCompetitors.length > 0 && highestCompetitor > 0) {
+      const exactConditionCompetitors = await this.runPricingRead<Array<{
+        competitor_name?: string
+        trade_in_price?: number
+      }>>(
+        'competitor_prices final sanity ceiling',
+        () => supabase
+          .from('competitor_prices')
+          .select('competitor_name, trade_in_price')
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
+          .eq('condition', competitorCondition)
+          .not('trade_in_price', 'is', null)
+          .gt('trade_in_price', 0),
+        { allowNoRows: true, retries: 2 }
+      )
+
+      const exactFilteredCompetitors = filterCompetitorOutliers(
+        (exactConditionCompetitors || [])
+          .map((row) => ({
+            name: row.competitor_name || 'Unknown',
+            price: Number(row.trade_in_price) || 0,
+          }))
+          .filter((row) => row.price > 0)
+      )
+
+      const competitorCeilingReference = exactFilteredCompetitors.length > 0
+        ? Math.max(...exactFilteredCompetitors.map((entry) => entry.price))
+        : highestCompetitor
+
+      if (!beatPricingApplied && competitorCeilingReference > 0) {
         const ceilingMultiplier = Math.max(0, settings.competitor_ceiling_percent) / 100
-        const competitorCeiling = highestCompetitor * (1 + ceilingMultiplier)
+        const competitorCeiling = competitorCeilingReference * (1 + ceilingMultiplier)
         competitorCeilingValue = round2(competitorCeiling)
         const clampedTradePrice = Math.min(tradePrice, competitorCeiling)
         competitorCeilingApplied = clampedTradePrice < tradePrice
