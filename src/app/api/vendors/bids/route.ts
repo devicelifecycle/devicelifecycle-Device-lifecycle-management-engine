@@ -21,27 +21,69 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Only internal roles can view vendor bids
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
-    if (!profile || !['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+    if (!profile) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)
+    const isVendor = profile.role === 'vendor'
+
+    if (!isInternal && !isVendor) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
     const orderId = searchParams.get('order_id')
 
-    if (!orderId) {
-      return NextResponse.json({ error: 'order_id query parameter is required' }, { status: 400 })
+    if (isInternal) {
+      // Internal roles must supply order_id and can see all bids for that order
+      if (!orderId) {
+        return NextResponse.json({ error: 'order_id query parameter is required' }, { status: 400 })
+      }
+      const bids = await VendorService.getOrderVendorBids(orderId)
+      return NextResponse.json({ data: bids })
     }
 
-    const bids = await VendorService.getOrderVendorBids(orderId)
+    // Vendor role: return only bids submitted by their own vendor record
+    if (!profile.organization_id) {
+      return NextResponse.json({ error: 'Vendor has no organization' }, { status: 400 })
+    }
 
-    return NextResponse.json({ data: bids })
+    const { data: vendor } = await supabase
+      .from('vendors')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .eq('is_active', true)
+      .single()
+
+    if (!vendor) {
+      return NextResponse.json({ error: 'No active vendor found for your organization' }, { status: 404 })
+    }
+
+    // Query vendor_bids filtered to this vendor, optionally scoped to an order
+    const query = supabase
+      .from('vendor_bids')
+      .select('*, order:orders(id, order_number, type, status, total_quantity, created_at)')
+      .eq('vendor_id', vendor.id)
+      .order('created_at', { ascending: false })
+
+    if (orderId) {
+      query.eq('order_id', orderId)
+    }
+
+    const { data: bids, error: bidsError } = await query
+
+    if (bidsError) {
+      throw new Error(bidsError.message)
+    }
+
+    return NextResponse.json({ data: bids || [] })
   } catch (error) {
     console.error('Error fetching vendor bids:', error)
     return NextResponse.json(
