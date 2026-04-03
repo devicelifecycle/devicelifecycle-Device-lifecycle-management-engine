@@ -230,6 +230,7 @@ export default function COEShippingPage() {
   }
 
   const ShipmentTable = ({ shipments, showActions }: { shipments: Shipment[]; showActions?: boolean }) => (
+    <div className="overflow-x-auto">
     <Table>
       <TableHeader>
         <TableRow>
@@ -244,15 +245,15 @@ export default function COEShippingPage() {
       <TableBody>
         {shipments.map(s => (
           <TableRow key={s.id}>
-            <TableCell className="font-mono text-sm font-medium">{s.tracking_number}</TableCell>
-            <TableCell>{s.carrier}</TableCell>
-            <TableCell className="text-sm">{(s.order as unknown as Record<string, string>)?.order_number || '—'}</TableCell>
-            <TableCell>
+            <TableCell className="font-mono text-sm font-medium whitespace-nowrap">{s.tracking_number}</TableCell>
+            <TableCell className="whitespace-nowrap">{s.carrier}</TableCell>
+            <TableCell className="text-sm whitespace-nowrap">{(s.order as unknown as Record<string, string>)?.order_number || '—'}</TableCell>
+            <TableCell className="whitespace-nowrap">
               <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[s.status] || ''}`}>
                 {s.status.replace(/_/g, ' ')}
               </span>
             </TableCell>
-            <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(s.created_at)}</TableCell>
+            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{formatRelativeTime(s.created_at)}</TableCell>
             {showActions && (
               <TableCell className="text-right">
                 {s.label_pdf_url && (
@@ -276,11 +277,12 @@ export default function COEShippingPage() {
         ))}
       </TableBody>
     </Table>
+    </div>
   )
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Shipping</h1>
           <p className="text-muted-foreground">Manage outbound shipments to customers</p>
@@ -349,7 +351,7 @@ export default function COEShippingPage() {
         setCreateDialogOpen(open)
         if (!open) { setSelectedOrder(null); setOrderSearch(''); setForm({ carrier: 'FedEx', custom_carrier: '', tracking_number: '', stallion_purchase: false, weight: '2', length: '12', width: '8', height: '4' }) }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Outbound Shipment</DialogTitle>
             <DialogDescription>Select the order, then paste tracking from any carrier or platform. Buying a label in-app is optional.</DialogDescription>

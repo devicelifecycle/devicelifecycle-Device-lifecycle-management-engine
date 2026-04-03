@@ -1024,6 +1024,7 @@ export default function NewOrderPage() {
               <CardDescription>Review pricing before submitting</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1032,8 +1033,8 @@ export default function NewOrderPage() {
                     <TableHead>Condition</TableHead>
                     <TableHead>Storage</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right">Unit Price</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Unit Price</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1054,8 +1055,8 @@ export default function NewOrderPage() {
                         </TableCell>
                         <TableCell>{item.storage}</TableCell>
                         <TableCell className="text-right">{item.quantity}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(unitPrice)}</TableCell>
-                        <TableCell className="text-right font-mono font-medium">{formatCurrency(unitPrice * item.quantity)}</TableCell>
+                        <TableCell className="text-right font-mono whitespace-nowrap">{formatCurrency(unitPrice)}</TableCell>
+                        <TableCell className="text-right font-mono font-medium whitespace-nowrap">{formatCurrency(unitPrice * item.quantity)}</TableCell>
                       </TableRow>
                     )
                   })}
@@ -1073,6 +1074,7 @@ export default function NewOrderPage() {
                   )}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -1085,7 +1087,7 @@ export default function NewOrderPage() {
           </CardContent>
         </Card>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             type="submit"
             disabled={isCreating || (isCustomer && (myCustomerLoading || !myCustomer || !!myCustomerError))}

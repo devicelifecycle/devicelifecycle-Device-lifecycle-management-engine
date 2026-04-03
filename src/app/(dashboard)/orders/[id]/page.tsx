@@ -1262,20 +1262,18 @@ export default function OrderDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href={backHref}><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{order.order_number}</h1>
-              <Badge variant="outline" className="capitalize">{order.type.replace('_', ' ')}</Badge>
-              <StatusBadge status={order.status} label={statusConfig?.label} dot />
-              {!isCustomer && order.is_sla_breached && (
-                <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" />SLA Breached</Badge>
-              )}
-            </div>
-            <p className="text-muted-foreground">{statusConfig?.description}</p>
+      <div className="flex flex-wrap items-start gap-4">
+        <Link href={backHref}><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold whitespace-nowrap">{order.order_number}</h1>
+            <Badge variant="outline" className="capitalize">{order.type.replace('_', ' ')}</Badge>
+            <StatusBadge status={order.status} label={statusConfig?.label} dot />
+            {!isCustomer && order.is_sla_breached && (
+              <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" />SLA Breached</Badge>
+            )}
           </div>
+          <p className="text-muted-foreground">{statusConfig?.description}</p>
         </div>
       </div>
 
@@ -2061,7 +2059,7 @@ export default function OrderDetailPage() {
 
           {/* Create Shipment Dialog */}
           <Dialog open={shipmentDialogOpen} onOpenChange={setShipmentDialogOpen}>
-            <DialogContent>
+            <DialogContent className="max-w-[95vw] sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>{isVendor ? 'Upload Tracking' : 'Create Shipment'}</DialogTitle>
                 <DialogDescription>
@@ -2197,7 +2195,7 @@ export default function OrderDetailPage() {
 
           {/* Add Mismatch Dialog — admin records devices that were received in different condition */}
           <Dialog open={addMismatchDialogOpen} onOpenChange={setAddMismatchDialogOpen}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-[95vw] sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Add Mismatched Device(s)</DialogTitle>
                 <DialogDescription>
@@ -2257,7 +2255,7 @@ export default function OrderDetailPage() {
 
           {/* Add Mismatch Dialog — admin records devices that were mismatched, linked to triage/exceptions */}
           <Dialog open={addMismatchDialogOpen} onOpenChange={setAddMismatchDialogOpen}>
-            <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+            <DialogContent className="max-w-[95vw] sm:max-w-xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add Mismatched Devices</DialogTitle>
                 <DialogDescription>
@@ -2327,7 +2325,7 @@ export default function OrderDetailPage() {
 
           {/* Add Mismatch Dialog */}
           <Dialog open={addMismatchDialogOpen} onOpenChange={setAddMismatchDialogOpen}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-[95vw] sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Add Mismatched Devices</DialogTitle>
                 <DialogDescription>
@@ -2701,7 +2699,7 @@ export default function OrderDetailPage() {
 
       {/* Pricing Dialog */}
       <Dialog open={pricingDialogOpen} onOpenChange={setPricingDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Set Item Pricing</DialogTitle>
             <DialogDescription>
@@ -2988,7 +2986,7 @@ export default function OrderDetailPage() {
 
       {/* Assign Vendor Dialog */}
       <Dialog open={assignVendorDialogOpen} onOpenChange={setAssignVendorDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Assign Vendor</DialogTitle>
             <DialogDescription>
@@ -3032,7 +3030,7 @@ export default function OrderDetailPage() {
 
       {/* Accept Bid Confirmation Dialog */}
       <Dialog open={acceptBidDialogOpen} onOpenChange={(open) => { if (!open) { setAcceptBidDialogOpen(false); setSelectedBid(null) } }}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Accept Vendor Bid</DialogTitle>
             <DialogDescription>
