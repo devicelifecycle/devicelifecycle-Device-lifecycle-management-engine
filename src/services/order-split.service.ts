@@ -16,7 +16,7 @@ export class OrderSplitService {
    * Check if an order can be split
    */
   static async canSplitOrder(orderId: string): Promise<{ canSplit: boolean; reason?: string }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: order, error } = await supabase
       .from('orders')
@@ -50,7 +50,7 @@ export class OrderSplitService {
     config: OrderSplitConfig,
     userId: string
   ): Promise<Order[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { parent_order_id, strategy, allocations } = config
 
     // 1. Validate the parent order
@@ -171,7 +171,7 @@ export class OrderSplitService {
    * Create a single sub-order from a vendor allocation
    */
   private static async createSubOrder(
-    supabase: ReturnType<typeof createServerSupabaseClient>,
+    supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
     parentOrder: Record<string, any>,
     parentItems: Array<Record<string, any>>,
     allocation: OrderSplitAllocation,
@@ -295,7 +295,7 @@ export class OrderSplitService {
     sub_orders: Order[]
     splits: Array<{ sub_order_id: string; split_items: any; split_at: string }>
   }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: parent, error: parentError } = await supabase
       .from('orders')
@@ -334,7 +334,7 @@ export class OrderSplitService {
    * Undo a split — only if no sub-order has progressed past 'sourced'
    */
   static async undoSplit(parentOrderId: string, userId: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: subOrders, error: subError } = await supabase
       .from('orders')
@@ -398,7 +398,7 @@ export class OrderSplitService {
    * Check if parent order should auto-transition based on sub-order states
    */
   static async checkParentAutoTransition(subOrderId: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: subOrder } = await supabase
       .from('orders')
@@ -451,7 +451,7 @@ export class OrderSplitService {
    * Cancel all sub-orders when parent is cancelled
    */
   static async cancelSubOrders(parentOrderId: string, userId: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: subOrders } = await supabase
       .from('orders')

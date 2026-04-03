@@ -34,7 +34,7 @@ export class AuditService {
    * Log an audit event
    */
   static async log(input: AuditLogInput): Promise<AuditLog> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('audit_logs')
@@ -203,7 +203,7 @@ export class AuditService {
     page: number
     totalPages: number
   }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const page = filters.page || 1
     const limit = filters.limit || 50
     const offset = (page - 1) * limit
@@ -258,7 +258,7 @@ export class AuditService {
     entityType: string,
     entityId: string
   ): Promise<AuditLog[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('audit_logs')
@@ -281,7 +281,7 @@ export class AuditService {
     userId: string,
     limit: number = 20
   ): Promise<AuditLog[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('audit_logs')
@@ -309,7 +309,7 @@ export class AuditService {
     by_entity_type: Record<string, number>
     active_users: number
   }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     let query = supabase.from('audit_logs').select('*')
 
@@ -355,7 +355,7 @@ export class AuditService {
    * Cleanup old audit logs
    */
   static async cleanupOldLogs(daysToKeep: number = 365): Promise<number> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
 

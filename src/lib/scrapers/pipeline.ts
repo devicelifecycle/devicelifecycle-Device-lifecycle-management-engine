@@ -460,7 +460,7 @@ export async function runScraperPipeline(
   supabaseClient?: SupabaseClient,
   discovery = true
 ): Promise<PipelineResult> {
-  const supabase = supabaseClient ?? createServerSupabaseClient()
+  const supabase = supabaseClient ?? await createServerSupabaseClient()
   const errors: string[] = []
   let devicesCreated = 0
   const resolveDevice = createDeviceIdResolver(supabase)

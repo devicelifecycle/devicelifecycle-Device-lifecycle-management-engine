@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -227,7 +227,7 @@ function detectCategory(model: string): string {
 // GET - Download current pricing as CSV
 export async function GET(_request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {

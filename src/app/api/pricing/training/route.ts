@@ -44,7 +44,7 @@ function addVariation(price: number, percent: number): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const serviceClient = createServiceRoleClient()
 
     // Verify admin role
@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Verify admin role
     const { data: { user } } = await supabase.auth.getUser()
@@ -310,7 +310,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const serviceClient = createServiceRoleClient()
 
     // Verify admin role

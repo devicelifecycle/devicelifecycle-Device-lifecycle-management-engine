@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST() {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

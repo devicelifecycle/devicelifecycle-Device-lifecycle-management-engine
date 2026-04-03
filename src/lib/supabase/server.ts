@@ -11,9 +11,9 @@ const supabaseUrl = rawUrl.startsWith('https://') ? rawUrl : 'https://placeholde
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-export function createServerSupabaseClient() {
+export async function createServerSupabaseClient() {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
 
     return createServerClient(
       supabaseUrl,
@@ -40,7 +40,6 @@ export function createServerSupabaseClient() {
         auth: { persistSession: false, autoRefreshToken: false },
       })
     }
-
     return createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     })

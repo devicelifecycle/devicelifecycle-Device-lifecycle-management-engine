@@ -23,7 +23,7 @@ export class DeviceService {
       make?: string;
     }
   ): Promise<PaginatedResponse<Device>> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     
     const {
       page = 1,
@@ -80,7 +80,7 @@ export class DeviceService {
    * Get a single device by ID
    */
   static async getDeviceById(id: string): Promise<Device | null> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('device_catalog')
@@ -100,7 +100,7 @@ export class DeviceService {
    * Create a new device
    */
   static async createDevice(input: CreateDeviceInput): Promise<Device> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('device_catalog')
@@ -122,7 +122,7 @@ export class DeviceService {
    * Update a device
    */
   static async updateDevice(id: string, input: Partial<CreateDeviceInput>): Promise<Device> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('device_catalog')
@@ -145,7 +145,7 @@ export class DeviceService {
    * Delete a device (soft delete)
    */
   static async deleteDevice(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
       .from('device_catalog')
@@ -164,7 +164,7 @@ export class DeviceService {
    * Search devices (for autocomplete)
    */
   static async searchDevices(query: string, limit = 10): Promise<Device[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('device_catalog')
@@ -184,7 +184,7 @@ export class DeviceService {
    * Get all makes (brands)
    */
   static async getMakes(): Promise<string[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('device_catalog')
@@ -203,7 +203,7 @@ export class DeviceService {
    * Get models by make
    */
   static async getModelsByMake(make: string): Promise<Device[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('device_catalog')

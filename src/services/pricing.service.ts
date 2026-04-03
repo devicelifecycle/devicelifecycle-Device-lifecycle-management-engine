@@ -166,7 +166,7 @@ export class PricingService {
    */
   static async getPricingSettings(): Promise<PricingSettingsOverrides> {
     try {
-      const supabase = createServerSupabaseClient()
+      const supabase = await createServerSupabaseClient()
       const { data, error } = await supabase
         .from('pricing_settings')
         .select('setting_key, setting_value')
@@ -219,8 +219,8 @@ export class PricingService {
     trade_in_profit_percent?: number;
     enterprise_margin_percent?: number;
     cpo_markup_percent?: number;
-  }, supabaseClient?: ReturnType<typeof createServerSupabaseClient>): Promise<PriceCalculationResultV2> {
-    const supabase = supabaseClient ?? createServerSupabaseClient()
+  }, supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<PriceCalculationResultV2> {
+    const supabase = supabaseClient ?? await createServerSupabaseClient()
     const carrier = input.carrier || 'Unlocked'
     const settings = await this.getPricingSettings()
 
@@ -862,7 +862,7 @@ export class PricingService {
   // ============================================================================
 
   static async getMarketPrices(deviceId?: string): Promise<MarketPrice[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     let query = supabase
       .from('market_prices')
       .select('*, device:device_catalog(*)')
@@ -879,7 +879,7 @@ export class PricingService {
   }
 
   static async createMarketPrice(input: Omit<MarketPrice, 'id' | 'created_at' | 'updated_at' | 'device'>, userId: string): Promise<MarketPrice> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data, error } = await supabase
       .from('market_prices')
       .insert({ ...input, is_active: true, updated_by_id: userId })
@@ -891,7 +891,7 @@ export class PricingService {
   }
 
   static async updateMarketPrice(id: string, input: Partial<MarketPrice>, userId: string): Promise<MarketPrice> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data, error } = await supabase
       .from('market_prices')
       .update({ ...input, updated_by_id: userId, updated_at: new Date().toISOString() })
@@ -904,7 +904,7 @@ export class PricingService {
   }
 
   static async deleteMarketPrice(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { error } = await supabase.from('market_prices').delete().eq('id', id)
     if (error) throw new Error(error.message)
   }
@@ -922,7 +922,7 @@ export class PricingService {
   }
 
   static async getCompetitorPrices(deviceId?: string, condition?: 'excellent' | 'good' | 'fair' | 'broken', search?: string): Promise<CompetitorPrice[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const pageSize = 1000
     let matchedDeviceIds: string[] | null = null
 
@@ -999,7 +999,7 @@ export class PricingService {
   }
 
   static async createCompetitorPrice(input: Omit<CompetitorPrice, 'id' | 'created_at' | 'updated_at' | 'device'>): Promise<CompetitorPrice> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data, error } = await supabase
       .from('competitor_prices')
       .insert({
@@ -1014,7 +1014,7 @@ export class PricingService {
   }
 
   static async updateCompetitorPrice(id: string, input: Partial<CompetitorPrice>): Promise<CompetitorPrice> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data, error } = await supabase
       .from('competitor_prices')
       .update({ ...input, updated_at: new Date().toISOString() })
@@ -1027,7 +1027,7 @@ export class PricingService {
   }
 
   static async deleteCompetitorPrice(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { error } = await supabase.from('competitor_prices').delete().eq('id', id)
     if (error) throw new Error(error.message)
   }
@@ -1039,7 +1039,7 @@ export class PricingService {
   static async bulkUpsertCompetitorPrices(
     rows: Array<{ device_id: string; storage: string; trade_in_price?: number; sell_price?: number }>
   ): Promise<{ imported: number; errors: string[] }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const errors: string[] = []
     let imported = 0
 
@@ -1076,7 +1076,7 @@ export class PricingService {
   // ============================================================================
 
   static async calculatePrice(input: PriceCalculationInput): Promise<PriceCalculationResult> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const deviceId = input.device_id || input.device_catalog_id
 
     try {
@@ -1216,7 +1216,7 @@ export class PricingService {
   // ============================================================================
 
   static async getMarginSettings() {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data } = await supabase
       .from('margin_settings')
       .select('*')
@@ -1244,7 +1244,7 @@ export class PricingService {
   // ============================================================================
 
   static async getPricingTables(deviceCatalogId?: string): Promise<PricingTable[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     let query = supabase
       .from('pricing_tables')
       .select('*, device:device_catalog(*)')
@@ -1260,7 +1260,7 @@ export class PricingService {
   }
 
   static async createPricingEntry(input: Omit<PricingTable, 'id' | 'created_at' | 'updated_at'>, userId: string): Promise<PricingTable> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data, error } = await supabase
       .from('pricing_tables')
       .insert({ ...input, created_by_id: userId })
@@ -1272,7 +1272,7 @@ export class PricingService {
   }
 
   static async updatePricingEntry(id: string, input: Partial<PricingTable>): Promise<PricingTable> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data, error } = await supabase
       .from('pricing_tables')
       .update({ ...input, updated_at: new Date().toISOString() })
@@ -1285,7 +1285,7 @@ export class PricingService {
   }
 
   static async deletePricingEntry(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { error } = await supabase.from('pricing_tables').delete().eq('id', id)
     if (error) throw new Error(error.message)
   }
@@ -1307,7 +1307,7 @@ export class PricingService {
     highest_price: number | null
     average_price: number | null
   }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data } = await supabase
       .from('competitor_prices')
       .select('competitor_name, trade_in_price, retrieved_at, scraped_at, updated_at')

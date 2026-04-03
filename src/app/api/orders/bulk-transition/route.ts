@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

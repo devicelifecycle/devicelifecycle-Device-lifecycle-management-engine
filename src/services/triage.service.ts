@@ -58,7 +58,7 @@ export class TriageService {
     triageResult: TriageResult
     outcome: TriageOutcome
   }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Get the IMEI record
     const { data: imeiRecord, error: imeiError } = await supabase
@@ -296,7 +296,7 @@ export class TriageService {
    * Get pending triage items
    */
   static async getPendingTriageItems(): Promise<IMEIRecord[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('imei_records')
@@ -334,7 +334,7 @@ export class TriageService {
    * Get items needing exception approval
    */
   static async getExceptionItems(): Promise<TriageResult[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('triage_results')
@@ -475,7 +475,7 @@ export class TriageService {
 
   private static async resolveImeiQuotedPrice(
     imeiRecord: IMEIRecord | null,
-    supabase: ReturnType<typeof createServerSupabaseClient>,
+    supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   ): Promise<IMEIRecord | null> {
     if (!imeiRecord || imeiRecord.quoted_price != null || !imeiRecord.order_item_id) {
       return imeiRecord

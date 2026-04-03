@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readServerEnv } from '@/lib/server-env'
 import { ShipmentService, isShippingConfigured } from '@/services/shipment.service'
-import { StallionService } from '@/services/stallion.service'
+import { ShippingProviderService } from '@/services/shipping-provider.service'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!isShippingConfigured()) {
-      return NextResponse.json({ skipped: true, reason: 'Stallion Express is not configured' }, { status: 200 })
+      return NextResponse.json({ skipped: true, reason: 'Shipping provider is not configured' }, { status: 200 })
     }
 
     // Use service-role — cron has no user session
@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
 
     for (const shipment of shipments || []) {
       try {
-        // Fetch tracking from Stallion Express
-        const tracking = await StallionService.fetchTrackingStatus(shipment.tracking_number)
+        // Fetch tracking from the configured shipping provider
+        const tracking = await ShippingProviderService.fetchTrackingStatus(shipment.tracking_number)
 
         // Update shipment status if changed
         if (tracking.internal_status !== shipment.status) {
@@ -77,14 +77,14 @@ export async function GET(request: NextRequest) {
         updated++
         results.push({ id: shipment.id, status: tracking.internal_status })
       } catch (e) {
-        console.error('Stallion tracking sync failed for shipment', shipment.id, e)
+        console.error('Provider tracking sync failed for shipment', shipment.id, e)
         failed++
       }
     }
 
     return NextResponse.json({
       success: true,
-      provider: 'stallion',
+      provider: 'shipping_provider',
       processed: shipments?.length || 0,
       updated,
       failed,

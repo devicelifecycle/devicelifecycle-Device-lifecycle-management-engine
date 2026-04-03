@@ -18,7 +18,7 @@ export async function GET(
     if (!isValidUUID(params.id)) {
       return NextResponse.json({ error: 'Invalid customer ID format' }, { status: 400 })
     }
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -82,7 +82,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -143,7 +143,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

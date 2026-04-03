@@ -1,8 +1,5 @@
 // ============================================================================
-// STALLION EXPRESS SERVICE — Canada's #1 eCommerce Shipping
-// API v4: https://stallionexpress.redocly.app/stallionexpress-v4
-// Production: https://ship.stallionexpress.ca/api/v4
-// Sandbox:    https://sandbox.stallionexpress.ca/api/v4
+// OPTIONAL SHIPPING PROVIDER SERVICE
 // ============================================================================
 
 import type { AddressInput } from '@/services/shipment.service'
@@ -12,7 +9,7 @@ import { readServerEnv } from '@/lib/server-env'
 // Types
 // ──────────────────────────────────────────────────────────────
 
-interface StallionAddress {
+interface ShippingProviderAddress {
   name: string
   company?: string
   address1: string
@@ -25,7 +22,7 @@ interface StallionAddress {
   email?: string
 }
 
-interface StallionItem {
+interface ShippingProviderItem {
   description: string
   quantity: number
   value: number           // CAD value per item
@@ -33,7 +30,7 @@ interface StallionItem {
   hs_code?: string
 }
 
-interface StallionShipmentRequest {
+interface ShippingProviderShipmentRequest {
   store_id?: string
   name: string
   company?: string
@@ -57,10 +54,10 @@ interface StallionShipmentRequest {
   value?: number
   currency?: string         // "CAD" or "USD"
   order_id?: string         // external reference
-  items?: StallionItem[]
+  items?: ShippingProviderItem[]
 }
 
-interface StallionShipmentResponse {
+interface ShippingProviderShipmentResponse {
   id: number | string
   tracking_number?: string
   carrier?: string
@@ -77,7 +74,7 @@ interface StallionShipmentResponse {
   [key: string]: unknown
 }
 
-interface StallionTrackingEvent {
+interface ShippingProviderTrackingEvent {
   datetime?: string
   date?: string
   location?: string
@@ -85,17 +82,17 @@ interface StallionTrackingEvent {
   status?: string
 }
 
-interface StallionTrackingResponse {
+interface ShippingProviderTrackingResponse {
   tracking_number?: string
   status?: string
   status_description?: string
   estimated_delivery?: string
-  events?: StallionTrackingEvent[]
+  events?: ShippingProviderTrackingEvent[]
   tracking_url?: string
   [key: string]: unknown
 }
 
-interface StallionRateQuote {
+interface ShippingProviderRateQuote {
   postage_type?: string
   carrier_code?: string
   postage_code?: string
@@ -109,7 +106,7 @@ interface StallionRateQuote {
 // Exported interfaces for the shipping flow
 // ──────────────────────────────────────────────────────────────
 
-export interface StallionPurchaseLabelInput {
+export interface ShippingProviderPurchaseLabelInput {
   fromAddress: AddressInput
   toAddress: AddressInput
   parcel: {
@@ -126,7 +123,7 @@ export interface StallionPurchaseLabelInput {
   items?: Array<{ description: string; quantity: number; value: number }>
 }
 
-export interface StallionPurchasedLabel {
+export interface ShippingProviderPurchasedLabel {
   stallion_shipment_id: string
   tracking_number: string
   carrier: string
@@ -145,21 +142,21 @@ export interface StallionPurchasedLabel {
   shippo_tracking_status?: string
 }
 
-export interface StallionTrackingUpdate {
+export interface ShippingProviderTrackingUpdate {
   tracking_number: string
   stallion_tracking_status: string
   status_details?: string
   status_date?: string
   location?: string
   internal_status: 'label_created' | 'picked_up' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'exception'
-  events?: StallionTrackingEvent[]
+  events?: ShippingProviderTrackingEvent[]
 }
 
 // ──────────────────────────────────────────────────────────────
 // Service
 // ──────────────────────────────────────────────────────────────
 
-export class StallionService {
+export class ShippingProviderService {
   private static getApiToken(): string {
     const token = readServerEnv('STALLION_API_TOKEN')
     if (!token) throw new Error('STALLION_API_TOKEN is not configured')
@@ -191,7 +188,7 @@ export class StallionService {
 
     if (!response.ok) {
       const text = await response.text()
-      throw new Error(`Stallion API error (${response.status}): ${text}`)
+      throw new Error(`Shipping provider API error (${response.status}): ${text}`)
     }
 
     return response.json() as Promise<T>
@@ -201,7 +198,7 @@ export class StallionService {
   // Address conversion
   // ──────────────────────────────────────────────────────────────
 
-  private static toStallionAddress(address: AddressInput): StallionAddress {
+  private static toProviderAddress(address: AddressInput): ShippingProviderAddress {
     return {
       name: address.name,
       company: address.company,
@@ -225,8 +222,8 @@ export class StallionService {
     weight: number
     weightUnit?: 'kg' | 'lb'
     items?: Array<{ description: string; quantity: number; value: number }>
-  }): Promise<StallionRateQuote[]> {
-    const addr = this.toStallionAddress(input.toAddress)
+  }): Promise<ShippingProviderRateQuote[]> {
+    const addr = this.toProviderAddress(input.toAddress)
     const payload = {
       ...addr,
       weight: input.weight,
@@ -234,7 +231,7 @@ export class StallionService {
       items: input.items || [{ description: 'Device', quantity: 1, value: 100 }],
     }
 
-    return this.request<StallionRateQuote[]>('/rates/quote', {
+    return this.request<ShippingProviderRateQuote[]>('/rates/quote', {
       method: 'POST',
       body: JSON.stringify(payload),
     })
@@ -244,8 +241,8 @@ export class StallionService {
   // Create shipment & purchase label
   // ──────────────────────────────────────────────────────────────
 
-  static async purchaseLabel(input: StallionPurchaseLabelInput): Promise<StallionPurchasedLabel> {
-    const toAddr = this.toStallionAddress(input.toAddress)
+  static async purchaseLabel(input: ShippingProviderPurchaseLabelInput): Promise<ShippingProviderPurchasedLabel> {
+    const toAddr = this.toProviderAddress(input.toAddress)
 
     // Convert mass unit
     const massUnit = input.parcel.massUnit || 'lb'
@@ -254,7 +251,7 @@ export class StallionService {
     if (massUnit === 'oz') weight = weight / 16  // oz to lb
     if (massUnit === 'g') weight = weight / 1000 // g to kg
 
-    const payload: StallionShipmentRequest = {
+    const payload: ShippingProviderShipmentRequest = {
       store_id: this.getStoreId(),
       name: toAddr.name,
       company: toAddr.company,
@@ -286,20 +283,20 @@ export class StallionService {
       payload.postage_code = input.preferredServiceLevelToken
     }
 
-    const result = await this.request<StallionShipmentResponse>('/shipments', {
+    const result = await this.request<ShippingProviderShipmentResponse>('/shipments', {
       method: 'POST',
       body: JSON.stringify(payload),
     })
 
     const shipmentId = String(result.id || '')
     if (!shipmentId) {
-      throw new Error('Stallion shipment creation failed — no ID returned')
+      throw new Error('Shipping provider shipment creation failed — no ID returned')
     }
 
     return {
       stallion_shipment_id: shipmentId,
       tracking_number: result.tracking_number || '',
-      carrier: result.carrier || result.carrier_code || 'Stallion Express',
+      carrier: result.carrier || result.carrier_code || 'Shipping Provider',
       tracking_status: result.status || 'label_created',
       label_url: result.label_url,
       label_pdf_url: result.label_pdf_url || result.label_url,
@@ -320,9 +317,9 @@ export class StallionService {
   // Track shipment
   // ──────────────────────────────────────────────────────────────
 
-  static async fetchTrackingStatus(trackingNumber: string): Promise<StallionTrackingUpdate> {
+  static async fetchTrackingStatus(trackingNumber: string): Promise<ShippingProviderTrackingUpdate> {
     const encoded = encodeURIComponent(trackingNumber)
-    const result = await this.request<StallionTrackingResponse>(
+    const result = await this.request<ShippingProviderTrackingResponse>(
       `/shipments/track?tracking_number=${encoded}`
     )
 
@@ -346,7 +343,7 @@ export class StallionService {
   // Status mapping
   // ──────────────────────────────────────────────────────────────
 
-  static mapTrackingStatusToInternal(status: string): StallionTrackingUpdate['internal_status'] {
+  static mapTrackingStatusToInternal(status: string): ShippingProviderTrackingUpdate['internal_status'] {
     const s = status.toUpperCase()
     if (s.includes('DELIVERED')) return 'delivered'
     if (s.includes('OUT_FOR_DELIVERY') || s.includes('OUT FOR DELIVERY')) return 'out_for_delivery'
@@ -400,7 +397,7 @@ export class StallionService {
         keyConfigured: true,
         apiReachable: true,
         keyValid: true,
-        message: `Stallion Express connected. Balance: $${credits.balance} ${credits.currency || 'CAD'}`,
+        message: `Shipping provider connected. Balance: $${credits.balance} ${credits.currency || 'CAD'}`,
         credits: credits.balance,
       }
     } catch (error) {
@@ -411,7 +408,7 @@ export class StallionService {
           keyConfigured: true,
           apiReachable: true,
           keyValid: false,
-          message: 'Stallion API token is invalid or expired',
+          message: 'Shipping provider API token is invalid or expired',
         }
       }
 

@@ -15,7 +15,7 @@ export class IMEIService {
    * Get IMEI record by IMEI number
    */
   static async getByIMEI(imei: string): Promise<IMEIRecord | null> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('imei_records')
@@ -48,7 +48,7 @@ export class IMEIService {
     is_locked?: boolean
     lock_type?: string
   }, actorId: string): Promise<IMEIRecord> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Check if IMEI already exists
     const existing = await this.getByIMEI(input.imei)
@@ -89,7 +89,7 @@ export class IMEIService {
     actorId: string,
     eventDescription?: string
   ): Promise<IMEIRecord> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Get current record
     const current = await this.getByIMEI(imei)
@@ -136,7 +136,7 @@ export class IMEIService {
     actorType: 'user' | 'vendor' | 'customer' | 'system',
     notes?: string
   ): Promise<IMEIRecord> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const current = await this.getByIMEI(imei)
     if (!current) {
@@ -233,7 +233,7 @@ export class IMEIService {
    * Search IMEI records
    */
   static async searchIMEI(query: string, limit = 20): Promise<IMEIRecord[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('imei_records')
@@ -252,7 +252,7 @@ export class IMEIService {
    * Get IMEI records by vendor
    */
   static async getByVendor(vendorId: string): Promise<IMEIRecord[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('imei_records')
@@ -271,7 +271,7 @@ export class IMEIService {
    * Get IMEI records by customer
    */
   static async getByCustomer(customerId: string): Promise<IMEIRecord[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('imei_records')

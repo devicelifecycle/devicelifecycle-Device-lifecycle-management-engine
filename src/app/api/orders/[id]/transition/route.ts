@@ -11,6 +11,11 @@ import { orderTransitionSchema } from '@/lib/validations'
 import type { OrderStatus } from '@/types'
 export const dynamic = 'force-dynamic'
 
+type VendorShipment = {
+  id: string
+  direction?: string | null
+  tracking_number?: string | null
+}
 
 interface RouteParams {
   params: {
@@ -20,7 +25,7 @@ interface RouteParams {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -67,8 +72,39 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           { status: 403 }
         )
       }
+    } else if (profile.role === 'vendor') {
+      const vendorOrg = (currentOrder.vendor as { organization_id?: string } | null)?.organization_id
+      if (!profile.organization_id || vendorOrg !== profile.organization_id) {
+        return NextResponse.json({ error: 'You can only manage orders assigned to your organization' }, { status: 403 })
+      }
+
+      const vendorTransitionMap: Partial<Record<OrderStatus, OrderStatus[]>> = {
+        accepted: ['sourcing'],
+        sourcing: ['sourced'],
+        sourced: ['shipped'],
+        shipped: ['delivered'],
+        delivered: ['closed'],
+      }
+
+      const allowedVendorTransitions = vendorTransitionMap[currentOrder.status as OrderStatus] || []
+      if (!allowedVendorTransitions.includes(newStatus)) {
+        return NextResponse.json(
+          {
+            error:
+              'Vendors can only accept jobs, mark devices as sourced, shipped, delivered, or complete fulfillment on their assigned orders',
+          },
+          { status: 403 }
+        )
+      }
     } else if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (newStatus === 'quoted' && !['admin', 'coe_manager', 'sales'].includes(profile.role)) {
+      return NextResponse.json(
+        { error: 'Only admin, COE managers, or sales can send quotes' },
+        { status: 403 }
+      )
     }
 
     // Validate transition
@@ -94,6 +130,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { error: 'Cannot move to sourced — no vendor assigned. Move to sourcing first.' },
         { status: 400 }
       )
+    }
+
+    if (newStatus === 'shipped' && currentOrder.status === 'sourced' && profile.role !== 'vendor') {
+      return NextResponse.json(
+        { error: 'Only vendors can move a sourced order directly to shipped' },
+        { status: 400 }
+      )
+    }
+
+    if (profile.role === 'vendor' && newStatus === 'shipped' && currentOrder.status === 'sourced') {
+      const shipments = (((currentOrder as unknown as { shipments?: VendorShipment[] }).shipments) || [])
+        .filter((shipment) => shipment.direction === 'inbound' && shipment.tracking_number)
+
+      if (shipments.length === 0) {
+        return NextResponse.json(
+          { error: 'Upload vendor tracking before marking the order as shipped' },
+          { status: 400 }
+        )
+      }
     }
 
     // Trade-ins can move directly from accepted to shipped_to_coe once the customer

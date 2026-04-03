@@ -45,7 +45,7 @@ export class DataDrivenPricingModel implements IPricingModel {
     'Self-learning model trained from ALL sources: orders, IMEI, sales, market prices, competitor scrapes. Auto-trains when needed.'
 
   async calculate(input: PricingModelInput): Promise<PricingModelResult> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const storage = input.storage || '128GB'
     const carrier = input.carrier || 'Unlocked'
 
@@ -253,7 +253,7 @@ export class DataDrivenPricingModel implements IPricingModel {
   }
 
   private async getConditionMultiplier(
-    supabase: ReturnType<typeof createServerSupabaseClient>,
+    supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
     condition: string
   ): Promise<number> {
     const { data: multRow } = await supabase
@@ -266,7 +266,7 @@ export class DataDrivenPricingModel implements IPricingModel {
   }
 
   private async getGoodPrice(
-    supabase: ReturnType<typeof createServerSupabaseClient>,
+    supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
     deviceId: string,
     storage: string,
     carrier: string
@@ -287,7 +287,7 @@ export class DataDrivenPricingModel implements IPricingModel {
    * Auto-train if no baselines exist. This means the model bootstraps
    * itself from whatever data is available (market + competitor + internal).
    */
-  private async ensureBaselinesExist(supabase: ReturnType<typeof createServerSupabaseClient>): Promise<void> {
+  private async ensureBaselinesExist(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<void> {
     if (Date.now() - lastTrainCheck < TRAIN_CHECK_INTERVAL_MS) return
     lastTrainCheck = Date.now()
 

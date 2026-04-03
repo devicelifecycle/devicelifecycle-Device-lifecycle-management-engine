@@ -37,7 +37,7 @@ function adaptModelToV2(modelResult: { success: boolean; final_price: number; tr
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -90,6 +90,51 @@ export async function POST(request: NextRequest) {
       }))
       const qty = quantity ?? 1
       return NextResponse.json(adaptModelToV2(modelResult, qty))
+    }
+
+    // A/B: run all registered models in parallel and return comparison
+    if (modelId === 'all') {
+      const validation = priceCalculationV2Schema.safeParse(body)
+      if (!validation.success) {
+        return NextResponse.json(
+          { error: 'Validation failed', details: validation.error.errors },
+          { status: 400 }
+        )
+      }
+      const { device_id, storage, carrier, condition, quantity, issues } = validation.data
+      const allModels = PricingModelRegistry.list()
+      const qty = quantity ?? 1
+
+      const results = await Promise.allSettled(
+        allModels.map(async (model) => {
+          const result = await Promise.resolve(model.calculate({
+            device_id,
+            storage: storage ?? '128GB',
+            carrier: carrier ?? 'Unlocked',
+            condition,
+            issues,
+            quantity: qty,
+            purpose: 'buy',
+          }))
+          return { model_id: model.id, model_name: model.name, ...adaptModelToV2(result, qty) }
+        })
+      )
+
+      const comparisons = results.map((r, i) => {
+        if (r.status === 'fulfilled') return r.value
+        return {
+          model_id: allModels[i].id,
+          model_name: allModels[i].name,
+          success: false,
+          trade_price: 0,
+          cpo_price: 0,
+          confidence: 0,
+          quantity: qty,
+          error: r.reason instanceof Error ? r.reason.message : 'Model failed',
+        }
+      })
+
+      return NextResponse.json({ ab_comparison: true, models: comparisons, quantity: qty })
     }
 
     if (version === 'competitor_avg') {

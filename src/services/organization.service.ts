@@ -18,7 +18,7 @@ export class OrganizationService {
   static async getOrganizations(
     params: PaginationParams & { search?: string; type?: OrganizationType }
   ): Promise<PaginatedResponse<Organization>> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const {
       page = 1,
@@ -70,7 +70,7 @@ export class OrganizationService {
    * Get a single organization by ID
    */
   static async getOrganizationById(id: string): Promise<Organization | null> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('organizations')
@@ -97,7 +97,7 @@ export class OrganizationService {
     address?: Record<string, unknown>
     settings?: Record<string, unknown>
   }): Promise<Organization> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('organizations')
@@ -130,7 +130,7 @@ export class OrganizationService {
       is_active: boolean
     }>
   ): Promise<Organization> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('organizations')
@@ -153,7 +153,7 @@ export class OrganizationService {
    * Deactivate an organization (soft delete)
    */
   static async deactivateOrganization(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
       .from('organizations')

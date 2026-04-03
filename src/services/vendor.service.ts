@@ -22,7 +22,7 @@ export class VendorService {
   static async getVendors(
     params: PaginationParams & { search?: string; capability?: string; is_active?: boolean }
   ): Promise<PaginatedResponse<Vendor>> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     
     const {
       page = 1,
@@ -80,7 +80,7 @@ export class VendorService {
    * Broadcast to all vendors; any vendor can bid.
    */
   static async getOpenOrdersForBidding(params: { page?: number; page_size?: number }) {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const page = params.page ?? 1
     const page_size = params.page_size ?? 20
     const from = (page - 1) * page_size
@@ -89,7 +89,7 @@ export class VendorService {
     // Vendors must NOT see customer/organization info — only order + device details
     const { data, error, count } = await supabase
       .from('orders')
-      .select('id, order_number, type, status, total_quantity, total_amount, quoted_amount, created_at, updated_at, items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))', { count: 'exact' })
+      .select('id, order_number, type, status, total_quantity, created_at, updated_at, items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))', { count: 'exact' })
       .eq('type', 'cpo')
       .is('vendor_id', null)
       .in('status', ['sourcing', 'accepted'])
@@ -114,12 +114,12 @@ export class VendorService {
    * Get vendor's orders (orders where vendor_id = vendor)
    */
   static async getVendorOrders(vendorId: string, limit = 50) {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Vendors must NOT see customer/organization info
     const { data, error } = await supabase
       .from('orders')
-      .select('id, order_number, type, status, total_quantity, total_amount, quoted_amount, created_at, updated_at, items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))')
+      .select('id, order_number, type, status, total_quantity, created_at, updated_at, items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))')
       .eq('vendor_id', vendorId)
       .order('created_at', { ascending: false })
       .limit(limit)
@@ -135,7 +135,7 @@ export class VendorService {
    * Get a single vendor by ID
    */
   static async getVendorById(id: string): Promise<Vendor | null> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('vendors')
@@ -155,7 +155,7 @@ export class VendorService {
    * Create a new vendor
    */
   static async createVendor(input: CreateVendorInput, orgId: string): Promise<Vendor> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('vendors')
@@ -178,7 +178,7 @@ export class VendorService {
    * Update a vendor
    */
   static async updateVendor(id: string, input: Partial<CreateVendorInput>): Promise<Vendor> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('vendors')
@@ -201,7 +201,7 @@ export class VendorService {
    * Deactivate a vendor (soft delete)
    */
   static async deleteVendor(id: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
       .from('vendors')
@@ -226,7 +226,7 @@ export class VendorService {
     leadTimeDays: number,
     userId?: string
   ): Promise<VendorBid & { auto_split?: boolean; sub_orders?: Order[] }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('vendor_bids')
@@ -271,7 +271,7 @@ export class VendorService {
    * Returns sub-orders if split was executed, null otherwise.
    */
   private static async tryAutoSplit(
-    supabase: ReturnType<typeof createServerSupabaseClient>,
+    supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
     orderId: string,
     userId: string
   ): Promise<Order[] | null> {
@@ -374,7 +374,7 @@ export class VendorService {
    * Get vendor bids for an order
    */
   static async getOrderVendorBids(orderId: string): Promise<VendorBid[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('vendor_bids')
@@ -393,7 +393,7 @@ export class VendorService {
    * Get vendors by capability
    */
   static async getVendorsByCapability(capability: string): Promise<Vendor[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('vendors')
@@ -412,7 +412,7 @@ export class VendorService {
    * Update vendor rating
    */
   static async updateRating(vendorId: string, score: number): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { error } = await supabase
       .from('vendors')
@@ -439,7 +439,7 @@ export class VendorService {
     warranty_days?: number
     notes?: string
   }): Promise<VendorBid & { auto_accepted?: boolean }> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('vendor_bids')
@@ -501,7 +501,7 @@ export class VendorService {
     status: 'accepted' | 'rejected',
     cpoMarkupPercent?: number
   ): Promise<VendorBid> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // 1. Fetch the bid
     const { data: bid, error: bidError } = await supabase
@@ -608,7 +608,7 @@ export class VendorService {
    * Get vendor bids with split allocation details for an order
    */
   static async getVendorBidsForSplit(orderId: string): Promise<VendorBid[]> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('vendor_bids')

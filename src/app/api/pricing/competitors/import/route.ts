@@ -78,7 +78,7 @@ function parseCsv(text: string): { rows: CsvRow[]; parseErrors: string[] } {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

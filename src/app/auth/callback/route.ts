@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   const safeNext = isAllowed ? decoded : '/dashboard'
 
   if (code) {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
 
     const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
     const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''

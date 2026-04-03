@@ -27,7 +27,7 @@ export class OrderService {
    * Get orders with filters and pagination
    */
   static async getOrders(filters: OrderFilters): Promise<PaginatedResponse<Order>> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     
     const {
       page = 1,
@@ -185,7 +185,7 @@ export class OrderService {
    * Get a single order by ID
    */
   static async getOrderById(id: string): Promise<Order | null> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('orders')
@@ -303,7 +303,7 @@ export class OrderService {
    * Update an order
    */
   static async updateOrder(id: string, input: UpdateOrderInput, userId: string): Promise<Order> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // Get current order for audit log
     const { data: currentOrder } = await supabase
@@ -346,7 +346,7 @@ export class OrderService {
    * would require cascading order_timeline, shipments, etc.).
    */
   static async deleteOrder(id: string, userId: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: order, error: fetchError } = await supabase
       .from('orders')
@@ -381,7 +381,7 @@ export class OrderService {
    * Check if a transition is valid for an order
    */
   static async canTransition(id: string, toStatus: OrderStatus): Promise<boolean> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: order, error } = await supabase
       .from('orders')
@@ -517,7 +517,7 @@ export class OrderService {
    * Runs pricing calculation for each trade_in item and updates order_items.
    */
   static async autoQuoteOrderItems(orderId: string): Promise<void> {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: order, error: orderErr } = await supabase
       .from('orders')
@@ -633,7 +633,7 @@ export class OrderService {
    * Feeds our data-driven pricing model training.
    */
   private static async recordSalesHistory(
-    supabase: ReturnType<typeof createServerSupabaseClient>,
+    supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
     orderId: string,
     transactionType: 'trade_in' | 'cpo'
   ): Promise<void> {
@@ -728,7 +728,7 @@ export class OrderService {
    * Get order statistics for dashboard
    */
   static async getOrderStats(orgId?: string) {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)

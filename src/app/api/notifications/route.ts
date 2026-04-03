@@ -23,7 +23,7 @@ function isAdminOnlyNotification(notification: { title?: string; metadata?: Reco
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

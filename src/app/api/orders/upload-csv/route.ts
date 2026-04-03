@@ -300,7 +300,7 @@ interface NormalizedRow {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -450,6 +450,13 @@ export async function POST(request: NextRequest) {
 
     // Determine order type
     const effectiveOrderType = order_type || (templateType === 'cpo' ? 'cpo' : 'trade_in')
+
+    if (userProfile.role === 'sales' && effectiveOrderType === 'cpo') {
+      return NextResponse.json(
+        { error: 'Sales can create trade-in orders only' },
+        { status: 403 }
+      )
+    }
 
     // Generate order number
     const { data: orderNumResult } = await supabase.rpc('generate_order_number')
