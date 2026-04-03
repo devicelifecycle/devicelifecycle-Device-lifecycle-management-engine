@@ -53,7 +53,10 @@ async function fetchOpenOrders(page = 1) {
 
 async function fetchMyBids() {
   const res = await fetch('/api/vendors/bids')
-  if (!res.ok) throw new Error('Failed to fetch bids')
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || 'Failed to fetch bids')
+  }
   return res.json()
 }
 
@@ -84,9 +87,11 @@ export default function VendorOrdersPage() {
   const {
     data: bidsData,
     isLoading: bidsLoading,
+    isError: bidsError,
   } = useQuery({
     queryKey: ['vendor-my-bids'],
     queryFn: fetchMyBids,
+    retry: 1,
   })
   const myBids: (VendorBid & { order?: { id: string; order_number: string; type: string; status: string; total_quantity: number; created_at: string } })[] = bidsData?.data || []
 
@@ -380,6 +385,10 @@ export default function VendorOrdersPage() {
                   {[...Array(4)].map((_, index) => (
                     <div key={index} className="h-14 rounded-lg bg-muted/50 animate-pulse" />
                   ))}
+                </div>
+              ) : bidsError ? (
+                <div className="text-center py-14">
+                  <p className="text-sm text-muted-foreground">Could not load bids. Please refresh the page.</p>
                 </div>
               ) : myBids.length === 0 ? (
                 <div className="text-center py-14">

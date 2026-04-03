@@ -67,14 +67,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Query vendor_bids filtered to this vendor, optionally scoped to an order
-    const query = supabase
+    let query = supabase
       .from('vendor_bids')
-      .select('*, order:orders(id, order_number, type, status, total_quantity, created_at)')
+      .select('*, order:orders!vendor_bids_order_id_fkey(id, order_number, type, status, total_quantity, created_at)')
       .eq('vendor_id', vendor.id)
       .order('created_at', { ascending: false })
 
     if (orderId) {
-      query.eq('order_id', orderId)
+      query = query.eq('order_id', orderId)
     }
 
     const { data: bids, error: bidsError } = await query
