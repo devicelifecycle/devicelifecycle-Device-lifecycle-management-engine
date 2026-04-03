@@ -15,6 +15,7 @@ const TEST_DEVICES: DeviceToScrape[] = [
   { make: 'Apple', model: 'iPad Pro', storage: '256GB', condition: 'good' },
   { make: 'Apple', model: 'MacBook Air', storage: '256GB', condition: 'good' },
   { make: 'Apple', model: 'iPhone 15 Pro Max', storage: '256GB', condition: 'good' },
+  { make: 'Apple', model: 'iPhone 15 Pro', storage: '256GB', condition: 'good' },
   { make: 'Apple', model: 'iPhone 14', storage: '128GB', condition: 'good' },
   { make: 'Samsung', model: 'Galaxy S24 Ultra', storage: '256GB', condition: 'good' },
   { make: 'Samsung', model: 'Galaxy S23', storage: '128GB', condition: 'good' },

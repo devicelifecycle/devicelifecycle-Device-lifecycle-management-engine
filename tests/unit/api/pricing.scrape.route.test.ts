@@ -144,6 +144,29 @@ describe('POST /api/pricing/scrape', () => {
     expect(trainMock).toHaveBeenCalledTimes(1)
   })
 
+  it('passes provider filters through to the scraper pipeline', async () => {
+    createServerSupabaseClientMock.mockReturnValue(makeSupabase({ user: { id: 'u1' }, role: 'admin' }))
+    createServiceRoleClientMock.mockReturnValue({ kind: 'service' })
+    runScraperPipelineMock.mockResolvedValue({
+      total_scraped: 10,
+      total_upserted: 8,
+      devices_created: 0,
+      errors: [],
+      results: [],
+    })
+
+    const { POST } = await import('@/app/api/pricing/scrape/route')
+    const response = await POST(new NextRequest('http://localhost/api/pricing/scrape?providers=universal,gorecell', { method: 'POST' }))
+
+    expect(response.status).toBe(200)
+    expect(runScraperPipelineMock).toHaveBeenCalledWith(
+      undefined,
+      { kind: 'service' },
+      true,
+      ['universal', 'gorecell']
+    )
+  })
+
   it('returns structured JSON on scraper failure', async () => {
     createServerSupabaseClientMock.mockReturnValue(makeSupabase({ user: { id: 'u1' }, role: 'admin' }))
     createServiceRoleClientMock.mockImplementation(() => {

@@ -10,8 +10,10 @@ import type { NextRequest } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { runScraperPipeline } from '@/lib/scrapers'
+import type { ScraperProviderId } from '@/lib/scrapers'
 export const dynamic = 'force-dynamic'
 
+const VALID_PROVIDERS: ScraperProviderId[] = ['gorecell', 'telus', 'bell', 'universal', 'apple']
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +35,13 @@ export async function POST(request: NextRequest) {
     }
 
     const serviceSupabase = createServiceRoleClient()
-    const result = await runScraperPipeline(undefined, serviceSupabase)
+    const providers = request.nextUrl.searchParams
+      .get('providers')
+      ?.split(',')
+      .map((provider) => provider.trim().toLowerCase())
+      .filter((provider): provider is ScraperProviderId => VALID_PROVIDERS.includes(provider as ScraperProviderId))
+
+    const result = await runScraperPipeline(undefined, serviceSupabase, true, providers?.length ? providers : undefined)
 
     let trainingResult = null
     const shouldTrainInline =
