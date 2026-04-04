@@ -116,6 +116,27 @@ function dedupeBellCatalogPrices(prices: ScrapedPrice[]): ScrapedPrice[] {
   return Array.from(map.values())
 }
 
+function findBestBellDomPrice(
+  modelOrTitle: string,
+  storage: string,
+  allDomPrices: Array<{ price: number; context: string }>
+): number | null {
+  if (allDomPrices.length === 0) return null
+
+  const modelToken = normalizeText(modelOrTitle)
+  const storageToken = normalizeStorage(storage)
+
+  const domMatch = allDomPrices.find((item) => {
+    const contextToken = normalizeText(item.context)
+    const contextStorage = normalizeStorage(item.context)
+    const hasModel = contextToken.includes(modelToken)
+    const hasStorage = !storageToken || contextStorage.includes(storageToken)
+    return hasModel && hasStorage
+  })
+
+  return domMatch?.price ?? null
+}
+
 function selectBestBellProduct(
   device: DeviceToScrape,
   products: Array<{ product_code: string; product_title: string; manufacturer?: { manufacturer_name?: string } }>
@@ -192,16 +213,8 @@ async function scrapeBellTypeScript(devices: DeviceToScrape[]): Promise<ScraperR
 
       // Try to reconcile with on-page Bell trade-in value (closer to what users see)
       if (allDomPrices.length > 0) {
-        const domMatch = allDomPrices.find(item => {
-          const contextToken = normalizeText(item.context)
-          const contextStorage = normalizeStorage(item.context)
-          const hasModel = contextToken.includes(modelToken)
-          const hasStorage = !storageToken || contextStorage.includes(storageToken)
-          return hasModel && hasStorage
-        })
-
-        if (domMatch) {
-          const domPrice = domMatch.price
+        const domPrice = findBestBellDomPrice(device.model, device.storage, allDomPrices)
+        if (domPrice != null) {
           if (tradePrice == null) {
             // No API value — fall back to the DOM price directly
             tradePrice = domPrice
@@ -242,11 +255,18 @@ async function scrapeBellTypeScript(devices: DeviceToScrape[]): Promise<ScraperR
   }
 }
 
-async function scrapeBellFullCatalogTypeScript(limitProducts = 450): Promise<ScraperResult> {
+async function scrapeBellFullCatalogTypeScript(limitProducts?: number): Promise<ScraperResult> {
   const start = Date.now()
   const now = new Date().toISOString()
 
   try {
+    const pageRes = await fetchWithRetry(TRADE_IN_URL, { method: 'GET' })
+    const pageHtml = await pageRes.text()
+    const page$ = cheerio.load(pageHtml)
+    const domPrices = extractDomPrices(page$)
+    const htmlPrices = extractPricesFromHtml(pageHtml)
+    const allDomPrices = domPrices.length > 0 ? domPrices : htmlPrices
+
     const sessionId = await fetchBellSessionId()
     if (!sessionId) {
       return {
@@ -269,19 +289,34 @@ async function scrapeBellFullCatalogTypeScript(limitProducts = 450): Promise<Scr
       }
     }
 
-    const capped = products.slice(0, limitProducts)
+    const capped = typeof limitProducts === 'number' && Number.isFinite(limitProducts) && limitProducts > 0
+      ? products.slice(0, limitProducts)
+      : products
     const scraped: ScrapedPrice[] = []
 
     for (const product of capped) {
-      const tradeValue = await fetchBellBuybackValue(sessionId, product.product_code)
+      let tradeValue = await fetchBellBuybackValue(sessionId, product.product_code)
+      const title = product.product_title || ''
+      const manufacturer = (product.manufacturer?.manufacturer_name || 'Other').trim() || 'Other'
+      const { model, storage } = parseBellTitle(title)
+
+      const domPrice = findBestBellDomPrice(model, storage, allDomPrices)
+      if (domPrice != null) {
+        if (tradeValue == null) {
+          tradeValue = domPrice
+        } else {
+          const diff = Math.abs(tradeValue - domPrice)
+          const rel = domPrice > 0 ? diff / domPrice : 0
+          if (rel > 0.3) {
+            tradeValue = domPrice
+          }
+        }
+      }
+
       if (tradeValue == null) {
         await throttle(120)
         continue
       }
-
-      const title = product.product_title || ''
-      const manufacturer = (product.manufacturer?.manufacturer_name || 'Other').trim() || 'Other'
-      const { model, storage } = parseBellTitle(title)
 
       scraped.push(
         ...expandPriceByConditions(
@@ -327,7 +362,7 @@ export async function scrapeBell(devices: DeviceToScrape[]): Promise<ScraperResu
   })
 }
 
-export async function scrapeBellFullCatalog(limitProducts = 450): Promise<ScraperResult> {
+export async function scrapeBellFullCatalog(limitProducts?: number): Promise<ScraperResult> {
   return runBellScraperPilot({
     devices: [],
     discovery: true,

@@ -349,7 +349,7 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
 }
 
 /** Discovery mode: scrape full GoRecell catalog, return all devices + prices (no input devices needed) */
-async function scrapeGoRecellFullCatalogTypeScript(limitProducts = 150): Promise<ScraperResult> {
+async function scrapeGoRecellFullCatalogTypeScript(limitProducts?: number): Promise<ScraperResult> {
   const start = Date.now()
   const prices: ScrapedPrice[] = []
   const now = new Date().toISOString()
@@ -359,7 +359,7 @@ async function scrapeGoRecellFullCatalogTypeScript(limitProducts = 150): Promise
     const perPage = 30
     let fetched = 0
 
-    while (fetched < limitProducts) {
+    while (limitProducts == null || fetched < limitProducts) {
       const url = `${STORE_API}?page=${page}&per_page=${perPage}`
       const res = await fetchWithRetry(url, { method: 'GET', headers: { Accept: 'application/json' } })
       const raw = res.ok ? await res.json() : []
@@ -367,7 +367,7 @@ async function scrapeGoRecellFullCatalogTypeScript(limitProducts = 150): Promise
       if (products.length === 0) break
 
       for (const p of products) {
-        if (fetched >= limitProducts) break
+        if (limitProducts != null && fetched >= limitProducts) break
         if (!p?.name || !p?.slug) continue
 
         try {
@@ -423,7 +423,7 @@ export async function scrapeGoRecell(devices: DeviceToScrape[]): Promise<Scraper
   })
 }
 
-export async function scrapeGoRecellFullCatalog(limitProducts = 150): Promise<ScraperResult> {
+export async function scrapeGoRecellFullCatalog(limitProducts?: number): Promise<ScraperResult> {
   return runGoRecellScraperPilot({
     devices: [],
     discovery: true,
