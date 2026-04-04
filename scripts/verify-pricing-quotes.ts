@@ -19,6 +19,32 @@ function readArg(name: string): string | undefined {
   return raw ? raw.slice(prefix.length).trim() : undefined
 }
 
+async function fetchAllRows<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message?: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = []
+  const pageSize = 1000
+
+  for (let page = 0; ; page += 1) {
+    const from = page * pageSize
+    const to = from + pageSize - 1
+    const { data, error } = await fetchPage(from, to)
+
+    if (error) {
+      throw new Error(error.message || 'Failed to fetch paginated rows')
+    }
+
+    const batch = data || []
+    rows.push(...batch)
+
+    if (batch.length < pageSize) {
+      break
+    }
+  }
+
+  return rows
+}
+
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -46,9 +72,10 @@ async function main() {
 
   console.log(`  Total competitor_prices: ${totalCp ?? 0}`)
 
-  const { data: byCompetitor } = await supabase
+  const byCompetitor = await fetchAllRows<{ competitor_name: string }>((from, to) => supabase
     .from('competitor_prices')
     .select('competitor_name')
+    .range(from, to))
   const competitors = [...new Set((byCompetitor || []).map(r => r.competitor_name))].sort()
   console.log(`  Competitors: ${competitors.join(', ')}`)
 
@@ -86,11 +113,18 @@ async function main() {
   console.log('  3. QUOTE VS COMPETITOR (sample device)')
   console.log(SEP)
 
-  const { data: grouped } = await supabase
+  const grouped = await fetchAllRows<{
+    device_id: string
+    storage: string
+    condition: string
+    trade_in_price: number
+    competitor_name: string
+  }>((from, to) => supabase
     .from('competitor_prices')
     .select('device_id, storage, condition, trade_in_price, competitor_name')
     .not('trade_in_price', 'is', null)
     .gt('trade_in_price', 0)
+    .range(from, to))
 
   if (!grouped || grouped.length === 0) {
     console.log('  No competitor data — run scrape first: npm run scrape:prices')
