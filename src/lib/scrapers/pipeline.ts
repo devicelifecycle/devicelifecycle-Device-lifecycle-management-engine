@@ -362,23 +362,44 @@ function getOutlierThresholds(make: string, model: string): {
   }
 }
 
-async function buildScrapeDevicesFromCatalog(supabase: SupabaseClient, limit = 240): Promise<DeviceToScrape[]> {
-  const { data: catalog } = await supabase
-    .from('device_catalog')
-    .select('make, model, category, specifications')
-    .eq('is_active', true)
-    .limit(limit)
-
+async function buildScrapeDevicesFromCatalog(supabase: SupabaseClient, limit?: number): Promise<DeviceToScrape[]> {
   const devicesToScrape: DeviceToScrape[] = []
-  for (const d of catalog || []) {
-    const category = (d.category || '').toLowerCase()
-    if (category && !['phone', 'tablet', 'watch', 'laptop'].includes(category)) continue
-    const spec = (d.specifications || {}) as { storage_options?: string[] }
-    const storages = spec.storage_options?.length ? spec.storage_options : ['128GB']
-    for (const s of storages.slice(0, 3)) {
-      devicesToScrape.push({ make: d.make, model: d.model, storage: s })
+  const pageSize = 500
+  let fetched = 0
+
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1
+    let query = supabase
+      .from('device_catalog')
+      .select('make, model, category, specifications')
+      .eq('is_active', true)
+      .order('make')
+      .order('model')
+      .range(from, to)
+
+    if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
+      query = query.limit(Math.max(limit - fetched, 0))
     }
+
+    const { data: catalog, error } = await query
+    if (error) throw new Error(error.message)
+
+    const rows = catalog || []
+    for (const d of rows) {
+      const category = (d.category || '').toLowerCase()
+      if (category && !['phone', 'tablet', 'watch', 'laptop'].includes(category)) continue
+      const spec = (d.specifications || {}) as { storage_options?: string[] }
+      const storages = spec.storage_options?.length ? spec.storage_options : ['128GB']
+      for (const s of storages.slice(0, 3)) {
+        devicesToScrape.push({ make: d.make, model: d.model, storage: s })
+      }
+    }
+
+    fetched += rows.length
+    if (rows.length < pageSize) break
+    if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0 && fetched >= limit) break
   }
+
   return devicesToScrape
 }
 
@@ -481,7 +502,7 @@ export async function runScraperPipeline(
 
   if (discovery && (!devices || devices.length === 0)) {
     // Discovery mode: run all discovery scrapers + Apple IN PARALLEL
-    const devicesToScrape = await buildScrapeDevicesFromCatalog(supabase, 200)
+    const devicesToScrape = await buildScrapeDevicesFromCatalog(supabase)
     const expandedDevices = expandDevicesByCondition(devicesToScrape)
 
     const scraperPromises = [
@@ -511,7 +532,7 @@ export async function runScraperPipeline(
     // Non-discovery: run all scrapers IN PARALLEL with device list
     let devicesToScrape = devices
     if (!devicesToScrape?.length) {
-      devicesToScrape = await buildScrapeDevicesFromCatalog(supabase, 240)
+      devicesToScrape = await buildScrapeDevicesFromCatalog(supabase)
     }
     const expandedDevices = expandDevicesByCondition(devicesToScrape!)
 

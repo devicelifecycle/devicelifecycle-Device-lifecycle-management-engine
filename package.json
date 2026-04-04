@@ -45,7 +45,9 @@
     "verify:univercell:scrapling": "npx tsx scripts/validate-univercell-scrapling.ts",
     "set-pricing-defaults": "node --env-file=.env.local scripts/set-pricing-defaults.mjs",
     "verify:pricing": "npx tsx scripts/verify-pricing-quotes.ts",
+    "refresh:device-prices": "npx tsx scripts/refresh-device-competitor-prices.ts",
     "audit:pricing:catalog": "npx tsx scripts/run-full-catalog-pricing-audit.ts",
+    "reconcile:market-trade": "npx tsx scripts/reconcile-market-trade-prices.ts",
     "send-test-email": "npx tsx --env-file=.env.local scripts/send-test-email.ts"
   },
   "dependencies": {
