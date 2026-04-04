@@ -451,7 +451,10 @@ export default function VendorOrdersPage() {
       </Tabs>
 
       {/* Submit Bid Dialog — outside Tabs so it works from both Open and Assigned */}
-      <Dialog open={bidDialogOpen} onOpenChange={setBidDialogOpen}>
+      <Dialog open={bidDialogOpen} onOpenChange={(open) => {
+        setBidDialogOpen(open)
+        if (!open) setBidForm({ quantity: '', unit_price: '', lead_time_days: '', warranty_days: '', notes: '' })
+      }}>
         <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Submit Bid</DialogTitle>

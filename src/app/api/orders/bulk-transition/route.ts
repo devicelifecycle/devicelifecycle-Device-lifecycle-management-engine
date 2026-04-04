@@ -104,7 +104,8 @@ export async function POST(request: NextRequest) {
 
         results.push({ id: orderId, success: true })
       } catch (err) {
-        results.push({ id: orderId, success: false, error: 'Internal error' })
+        const msg = err instanceof Error ? err.message : 'Internal error'
+        results.push({ id: orderId, success: false, error: msg })
       }
     }
 

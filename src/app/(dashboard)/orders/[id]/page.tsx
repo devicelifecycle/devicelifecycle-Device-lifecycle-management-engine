@@ -289,8 +289,8 @@ export default function OrderDetailPage() {
       toast.success(`Order moved to ${ORDER_STATUS_CONFIG[newStatus]?.label}`)
       setTransitionTarget(null)
       setTransitionNotes('')
-    } catch {
-      toast.error('Failed to update order status')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update order status')
     }
   }
 
