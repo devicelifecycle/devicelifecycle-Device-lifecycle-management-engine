@@ -369,7 +369,6 @@ export default function VendorOrdersPage() {
         </CardContent>
       </Card>
         </TabsContent>
-      </Tabs>
 
         <TabsContent value="my-bids">
           <Card>
@@ -449,6 +448,7 @@ export default function VendorOrdersPage() {
             </CardContent>
           </Card>
         </TabsContent>
+      </Tabs>
 
       {/* Submit Bid Dialog — outside Tabs so it works from both Open and Assigned */}
       <Dialog open={bidDialogOpen} onOpenChange={setBidDialogOpen}>
