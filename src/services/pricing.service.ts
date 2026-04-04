@@ -950,17 +950,17 @@ export class PricingService {
           }
           tradePrice = Math.max(tradePrice, competitiveFloor)
         } else {
-          tradePrice = marketEntry?.trade_price || 0
-          if (!tradePrice) {
-            tradePrice = Math.max(adjustedPrice, competitiveFloor)
+          // Always apply margin against the condition-adjusted anchor — never use raw
+          // adjustedPrice or market.trade_price directly. Both can be inflated when
+          // competitor data is absent and anchor falls back to wholesale C-stock.
+          if (avgCompetitorPrice > 0) {
+            tradePrice = round2(avgCompetitorPrice * (1 - marginTarget))
+          } else {
+            const conditionAdjustedAnchor = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
+            tradePrice = round2(conditionAdjustedAnchor * (1 - marginTarget))
+            tradePrice = Math.max(tradePrice, 0)
           }
-          // Enforce minimum margin even in default path — prevent overpaying for trade-ins
-          if (anchorPrice > 0) {
-            const maxTradeAtMargin = round2(anchorPrice * (1 - marginTarget))
-            if (tradePrice > maxTradeAtMargin) {
-              tradePrice = Math.max(maxTradeAtMargin, competitiveFloor)
-            }
-          }
+          tradePrice = Math.max(tradePrice, competitiveFloor)
         }
 
       }
