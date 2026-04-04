@@ -153,6 +153,7 @@ export default function OrderDetailPage() {
   const [isSendingMismatchNotice, setIsSendingMismatchNotice] = useState(false)
   const [isSendingQuote, setIsSendingQuote] = useState(false)
   const [isNotifyingPriceChange, setIsNotifyingPriceChange] = useState(false)
+  const [isGeneratingPostTriageQuote, setIsGeneratingPostTriageQuote] = useState(false)
   const [suggestingItemId, setSuggestingItemId] = useState<string | null>(null)
   const [transitionTarget, setTransitionTarget] = useState<OrderStatus | null>(null)
   const [transitionNotes, setTransitionNotes] = useState('')
@@ -881,6 +882,22 @@ export default function OrderDetailPage() {
     }
   }
 
+  const handleGeneratePostTriageQuote = async () => {
+    if (!order) return
+    setIsGeneratingPostTriageQuote(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/generate-quote`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to generate quote')
+      toast.success('Post-triage quote generated and sent to customer')
+      refetch()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to generate quote')
+    } finally {
+      setIsGeneratingPostTriageQuote(false)
+    }
+  }
+
   const handleEditAndSendQuote = () => {
     if (!order?.items?.length) return
     const prices: Record<string, string> = {}
@@ -1489,6 +1506,27 @@ export default function OrderDetailPage() {
                   </div>
                 )}
               </div>
+
+              {/* Post-triage quote generation — for walk-in/unquoted trade-ins */}
+              {canSetPricingByRole && order.type === 'trade_in' &&
+                ['received', 'in_triage', 'qc_complete'].includes(order.status) &&
+                !(order.quoted_amount && order.quoted_amount > 0) && (
+                <div className="mt-4 flex items-center gap-3 rounded-lg border border-dashed bg-muted/30 px-4 py-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">No quote sent yet</p>
+                    <p className="text-xs text-muted-foreground">
+                      This order arrived without a prior quote. Generate a quote based on {order.status === 'qc_complete' ? 'actual triage condition' : 'device condition'} and send it to the customer.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleGeneratePostTriageQuote}
+                    disabled={isGeneratingPostTriageQuote}
+                  >
+                    {isGeneratingPostTriageQuote ? 'Generating...' : 'Generate & Send Quote'}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 

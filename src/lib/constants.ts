@@ -260,14 +260,14 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   draft: ['submitted', 'cancelled'],
   submitted: ['quoted', 'sourcing', 'cancelled'],
   quoted: ['accepted', 'rejected'],
-  accepted: ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled'],
+  accepted: ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled', 'ready_to_ship'],
   rejected: [], // Terminal state
   sourcing: ['sourced', 'cancelled'],
   sourced: ['shipped_to_coe', 'shipped', 'cancelled'],
   shipped_to_coe: ['received'],
   received: ['in_triage'],
   in_triage: ['qc_complete'],
-  qc_complete: ['ready_to_ship'],
+  qc_complete: ['ready_to_ship', 'quoted'], // 'quoted' = post-triage quote for walk-in/unquoted orders
   ready_to_ship: ['shipped'],
   shipped: ['delivered'],
   delivered: ['closed'],

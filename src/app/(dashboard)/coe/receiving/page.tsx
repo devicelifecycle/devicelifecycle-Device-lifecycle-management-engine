@@ -51,6 +51,7 @@ export default function COEReceivingPage() {
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
   const [receiveNotes, setReceiveNotes] = useState('')
+  const [quantityReceived, setQuantityReceived] = useState('')
   const [isReceiving, setIsReceiving] = useState(false)
 
   // Record Inbound Shipment
@@ -147,16 +148,25 @@ export default function COEReceivingPage() {
     if (!selectedShipment) return
     setIsReceiving(true)
     try {
+      const expectedQty = (selectedShipment.order as unknown as Record<string, number> | undefined)?.total_quantity
+      const receivedQty = quantityReceived ? parseInt(quantityReceived, 10) : null
+      const countNote = receivedQty != null
+        ? `Devices counted: ${receivedQty}${expectedQty && receivedQty !== expectedQty ? ` (expected ${expectedQty} — DISCREPANCY)` : ''}.`
+        : ''
+      const combinedNotes = [countNote, receiveNotes].filter(Boolean).join(' ').trim()
+
       const res = await fetch(`/api/shipments/${selectedShipment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'receive', notes: receiveNotes }),
+        body: JSON.stringify({ action: 'receive', notes: combinedNotes || undefined }),
       })
       if (!res.ok) throw new Error()
-      toast.success('Shipment marked as received')
+      const countSummary = receivedQty != null ? ` — ${receivedQty} device${receivedQty !== 1 ? 's' : ''} counted` : ''
+      toast.success(`Shipment received${countSummary}`)
       setReceiveDialogOpen(false)
       setSelectedShipment(null)
       setReceiveNotes('')
+      setQuantityReceived('')
       fetchShipments()
     } catch {
       toast.error('Failed to mark shipment as received')
@@ -256,7 +266,7 @@ export default function COEReceivingPage() {
                       {s.status !== 'delivered' ? (
                         <Button
                           size="sm"
-                          onClick={() => { setSelectedShipment(s); setReceiveDialogOpen(true) }}
+                          onClick={() => { setSelectedShipment(s); setQuantityReceived(''); setReceiveNotes(''); setReceiveDialogOpen(true) }}
                         >
                           <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />Receive
                         </Button>
@@ -292,10 +302,48 @@ export default function COEReceivingPage() {
                 <p className="font-medium">{(selectedShipment?.order as unknown as Record<string, string>)?.order_number || '—'}</p>
               </div>
             </div>
+
+            {/* Device Count Verification */}
+            <div className="space-y-2">
+              <Label>
+                Devices Counted
+                {(selectedShipment?.order as unknown as Record<string, number>)?.total_quantity != null && (
+                  <span className="ml-2 text-xs text-muted-foreground font-normal">
+                    (expected {(selectedShipment?.order as unknown as Record<string, number>).total_quantity})
+                  </span>
+                )}
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                placeholder="Enter number of devices physically received"
+                value={quantityReceived}
+                onChange={e => setQuantityReceived(e.target.value)}
+              />
+              {(() => {
+                const expected = (selectedShipment?.order as unknown as Record<string, number>)?.total_quantity
+                const received = quantityReceived ? parseInt(quantityReceived, 10) : null
+                if (received == null || !expected) return null
+                if (received === expected) {
+                  return (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" />Count matches order — all {expected} devices accounted for
+                    </p>
+                  )
+                }
+                return (
+                  <p className="text-xs text-amber-600 font-medium">
+                    ⚠ Count mismatch — received {received}, expected {expected}. Note will be flagged on the shipment.
+                  </p>
+                )
+              })()}
+            </div>
+
             <div className="space-y-2">
               <Label>Receiving Notes (optional)</Label>
               <Textarea
-                placeholder="Package condition, item count, any issues..."
+                placeholder="Package condition, any damage, other observations..."
                 value={receiveNotes}
                 onChange={e => setReceiveNotes(e.target.value)}
                 rows={3}
