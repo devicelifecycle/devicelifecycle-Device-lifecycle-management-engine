@@ -209,9 +209,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(updatedOrder)
   } catch (error) {
     console.error('Error transitioning order:', error)
-    return NextResponse.json(
-      { error: 'Failed to transition order' },
-      { status: 500 }
-    )
+    const message = error instanceof Error ? error.message : 'Failed to transition order'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
