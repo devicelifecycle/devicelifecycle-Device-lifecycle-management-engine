@@ -46,7 +46,9 @@ export class DataDrivenPricingModel implements IPricingModel {
 
   async calculate(input: PricingModelInput): Promise<PricingModelResult> {
     const supabase = await createServerSupabaseClient()
-    const storage = input.storage || '128GB'
+    // Normalize storage to match what scrapers store: "128 GB" → "128GB", "1024GB" → "1TB"
+    const rawStorage = input.storage || '128GB'
+    const storage = rawStorage.trim().toUpperCase().replace(/\s+/g, '').replace(/^1024GB$/, '1TB').replace(/^2048GB$/, '2TB') || '128GB'
     const carrier = input.carrier || 'Unlocked'
 
     // Auto-train if baselines are empty or stale (check at most every 5 min)
