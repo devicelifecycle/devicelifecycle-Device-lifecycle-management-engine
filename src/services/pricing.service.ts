@@ -98,6 +98,17 @@ function isBrokenDevice(condition: DeviceCondition, deductionKeys: string[]): bo
   return deductionKeys.some(k => CRITICAL_BROKEN_ISSUES.includes(k))
 }
 
+/** Normalize storage string to match what scrapers store in competitor_prices table.
+ *  e.g. "128 GB" → "128GB", "1024GB" → "1TB", "1 TB" → "1TB" */
+function normalizeStorageInput(storage: string): string {
+  let s = (storage || '128GB').trim().toUpperCase().replace(/\s+/g, '')
+  if (s === '1024GB') s = '1TB'
+  if (s === '2048GB') s = '2TB'
+  if (s === '4096GB') s = '4TB'
+  if (s === '8192GB') s = '8TB'
+  return s || '128GB'
+}
+
 /** Filter competitor outliers — discard highest if >1.3x second-highest (e.g. Bell promotion) */
 function filterCompetitorOutliers(
   list: Array<{ name: string; price: number }>
@@ -264,9 +275,11 @@ export class PricingService {
   }, supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<PriceCalculationResultV2> {
     const supabase = supabaseClient ?? await createServerSupabaseClient()
     const resolvedDeviceId = await resolveComparablePricingDeviceId(supabase, input.device_id)
-    const normalizedInput = resolvedDeviceId === input.device_id
-      ? input
-      : { ...input, device_id: resolvedDeviceId }
+    const normalizedInput = {
+      ...input,
+      device_id: resolvedDeviceId,
+      storage: normalizeStorageInput(input.storage),
+    }
     const settings = await this.getPricingSettings(supabase)
     const hasFormulaOverrides =
       input.beat_competitor_percent != null ||
@@ -399,9 +412,11 @@ export class PricingService {
   }, supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<PriceCalculationResultV2> {
     const supabase = supabaseClient ?? await createServerSupabaseClient()
     const resolvedDeviceId = await resolveComparablePricingDeviceId(supabase, input.device_id)
-    const normalizedInput = resolvedDeviceId === input.device_id
-      ? input
-      : { ...input, device_id: resolvedDeviceId }
+    const normalizedInput = {
+      ...input,
+      device_id: resolvedDeviceId,
+      storage: normalizeStorageInput(input.storage),
+    }
     const carrier = normalizedInput.carrier || 'Unlocked'
     const settings = await this.getPricingSettings(supabase)
 
@@ -492,6 +507,51 @@ export class PricingService {
         // Same-condition competitor prices are already condition-specific
         anchorIsBaseNormalized = false
       }
+
+      // Stale competitor fallback — use before wholesale so quotes stay anchored to real
+      // competitor offers rather than inflated wholesale prices when scraper data is >14 days old.
+      if (!anchorPrice) {
+        const staleCompSameCondition = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
+          'competitor_prices stale same condition anchor',
+          () => supabase
+            .from('competitor_prices')
+            .select('trade_in_price')
+            .eq('device_id', normalizedInput.device_id)
+            .eq('storage', normalizedInput.storage)
+            .eq('condition', competitorConditionForAnchor)
+            .not('trade_in_price', 'is', null)
+            .gt('trade_in_price', 0),
+          { allowNoRows: true, retries: 2 }
+        )
+        const staleConditionPrices = (staleCompSameCondition || [])
+          .map((c) => Number(c.trade_in_price) || 0)
+          .filter((p) => p > 0)
+        if (staleConditionPrices.length > 0) {
+          anchorPrice = staleConditionPrices.reduce((s, p) => s + p, 0) / staleConditionPrices.length
+          anchorIsBaseNormalized = false // condition-specific stale data
+        }
+      }
+      if (!anchorPrice) {
+        const staleCompAllConditions = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
+          'competitor_prices stale all conditions anchor',
+          () => supabase
+            .from('competitor_prices')
+            .select('trade_in_price')
+            .eq('device_id', normalizedInput.device_id)
+            .eq('storage', normalizedInput.storage)
+            .not('trade_in_price', 'is', null)
+            .gt('trade_in_price', 0),
+          { allowNoRows: true, retries: 2 }
+        )
+        const staleAllPrices = (staleCompAllConditions || [])
+          .map((c) => Number(c.trade_in_price) || 0)
+          .filter((p) => p > 0)
+        if (staleAllPrices.length > 0) {
+          anchorPrice = staleAllPrices.reduce((s, p) => s + p, 0) / staleAllPrices.length
+          anchorIsBaseNormalized = true // mixed conditions — treat as approximate base
+        }
+      }
+
       if (!anchorPrice) {
         anchorPrice = marketEntry?.wholesale_c_stock || 0
         if (anchorPrice) anchorIsBaseNormalized = true // wholesale is a "new" base price
@@ -1625,11 +1685,12 @@ export class PricingService {
   }> {
     const supabase = await createServerSupabaseClient()
     const deviceId = await resolveComparablePricingDeviceId(supabase, input.device_id)
+    const normalizedStorage = normalizeStorageInput(input.storage)
     const { data } = await supabase
       .from('competitor_prices')
       .select('competitor_name, trade_in_price, retrieved_at, scraped_at, updated_at')
       .eq('device_id', deviceId)
-      .eq('storage', input.storage)
+      .eq('storage', normalizedStorage)
       .eq('condition', input.condition)
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
