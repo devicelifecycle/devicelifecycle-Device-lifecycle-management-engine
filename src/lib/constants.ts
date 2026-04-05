@@ -578,7 +578,10 @@ export const CHANNEL_DECISION_THRESHOLDS = {
 } as const
 
 export const MARKETPLACE_FEE_PERCENT = 12
-export const COMPETITIVE_RELEVANCE_MIN = 0.85
+// Minimum competitiveness floor: we won't offer less than 70% of competitor avg.
+// Set lower than the margin formula (avg × 0.80) so the margin formula wins normally.
+// Admins can raise this in Settings to trade margin for competitiveness.
+export const COMPETITIVE_RELEVANCE_MIN = 0.70
 export const BREAKAGE_RISK_PERCENT = 5
 export const OUTLIER_DEVIATION_THRESHOLD = 0.20  // Flag if >20% from historical avg
 export const BROKEN_DEVICE_MULTIPLIER = 0.50     // Broken = 50% of good working trade price (Brian's rule)

@@ -906,7 +906,13 @@ export class PricingService {
           : anchorPrice
       const goodWorkingBreakage = goodWorkingAnchor * (settings.breakage_risk_percent / 100)
       const goodWorkingAfterBreakage = Math.max(goodWorkingAnchor - goodWorkingBreakage, 0)
-      const competitiveFloor = highestCompetitor * settings.competitive_relevance_min
+      // Floor = avg × relevance_min (not highest × relevance_min).
+      // Using highest was inflating quotes: highest=$220, 0.85×220=$187 overrode
+      // the margin formula ($172) and pushed us $28 below avg instead of $5-10.
+      // Using avg×0.85: floor=215×0.85=$182.75 — margin formula wins at $172 → actual=$182.75.
+      // Still too high. The floor is a safety net (don't go below ~85% of avg), not a target.
+      // The margin formula result should usually win; the floor only catches extreme cases.
+      const competitiveFloor = (avgCompetitorPrice > 0 ? avgCompetitorPrice : highestCompetitor) * settings.competitive_relevance_min
       const dGradeFloor = isBroken && dGradeFormula ? dGradeFormula.calculated_trade_price : 0
       const goodWorkingTradePrice = Math.max(
         goodWorkingAfterBreakage,

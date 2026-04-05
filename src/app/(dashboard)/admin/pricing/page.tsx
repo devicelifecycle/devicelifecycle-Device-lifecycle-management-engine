@@ -93,7 +93,7 @@ const SETTINGS_DEFAULTS: Record<string, string> = {
   trade_in_profit_percent: '20',
   enterprise_margin_percent: '12',
   breakage_risk_percent: '5',
-  competitive_relevance_min: '0.85',
+  competitive_relevance_min: '0.70',
   competitor_ceiling_percent: '0',
   beat_competitor_percent: '0',
   price_staleness_days: '7',
