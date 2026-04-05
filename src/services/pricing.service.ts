@@ -1374,6 +1374,7 @@ export class PricingService {
       .from('competitor_prices')
       .insert({
         ...input,
+        storage: normalizeStorageInput(input.storage),
         condition: input.condition || 'good',
       })
       .select('*, device:device_catalog(*)')
@@ -1385,9 +1386,10 @@ export class PricingService {
 
   static async updateCompetitorPrice(id: string, input: Partial<CompetitorPrice>): Promise<CompetitorPrice> {
     const supabase = await createServerSupabaseClient()
+    const normalized = input.storage ? { ...input, storage: normalizeStorageInput(input.storage) } : input
     const { data, error } = await supabase
       .from('competitor_prices')
-      .update({ ...input, updated_at: new Date().toISOString() })
+      .update({ ...normalized, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select('*, device:device_catalog(*)')
       .single()
