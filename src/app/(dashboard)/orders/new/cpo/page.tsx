@@ -4,18 +4,20 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download } from 'lucide-react'
+import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import Papa from 'papaparse'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers } from '@/hooks/useCustomers'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -23,6 +25,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Separator } from '@/components/ui/separator'
 import { STORAGE_OPTIONS } from '@/lib/constants'
 import { matchDeviceFromCsv } from '@/lib/device-match'
+import { formatCurrency } from '@/lib/utils'
 import {
   CPO_CSV_HEADERS,
   CPO_CSV_SAMPLE,
@@ -41,6 +44,20 @@ interface CSVRow {
 
 // CPO orders are always 'good' condition — no condition selection needed
 const CPO_CONDITION: DeviceCondition = 'good'
+
+interface CpoCompetitorPrice {
+  name: string
+  sell_price: number
+}
+
+interface ItemPrice {
+  engine_cpo_price: number    // CPO price from engine
+  manual_price: string        // user override (empty = use engine)
+  loading: boolean
+  error: string | null
+  source: string
+  cpo_competitors: CpoCompetitorPrice[]
+}
 
 interface LineItem {
   device_id: string
@@ -70,8 +87,10 @@ function getStorageOptionsForDevice(device?: Device): string[] {
 
 export default function NewCPOOrderPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const { create, isCreating } = useOrders()
   const { customers } = useCustomers()
+  const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
   const [devices, setDevices] = useState<Device[]>([])
   const [customerId, setCustomerId] = useState('')
   const [items, setItems] = useState<LineItem[]>([])
@@ -81,9 +100,57 @@ export default function NewCPOOrderPage() {
   const [csvErrors, setCsvErrors] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Pricing state (internal roles only)
+  const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
+
   useEffect(() => {
     fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
+
+  const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string) => {
+    if (!deviceId || !storage || !isInternal) return
+
+    setItemPrices(prev => ({
+      ...prev,
+      [index]: { engine_cpo_price: 0, manual_price: '', loading: true, error: null, source: '', cpo_competitors: [] },
+    }))
+
+    try {
+      const res = await fetch('/api/pricing/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition: CPO_CONDITION }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.cpo_price > 0) {
+          setItemPrices(prev => ({
+            ...prev,
+            [index]: {
+              engine_cpo_price: data.cpo_price,
+              manual_price: '',
+              loading: false,
+              error: null,
+              source: data.price_source || 'Pricing Engine V2',
+              cpo_competitors: (data.cpo_competitors || []) as CpoCompetitorPrice[],
+            },
+          }))
+          return
+        }
+      }
+
+      setItemPrices(prev => ({
+        ...prev,
+        [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: 'No price data', source: '', cpo_competitors: [] },
+      }))
+    } catch {
+      setItemPrices(prev => ({
+        ...prev,
+        [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: 'Lookup failed', source: '', cpo_competitors: [] },
+      }))
+    }
+  }, [isInternal])
 
   const addItem = () => {
     setItems([...items, { device_id: '', device_label: '', quantity: 1, storage: '', notes: '' }])
@@ -91,10 +158,20 @@ export default function NewCPOOrderPage() {
 
   const removeItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index))
+    setItemPrices(prev => {
+      const next = { ...prev }
+      delete next[index]
+      const reindexed: Record<number, ItemPrice> = {}
+      Object.keys(next).forEach(key => {
+        const k = parseInt(key)
+        reindexed[k > index ? k - 1 : k] = next[k]
+      })
+      return reindexed
+    })
   }
 
   const updateItem = (index: number, field: string, value: string | number) => {
-    setItems(items.map((item, i) => {
+    const newItems = items.map((item, i) => {
       if (i !== index) return item
       if (field === 'device_id') {
         const dev = devices.find(d => d.id === value)
@@ -108,7 +185,32 @@ export default function NewCPOOrderPage() {
         }
       }
       return { ...item, [field]: value }
+    })
+    setItems(newItems)
+
+    if (isInternal && ['device_id', 'storage'].includes(field)) {
+      const updated = newItems[index]
+      if (updated) {
+        setTimeout(() => lookupPrice(index, updated.device_id, updated.storage), 100)
+      }
+    }
+  }
+
+  const updateManualPrice = (index: number, val: string) => {
+    setItemPrices(prev => ({
+      ...prev,
+      [index]: {
+        ...(prev[index] || { engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: 'manual', cpo_competitors: [] }),
+        manual_price: val,
+      },
     }))
+  }
+
+  const getFinalPrice = (i: number) => {
+    const p = itemPrices[i]
+    if (!p) return 0
+    if (p.manual_price !== '' && !Number.isNaN(parseFloat(p.manual_price))) return parseFloat(p.manual_price)
+    return p.engine_cpo_price
   }
 
   const handleDownloadCpoTemplate = () => {
@@ -264,62 +366,71 @@ export default function NewCPOOrderPage() {
             {items.length === 0 ? (
               <p className="text-center py-6 text-muted-foreground">No items added. Click &quot;Add Item&quot; to start.</p>
             ) : (
-              items.map((item, index) => (
-                (() => {
-                  const selectedDevice = devices.find(d => d.id === item.device_id)
-                  const storageOptions = getStorageOptionsForDevice(selectedDevice)
-                  return (
-                <div key={index}>
-                  {index > 0 && <Separator className="mb-4" />}
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1 space-y-3">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Device</Label>
-                          <Select value={item.device_id} onValueChange={v => updateItem(index, 'device_id', v)}>
-                            <SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger>
-                            <SelectContent>
-                              {devices.map(d => <SelectItem key={d.id} value={d.id}>{d.make} {d.model}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
+              items.map((item, index) => {
+                const selectedDevice = devices.find(d => d.id === item.device_id)
+                const storageOptions = getStorageOptionsForDevice(selectedDevice)
+                const price = itemPrices[index]
+                return (
+                  <div key={index}>
+                    {index > 0 && <Separator className="mb-4" />}
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1 space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
                           <div className="space-y-1">
-                            <Label className="text-xs">Qty</Label>
-                            <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} />
+                            <Label className="text-xs">Device</Label>
+                            <Select value={item.device_id} onValueChange={v => updateItem(index, 'device_id', v)}>
+                              <SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger>
+                              <SelectContent>
+                                {devices.map(d => <SelectItem key={d.id} value={d.id}>{d.make} {d.model}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Condition</Label>
-                            <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
-                              CPO (Good)
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Qty</Label>
+                              <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Condition</Label>
+                              <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+                                CPO (Good)
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Storage</Label>
-                          <Select value={item.storage} onValueChange={v => updateItem(index, 'storage', v)}>
-                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                            <SelectContent>
-                              {storageOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Storage</Label>
+                            <Select value={item.storage} onValueChange={v => updateItem(index, 'storage', v)}>
+                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectContent>
+                                {storageOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Notes</Label>
+                            <Input placeholder="Optional notes" value={item.notes} onChange={e => updateItem(index, 'notes', e.target.value)} />
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Notes</Label>
-                          <Input placeholder="Optional notes" value={item.notes} onChange={e => updateItem(index, 'notes', e.target.value)} />
-                        </div>
+                        {/* Inline price indicator for internal staff */}
+                        {isInternal && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {price?.loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                            {price?.engine_cpo_price > 0 && !price.loading && (
+                              <span className="font-medium text-foreground">CPO Price: {formatCurrency(price.engine_cpo_price)} <span className="font-normal text-muted-foreground">/ unit ({price.source})</span></span>
+                            )}
+                            {price?.error && <span className="text-muted-foreground">No price data</span>}
+                          </div>
+                        )}
                       </div>
+                      <Button type="button" variant="ghost" size="icon" className="mt-5 shrink-0" onClick={() => removeItem(index)}>
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Button type="button" variant="ghost" size="icon" className="mt-5 shrink-0" onClick={() => removeItem(index)}>
-                      <X className="h-4 w-4" />
-                    </Button>
                   </div>
-                </div>
-                  )
-                })()
-              ))
+                )
+              })
             )}
               </TabsContent>
 
@@ -377,6 +488,91 @@ export default function NewCPOOrderPage() {
             </Tabs>
           </CardContent>
         </Card>
+
+        {/* Quote Summary — internal staff only, manual tab */}
+        {isInternal && tab === 'manual' && items.some((_, i) => (itemPrices[i]?.engine_cpo_price ?? 0) > 0) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Quote Summary</CardTitle>
+              <CardDescription>CPO sell pricing for this order. Competitor sell prices shown for internal reference only.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Device</TableHead>
+                      <TableHead>Storage</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right text-muted-foreground">Engine CPO</TableHead>
+                      <TableHead className="text-right text-amber-700 bg-amber-50/60">Competitors (Sell)</TableHead>
+                      <TableHead className="text-right font-semibold">Our CPO Quote</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((item, i) => {
+                      const price = itemPrices[i]
+                      if (!price || price.engine_cpo_price <= 0) return null
+                      const isManual = price.manual_price !== '' && !Number.isNaN(parseFloat(price.manual_price))
+                      const finalUnit = getFinalPrice(i)
+                      return (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium whitespace-nowrap">{item.device_label || '—'}</TableCell>
+                          <TableCell className="text-xs">{item.storage}</TableCell>
+                          <TableCell className="text-right text-xs">{item.quantity}</TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">{formatCurrency(price.engine_cpo_price)}</TableCell>
+                          {/* Competitor sell prices — internal only */}
+                          <TableCell className="bg-amber-50/40 min-w-[160px]">
+                            {price.cpo_competitors.length > 0 ? (
+                              <div className="space-y-0.5">
+                                {price.cpo_competitors.map(c => (
+                                  <div key={c.name} className="flex items-center justify-between gap-2 text-[11px]">
+                                    <span className="text-muted-foreground truncate max-w-[90px]">{c.name}</span>
+                                    <span className="font-mono font-medium text-amber-800">{formatCurrency(c.sell_price)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">No data</span>
+                            )}
+                          </TableCell>
+                          {/* Editable final CPO quote price */}
+                          <TableCell className="text-right">
+                            <div className="relative w-28 ml-auto">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder={String(price.engine_cpo_price)}
+                                value={price.manual_price}
+                                onChange={e => updateManualPrice(i, e.target.value)}
+                                className="text-right font-mono font-semibold h-8 pr-1"
+                              />
+                            </div>
+                            {isManual && (
+                              <div className="text-[10px] text-blue-600 text-right mt-0.5">manual · engine: {formatCurrency(price.engine_cpo_price)}</div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-medium">{formatCurrency(finalUnit * item.quantity)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                    <TableRow className="border-t-2">
+                      <TableCell colSpan={6} className="text-right font-semibold">Grand Total (CPO)</TableCell>
+                      <TableCell className="text-right font-mono font-bold text-lg">
+                        {formatCurrency(items.reduce((sum, item, i) => sum + getFinalPrice(i) * item.quantity, 0))}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Competitor sell prices are for internal reference only — not visible to the customer. Edit the <span className="font-medium">Our CPO Quote</span> column to override the engine price per item.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Notes */}
         <Card>
