@@ -140,6 +140,68 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ data: imeiRecord, message: 'Device added to triage queue' }, { status: 201 })
     }
 
+    // Handle bulk import from CSV upload
+    if (body.action === 'bulk_import') {
+      type ImportRow = {
+        imei?: string
+        device_id?: string | null
+        claimed_condition?: string
+        storage?: string
+        color?: string
+        battery_health?: number
+        sim_lock?: string
+        locked_carrier?: string
+        device_cost?: number
+        repair_cost?: number
+        notes?: string
+        order_id?: string
+      }
+      const importRows: ImportRow[] = Array.isArray(body.rows) ? body.rows : []
+      const validConditions = ['new', 'excellent', 'good', 'fair', 'poor']
+      let imported = 0
+      let skipped = 0
+      const errors: string[] = []
+
+      for (const row of importRows) {
+        if (!row.imei || !row.device_id) { skipped++; continue }
+        const imei = String(row.imei).trim()
+        if (!imei) { skipped++; continue }
+
+        // Skip already-registered IMEIs
+        const { data: existing } = await supabase
+          .from('imei_records')
+          .select('id')
+          .eq('imei', imei)
+          .maybeSingle()
+        if (existing) { skipped++; continue }
+
+        const condition = validConditions.includes(row.claimed_condition ?? '') ? row.claimed_condition : 'good'
+        const { error: insertError } = await supabase.from('imei_records').insert({
+          imei,
+          device_id: row.device_id,
+          claimed_condition: condition,
+          triage_status: 'pending',
+          order_id: row.order_id || null,
+          metadata: {
+            storage: row.storage,
+            color: row.color,
+            battery_health: row.battery_health,
+            sim_lock: row.sim_lock,
+            locked_carrier: row.locked_carrier,
+            device_cost: row.device_cost,
+            repair_cost: row.repair_cost,
+            notes: row.notes,
+            bulk_imported: true,
+            imported_by_id: user.id,
+          },
+        })
+        if (insertError) { errors.push(imei); continue }
+        imported++
+      }
+
+      return NextResponse.json({ imported, skipped, errors }, { status: 201 })
+    }
+
     // Handle regular triage submission
     const validation = triageSubmitSchema.safeParse(body)
     if (!validation.success) {

@@ -15,34 +15,52 @@ export const dynamic = 'force-dynamic'
 
 // ── Column aliases ─────────────────────────────────────────────────────────
 const COLUMN_MAP: Record<string, string> = {
+  // Row number (ignored, we use file line index)
+  'no': 'row_num', 'no.': 'row_num', '#': 'row_num',
   // Order / Quote reference
   'order': 'order_ref', 'order_number': 'order_ref', 'order number': 'order_ref',
   'order#': 'order_ref', 'order #': 'order_ref', 'quote': 'order_ref',
   'quote_number': 'order_ref', 'quote number': 'order_ref', 'quote#': 'order_ref',
   'reference': 'order_ref', 'ref': 'order_ref', 'ref#': 'order_ref',
-  // IMEI
+  // IMEI / Serial
   'imei': 'imei', 'imei/serial': 'imei', 'imei / serial': 'imei',
+  'imei/meid': 'imei', 'imei / meid': 'imei', 'imei meid': 'imei',
   'serial': 'serial', 'serial_number': 'serial', 'serial number': 'serial', 's/n': 'serial',
   // Make / Model
   'make': 'brand', 'brand': 'brand', 'manufacturer': 'brand', 'oem': 'brand',
   'model': 'model', 'device': 'model', 'device_model': 'model', 'device model': 'model',
-  'product': 'product', 'device name': 'model',
-  // Condition
-  'condition': 'condition', 'grade': 'condition', 'condtion': 'condition', 'condiiton': 'condition',
-  // Storage
+  'model name': 'model', 'modelname': 'model', 'product': 'product', 'device name': 'model',
+  // Storage / Capacity
   'storage': 'storage', 'storage/gb': 'storage', 'capacity': 'storage', 'gb': 'storage',
+  // Color
+  'color': 'color', 'colour': 'color',
+  // Battery
+  'battery info': 'battery_health', 'battery health': 'battery_health',
+  'battery %': 'battery_health', 'battery%': 'battery_health', 'battery': 'battery_health',
+  'battery_info': 'battery_health', 'battery_health': 'battery_health',
+  // SIM lock / Carrier
+  'sim lock': 'sim_lock', 'simlock': 'sim_lock', 'sim': 'sim_lock', 'sim_lock': 'sim_lock',
+  'locked carrier': 'locked_carrier', 'locked_carrier': 'locked_carrier', 'carrier lock': 'locked_carrier',
+  // Condition / Grade
+  'condition': 'condition', 'grade': 'condition', 'condtion': 'condition', 'condiiton': 'condition',
+  // Costs
+  'device cost': 'device_cost', 'devicecost': 'device_cost', 'device_cost': 'device_cost',
+  'cost': 'device_cost',
+  'repair cost': 'repair_cost', 'repaircost': 'repair_cost', 'repair_cost': 'repair_cost',
   // Quantity
   'quantity': 'quantity', 'qty': 'quantity', 'count': 'quantity',
-  // Notes / Faults
+  // Notes / Faults / Comments
   'notes': 'notes', 'faults': 'notes', 'faults/notes': 'notes', 'comments': 'notes',
 }
 
 const CONDITION_MAP: Record<string, string> = {
   new: 'new', sealed: 'new', unopened: 'new',
-  excellent: 'excellent', 'like new': 'excellent', likenew: 'excellent', a: 'excellent', 'grade a': 'excellent',
-  good: 'good', b: 'good', 'grade b': 'good',
-  fair: 'fair', average: 'fair', c: 'fair', 'grade c': 'fair',
-  poor: 'poor', broken: 'poor', damaged: 'poor', cracked: 'poor', d: 'poor', 'grade d': 'poor',
+  excellent: 'excellent', 'like new': 'excellent', likenew: 'excellent',
+  a: 'excellent', 'a+': 'excellent', 'a-': 'excellent', 'grade a': 'excellent',
+  good: 'good', b: 'good', 'b-': 'good', 'b+': 'good', 'grade b': 'good',
+  fair: 'fair', average: 'fair', c: 'fair', 'c+': 'fair', 'c-': 'fair', 'grade c': 'fair',
+  poor: 'poor', broken: 'poor', damaged: 'poor', cracked: 'poor',
+  d: 'poor', 'grade d': 'poor',
 }
 
 function normalizeCondition(raw: string): string | null {
@@ -128,6 +146,12 @@ export async function POST(request: NextRequest) {
       model?: string
       condition?: string
       storage?: string
+      color?: string
+      battery_health?: number
+      sim_lock?: string
+      locked_carrier?: string
+      device_cost?: number
+      repair_cost?: number
       quantity?: number
       notes?: string
       raw: Record<string, string>
@@ -157,6 +181,17 @@ export async function POST(request: NextRequest) {
       const condNorm = normalizeCondition(condRaw) ?? condRaw.toLowerCase()
       const qtyRaw = get('quantity')
 
+      // Battery health: strip % sign and parse
+      const battRaw = get('battery_health').replace('%', '').trim()
+      const battNum = battRaw ? parseFloat(battRaw) : undefined
+      const battHealth = battNum != null && !Number.isNaN(battNum) ? battNum : undefined
+
+      // Costs
+      const deviceCostRaw = get('device_cost').replace(/[$,]/g, '').trim()
+      const repairCostRaw = get('repair_cost').replace(/[$,]/g, '').trim()
+      const deviceCost = deviceCostRaw ? (parseFloat(deviceCostRaw) || undefined) : undefined
+      const repairCost = repairCostRaw ? (parseFloat(repairCostRaw) || undefined) : undefined
+
       rows.push({
         row: i + 1,
         order_ref: get('order_ref') || undefined,
@@ -166,6 +201,12 @@ export async function POST(request: NextRequest) {
         model: model || undefined,
         condition: condNorm || undefined,
         storage: get('storage') || undefined,
+        color: get('color') || undefined,
+        battery_health: battHealth,
+        sim_lock: get('sim_lock') || undefined,
+        locked_carrier: get('locked_carrier') || undefined,
+        device_cost: deviceCost,
+        repair_cost: repairCost,
         quantity: qtyRaw ? (parseInt(qtyRaw, 10) || 1) : undefined,
         notes: get('notes') || undefined,
         raw: Object.fromEntries(headers.map((h, idx) => [h, cells[idx] ?? ''])),
@@ -241,19 +282,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Resolve device_catalog IDs by make/model ──────────────────────────
+    const deviceLookupMap = new Map<string, string>() // "make|model" → device_id
+    const makes = [...new Set(rows.map(r => r.brand).filter(Boolean) as string[])]
+    if (makes.length > 0) {
+      const { data: catalogDevices } = await supabase
+        .from('device_catalog')
+        .select('id, make, model')
+        .in('make', makes)
+      if (catalogDevices) {
+        for (const d of catalogDevices) {
+          const key = `${d.make.toLowerCase()}|${d.model.toLowerCase()}`
+          if (!deviceLookupMap.has(key)) deviceLookupMap.set(key, d.id)
+        }
+      }
+    }
+
     // ── Match rows against order items ─────────────────────────────────────
     type RowResult = ParsedRow & {
       match_status: 'matched' | 'condition_mismatch' | 'not_in_order' | 'no_order'
       matched_item?: OrderItem
       quoted_price?: number | null
+      device_id?: string | null
     }
 
     const results: RowResult[] = rows.map(row => {
-      if (!order) return { ...row, match_status: 'no_order' as const }
+      const deviceKey = `${(row.brand ?? '').toLowerCase()}|${(row.model ?? '').toLowerCase()}`
+      const device_id = deviceLookupMap.get(deviceKey) ?? null
+      if (!order) return { ...row, device_id, match_status: 'no_order' as const }
 
-      // Try to match by IMEI first, then by make+model
+      // Try to match by make+model (IMEIs are per-unit, order items are aggregates)
       let matched = order.items.find(i => {
-        if (row.imei && row.imei.length > 5) return false // IMEIs don't match order items directly (items are aggregates)
         const d = i.device
         if (!d) return false
         const makeLower = (row.brand ?? '').toLowerCase()
@@ -270,7 +329,7 @@ export async function POST(request: NextRequest) {
       if (!matched && order.items.length === 1) matched = order.items[0]
 
       if (!matched) {
-        return { ...row, match_status: 'not_in_order' as const }
+        return { ...row, device_id, match_status: 'not_in_order' as const }
       }
 
       const conditionMismatch = row.condition && matched.claimed_condition &&
@@ -278,6 +337,7 @@ export async function POST(request: NextRequest) {
 
       return {
         ...row,
+        device_id: device_id ?? matched.device_id,
         match_status: conditionMismatch ? 'condition_mismatch' as const : 'matched' as const,
         matched_item: matched,
         quoted_price: matched.quoted_price,
