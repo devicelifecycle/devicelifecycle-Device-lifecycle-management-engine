@@ -96,6 +96,8 @@ const SETTINGS_DEFAULTS: Record<string, string> = {
   competitive_relevance_min: '0.70',
   competitor_ceiling_percent: '0',
   beat_competitor_percent: '0',
+  beat_competitor_amount: '12',
+  cpo_beat_amount: '10',
   price_staleness_days: '7',
   channel_green_min: '0.30',
   channel_yellow_min: '0.20',
@@ -987,6 +989,8 @@ export default function AdminPricingPage() {
     { key: 'competitive_relevance_min', label: 'Minimum Competitiveness', desc: 'How close we stay to competitor offers (0.85 = 85%).' },
     { key: 'competitor_ceiling_percent', label: 'Max Above Competitor (%)', desc: 'Maximum percent we allow above top competitor offer.' },
     { key: 'beat_competitor_percent', label: 'Beat Competitors (%)', desc: 'Offer X% above highest competitor to win deals (0 = off, 2–5 = aggressive).' },
+    { key: 'beat_competitor_amount', label: 'Trade-In Beat Amount ($)', desc: 'How many $ above the highest competitor trade-in price we offer. Default $12.' },
+    { key: 'cpo_beat_amount', label: 'CPO Beat Amount ($)', desc: 'How many $ above the highest competitor CPO sell price we list at. Default $10.' },
     { key: 'price_staleness_days', label: 'Price Refresh Reminder (days)', desc: 'Warn admins when competitor data is old.' },
   ] as const
 
