@@ -53,7 +53,8 @@ interface LineItem {
 }
 
 interface ItemPrice {
-  unit_price: number
+  unit_price: number        // editable / final price used for submission
+  engine_price: number      // raw price from engine (before margin override)
   cpo_unit_price: number
   loading: boolean
   error: string | null
@@ -105,6 +106,8 @@ export default function NewTradeInPage() {
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
+  // marginOverride: empty string = use engine default, number = override margin %
+  const [marginOverride, setMarginOverride] = useState<string>('')
 
   useEffect(() => {
     fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
@@ -119,7 +122,7 @@ export default function NewTradeInPage() {
   const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, condition: DeviceCondition) => {
     if (!deviceId || !storage || !isInternal) return
 
-    setItemPrices(prev => ({ ...prev, [index]: { unit_price: 0, cpo_unit_price: 0, loading: true, error: null, source: '', competitor_count: 0 } }))
+    setItemPrices(prev => ({ ...prev, [index]: { unit_price: 0, engine_price: 0, cpo_unit_price: 0, loading: true, error: null, source: '', competitor_count: 0 } }))
 
     try {
       const res = await fetch('/api/pricing/calculate', {
@@ -141,6 +144,7 @@ export default function NewTradeInPage() {
             ...prev,
             [index]: {
               unit_price: data.trade_price,
+              engine_price: data.trade_price,
               cpo_unit_price: data.cpo_price || 0,
               loading: false,
               error: null,
@@ -154,12 +158,12 @@ export default function NewTradeInPage() {
 
       setItemPrices(prev => ({
         ...prev,
-        [index]: { unit_price: 0, cpo_unit_price: 0, loading: false, error: 'No price data', source: '', competitor_count: 0 },
+        [index]: { unit_price: 0, engine_price: 0, cpo_unit_price: 0, loading: false, error: 'No price data', source: '', competitor_count: 0 },
       }))
     } catch {
       setItemPrices(prev => ({
         ...prev,
-        [index]: { unit_price: 0, cpo_unit_price: 0, loading: false, error: 'Lookup failed', source: '', competitor_count: 0 },
+        [index]: { unit_price: 0, engine_price: 0, cpo_unit_price: 0, loading: false, error: 'Lookup failed', source: '', competitor_count: 0 },
       }))
     }
   }, [isInternal])
@@ -326,7 +330,7 @@ export default function NewTradeInPage() {
         storage: i.storage || '128GB',
         condition: i.condition,
         notes: i.notes,
-        ...(itemPrices[idx]?.unit_price > 0 ? { quoted_price: itemPrices[idx].unit_price } : {}),
+        ...(itemPrices[idx]?.engine_price > 0 ? { quoted_price: applyMargin(itemPrices[idx].engine_price) } : {}),
       }))
     }
 
@@ -344,9 +348,21 @@ export default function NewTradeInPage() {
     }
   }
 
+  // Apply margin override: adjustedPrice = enginePrice × (1 - margin%)
+  const marginPct = marginOverride !== '' ? parseFloat(marginOverride) : null
+  const applyMargin = (enginePrice: number) => {
+    if (marginPct === null || Number.isNaN(marginPct) || enginePrice <= 0) return enginePrice
+    const factor = 1 - marginPct / 100
+    if (factor <= 0) return 0
+    return Math.round(enginePrice * factor * 100) / 100
+  }
+
   // Calculate quote totals
   const quoteTotalItems = items.filter((_, i) => itemPrices[i]?.unit_price > 0)
-  const grandTotal = items.reduce((sum, item, i) => sum + ((itemPrices[i]?.unit_price || 0) * item.quantity), 0)
+  const grandTotal = items.reduce((sum, item, i) => {
+    const ep = itemPrices[i]?.engine_price || 0
+    return sum + (applyMargin(ep) * item.quantity)
+  }, 0)
 
   // ── Customer role: premium wizard ────────────────────────────────────────
   if (isCustomer) {
@@ -579,9 +595,44 @@ export default function NewTradeInPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Quote Summary</CardTitle>
-              <CardDescription>Review pricing before submitting. Unit prices are editable above.</CardDescription>
+              <CardDescription>Review pricing before submitting.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Margin override control */}
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Margin Adjustment</p>
+                  <p className="text-xs text-muted-foreground">
+                    Override the engine margin for this quote. Engine default is already baked into prices below.
+                    {marginOverride !== '' && !Number.isNaN(parseFloat(marginOverride)) && (
+                      <span className="ml-1 font-medium text-foreground">
+                        Applying {parseFloat(marginOverride)}% margin — prices adjusted from engine values.
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="relative w-28">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="60"
+                      step="0.5"
+                      placeholder="e.g. 20"
+                      value={marginOverride}
+                      onChange={e => setMarginOverride(e.target.value)}
+                      className="pr-7 text-right"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                  </div>
+                  {marginOverride !== '' && (
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setMarginOverride('')}>
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -589,6 +640,8 @@ export default function NewTradeInPage() {
                     <TableHead>Condition</TableHead>
                     <TableHead>Storage</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Engine Price</TableHead>
+                    <TableHead className="text-right">Margin</TableHead>
                     <TableHead className="text-right">Trade-In Unit</TableHead>
                     <TableHead className="text-right">CPO Unit</TableHead>
                     <TableHead className="text-right">Trade-In Total</TableHead>
@@ -597,7 +650,11 @@ export default function NewTradeInPage() {
                 <TableBody>
                   {items.map((item, i) => {
                     const price = itemPrices[i]
-                    if (!price || price.unit_price <= 0) return null
+                    if (!price || price.engine_price <= 0) return null
+                    const adjustedUnit = applyMargin(price.engine_price)
+                    const effectiveMarginPct = marginPct !== null && !Number.isNaN(marginPct)
+                      ? marginPct
+                      : (price.engine_price > 0 ? Math.round((1 - adjustedUnit / price.engine_price) * 1000) / 10 : null)
                     return (
                       <TableRow key={i}>
                         <TableCell className="font-medium">{item.device_label || '—'}</TableCell>
@@ -606,20 +663,26 @@ export default function NewTradeInPage() {
                         </TableCell>
                         <TableCell>{item.storage}</TableCell>
                         <TableCell className="text-right">{item.quantity}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(price.unit_price)}</TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">{formatCurrency(price.engine_price)}</TableCell>
+                        <TableCell className="text-right">
+                          {effectiveMarginPct !== null && effectiveMarginPct > 0
+                            ? <Badge variant="outline" className="font-mono text-xs">{effectiveMarginPct}%</Badge>
+                            : <span className="text-xs text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-semibold">{formatCurrency(adjustedUnit)}</TableCell>
                         <TableCell className="text-right font-mono">{price.cpo_unit_price > 0 ? formatCurrency(price.cpo_unit_price) : '—'}</TableCell>
-                        <TableCell className="text-right font-mono font-medium">{formatCurrency(price.unit_price * item.quantity)}</TableCell>
+                        <TableCell className="text-right font-mono font-medium">{formatCurrency(adjustedUnit * item.quantity)}</TableCell>
                       </TableRow>
                     )
                   })}
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-right font-semibold">Grand Total (Trade-In)</TableCell>
+                  <TableRow className="border-t-2">
+                    <TableCell colSpan={8} className="text-right font-semibold">Grand Total (Trade-In)</TableCell>
                     <TableCell className="text-right font-mono font-bold text-lg">{formatCurrency(grandTotal)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
-              <p className="text-xs text-muted-foreground mt-3">
-                Prices based on current competitor data. You can edit unit prices above before submitting.
+              <p className="text-xs text-muted-foreground">
+                Prices based on current competitor data. Use the margin field above to adjust all prices at once.
               </p>
             </CardContent>
           </Card>
