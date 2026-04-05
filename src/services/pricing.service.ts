@@ -71,6 +71,12 @@ const FUNCTIONAL_DEDUCTIONS: Record<string, { type: 'percentage' | 'fixed'; valu
 const round2 = (n: number) => Math.round(Math.max(n, 0) * 100) / 100
 const safeNum = (n: number) => Number.isFinite(n) ? n : 0
 
+// Wholesale C-stock is a SELL price (what resellers pay to buy devices).
+// Consumer trade-in is ~55% of wholesale — reflecting the wholesale→retail markup
+// and the fact that individual trade-ins carry more risk than bulk stock purchases.
+// Applied ONLY when wholesale is the anchor and no competitor data exists at all.
+const WHOLESALE_TO_TRADE_FACTOR = 0.55
+
 /** Critical issues that make device "broken" — use 50% of good rule (Brian's algorithm) */
 const CRITICAL_BROKEN_ISSUES = ['SCREEN_DEAD', 'ICLOUD_LOCKED', 'WATER_DAMAGE', 'BATTERY_DEAD']
 
@@ -552,10 +558,10 @@ export class PricingService {
         }
       }
 
-      if (!anchorPrice) {
-        anchorPrice = marketEntry?.wholesale_c_stock || 0
-        if (anchorPrice) anchorIsBaseNormalized = true // wholesale is a "new" base price
-      }
+      // NOTE: wholesale_c_stock is intentionally NOT used as a trade-in anchor.
+      // Wholesale is a sell price (~2x trade-in market rates) and using it causes
+      // over-payment to customers. If no competitor data exists, the engine returns
+      // an error — run the scraper to populate competitor_prices first.
       if (!anchorPrice) {
         const pricingEntry = await this.runPricingRead<{ base_price?: number }>(
           'pricing_tables exact lookup',
@@ -573,8 +579,8 @@ export class PricingService {
             .maybeSingle(),
           { allowNoRows: true, retries: 2 }
         )
-        anchorPrice = pricingEntry?.base_price || 0
-        if (anchorPrice) anchorIsBaseNormalized = true // pricing table condition='new'
+        // pricing_tables base_price is a retail sell price — not used as trade-in anchor
+        void pricingEntry
       }
       if (!anchorPrice) {
         const compFallback = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
@@ -625,13 +631,7 @@ export class PricingService {
             .limit(10),
           { allowNoRows: true, retries: 2 }
         )
-        const stocks = (marketAnyStorage || [])
-          .map((m: { wholesale_c_stock?: number }) => m.wholesale_c_stock || 0)
-          .filter((p: number) => p > 0)
-        if (stocks.length > 0) {
-          anchorPrice = stocks.reduce((s: number, p: number) => s + p, 0) / stocks.length
-          anchorIsBaseNormalized = true // wholesale is a base price
-        }
+        // wholesale_c_stock is a sell price — not used as trade-in anchor (causes over-payment)
       }
 
       // Fallback: trained_pricing_baselines — our own historical data
@@ -759,7 +759,7 @@ export class PricingService {
       }
 
       if (!anchorPrice) {
-        return this.v2ErrorResult('Device not found in market prices, pricing table, competitor data, or trained baselines. Add pricing data or run the scraper.')
+        return this.v2ErrorResult('No competitor trade-in data found for this device. Run the price scraper (Admin → Pricing → Run Scraper) to fetch current market rates before quoting.')
       }
 
       // Step 3: Apply condition multiplier (only when anchor is a base/"new" equivalent)
