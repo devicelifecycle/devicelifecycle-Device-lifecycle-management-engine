@@ -232,6 +232,7 @@ export interface PriceCalculationResultV2 {
   marketplace_price?: number;
   marketplace_net?: number;
   competitors: Array<{ name: string; price: number; gap_percent: number }>;
+  cpo_competitors?: Array<{ name: string; sell_price: number }>;
   highest_competitor?: number;
   channel_decision: ChannelDecision;
   repair_buffer?: number;

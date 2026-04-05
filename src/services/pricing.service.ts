@@ -801,6 +801,7 @@ export class PricingService {
 
       const rawCompetitors: Array<{ name: string; price: number }> = []
       const rawCompetitorSellPrices: number[] = []
+      const rawCpoCompetitors: Array<{ name: string; sell_price: number }> = []
       let competitorDataAgeDays: number | undefined
 
       if (competitorData && competitorData.length > 0) {
@@ -819,6 +820,7 @@ export class PricingService {
           // Only use sell prices for our condition — when fallback fetches all conditions, avoid mixing
           if (sellPrice > 0 && (!cpCondition || cpCondition === competitorCondition)) {
             rawCompetitorSellPrices.push(sellPrice)
+            rawCpoCompetitors.push({ name: cp.competitor_name || 'Unknown', sell_price: sellPrice })
           }
         }
         if (maxAgeMs > 0) {
@@ -1161,6 +1163,7 @@ export class PricingService {
         marketplace_price: mpPrice || undefined,
         marketplace_net: mpNet > 0 ? round2(mpNet) : undefined,
         competitors,
+        cpo_competitors: rawCpoCompetitors.length > 0 ? rawCpoCompetitors : undefined,
         highest_competitor: highestCompetitor > 0 ? highestCompetitor : undefined,
         channel_decision: channelDecision,
         repair_buffer: repairBuffer > 0 ? round2(repairBuffer) : undefined,
