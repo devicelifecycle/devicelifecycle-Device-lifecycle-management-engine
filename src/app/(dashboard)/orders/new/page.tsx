@@ -122,14 +122,23 @@ interface LineItem {
   color: string // Device color
 }
 
+interface CompetitorPrice {
+  name: string
+  price: number
+}
+
 interface ItemPrice {
-  unit_price: number
-  cpo_unit_price: number
+  engine_price: number       // raw trade-in price from engine
+  engine_cpo_price: number   // raw CPO price from engine
+  manual_price: string       // user override (empty = use engine)
   loading: boolean
   error: string | null
   source: string
-  competitor_count: number
+  competitors: CompetitorPrice[]
 }
+
+// CPO orders are always 'good' condition
+const CPO_CONDITION: DeviceCondition = 'good'
 
 function getStorageOptionsForDevice(device?: Device): string[] {
   if (!device) return STORAGE_OPTIONS
@@ -186,19 +195,13 @@ export default function NewOrderPage() {
   const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, condition: DeviceCondition) => {
     if (!deviceId || !storage || !isInternal) return
 
-    setItemPrices(prev => ({ ...prev, [index]: { unit_price: 0, cpo_unit_price: 0, loading: true, error: null, source: '', competitor_count: 0 } }))
+    setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: true, error: null, source: '', competitors: [] } }))
 
     try {
       const res = await fetch('/api/pricing/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          version: 'v2',
-          device_id: deviceId,
-          storage,
-          carrier: 'Unlocked',
-          condition,
-        }),
+        body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition }),
       })
 
       if (res.ok) {
@@ -207,12 +210,13 @@ export default function NewOrderPage() {
           setItemPrices(prev => ({
             ...prev,
             [index]: {
-              unit_price: data.trade_price || 0,
-              cpo_unit_price: data.cpo_price || 0,
+              engine_price: data.trade_price || 0,
+              engine_cpo_price: data.cpo_price || 0,
+              manual_price: '',
               loading: false,
               error: null,
               source: data.price_source || 'Pricing Engine V2',
-              competitor_count: data.competitors?.length || 0,
+              competitors: (data.competitors || []) as CompetitorPrice[],
             },
           }))
           return
@@ -221,12 +225,12 @@ export default function NewOrderPage() {
 
       setItemPrices(prev => ({
         ...prev,
-        [index]: { unit_price: 0, cpo_unit_price: 0, loading: false, error: 'No price data', source: '', competitor_count: 0 },
+        [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: 'No price data', source: '', competitors: [] },
       }))
     } catch {
       setItemPrices(prev => ({
         ...prev,
-        [index]: { unit_price: 0, cpo_unit_price: 0, loading: false, error: 'Lookup failed', source: '', competitor_count: 0 },
+        [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: 'Lookup failed', source: '', competitors: [] },
       }))
     }
   }, [isInternal])
@@ -238,12 +242,12 @@ export default function NewOrderPage() {
       return
     }
 
-    setItems([...items, { 
-      device_id: '', 
-      device_label: '', 
-      quantity: 1, 
-      condition: 'good', 
-      storage: '', 
+    setItems([...items, {
+      device_id: '',
+      device_label: '',
+      quantity: 1,
+      condition: orderType === 'cpo' ? CPO_CONDITION : 'good',
+      storage: '',
       notes: '',
       order_type: orderType,
       serial_number: '',
@@ -282,9 +286,9 @@ export default function NewOrderPage() {
       if (field === 'order_type' && value === 'cpo' && !canCreateCpoOrder) {
         return { ...item, order_type: 'trade_in' as const }
       }
-      // When switching to CPO, condition doesn't matter (all "Certified")
+      // When switching to CPO, lock condition to CPO_CONDITION
       if (field === 'order_type' && value === 'cpo') {
-        return { ...item, order_type: 'cpo' as const, condition: 'good' as DeviceCondition }
+        return { ...item, order_type: 'cpo' as const, condition: CPO_CONDITION }
       }
       return { ...item, [field]: value }
     })
@@ -302,14 +306,21 @@ export default function NewOrderPage() {
     }
   }
 
-  const updateUnitPrice = (index: number, price: number) => {
+  const updateManualPrice = (index: number, val: string) => {
     setItemPrices(prev => ({
       ...prev,
       [index]: {
-        ...(prev[index] || { unit_price: 0, cpo_unit_price: 0, loading: false, error: null, source: 'manual', competitor_count: 0 }),
-        unit_price: price,
+        ...(prev[index] || { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: 'manual', competitors: [] }),
+        manual_price: val,
       },
     }))
+  }
+
+  const getFinalPrice = (i: number) => {
+    const p = itemPrices[i]
+    if (!p) return 0
+    if (p.manual_price !== '' && !Number.isNaN(parseFloat(p.manual_price))) return parseFloat(p.manual_price)
+    return items[i]?.order_type === 'cpo' ? p.engine_cpo_price : p.engine_price
   }
 
   // CSV template downloads - separate for Trade-In and CPO (demo data for Apple & Samsung)
@@ -585,7 +596,7 @@ export default function NewOrderPage() {
         order_type: i.order_type,
         serial_number: i.serial_number || '',
         color: i.color || '',
-        ...(itemPrices[idx]?.unit_price > 0 ? { quoted_price: itemPrices[idx].unit_price } : {}),
+        ...(itemPrices[idx]?.engine_price > 0 || itemPrices[idx]?.engine_cpo_price > 0 ? { quoted_price: getFinalPrice(idx) } : {}),
       }))
     }
 
@@ -636,16 +647,10 @@ export default function NewOrderPage() {
   }
 
   // Calculate quote totals by type
-  const tradeInItems = items.filter(i => i.order_type === 'trade_in')
-  const cpoItemsList = items.filter(i => i.order_type === 'cpo')
-  const tradeInTotal = tradeInItems.reduce((sum, item, i) => {
-    const idx = items.indexOf(item)
-    return sum + ((itemPrices[idx]?.unit_price || 0) * item.quantity)
-  }, 0)
-  const cpoTotal = cpoItemsList.reduce((sum, item) => {
-    const idx = items.indexOf(item)
-    return sum + ((itemPrices[idx]?.cpo_unit_price || 0) * item.quantity)
-  }, 0)
+  const tradeInTotal = items.reduce((sum, item, idx) =>
+    item.order_type === 'trade_in' ? sum + getFinalPrice(idx) * item.quantity : sum, 0)
+  const cpoTotal = items.reduce((sum, item, idx) =>
+    item.order_type === 'cpo' ? sum + getFinalPrice(idx) * item.quantity : sum, 0)
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -803,15 +808,16 @@ export default function NewOrderPage() {
                                     <div className="flex items-center h-10 px-3">
                                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                                     </div>
-                                  ) : price?.unit_price > 0 || price?.cpo_unit_price > 0 ? (
+                                  ) : price?.engine_price > 0 || price?.engine_cpo_price > 0 ? (
                                     <div className="space-y-0.5">
                                       <Input
                                         type="number"
                                         step="0.01"
                                         min="0"
                                         className="text-right font-mono"
-                                        value={item.order_type === 'cpo' ? (price.cpo_unit_price || 0) : price.unit_price}
-                                        onChange={e => updateUnitPrice(index, parseFloat(e.target.value) || 0)}
+                                        placeholder={String(item.order_type === 'cpo' ? price.engine_cpo_price : price.engine_price)}
+                                        value={price.manual_price}
+                                        onChange={e => updateManualPrice(index, e.target.value)}
                                       />
                                       <span className="text-[10px] text-muted-foreground">{price.source}</span>
                                     </div>
@@ -1035,51 +1041,90 @@ export default function NewOrderPage() {
                   <TableRow>
                     <TableHead>Type</TableHead>
                     <TableHead>Device</TableHead>
-                    <TableHead>Condition</TableHead>
+                    <TableHead>Cond.</TableHead>
                     <TableHead>Storage</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Unit Price</TableHead>
+                    <TableHead className="text-right text-muted-foreground">Engine Price</TableHead>
+                    <TableHead className="text-right text-amber-700 bg-amber-50/60">Competitor Prices</TableHead>
+                    <TableHead className="text-right">Our Quote</TableHead>
                     <TableHead className="text-right whitespace-nowrap">Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((item, i) => {
                     const price = itemPrices[i]
-                    const unitPrice = item.order_type === 'cpo' ? (price?.cpo_unit_price || 0) : (price?.unit_price || 0)
-                    if (unitPrice <= 0) return null
+                    const enginePrice = item.order_type === 'cpo' ? (price?.engine_cpo_price || 0) : (price?.engine_price || 0)
+                    if (enginePrice <= 0 && !price?.manual_price) return null
+                    const finalPrice = getFinalPrice(i)
+                    const isManual = price?.manual_price !== '' && !Number.isNaN(parseFloat(price?.manual_price || ''))
                     return (
                       <TableRow key={i}>
                         <TableCell>
-                          <Badge variant={item.order_type === 'cpo' ? 'default' : 'secondary'}>
+                          <Badge variant={item.order_type === 'cpo' ? 'default' : 'secondary'} className="whitespace-nowrap">
                             {item.order_type === 'cpo' ? 'CPO' : 'Trade-In'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-medium">{item.device_label || '—'}</TableCell>
+                        <TableCell className="font-medium whitespace-nowrap">{item.device_label || '—'}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="capitalize">{item.condition}</Badge>
+                          <Badge variant="outline" className="capitalize text-xs">{item.order_type === 'cpo' ? 'Good' : item.condition}</Badge>
                         </TableCell>
-                        <TableCell>{item.storage}</TableCell>
-                        <TableCell className="text-right">{item.quantity}</TableCell>
-                        <TableCell className="text-right font-mono whitespace-nowrap">{formatCurrency(unitPrice)}</TableCell>
-                        <TableCell className="text-right font-mono font-medium whitespace-nowrap">{formatCurrency(unitPrice * item.quantity)}</TableCell>
+                        <TableCell className="text-xs">{item.storage}</TableCell>
+                        <TableCell className="text-right text-xs">{item.quantity}</TableCell>
+                        <TableCell className="text-right font-mono text-xs text-muted-foreground">{enginePrice > 0 ? formatCurrency(enginePrice) : '—'}</TableCell>
+                        {/* Competitor prices — internal only */}
+                        <TableCell className="bg-amber-50/40 min-w-[150px]">
+                          {price?.competitors && price.competitors.length > 0 ? (
+                            <div className="space-y-0.5">
+                              {price.competitors.map(c => (
+                                <div key={c.name} className="flex items-center justify-between gap-2 text-[11px]">
+                                  <span className="text-muted-foreground truncate max-w-[80px]">{c.name}</span>
+                                  <span className="font-mono font-medium text-amber-800">{formatCurrency(c.price)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No data</span>
+                          )}
+                        </TableCell>
+                        {/* Editable final price */}
+                        <TableCell className="text-right">
+                          <div className="relative w-24 ml-auto">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder={String(enginePrice)}
+                              value={price?.manual_price || ''}
+                              onChange={e => updateManualPrice(i, e.target.value)}
+                              className="text-right font-mono font-semibold h-8 pr-1"
+                            />
+                          </div>
+                          {isManual && (
+                            <div className="text-[10px] text-blue-600 text-right mt-0.5">manual</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-medium whitespace-nowrap">{formatCurrency(finalPrice * item.quantity)}</TableCell>
                       </TableRow>
                     )
                   })}
                   {tradeInTotal > 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-right font-semibold">Trade-In Total</TableCell>
+                    <TableRow className="border-t-2">
+                      <TableCell colSpan={8} className="text-right font-semibold">Trade-In Total</TableCell>
                       <TableCell className="text-right font-mono font-bold text-green-600">{formatCurrency(tradeInTotal)}</TableCell>
                     </TableRow>
                   )}
                   {cpoTotal > 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-right font-semibold">CPO Total</TableCell>
+                    <TableRow className="border-t-2">
+                      <TableCell colSpan={8} className="text-right font-semibold">CPO Total</TableCell>
                       <TableCell className="text-right font-mono font-bold text-blue-600">{formatCurrency(cpoTotal)}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
               </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Competitor prices are for internal reference only. Edit <span className="font-medium">Our Quote</span> per item to override the engine price.
+              </p>
             </CardContent>
           </Card>
         )}
