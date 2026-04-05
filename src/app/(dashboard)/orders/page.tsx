@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRightLeft, Download, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react'
+import { ArrowRightLeft, Download, Plus, Search, ShoppingCart, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -187,6 +187,14 @@ export default function OrdersPage() {
         }
         actions={
           <>
+            {canCreateCpo && (
+              <Link href="/orders/new">
+                <Button variant="secondary">
+                  <Upload className="mr-2 h-4 w-4" />
+                  CSV / Mixed Order
+                </Button>
+              </Link>
+            )}
             {canCreateTradeIn && (
               <Link href="/orders/new/trade-in">
                 <Button>

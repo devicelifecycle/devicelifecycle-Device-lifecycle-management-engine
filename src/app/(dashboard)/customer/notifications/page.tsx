@@ -210,7 +210,10 @@ export default function CustomerNotificationsPage() {
                     key={n.id}
                     className={`flex items-start gap-3 p-4 transition-colors ${
                       !n.is_read ? 'bg-primary/[0.03]' : ''
-                    }`}
+                    } ${link ? 'cursor-pointer hover:bg-muted/50' : ''}`}
+                    onClick={() => {
+                      if (!n.is_read) markAsRead(n.id)
+                    }}
                   >
                     {/* Icon */}
                     <div
@@ -221,37 +224,63 @@ export default function CustomerNotificationsPage() {
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p
-                          className={`text-sm ${
-                            !n.is_read
-                              ? 'font-semibold'
-                              : 'font-medium text-muted-foreground'
-                          }`}
-                        >
-                          {n.title}
-                        </p>
-                        {!n.is_read && (
-                          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
-                        {n.message}
-                      </p>
-                      <p className="mt-1.5 text-xs text-muted-foreground/60">
-                        {formatRelativeTime(n.created_at)}
-                      </p>
+                      {link ? (
+                        <Link href={link} className="block" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-2">
+                            <p
+                              className={`text-sm ${
+                                !n.is_read
+                                  ? 'font-semibold'
+                                  : 'font-medium text-muted-foreground'
+                              }`}
+                            >
+                              {n.title}
+                            </p>
+                            {!n.is_read && (
+                              <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
+                            {n.message}
+                          </p>
+                          <p className="mt-1.5 text-xs text-muted-foreground/60">
+                            {formatRelativeTime(n.created_at)}
+                          </p>
+                        </Link>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <p
+                              className={`text-sm ${
+                                !n.is_read
+                                  ? 'font-semibold'
+                                  : 'font-medium text-muted-foreground'
+                              }`}
+                            >
+                              {n.title}
+                            </p>
+                            {!n.is_read && (
+                              <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
+                            {n.message}
+                          </p>
+                          <p className="mt-1.5 text-xs text-muted-foreground/60">
+                            {formatRelativeTime(n.created_at)}
+                          </p>
+                        </>
+                      )}
                     </div>
 
                     {/* Actions */}
                     <div className="flex shrink-0 items-center gap-1.5">
                       {link && (
-                        <Link href={link}>
+                        <Link href={link} onClick={(e) => { e.stopPropagation(); if (!n.is_read) markAsRead(n.id) }}>
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-7 px-2 text-xs gap-1"
-                            onClick={() => !n.is_read && markAsRead(n.id)}
                           >
                             <span className="hidden sm:inline">View</span>
                             <ArrowRight className="h-3 w-3" />
@@ -260,7 +289,7 @@ export default function CustomerNotificationsPage() {
                       )}
                       {!n.is_read && (
                         <button
-                          onClick={() => markAsRead(n.id)}
+                          onClick={(e) => { e.stopPropagation(); markAsRead(n.id) }}
                           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                           title="Mark as read"
                         >
