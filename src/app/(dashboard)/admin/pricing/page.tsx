@@ -1242,18 +1242,17 @@ export default function AdminPricingPage() {
         if (storageCmp !== 0) return storageCmp
         return a.condition.localeCompare(b.condition)
       })
-    const emptyRowKeys = rows
-      .filter(row => {
-        const priceSource = priceMode === 'trade_in' ? row.prices : row.sellPrices
-        return !COMPETITOR_LIST.some(c => (priceSource[c] ?? 0) > 0)
-      })
+    // Send ALL matrix rows to calculate-batch so "Our Quote" always comes from the backend
+    // (not a client-side approximation). Rows with competitor data get a verified API quote;
+    // rows without get a formula-derived fallback.
+    const allMatrixRowKeys = rows
       .slice(0, 80)
       .map(row => ({ key: `${row.device_id}|${row.storage}|${row.condition}`, device_id: row.device_id, storage: row.storage, condition: row.condition }))
-    return { competitorMatrixRows: rows, emptyRowKeys }
+    return { competitorMatrixRows: rows, emptyRowKeys: allMatrixRowKeys }
   })()
 
   const emptyRowKeysStr = emptyRowKeys.map(e => e.key).join('|')
-  // Fetch formula-derived prices for empty matrix cells (auto-updates when scraper adds competitor data)
+  // Fetch backend-computed prices for all matrix rows so "Our Quote" is always backend-authoritative
   useEffect(() => {
     if (emptyRowKeys.length === 0 || cpLoading) return
     const toFetch = emptyRowKeys.filter(item => !formulaPrices.has(item.key))
@@ -1568,28 +1567,22 @@ export default function AdminPricingPage() {
                             <TableCell className="text-right font-mono text-muted-foreground">
                               {avg != null ? formatCurrency(avg) : (formulaLoading ? '...' : '-')}
                             </TableCell>
-                            <TableCell className="text-right font-mono font-semibold text-primary" title={avg == null && (formulaPrices.has(`${row.device_id}|${row.storage}|${row.condition}`) || deviceAnchorPrices.has(row.device_id)) ? 'Derived from market data' : undefined}>
-                              {avg != null ? (() => {
-                                const rawMargin = parseFloat(settingsForm.trade_in_profit_percent || '0')
-                                const marginPct = rawMargin >= 1 ? rawMargin : 20
-                                const quotePrice = avg * (1 - marginPct / 100)
-                                return formatCurrency(quotePrice)
-                              })() : (() => {
-                                const fp = formulaPrices.get(`${row.device_id}|${row.storage}|${row.condition}`)
+                            <TableCell className="text-right font-mono font-semibold text-primary" title="Backend-computed price (margin applied to competitor avg)">
+                              {(() => {
+                                const key = `${row.device_id}|${row.storage}|${row.condition}`
+                                // Always prefer backend API result (calculate-batch) — single source of truth
+                                const fp = formulaPrices.get(key)
                                 if (fp) {
-                                  return fp.trade_price != null ? formatCurrency(fp.trade_price) : (formulaLoading ? '...' : '-')
+                                  return fp.trade_price != null && fp.trade_price > 0 ? formatCurrency(fp.trade_price) : '-'
                                 }
-                                const anchor = deviceAnchorPrices.get(row.device_id)
-                                if (anchor) {
-                                  const mult = CONDITION_MULT_FOR_QUOTE[row.condition] ?? 0.85
+                                if (formulaLoading) return <span className="text-muted-foreground text-xs">...</span>
+                                // Fallback while batch loads: client-side approximation using competitor avg
+                                if (avg != null) {
                                   const rawMargin = parseFloat(settingsForm.trade_in_profit_percent || '0')
                                   const marginPct = rawMargin >= 1 ? rawMargin : 20
-                                  const base = anchor.avgTrade
-                                  const adjusted = base * mult
-                                  const quotePrice = adjusted * (1 - marginPct / 100)
-                                  if (base > 0 && quotePrice > 0) return formatCurrency(quotePrice)
+                                  return formatCurrency(avg * (1 - marginPct / 100))
                                 }
-                                return formulaLoading ? '...' : '-'
+                                return '-'
                               })()}
                             </TableCell>
                             <TableCell className="text-right">
@@ -1600,7 +1593,7 @@ export default function AdminPricingPage() {
                                   </div>
                                   {(() => {
                                     const daysAgo = Math.floor((Date.now() - new Date(row.latestRetrievedAt).getTime()) / (24 * 60 * 60 * 1000))
-                                    return daysAgo > 7 ? (
+                                    return daysAgo > 14 ? (
                                       <Badge variant="destructive" className="text-[10px] mt-0.5">Stale</Badge>
                                     ) : null
                                   })()}
