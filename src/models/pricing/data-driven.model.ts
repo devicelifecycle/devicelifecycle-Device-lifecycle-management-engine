@@ -55,7 +55,7 @@ export class DataDrivenPricingModel implements IPricingModel {
     await this.ensureBaselinesExist(supabase)
 
     let anchorPrice = 0
-    let source: 'trained' | 'trained_good_fallback' | 'trained_nearby' | 'market_fallback' | 'pricing_table' = 'trained'
+    let source: 'trained' | 'trained_good_fallback' | 'trained_nearby' = 'trained'
     let sampleCount = 0
     let dataSources: string[] = []
     let confidenceBonus = 0
@@ -136,11 +136,8 @@ export class DataDrivenPricingModel implements IPricingModel {
         .limit(1)
         .single()
 
-      if (mp?.wholesale_c_stock && Number(mp.wholesale_c_stock) > 0) {
-        const condMult = DEFAULT_CONDITION_MULTIPLIERS[input.condition] ?? 0.85
-        anchorPrice = Number(mp.wholesale_c_stock) * condMult
-        source = 'market_fallback'
-      }
+      // wholesale_c_stock is a sell price — using it as trade-in anchor causes over-payment
+      void mp
     }
 
     if (!anchorPrice) {
@@ -154,11 +151,8 @@ export class DataDrivenPricingModel implements IPricingModel {
         .limit(1)
         .single()
 
-      if (pt?.base_price && Number(pt.base_price) > 0) {
-        const condMult = DEFAULT_CONDITION_MULTIPLIERS[input.condition] ?? 0.85
-        anchorPrice = Number(pt.base_price) * condMult
-        source = 'pricing_table'
-      }
+      // pricing_tables base_price is a retail sell price — not used as trade-in anchor
+      void pt
     }
 
     if (!anchorPrice || anchorPrice <= 0) {
@@ -169,7 +163,7 @@ export class DataDrivenPricingModel implements IPricingModel {
         price_date: new Date().toISOString(),
         valid_for_hours: 0,
         breakdown: {},
-        error: 'No pricing data available. Run training or add market/competitor data first.',
+        error: 'No competitor trade-in data found. Run the price scraper (Admin → Pricing → Run Scraper) to fetch current market rates.',
       }
     }
 
@@ -218,12 +212,6 @@ export class DataDrivenPricingModel implements IPricingModel {
         break
       case 'trained_nearby':
         confidence = 0.65 + confidenceBonus
-        break
-      case 'market_fallback':
-        confidence = 0.55
-        break
-      case 'pricing_table':
-        confidence = 0.45
         break
       default:
         confidence = 0.5
