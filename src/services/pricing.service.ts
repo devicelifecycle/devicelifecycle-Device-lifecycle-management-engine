@@ -63,6 +63,7 @@ const FUNCTIONAL_DEDUCTIONS: Record<string, { type: 'percentage' | 'fixed'; valu
   CAMERA_BROKEN: { type: 'percentage', value: 20 },
   SPEAKER_BROKEN: { type: 'fixed', value: 25 },
   BUTTON_BROKEN: { type: 'fixed', value: 20 },
+  CONNECTIVITY_BROKEN: { type: 'fixed', value: 40 }, // WiFi/cellular antenna/chip fault
   WATER_DAMAGE: { type: 'percentage', value: 35 },
   ICLOUD_LOCKED: { type: 'percentage', value: 90 },
   CARRIER_LOCKED: { type: 'fixed', value: 50 },
@@ -478,7 +479,7 @@ export class PricingService {
         { allowNoRows: true, retries: 2 }
       )
 
-      const staleDays = 14
+      const staleDays = settings.price_staleness_days
       const staleCutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000)
       const extractFreshPrices = (rows: Array<{ trade_in_price?: number; updated_at?: string; scraped_at?: string }> | null): number[] =>
         (rows || [])

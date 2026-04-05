@@ -25,6 +25,7 @@ const DEFAULT_DEDUCTIONS: Record<string, { type: 'percentage' | 'fixed'; value: 
   CAMERA_BROKEN: { type: 'percentage', value: 20 },
   SPEAKER_BROKEN: { type: 'fixed', value: 25 },
   BUTTON_BROKEN: { type: 'fixed', value: 20 },
+  CONNECTIVITY_BROKEN: { type: 'fixed', value: 40 }, // WiFi/cellular antenna/chip fault
 }
 
 const DEFAULT_CONDITION_MULTIPLIERS: Record<string, number> = {
