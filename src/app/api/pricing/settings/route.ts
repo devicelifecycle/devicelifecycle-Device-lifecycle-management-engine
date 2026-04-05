@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic'
 
 const SETTING_KEYS: (keyof PricingSettingsOverrides | 'cpo_depreciation_rate' | 'cpo_buyback_years')[] = [
   'channel_green_min', 'channel_yellow_min', 'marketplace_fee_percent',
-  'breakage_risk_percent', 'competitive_relevance_min', 'competitor_ceiling_percent', 'beat_competitor_percent',
+  'breakage_risk_percent', 'competitive_relevance_min', 'competitor_ceiling_percent',
+  'beat_competitor_percent', 'beat_competitor_amount', 'cpo_beat_amount',
   'outlier_deviation_threshold', 'trade_in_profit_percent', 'enterprise_margin_percent',
   'cpo_markup_percent', 'cpo_enterprise_markup_percent', 'price_staleness_days',
   'margin_mode', 'custom_margin_percent', 'custom_margin_amount',
@@ -26,6 +27,8 @@ const SETTING_BOUNDS: Record<string, { min: number; max: number }> = {
   competitive_relevance_min: { min: 0, max: 100 },
   competitor_ceiling_percent: { min: 0, max: 100 },
   beat_competitor_percent: { min: 0, max: 20 },
+  beat_competitor_amount: { min: 0, max: 200 },
+  cpo_beat_amount: { min: 0, max: 500 },
   outlier_deviation_threshold: { min: 0, max: 200 },
   trade_in_profit_percent: { min: 0, max: 100 },
   enterprise_margin_percent: { min: 0, max: 100 },

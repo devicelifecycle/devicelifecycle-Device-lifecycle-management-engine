@@ -144,11 +144,16 @@ export interface PricingSettingsOverrides {
   competitive_relevance_min: number
   competitor_ceiling_percent: number
   beat_competitor_percent: number
+  /** Fixed dollar amount added above the highest competitor trade-in price.
+   *  e.g. 12 → quote = highest_competitor + $12. Adjustable in Admin → Pricing → Settings. */
+  beat_competitor_amount: number
   outlier_deviation_threshold: number
   trade_in_profit_percent: number
   enterprise_margin_percent: number
   cpo_markup_percent: number
   cpo_enterprise_markup_percent: number
+  /** Fixed dollar amount added above the highest competitor CPO sell price. */
+  cpo_beat_amount: number
   price_staleness_days: number
   margin_mode: 'auto' | 'custom'
   custom_margin_percent: number
@@ -165,11 +170,13 @@ const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
   competitive_relevance_min: COMPETITIVE_RELEVANCE_MIN,
   competitor_ceiling_percent: 0,
   beat_competitor_percent: 0,
+  beat_competitor_amount: 12, // $12 above highest competitor by default
   outlier_deviation_threshold: OUTLIER_DEVIATION_THRESHOLD,
   trade_in_profit_percent: 20,
   enterprise_margin_percent: 12,
   cpo_markup_percent: 18,
   cpo_enterprise_markup_percent: 15,
+  cpo_beat_amount: 10, // $10 above highest competitor CPO sell price by default
   price_staleness_days: 7,
   margin_mode: 'auto',
   custom_margin_percent: 0,
@@ -920,55 +927,44 @@ export class PricingService {
         dGradeFloor
       )
 
-      // Step 8: Determine trade price (competitive relevance)
+      // Step 8: Determine trade price
+      // Primary strategy: quote = highest_competitor + beat_amount (default $12).
+      // This means we always offer MORE than competitors — customers choose us.
+      // beat_competitor_amount is adjustable in Admin → Pricing → Settings (0–$50).
+      // beat_competitor_percent (old %) is still honoured if explicitly set > 0.
       const beatPercent = (input.beat_competitor_percent ?? settings.beat_competitor_percent ?? 0)
-      const useBeatPricing = beatPercent > 0 && filteredCompetitors.length > 0 && highestCompetitor > 0
+      const beatAmount = settings.beat_competitor_amount ?? 12 // flat $ above highest competitor
+      const hasCompetitorData = filteredCompetitors.length > 0 && highestCompetitor > 0
 
       let tradePrice: number
       let competitorCeilingApplied = false
       let competitorCeilingValue: number | undefined
       let beatPricingApplied = false
 
-      const hasMarginOverride = retailOverride || enterpriseOverride
-      if (useBeatPricing) {
-        // Beat competitors: offer X% above highest to win deals (best price)
-        tradePrice = round2(highestCompetitor * (1 + beatPercent / 100))
-        if (isBroken) {
-          tradePrice = round2(tradePrice * BROKEN_DEVICE_MULTIPLIER)
-        }
-        beatPricingApplied = true
-      } else if (isBroken) {
-        // Brian: "Broken could just be 50% of good" — simple rule
+      if (isBroken) {
+        // Broken = 50% of good working trade price (Brian's rule)
         tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
+      } else if (hasCompetitorData) {
+        // Beat competitors: highest + $beat_amount (adjustable in settings).
+        // If beat_competitor_percent is also set, use whichever gives higher offer.
+        const amountBased = round2(highestCompetitor + beatAmount)
+        const percentBased = beatPercent > 0 ? round2(highestCompetitor * (1 + beatPercent / 100)) : 0
+        tradePrice = Math.max(amountBased, percentBased)
+        beatPricingApplied = true
       } else {
-        // Apply margin target when override is provided; otherwise use stored market trade_price or anchor-based
+        // No competitor data — use anchor-based formula as fallback
+        const hasMarginOverride = retailOverride || enterpriseOverride
         if (hasMarginOverride) {
-          // Our Quote = Avg × (1 − margin%). Use competitor avg when available, else anchor-based.
-          if (avgCompetitorPrice > 0) {
-            tradePrice = round2(avgCompetitorPrice * (1 - marginTarget))
-          } else {
-            // No competitors: apply margin to anchor-derived value (pre-breakage, pre-deductions)
-            // When anchor is already condition-specific, don't re-apply conditionMultiplier
-            const conditionAdjustedAnchor = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
-            const preBreakageValue = conditionAdjustedAnchor - totalDeductions
-            tradePrice = round2(preBreakageValue * (1 - marginTarget) - breakageDeduction)
-            tradePrice = Math.max(tradePrice, 0)
-          }
-          tradePrice = Math.max(tradePrice, competitiveFloor)
+          const conditionAdjustedAnchor = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
+          const preBreakageValue = conditionAdjustedAnchor - totalDeductions
+          tradePrice = round2(preBreakageValue * (1 - marginTarget) - breakageDeduction)
+          tradePrice = Math.max(tradePrice, 0)
         } else {
-          // Always apply margin against the condition-adjusted anchor — never use raw
-          // adjustedPrice or market.trade_price directly. Both can be inflated when
-          // competitor data is absent and anchor falls back to wholesale C-stock.
-          if (avgCompetitorPrice > 0) {
-            tradePrice = round2(avgCompetitorPrice * (1 - marginTarget))
-          } else {
-            const conditionAdjustedAnchor = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
-            tradePrice = round2(conditionAdjustedAnchor * (1 - marginTarget))
-            tradePrice = Math.max(tradePrice, 0)
-          }
-          tradePrice = Math.max(tradePrice, competitiveFloor)
+          const conditionAdjustedAnchor = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
+          tradePrice = round2(conditionAdjustedAnchor * (1 - marginTarget))
+          tradePrice = Math.max(tradePrice, 0)
         }
-
+        tradePrice = Math.max(tradePrice, competitiveFloor)
       }
 
       // Apply competitor ceiling for all non-beat pricing paths, including broken-condition quotes.
@@ -1067,7 +1063,9 @@ export class PricingService {
         value_add_viable: repairBuffer > minRepairCost,
       }
 
-      // Step 12: CPO price — prefer competitor sell prices, then market entry, then markup on trade. Cap at marketplace to stay competitive.
+      // Step 12: CPO price — highest competitor sell price + cpo_beat_amount (default $10).
+      // This means our CPO listing is always priced above competitors, adjusted via settings.
+      const cpoBeatAmount = settings.cpo_beat_amount ?? 10
       const cpoMarkupOverride = input.cpo_markup_percent != null && input.cpo_markup_percent >= 0
       const cpoMarkup = cpoMarkupOverride
         ? (input.cpo_markup_percent! / 100)
@@ -1076,13 +1074,11 @@ export class PricingService {
           : (settings.cpo_markup_percent / 100)
       let cpoPrice: number
       if (rawCompetitorSellPrices.length > 0) {
-        // Use average competitor CPO/sell price (condition-specific) as our CPO reference
-        const avgCompetitorSell = rawCompetitorSellPrices.reduce((s, p) => s + p, 0) / rawCompetitorSellPrices.length
-        cpoPrice = round2(avgCompetitorSell)
+        const highestCompetitorSell = Math.max(...rawCompetitorSellPrices)
+        cpoPrice = round2(highestCompetitorSell + cpoBeatAmount)
       } else if (marketEntry?.cpo_price) {
-        // Market cpo_price is per device/storage with no condition — scale by condition multiplier so CPO varies
         const scale = conditionMultiplier / goodConditionMult
-        cpoPrice = round2(marketEntry.cpo_price * scale)
+        cpoPrice = round2(marketEntry.cpo_price * scale + cpoBeatAmount)
       } else {
         // Fallback: trade price + markup (trade price already varies by condition)
         cpoPrice = round2(tradePrice * (1 + cpoMarkup))
