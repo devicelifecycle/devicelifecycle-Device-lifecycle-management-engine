@@ -269,6 +269,8 @@ export default function AdminPricingPage() {
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
+  const [showQuoteRefreshBanner, setShowQuoteRefreshBanner] = useState(false)
+  const [sendingQuoteUpdate, setSendingQuoteUpdate] = useState(false)
 
   // Depreciation preview
   const [depreciationInput, setDepreciationInput] = useState('')
@@ -932,10 +934,28 @@ export default function AdminPricingPage() {
         body: JSON.stringify(settingsForm),
       })
       if (!res.ok) throw new Error()
-      toast.success('Pricing settings saved')
+      toast.success('Pricing settings saved — refreshing quotes…')
+      // Clear cached formula prices and trigger a full re-fetch with new settings
+      setFormulaPrices(new Map())
+      setFormulaRefreshTrigger(t => t + 1)
+      setShowQuoteRefreshBanner(true)
     } catch {
       toast.error('Failed to save settings')
     } finally { setSettingsSaving(false) }
+  }
+
+  const handleSendUpdatedQuotes = async () => {
+    setSendingQuoteUpdate(true)
+    try {
+      const res = await fetch('/api/pricing/notify-quote-updates', { method: 'POST' })
+      const data = res.ok ? await res.json() : null
+      if (!res.ok) throw new Error()
+      const count = data?.notified ?? 0
+      toast.success(count > 0 ? `Updated quote notifications sent to ${count} customer${count !== 1 ? 's' : ''}` : 'No active orders with changed quotes')
+      setShowQuoteRefreshBanner(false)
+    } catch {
+      toast.error('Failed to send quote update notifications')
+    } finally { setSendingQuoteUpdate(false) }
   }
 
   const handleIntlDownloadTemplate = () => {
@@ -1306,6 +1326,21 @@ export default function AdminPricingPage() {
           { label: 'Scraper status', value: cpScraping ? 'Running' : 'Ready' },
         ]}
       />
+
+      {showQuoteRefreshBanner && (
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+            <Zap className="h-4 w-4 shrink-0" />
+            <span>Pricing settings updated — quotes have been recalculated. Send updated quote notifications to customers with active orders?</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowQuoteRefreshBanner(false)}>Dismiss</Button>
+            <Button size="sm" className="h-7 text-xs" onClick={handleSendUpdatedQuotes} disabled={sendingQuoteUpdate}>
+              {sendingQuoteUpdate ? <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" />Sending…</> : 'Send Updated Quotes'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="trade-in">
         <TabsList className="flex h-auto w-full flex-wrap items-center justify-start gap-1 bg-white/[0.035]">

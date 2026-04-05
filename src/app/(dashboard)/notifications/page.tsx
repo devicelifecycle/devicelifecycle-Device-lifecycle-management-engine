@@ -5,12 +5,15 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Bell, CheckCheck, AlertTriangle, ShoppingCart, Package } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Pagination } from '@/components/ui/pagination'
 import { formatRelativeTime } from '@/lib/utils'
+import type { Notification } from '@/types'
 
 const PAGE_SIZE = 20
 
@@ -26,6 +29,7 @@ const getCategoryIcon = (title: string): { icon: typeof Bell; bg: string; color:
 
 export default function NotificationsPage() {
   const { notifications, unreadCount, isLoading, markAsRead, markAllAsRead } = useNotifications()
+  const router = useRouter()
   const [page, setPage] = useState(1)
 
   const totalPages = Math.max(1, Math.ceil(notifications.length / PAGE_SIZE))
@@ -76,11 +80,17 @@ export default function NotificationsPage() {
               {paginated.map(n => {
                 const typeConfig = getCategoryIcon(n.title)
                 const IconComponent = typeConfig.icon
+                const meta = (n.metadata as Record<string, unknown>) || {}
+                const link = typeof meta.link === 'string' ? meta.link : null
+                const handleClick = () => {
+                  if (!n.is_read) markAsRead(n.id)
+                  if (link) router.push(link)
+                }
                 return (
                   <button
                     key={n.id}
-                    className={`w-full text-left px-4 py-3.5 transition-all hover:bg-muted/50 ${!n.is_read ? 'bg-primary/[0.03]' : ''}`}
-                    onClick={() => !n.is_read && markAsRead(n.id)}
+                    className={`w-full text-left px-4 py-3.5 transition-all hover:bg-muted/50 ${!n.is_read ? 'bg-primary/[0.03]' : ''} ${link ? 'cursor-pointer' : ''}`}
+                    onClick={handleClick}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${typeConfig.bg}`}>

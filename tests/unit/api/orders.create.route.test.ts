@@ -224,7 +224,7 @@ describe('POST /api/orders', () => {
       expect.objectContaining({
         user_id: '66666666-6666-6666-6666-666666666666',
         title: 'Order #TI-1001 Received',
-        link: '/customer/orders',
+        link: '/orders/77777777-7777-7777-7777-777777777777',
         metadata: expect.objectContaining({
           event: 'order_created',
           audience: 'customer',
