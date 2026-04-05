@@ -1068,11 +1068,13 @@ export class PricingService {
       // This means our CPO listing is always priced above competitors, adjusted via settings.
       const cpoBeatAmount = settings.cpo_beat_amount ?? 10
       const cpoMarkupOverride = input.cpo_markup_percent != null && input.cpo_markup_percent >= 0
-      const cpoMarkup = cpoMarkupOverride
-        ? (input.cpo_markup_percent! / 100)
+      const rawCpoMarkup = cpoMarkupOverride
+        ? input.cpo_markup_percent!
         : riskMode === 'enterprise'
-          ? (settings.cpo_enterprise_markup_percent / 100)
-          : (settings.cpo_markup_percent / 100)
+          ? settings.cpo_enterprise_markup_percent
+          : settings.cpo_markup_percent
+      // Enforce minimum 18% CPO markup in fallback path — prevents CPO ≈ trade price
+      const cpoMarkup = (rawCpoMarkup > 0 ? rawCpoMarkup : 18) / 100
       let cpoPrice: number
       if (rawCompetitorSellPrices.length > 0) {
         const highestCompetitorSell = Math.max(...rawCompetitorSellPrices)
