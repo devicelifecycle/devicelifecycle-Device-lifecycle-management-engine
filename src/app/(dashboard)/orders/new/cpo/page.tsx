@@ -21,7 +21,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Separator } from '@/components/ui/separator'
-import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
+import { STORAGE_OPTIONS } from '@/lib/constants'
 import { matchDeviceFromCsv } from '@/lib/device-match'
 import {
   CPO_CSV_HEADERS,
@@ -39,11 +39,13 @@ interface CSVRow {
   notes: string
 }
 
+// CPO orders are always 'excellent' condition — no condition selection needed
+const CPO_CONDITION: DeviceCondition = 'excellent'
+
 interface LineItem {
   device_id: string
   device_label: string
   quantity: number
-  condition: DeviceCondition
   storage: string
   notes: string
 }
@@ -84,7 +86,7 @@ export default function NewCPOOrderPage() {
   }, [])
 
   const addItem = () => {
-    setItems([...items, { device_id: '', device_label: '', quantity: 1, condition: 'good', storage: '', notes: '' }])
+    setItems([...items, { device_id: '', device_label: '', quantity: 1, storage: '', notes: '' }])
   }
 
   const removeItem = (index: number) => {
@@ -179,7 +181,7 @@ export default function NewCPOOrderPage() {
           device_id: device?.id || '',
           quantity: parseInt(row.quantity) || 1,
           storage: row.storage || '128GB',
-          condition: 'good' as DeviceCondition,
+          condition: CPO_CONDITION,
           notes: row.notes || '',
           _row: row,
         }
@@ -202,7 +204,7 @@ export default function NewCPOOrderPage() {
         device_id: i.device_id,
         quantity: i.quantity,
         storage: i.storage || '128GB',
-        condition: i.condition,
+        condition: CPO_CONDITION,
         notes: i.notes,
       }))
     }
@@ -288,12 +290,9 @@ export default function NewCPOOrderPage() {
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Condition</Label>
-                            <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(CONDITION_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+                              CPO (Excellent)
+                            </div>
                           </div>
                         </div>
                       </div>
