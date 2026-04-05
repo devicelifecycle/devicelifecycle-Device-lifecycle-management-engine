@@ -39,8 +39,8 @@ interface CSVRow {
   notes: string
 }
 
-// CPO orders are always 'excellent' condition — no condition selection needed
-const CPO_CONDITION: DeviceCondition = 'excellent'
+// CPO orders are always 'good' condition — no condition selection needed
+const CPO_CONDITION: DeviceCondition = 'good'
 
 interface LineItem {
   device_id: string
@@ -291,7 +291,7 @@ export default function NewCPOOrderPage() {
                           <div className="space-y-1">
                             <Label className="text-xs">Condition</Label>
                             <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
-                              CPO (Excellent)
+                              CPO (Good)
                             </div>
                           </div>
                         </div>
