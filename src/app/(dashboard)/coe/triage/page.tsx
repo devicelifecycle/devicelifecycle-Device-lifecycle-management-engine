@@ -105,19 +105,37 @@ export default function COETriagePage() {
   const [refError, setRefError] = useState('')
 
   // ── Template file upload ─────────────────────────────────────────────────
+  type UploadRow = {
+    row: number
+    imei?: string
+    serial?: string
+    brand?: string
+    model?: string
+    condition?: string
+    storage?: string
+    color?: string
+    battery_health?: number
+    sim_lock?: string
+    locked_carrier?: string
+    device_cost?: number
+    repair_cost?: number
+    quantity?: number
+    notes?: string
+    match_status: string
+    device_id?: string | null
+    matched_item?: { device: { make: string; model: string } | null; claimed_condition: string | null; quoted_price: number | null } | null
+    quoted_price?: number | null
+  }
   const [uploadResult, setUploadResult] = useState<{
     detected_ref: string | null
     order: { id: string; order_number: string; status: string; total_quantity: number; quoted_amount: number | null } | null
-    rows: Array<{
-      row: number; imei?: string; brand?: string; model?: string; condition?: string; storage?: string
-      quantity?: number; notes?: string; match_status: string
-      matched_item?: { device: { make: string; model: string } | null; claimed_condition: string | null; quoted_price: number | null } | null
-      quoted_price?: number | null
-    }>
+    rows: UploadRow[]
     total: number; matched: number; condition_mismatches: number; not_in_order: number
   } | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -139,6 +157,49 @@ export default function COETriagePage() {
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally { setIsUploading(false) }
+  }
+
+  const handleBulkImport = async () => {
+    if (!uploadResult) return
+    const importable = uploadResult.rows.filter(r => r.imei && r.device_id && r.match_status !== 'not_in_order')
+    if (importable.length === 0) {
+      toast.error('No rows with both an IMEI and a recognised device to import')
+      return
+    }
+    setIsImporting(true)
+    setImportResult(null)
+    try {
+      const res = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bulk_import',
+          rows: importable.map(r => ({
+            imei: r.imei,
+            device_id: r.device_id,
+            claimed_condition: r.condition,
+            storage: r.storage,
+            color: r.color,
+            battery_health: r.battery_health,
+            sim_lock: r.sim_lock,
+            locked_carrier: r.locked_carrier,
+            device_cost: r.device_cost,
+            repair_cost: r.repair_cost,
+            notes: r.notes,
+            order_id: uploadResult.order?.id,
+          })),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Import failed')
+      setImportResult(data)
+      if (data.imported > 0) {
+        toast.success(`${data.imported} device${data.imported !== 1 ? 's' : ''} added to triage queue`)
+        fetchPending()
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Bulk import failed')
+    } finally { setIsImporting(false) }
   }
 
   // ── Add device dialog state ──────────────────────────────────────────────
@@ -524,13 +585,36 @@ export default function COETriagePage() {
           </div>
 
           {uploadResult && (
-            <div className="mt-3 space-y-1.5">
-              {uploadResult.detected_ref && (
-                <p className="text-xs text-muted-foreground">
-                  Auto-detected reference: <span className="font-medium text-foreground">{uploadResult.detected_ref}</span>
-                  {uploadResult.order ? ` → ${uploadResult.order.order_number} (${uploadResult.order.status.replace(/_/g, ' ')})` : ' — order not found'}
-                </p>
-              )}
+            <div className="mt-4 space-y-3">
+              {/* Summary + import action */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  {uploadResult.detected_ref && (
+                    <p className="text-xs text-muted-foreground">
+                      Auto-detected: <span className="font-medium text-foreground">{uploadResult.detected_ref}</span>
+                      {uploadResult.order ? ` → ${uploadResult.order.order_number} (${uploadResult.order.status.replace(/_/g, ' ')})` : ' — order not found'}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {uploadResult.total} rows parsed — {uploadResult.rows.filter(r => r.imei && r.device_id).length} ready to import
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {importResult && (
+                    <span className="text-xs text-green-700 font-medium">
+                      {importResult.imported} imported, {importResult.skipped} skipped{importResult.errors.length > 0 ? `, ${importResult.errors.length} errors` : ''}
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handleBulkImport}
+                    disabled={isImporting || uploadResult.rows.filter(r => r.imei && r.device_id).length === 0}
+                  >
+                    {isImporting ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Importing...</> : <><Plus className="h-3.5 w-3.5 mr-1.5" />Import to Triage Queue</>}
+                  </Button>
+                </div>
+              </div>
+
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
@@ -538,8 +622,13 @@ export default function COETriagePage() {
                       <TableHead className="text-xs w-8">#</TableHead>
                       <TableHead className="text-xs">IMEI / Serial</TableHead>
                       <TableHead className="text-xs">Device</TableHead>
-                      <TableHead className="text-xs">Condition in File</TableHead>
-                      <TableHead className="text-xs">Quoted Condition</TableHead>
+                      <TableHead className="text-xs">Color</TableHead>
+                      <TableHead className="text-xs">Grade</TableHead>
+                      <TableHead className="text-xs text-center">Battery</TableHead>
+                      <TableHead className="text-xs">SIM / Carrier</TableHead>
+                      <TableHead className="text-xs">Notes</TableHead>
+                      <TableHead className="text-xs text-right">Device Cost</TableHead>
+                      <TableHead className="text-xs text-right">Repair Cost</TableHead>
                       <TableHead className="text-xs text-right">Quoted Price</TableHead>
                       <TableHead className="text-xs">Status</TableHead>
                     </TableRow>
@@ -551,19 +640,50 @@ export default function COETriagePage() {
                         row.match_status === 'not_in_order' ? 'bg-red-50/50' : ''
                       }>
                         <TableCell className="text-xs text-muted-foreground">{row.row}</TableCell>
-                        <TableCell className="text-xs font-mono">{row.imei || '—'}</TableCell>
-                        <TableCell className="text-xs font-medium">
+                        <TableCell className="text-xs font-mono whitespace-nowrap">
+                          <div>{row.imei || '—'}</div>
+                          {row.serial && row.serial !== row.imei && (
+                            <div className="text-muted-foreground text-[10px]">{row.serial}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs font-medium whitespace-nowrap">
                           {[row.brand, row.model].filter(Boolean).join(' ') || '—'}
                           {row.storage && <span className="text-muted-foreground ml-1">({row.storage})</span>}
+                          {!row.device_id && row.brand && (
+                            <span className="ml-1 text-amber-600 text-[10px]">not in catalog</span>
+                          )}
                         </TableCell>
-                        <TableCell className="text-xs capitalize">{row.condition || '—'}</TableCell>
-                        <TableCell className="text-xs capitalize text-muted-foreground">
-                          {row.matched_item?.claimed_condition || '—'}
+                        <TableCell className="text-xs">{row.color || '—'}</TableCell>
+                        <TableCell className="text-xs capitalize">
+                          {row.condition
+                            ? <span className={row.matched_item?.claimed_condition && row.condition !== row.matched_item.claimed_condition ? 'text-amber-600 font-medium' : ''}>
+                                {row.condition}
+                              </span>
+                            : '—'}
+                          {row.matched_item?.claimed_condition && row.condition !== row.matched_item.claimed_condition && (
+                            <div className="text-[10px] text-muted-foreground">quoted: {row.matched_item.claimed_condition}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-center">
+                          {row.battery_health != null
+                            ? <span className={row.battery_health < 80 ? 'text-amber-600 font-medium' : 'text-green-700'}>{row.battery_health}%</span>
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <div>{row.sim_lock || '—'}</div>
+                          {row.locked_carrier && <div className="text-muted-foreground text-[10px]">{row.locked_carrier}</div>}
+                        </TableCell>
+                        <TableCell className="text-xs max-w-[120px] truncate" title={row.notes}>{row.notes || '—'}</TableCell>
+                        <TableCell className="text-xs text-right tabular-nums">
+                          {row.device_cost != null ? formatCurrency(row.device_cost) : '—'}
+                        </TableCell>
+                        <TableCell className="text-xs text-right tabular-nums">
+                          {row.repair_cost != null && row.repair_cost > 0 ? formatCurrency(row.repair_cost) : '—'}
                         </TableCell>
                         <TableCell className="text-xs text-right tabular-nums">
                           {row.quoted_price != null ? formatCurrency(row.quoted_price) : '—'}
                         </TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell className="text-xs whitespace-nowrap">
                           {row.match_status === 'matched' && (
                             <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-3 w-3" />Matched</span>
                           )}
