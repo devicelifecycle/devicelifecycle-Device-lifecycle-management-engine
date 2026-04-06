@@ -1,14 +1,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, Eye, EyeOff, KeyRound, Loader2, Package, RadioTower, ShieldCheck, Sparkles, Truck } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { OrbitingDeviceField } from '@/components/landing/OrbitingDeviceField'
 import { Button } from '@/components/ui/button'
+
+// Lazy-load the animated background so the login form is interactive
+// immediately without waiting for 18+ Framer Motion animations to init.
+const OrbitingDeviceField = dynamic(
+  () => import('@/components/landing/OrbitingDeviceField').then(m => ({ default: m.OrbitingDeviceField })),
+  { ssr: false, loading: () => null }
+)
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
