@@ -2,7 +2,7 @@
 // AUTH HOOK
 // ============================================================================
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
@@ -16,10 +16,25 @@ interface AuthState {
   isAuthenticated: boolean
 }
 
+interface AuthContextValue extends AuthState {
+  login: (emailOrId: string, password: string) => Promise<void>
+  logout: () => Promise<void>
+  hasRole: (role: UserRole | UserRole[]) => boolean
+  isCOEUser: () => boolean
+  isAdmin: () => boolean
+  refetch: () => Promise<void>
+  verifyMfa: (factorId: string, code: string) => Promise<void>
+  enrollMfa: () => Promise<MfaEnrollData>
+  unenrollMfa: (factorId: string) => Promise<void>
+  getMfaFactors: () => Promise<MfaFactorsData>
+}
+
 const AUTH_CACHE_KEY = '__dlm_auth_user'
 
 // Module-level singleton — stable reference, never recreated
 const supabase = createBrowserSupabaseClient()
+type MfaEnrollData = Awaited<ReturnType<typeof supabase.auth.mfa.enroll>>['data']
+type MfaFactorsData = Awaited<ReturnType<typeof supabase.auth.mfa.listFactors>>['data']
 
 function isAbortError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === 'AbortError') return true
@@ -113,7 +128,9 @@ function fastNavigate(path: string, router: ReturnType<typeof useRouter>) {
   router.replace(path)
 }
 
-export function useAuth() {
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+function useProvideAuth(): AuthContextValue {
   const [state, setState] = useState<AuthState>({
     user: null,
     isLoading: false,
@@ -290,13 +307,11 @@ export function useAuth() {
         throw lastError || new Error('Invalid login credentials')
       }
 
-      // MFA check — run AAL and factors lookup in parallel to halve the latency.
+      // MFA check — only fetch enrolled factors when the session actually needs MFA.
       try {
-        const [{ data: aalData }, { data: factorsData }] = await Promise.all([
-          supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-          supabase.auth.mfa.listFactors(),
-        ])
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
         if (aalData?.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
+          const { data: factorsData } = await supabase.auth.mfa.listFactors()
           const totpFactor = factorsData?.totp?.[0]
           if (totpFactor) {
             setState((prev) => ({ ...prev, isLoading: false }))
@@ -318,8 +333,7 @@ export function useAuth() {
         return
       }
 
-      // Navigate immediately after auth succeeds so the login form does not sit in a
-      // "dead" loading state while we perform a second profile lookup on this page.
+      // Navigate immediately after auth succeeds; profile hydration continues in the background.
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -348,14 +362,24 @@ export function useAuth() {
         }
       })()
 
-      const resolvedProfile = await Promise.race([
-        profilePromise,
-        new Promise<User | null>((resolve) => {
-          window.setTimeout(() => resolve(null), 200)
-        }),
-      ])
+      void profilePromise.then((resolvedProfile) => {
+        if (!resolvedProfile) return
+        const targetPath = getDefaultAppPathForRole(resolvedProfile.role)
+        setState((prev) => ({
+          ...prev,
+          user: resolvedProfile,
+          isAuthenticated: true,
+        }))
 
-      fastNavigate(getDefaultAppPathForRole(resolvedProfile?.role), router)
+        if (typeof window !== 'undefined') {
+          const currentPath = window.location.pathname
+          if (currentPath === '/dashboard' && targetPath !== '/dashboard') {
+            fastNavigate(targetPath, router)
+          }
+        }
+      })
+
+      fastNavigate('/dashboard', router)
     } catch (error) {
       setState((prev) => ({ ...prev, isLoading: false }))
       if (isAbortError(error)) {
@@ -465,4 +489,17 @@ export function useAuth() {
     unenrollMfa,
     getMfaFactors,
   }
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const value = useProvideAuth()
+  return createElement(AuthContext.Provider, { value }, children)
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider')
+  }
+  return context
 }
