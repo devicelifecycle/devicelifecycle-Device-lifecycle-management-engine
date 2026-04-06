@@ -120,7 +120,7 @@ function normalizeStorageInput(storage: string): string {
 function filterCompetitorOutliers(
   list: Array<{ name: string; price: number }>
 ): Array<{ name: string; price: number }> {
-  if (list.length < 4) return list
+  if (list.length < 3) return list
   const sorted = [...list].sort((a, b) => b.price - a.price)
   const highest = sorted[0].price
   const secondHighest = sorted[1].price
@@ -937,7 +937,7 @@ export class PricingService {
       // beat_competitor_percent (old %) is still honoured if explicitly set > 0.
       const beatPercent = (input.beat_competitor_percent ?? settings.beat_competitor_percent ?? 0)
       const beatAmount = settings.beat_competitor_amount ?? 12 // flat $ above highest competitor
-      const hasCompetitorData = filteredCompetitors.length > 0 && highestCompetitor > 0
+      const hasCompetitorData = filteredCompetitors.length > 0 && avgCompetitorPrice > 0
 
       let tradePrice: number
       let competitorCeilingApplied = false
@@ -948,10 +948,11 @@ export class PricingService {
         // Broken = 50% of good working trade price (Brian's rule)
         tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
       } else if (hasCompetitorData) {
-        // Beat competitors: highest + $beat_amount (adjustable in settings).
+        // Beat competitors: avg + $beat_amount (adjustable in settings).
+        // Using average prevents a single high outlier from inflating the quote.
         // If beat_competitor_percent is also set, use whichever gives higher offer.
-        const amountBased = round2(highestCompetitor + beatAmount)
-        const percentBased = beatPercent > 0 ? round2(highestCompetitor * (1 + beatPercent / 100)) : 0
+        const amountBased = round2(avgCompetitorPrice + beatAmount)
+        const percentBased = beatPercent > 0 ? round2(avgCompetitorPrice * (1 + beatPercent / 100)) : 0
         tradePrice = Math.max(amountBased, percentBased)
         beatPricingApplied = true
       } else {
@@ -1048,7 +1049,7 @@ export class PricingService {
 
       // Append risk mode context
       if (beatPricingApplied) {
-        reasoning = `Beat competitors by ${beatPercent}% — offering best price ($${round2(tradePrice)}) to win deals.`
+        reasoning = `Beat avg competitor ($${round2(avgCompetitorPrice)}) by ${beatAmount > 0 ? '$' + beatAmount : beatPercent + '%'} — quote $${round2(tradePrice)}.`
       } else {
         reasoning += ` [${riskMode} mode, ${marginTargetPercent}% target margin]`
         if (competitorCeilingApplied && competitorCeilingValue != null) {
@@ -1164,6 +1165,7 @@ export class PricingService {
         marketplace_net: mpNet > 0 ? round2(mpNet) : undefined,
         competitors,
         cpo_competitors: rawCpoCompetitors.length > 0 ? rawCpoCompetitors : undefined,
+        avg_competitor: avgCompetitorPrice > 0 ? avgCompetitorPrice : undefined,
         highest_competitor: highestCompetitor > 0 ? highestCompetitor : undefined,
         channel_decision: channelDecision,
         repair_buffer: repairBuffer > 0 ? round2(repairBuffer) : undefined,
