@@ -102,12 +102,14 @@ export default function NewCPOOrderPage() {
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
+  const [beatMode, setBeatMode] = useState<'amount' | 'percent'>('amount')
+  const [beatOverride, setBeatOverride] = useState<string>('')
 
   useEffect(() => {
     fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
 
-  const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string) => {
+  const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, beatModeArg?: 'amount' | 'percent', beatValArg?: string) => {
     if (!deviceId || !storage || !isInternal) return
 
     setItemPrices(prev => ({
@@ -115,11 +117,20 @@ export default function NewCPOOrderPage() {
       [index]: { engine_cpo_price: 0, manual_price: '', loading: true, error: null, source: '', cpo_competitors: [] },
     }))
 
+    const effectiveBeatMode = beatModeArg ?? beatMode
+    const effectiveBeatVal = beatValArg ?? beatOverride
+    const beatNum = effectiveBeatVal !== '' ? parseFloat(effectiveBeatVal) : null
+    const beatBody: Record<string, number> = {}
+    if (beatNum !== null && !Number.isNaN(beatNum) && beatNum >= 0) {
+      if (effectiveBeatMode === 'percent') beatBody.beat_competitor_percent = beatNum
+      else beatBody.beat_competitor_amount = beatNum
+    }
+
     try {
       const res = await fetch('/api/pricing/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition: CPO_CONDITION }),
+        body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition: CPO_CONDITION, ...beatBody }),
       })
 
       if (res.ok) {
@@ -150,7 +161,7 @@ export default function NewCPOOrderPage() {
         [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: 'Lookup failed', source: '', cpo_competitors: [] },
       }))
     }
-  }, [isInternal])
+  }, [isInternal, beatMode, beatOverride])
 
   const addItem = () => {
     setItems([...items, { device_id: '', device_label: '', quantity: 1, storage: '', notes: '' }])
@@ -496,7 +507,70 @@ export default function NewCPOOrderPage() {
               <CardTitle className="text-base">Quote Summary</CardTitle>
               <CardDescription>CPO sell pricing for this order. Competitor sell prices shown for internal reference only.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Beat by control */}
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Beat Competitors By</p>
+                  <p className="text-xs text-muted-foreground">
+                    How much above the avg competitor sell price to list CPO. Default is the saved setting.
+                    {beatOverride !== '' && !Number.isNaN(parseFloat(beatOverride)) && (
+                      <span className="ml-1 font-medium text-foreground">
+                        Quoting avg + {beatMode === 'percent' ? parseFloat(beatOverride) + '%' : '$' + parseFloat(beatOverride)}.
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <select
+                    className="h-8 rounded-md border bg-background px-2 text-xs"
+                    value={beatMode}
+                    onChange={e => setBeatMode(e.target.value as 'amount' | 'percent')}
+                  >
+                    <option value="amount">$ flat</option>
+                    <option value="percent">%</option>
+                  </select>
+                  <div className="relative w-24">
+                    <Input
+                      type="number"
+                      min="0"
+                      step={beatMode === 'percent' ? '0.5' : '1'}
+                      placeholder={beatMode === 'percent' ? 'e.g. 5' : 'e.g. 10'}
+                      value={beatOverride}
+                      onChange={e => setBeatOverride(e.target.value)}
+                      className="pr-7 text-right h-8"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                      {beatMode === 'percent' ? '%' : '$'}
+                    </span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    disabled={beatOverride === '' || Number.isNaN(parseFloat(beatOverride))}
+                    onClick={() => {
+                      items.forEach((item, i) => {
+                        if (item.device_id && item.storage) {
+                          lookupPrice(i, item.device_id, item.storage, beatMode, beatOverride)
+                        }
+                      })
+                    }}
+                  >
+                    Apply
+                  </Button>
+                  {beatOverride !== '' && (
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => {
+                      setBeatOverride('')
+                      items.forEach((item, i) => {
+                        if (item.device_id && item.storage) lookupPrice(i, item.device_id, item.storage, beatMode, '')
+                      })
+                    }}>
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>

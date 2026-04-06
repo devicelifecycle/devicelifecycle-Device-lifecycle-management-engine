@@ -113,6 +113,9 @@ export default function NewTradeInPage() {
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
   // marginOverride: empty string = use engine default, number = override margin %
   const [marginOverride, setMarginOverride] = useState<string>('')
+  // beatOverride: 'amount' mode uses flat $, 'percent' mode uses %. Empty = use saved settings default.
+  const [beatMode, setBeatMode] = useState<'amount' | 'percent'>('amount')
+  const [beatOverride, setBeatOverride] = useState<string>('')
 
   useEffect(() => {
     fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
@@ -124,16 +127,25 @@ export default function NewTradeInPage() {
   }, [isCustomer, myCustomer?.id])
 
   // Price lookup for internal staff
-  const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, condition: DeviceCondition) => {
+  const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, condition: DeviceCondition, beatModeArg?: 'amount' | 'percent', beatValArg?: string) => {
     if (!deviceId || !storage || !isInternal) return
 
     setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, manual_price: '', cpo_unit_price: 0, loading: true, error: null, source: '', competitors: [] } }))
+
+    const effectiveBeatMode = beatModeArg ?? beatMode
+    const effectiveBeatVal = beatValArg ?? beatOverride
+    const beatNum = effectiveBeatVal !== '' ? parseFloat(effectiveBeatVal) : null
+    const beatBody: Record<string, number> = {}
+    if (beatNum !== null && !Number.isNaN(beatNum) && beatNum >= 0) {
+      if (effectiveBeatMode === 'percent') beatBody.beat_competitor_percent = beatNum
+      else beatBody.beat_competitor_amount = beatNum
+    }
 
     try {
       const res = await fetch('/api/pricing/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition }),
+        body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition, ...beatBody }),
       })
 
       if (res.ok) {
@@ -165,7 +177,7 @@ export default function NewTradeInPage() {
         [index]: { engine_price: 0, manual_price: '', cpo_unit_price: 0, loading: false, error: 'Lookup failed', source: '', competitors: [] },
       }))
     }
-  }, [isInternal])
+  }, [isInternal, beatMode, beatOverride])
 
   // Manual entry helpers
   const addItem = () => {
@@ -603,6 +615,72 @@ export default function NewTradeInPage() {
               <CardDescription>Review pricing before submitting.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Beat by control — re-fetches all prices when changed */}
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Beat Competitors By</p>
+                  <p className="text-xs text-muted-foreground">
+                    How much above the avg competitor price to quote. Default is the saved setting ($12 flat).
+                    {beatOverride !== '' && !Number.isNaN(parseFloat(beatOverride)) && (
+                      <span className="ml-1 font-medium text-foreground">
+                        Quoting avg + {beatMode === 'percent' ? parseFloat(beatOverride) + '%' : '$' + parseFloat(beatOverride)}.
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <select
+                    className="h-8 rounded-md border bg-background px-2 text-xs"
+                    value={beatMode}
+                    onChange={e => setBeatMode(e.target.value as 'amount' | 'percent')}
+                  >
+                    <option value="amount">$ flat</option>
+                    <option value="percent">%</option>
+                  </select>
+                  <div className="relative w-24">
+                    <Input
+                      type="number"
+                      min="0"
+                      step={beatMode === 'percent' ? '0.5' : '1'}
+                      placeholder={beatMode === 'percent' ? 'e.g. 5' : 'e.g. 12'}
+                      value={beatOverride}
+                      onChange={e => setBeatOverride(e.target.value)}
+                      className="pr-7 text-right h-8"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                      {beatMode === 'percent' ? '%' : '$'}
+                    </span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    disabled={beatOverride === '' || Number.isNaN(parseFloat(beatOverride))}
+                    onClick={() => {
+                      items.forEach((item, i) => {
+                        if (item.device_id && item.storage) {
+                          lookupPrice(i, item.device_id, item.storage, item.condition, beatMode, beatOverride)
+                        }
+                      })
+                    }}
+                  >
+                    Apply
+                  </Button>
+                  {beatOverride !== '' && (
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => {
+                      setBeatOverride('')
+                      items.forEach((item, i) => {
+                        if (item.device_id && item.storage) {
+                          lookupPrice(i, item.device_id, item.storage, item.condition, beatMode, '')
+                        }
+                      })
+                    }}>
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               {/* Margin override control */}
               <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
                 <div className="flex-1">
