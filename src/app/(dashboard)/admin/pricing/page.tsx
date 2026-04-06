@@ -1030,6 +1030,10 @@ export default function AdminPricingPage() {
     const matchesCondition = compConditionFilter === 'all' || (cp.condition || 'good') === compConditionFilter
     if (!matchesCondition) return false
 
+    const matchesCompetitor = compCompetitorFilter === 'all' ||
+      normalizeCompetitorName(cp.competitor_name || '') === compCompetitorFilter
+    if (!matchesCompetitor) return false
+
     if (!compSearch) return true
     const s = compSearch.toLowerCase()
     const label = getDeviceLabel(cp.device_id).toLowerCase()
@@ -1555,7 +1559,17 @@ export default function AdminPricingPage() {
                 <div className="flex flex-col items-center py-16 text-muted-foreground">
                   <TrendingUp className="h-10 w-10 mb-3 text-muted-foreground/40" />
                   <p className="text-sm font-medium">No competitor prices match filters</p>
-                  <p className="text-xs mt-1">Run the price scraper or add prices manually.</p>
+                  <p className="text-xs mt-1 mb-3">
+                    {compPrices.length === 0
+                      ? 'The competitor prices table is empty. Run the scraper to fetch live prices from Telus, Bell, GoRecell, UniverCell, and Apple Trade-In.'
+                      : 'No prices match the current filters. Try clearing the competitor or condition filter.'}
+                  </p>
+                  {compPrices.length === 0 && (
+                    <Button size="sm" onClick={handleRunScraper} disabled={cpScraping}>
+                      <RefreshCw className={`mr-2 h-3.5 w-3.5 ${cpScraping ? 'animate-spin' : ''}`} />
+                      {cpScraping ? 'Scraping...' : 'Run Scraper Now'}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -2152,7 +2166,11 @@ export default function AdminPricingPage() {
                 <div className="flex flex-col items-center py-16 text-muted-foreground">
                   <ShoppingBag className="h-10 w-10 mb-3 text-muted-foreground/40" />
                   <p className="text-sm font-medium">No CPO/sell prices available</p>
-                  <p className="text-xs mt-1">Run the price scraper to fetch sell prices from competitors.</p>
+                  <p className="text-xs mt-1 mb-3">Run the price scraper to fetch sell prices from Telus, Bell, GoRecell, UniverCell, and Apple.</p>
+                  <Button size="sm" onClick={handleRunScraper} disabled={cpScraping}>
+                    <RefreshCw className={`mr-2 h-3.5 w-3.5 ${cpScraping ? 'animate-spin' : ''}`} />
+                    {cpScraping ? 'Scraping...' : 'Run Scraper Now'}
+                  </Button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
