@@ -26,6 +26,7 @@ const nextConfig = {
 
     return [
       {
+        // Security headers for all routes
         source: '/(.*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
@@ -35,6 +36,17 @@ const nextConfig = {
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+        ],
+      },
+      {
+        // HTML pages must never be served from browser/CDN cache so all users
+        // always get the latest deployment. Static assets (_next/static) are
+        // excluded — they are content-hash-named and intentionally immutable.
+        source: '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|otf)).*)',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Expires', value: '0' },
         ],
       },
     ]

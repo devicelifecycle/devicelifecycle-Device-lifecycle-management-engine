@@ -15,9 +15,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 20 * 1000, // keep data fresh during active operations
+            // Consider data stale after 5s so background refetches keep all
+            // devices in sync without hammering the server on every render.
+            staleTime: 5 * 1000,
+            // Always refetch when the user switches back to the tab or
+            // reconnects so a colleague's update is visible immediately.
             refetchOnWindowFocus: true,
             refetchOnReconnect: true,
+            // Retry once on error before showing a failure state.
+            retry: 1,
           },
         },
       })

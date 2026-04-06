@@ -123,10 +123,11 @@ export function useOrders(filters: OrderFilters = {}) {
   const queryClient = useQueryClient()
   const supabase = createBrowserSupabaseClient()
 
-  // Query for orders list
+  // Query for orders list — poll every 30s as a fallback when Realtime drops
   const ordersQuery = useQuery({
     queryKey: ['orders', filters],
     queryFn: () => fetchOrders(filters),
+    refetchInterval: 30 * 1000,
   })
 
   // Supabase Realtime — auto-refresh on INSERT/UPDATE/DELETE
