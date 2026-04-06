@@ -7,6 +7,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
 import { useState } from 'react'
+import { AuthProvider } from '@/hooks/useAuth'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -14,18 +15,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000, // 1 minute
-            refetchOnWindowFocus: false,
+            staleTime: 20 * 1000, // keep data fresh during active operations
+            refetchOnWindowFocus: true,
+            refetchOnReconnect: true,
           },
         },
       })
   )
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" forcedTheme="dark" disableTransitionOnChange>
-        {children}
-      </ThemeProvider>
-    </QueryClientProvider>
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider attribute="class" forcedTheme="dark" disableTransitionOnChange>
+          {children}
+        </ThemeProvider>
+      </QueryClientProvider>
+    </AuthProvider>
   )
 }
