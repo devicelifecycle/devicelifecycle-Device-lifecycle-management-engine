@@ -283,6 +283,7 @@ export class PricingService {
     quantity?: number;
     risk_mode?: RiskMode;
     beat_competitor_percent?: number;
+    beat_competitor_amount?: number;
     trade_in_profit_percent?: number;
     enterprise_margin_percent?: number;
     cpo_markup_percent?: number;
@@ -420,6 +421,7 @@ export class PricingService {
     quantity?: number;
     risk_mode?: RiskMode;
     beat_competitor_percent?: number;
+    beat_competitor_amount?: number;
     trade_in_profit_percent?: number;
     enterprise_margin_percent?: number;
     cpo_markup_percent?: number;
@@ -936,7 +938,8 @@ export class PricingService {
       // beat_competitor_amount is adjustable in Admin → Pricing → Settings (0–$50).
       // beat_competitor_percent (old %) is still honoured if explicitly set > 0.
       const beatPercent = (input.beat_competitor_percent ?? settings.beat_competitor_percent ?? 0)
-      const beatAmount = settings.beat_competitor_amount ?? 12 // flat $ above highest competitor
+      // Per-request beat_competitor_amount overrides the saved setting — used for per-quote adjustments
+      const beatAmount = input.beat_competitor_amount ?? settings.beat_competitor_amount ?? 12
       const hasCompetitorData = filteredCompetitors.length > 0 && avgCompetitorPrice > 0
 
       let tradePrice: number
@@ -948,12 +951,14 @@ export class PricingService {
         // Broken = 50% of good working trade price (Brian's rule)
         tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
       } else if (hasCompetitorData) {
-        // Beat competitors: avg + $beat_amount (adjustable in settings).
-        // Using average prevents a single high outlier from inflating the quote.
-        // If beat_competitor_percent is also set, use whichever gives higher offer.
-        const amountBased = round2(avgCompetitorPrice + beatAmount)
-        const percentBased = beatPercent > 0 ? round2(avgCompetitorPrice * (1 + beatPercent / 100)) : 0
-        tradePrice = Math.max(amountBased, percentBased)
+        // Beat competitors: avg + beat_amount OR avg * (1 + beat_percent/100).
+        // The two modes are mutually exclusive — percent takes priority when explicitly set > 0,
+        // otherwise the flat dollar amount is used. This prevents double-stacking.
+        if (beatPercent > 0) {
+          tradePrice = round2(avgCompetitorPrice * (1 + beatPercent / 100))
+        } else {
+          tradePrice = round2(avgCompetitorPrice + beatAmount)
+        }
         beatPricingApplied = true
       } else {
         // No competitor data — use anchor-based formula as fallback
@@ -1049,7 +1054,8 @@ export class PricingService {
 
       // Append risk mode context
       if (beatPricingApplied) {
-        reasoning = `Beat avg competitor ($${round2(avgCompetitorPrice)}) by ${beatAmount > 0 ? '$' + beatAmount : beatPercent + '%'} — quote $${round2(tradePrice)}.`
+        const beatDesc = beatPercent > 0 ? `${beatPercent}%` : `$${beatAmount}`
+        reasoning = `Beat avg competitor ($${round2(avgCompetitorPrice)}) by ${beatDesc} — quote $${round2(tradePrice)}.`
       } else {
         reasoning += ` [${riskMode} mode, ${marginTargetPercent}% target margin]`
         if (competitorCeilingApplied && competitorCeilingValue != null) {

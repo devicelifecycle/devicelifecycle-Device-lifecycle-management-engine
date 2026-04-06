@@ -610,8 +610,10 @@ export const priceCalculationV2Schema = z.object({
   trade_in_profit_percent: z.coerce.number().min(0).max(100).optional(),
   cpo_markup_percent: z.coerce.number().min(0).max(100).optional(),
   enterprise_margin_percent: z.coerce.number().min(0).max(100).optional(),
-  /** Beat highest competitor by this % — offer best price to win deals (e.g. 2 = 2% above highest) */
+  /** Beat avg competitor by this % — takes priority over beat_competitor_amount when > 0 */
   beat_competitor_percent: z.coerce.number().min(0).max(20).optional(),
+  /** Beat avg competitor by this flat $ amount — used when beat_competitor_percent is 0 */
+  beat_competitor_amount: z.coerce.number().min(0).max(200).optional(),
 })
 
 // ============================================================================
