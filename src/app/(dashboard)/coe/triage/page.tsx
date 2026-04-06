@@ -4,17 +4,18 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   ClipboardCheck, Search, AlertTriangle, CheckCircle2, Plus, Smartphone,
   Loader2, ShieldAlert, ShieldCheck, ShieldQuestion, Hash, FileText,
-  Upload, X, CheckCircle, XCircle, AlertCircle,
+  Upload, X, CheckCircle, XCircle, AlertCircle, PackageSearch, Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -47,14 +48,23 @@ type OrderRefResult = {
   status: string
   total_quantity: number
   quoted_amount: number | null
+  customer?: { full_name?: string; company_name?: string } | null
   items: Array<{
     id: string
-    device: { make: string; model: string } | null
+    device: { id?: string; make: string; model: string } | null
     quantity: number
     claimed_condition: string
     quoted_price: number | null
     storage: string | null
   }>
+}
+
+type IntakeSlot = {
+  imei: string
+  actualCondition: DeviceCondition
+  validation: ImeiLookupResult | null
+  validating: boolean
+  mismatch: 'device_model' | 'condition' | 'both' | 'duplicate' | null
 }
 
 function StatusPill({ value, label }: { value: 'yes' | 'no' | 'unknown'; label: string }) {
@@ -103,6 +113,17 @@ export default function COETriagePage() {
   const [refResult, setRefResult] = useState<OrderRefResult | null>(null)
   const [refLoading, setRefLoading] = useState(false)
   const [refError, setRefError] = useState('')
+
+  // ── Order Intake tab state ───────────────────────────────────────────────
+  const [intakeSearch, setIntakeSearch] = useState('')
+  const [intakeOrder, setIntakeOrder] = useState<OrderRefResult | null>(null)
+  const [intakeOrderLoading, setIntakeOrderLoading] = useState(false)
+  const [intakeOrderError, setIntakeOrderError] = useState('')
+  const [intakeSlots, setIntakeSlots] = useState<Record<string, IntakeSlot[]>>({})
+  const [intakeDraft, setIntakeDraft] = useState<Record<string, string>>({})
+  const [intakeDraftCondition, setIntakeDraftCondition] = useState<Record<string, DeviceCondition>>({})
+  const [intakeSubmitting, setIntakeSubmitting] = useState(false)
+  const intakeImeiInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   // ── Template file upload ─────────────────────────────────────────────────
   type UploadRow = {
@@ -300,6 +321,136 @@ export default function COETriagePage() {
     } finally { setIsLookingUp(false) }
   }
 
+  const handleLoadIntakeOrder = async () => {
+    const q = intakeSearch.trim()
+    if (!q) return
+    setIntakeOrderLoading(true)
+    setIntakeOrderError('')
+    setIntakeOrder(null)
+    setIntakeSlots({})
+    setIntakeDraft({})
+    setIntakeDraftCondition({})
+    try {
+      const res = await fetch(`/api/orders?search=${encodeURIComponent(q)}&page=1&page_size=1`)
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      const match = data.data?.[0]
+      if (!match) { setIntakeOrderError('No order found with that number'); return }
+      const detailRes = await fetch(`/api/orders/${match.id}`)
+      if (!detailRes.ok) throw new Error()
+      const detail = await detailRes.json()
+      const order: OrderRefResult = detail.data ?? detail
+      setIntakeOrder(order)
+      // Seed default condition from each item's claimed_condition
+      const condMap: Record<string, DeviceCondition> = {}
+      for (const item of (order.items ?? [])) {
+        condMap[item.id] = (item.claimed_condition as DeviceCondition) || 'good'
+      }
+      setIntakeDraftCondition(condMap)
+    } catch {
+      setIntakeOrderError('Failed to load order. Check the order number and try again.')
+    } finally { setIntakeOrderLoading(false) }
+  }
+
+  const handleAddIntakeImei = async (orderItem: OrderRefResult['items'][0]) => {
+    const imei = (intakeDraft[orderItem.id] || '').trim()
+    if (!imei) return
+    const actualCondition = intakeDraftCondition[orderItem.id] || 'good'
+
+    // Duplicate check within this intake session
+    const alreadyEntered = Object.values(intakeSlots).flat().some(s => s.imei === imei)
+    if (alreadyEntered) { toast.error('IMEI already entered in this intake session'); return }
+
+    // Optimistically add the slot as validating
+    const newSlot: IntakeSlot = { imei, actualCondition, validation: null, validating: true, mismatch: null }
+    setIntakeSlots(prev => ({ ...prev, [orderItem.id]: [...(prev[orderItem.id] || []), newSlot] }))
+    setIntakeDraft(prev => ({ ...prev, [orderItem.id]: '' }))
+    // Re-focus the input
+    setTimeout(() => intakeImeiInputRefs.current[orderItem.id]?.focus(), 50)
+
+    try {
+      const res = await fetch(`/api/imei-lookup?imei=${encodeURIComponent(imei)}`)
+      const val: ImeiLookupResult = await res.json()
+
+      // Mismatch detection
+      const tacMake = (val.device?.make || '').toLowerCase()
+      const tacModel = (val.device?.model || '').toLowerCase()
+      const expectedMake = (orderItem.device?.make || '').toLowerCase()
+      const expectedModel = (orderItem.device?.model || '').toLowerCase()
+      const deviceMismatch = tacMake !== '' && expectedMake !== '' &&
+        !tacMake.includes(expectedMake.split(' ')[0]) && !expectedMake.includes(tacMake.split(' ')[0])
+      const condMismatch = actualCondition !== (orderItem.claimed_condition as DeviceCondition)
+      const isDuplicate = !!val.existing_record
+
+      let mismatch: IntakeSlot['mismatch'] = null
+      if (isDuplicate) mismatch = 'duplicate'
+      else if (deviceMismatch && condMismatch) mismatch = 'both'
+      else if (deviceMismatch) mismatch = 'device_model'
+      else if (condMismatch) mismatch = 'condition'
+
+      // Suppress unused variable warnings
+      void tacModel; void expectedModel
+
+      setIntakeSlots(prev => ({
+        ...prev,
+        [orderItem.id]: (prev[orderItem.id] || []).map(s =>
+          s.imei === imei ? { ...s, validation: val, validating: false, mismatch } : s
+        ),
+      }))
+    } catch {
+      setIntakeSlots(prev => ({
+        ...prev,
+        [orderItem.id]: (prev[orderItem.id] || []).map(s =>
+          s.imei === imei ? { ...s, validating: false } : s
+        ),
+      }))
+    }
+  }
+
+  const handleRemoveIntakeSlot = (orderItemId: string, imei: string) => {
+    setIntakeSlots(prev => ({
+      ...prev,
+      [orderItemId]: (prev[orderItemId] || []).filter(s => s.imei !== imei),
+    }))
+  }
+
+  const handleSubmitIntake = async () => {
+    if (!intakeOrder) return
+    const rows = Object.entries(intakeSlots).flatMap(([itemId, slots]) => {
+      const item = intakeOrder.items.find(i => i.id === itemId)
+      if (!item) return []
+      return slots
+        .filter(s => !s.validating && s.mismatch !== 'duplicate')
+        .map(s => ({
+          imei: s.imei,
+          device_id: item.device?.id || null,
+          claimed_condition: item.claimed_condition,
+          order_id: intakeOrder.id,
+          order_item_id: itemId,
+          storage: item.storage || undefined,
+          notes: s.mismatch ? `Intake mismatch: ${s.mismatch}` : undefined,
+        }))
+    })
+    if (rows.length === 0) { toast.error('No valid IMEIs to register'); return }
+    setIntakeSubmitting(true)
+    try {
+      const res = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulk_import', rows }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Registration failed')
+      toast.success(`${data.imported} device${data.imported !== 1 ? 's' : ''} registered to triage queue`)
+      fetchPending()
+      setIntakeSlots({})
+      setIntakeOrder(null)
+      setIntakeSearch('')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Registration failed')
+    } finally { setIntakeSubmitting(false) }
+  }
+
   const openAddDialog = () => {
     setAddForm({ imei: '', claimed_condition: 'good', storage: '', color: '', notes: '' })
     setSelectedDevice(null)
@@ -438,6 +589,18 @@ export default function COETriagePage() {
       })?.quoted_price ?? null
     : null
 
+  // Mismatch summary across all intake items
+  const intakeMismatchSummary = (() => {
+    const allSlots = Object.values(intakeSlots).flat()
+    return {
+      total: allSlots.length,
+      condition: allSlots.filter(s => s.mismatch === 'condition' || s.mismatch === 'both').length,
+      device: allSlots.filter(s => s.mismatch === 'device_model' || s.mismatch === 'both').length,
+      duplicate: allSlots.filter(s => s.mismatch === 'duplicate').length,
+      valid: allSlots.filter(s => !s.validating && s.mismatch !== 'duplicate').length,
+    }
+  })()
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -454,6 +617,241 @@ export default function COETriagePage() {
           </Badge>
         </div>
       </div>
+
+      <Tabs defaultValue="queue">
+        <TabsList>
+          <TabsTrigger value="queue">
+            <ClipboardCheck className="mr-1.5 h-4 w-4" />
+            Pending Queue
+            {pendingItems.length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">{pendingItems.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="intake">
+            <PackageSearch className="mr-1.5 h-4 w-4" />
+            Order Intake
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ══ ORDER INTAKE TAB ══════════════════════════════════════════════ */}
+        <TabsContent value="intake" className="space-y-4 mt-4">
+          {/* Order search */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <PackageSearch className="h-4 w-4 text-muted-foreground" />
+                Load Order for Intake
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Enter an order number to see all expected devices and register each IMEI against its order item.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Hash className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Enter order number (e.g. ORD-2026-0050)"
+                    value={intakeSearch}
+                    onChange={e => setIntakeSearch(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleLoadIntakeOrder() }}
+                  />
+                </div>
+                <Button onClick={handleLoadIntakeOrder} disabled={intakeOrderLoading || !intakeSearch.trim()}>
+                  {intakeOrderLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+                  {intakeOrderLoading ? 'Loading...' : 'Load Order'}
+                </Button>
+              </div>
+              {intakeOrderError && (
+                <p className="text-xs text-red-600 mt-2">{intakeOrderError}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {intakeOrder && (
+            <>
+              {/* Order summary banner */}
+              <div className="rounded-lg border bg-muted/30 px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-semibold text-sm">{intakeOrder.order_number}</span>
+                  <Badge variant="outline" className="text-[11px]">{intakeOrder.status.replace(/_/g, ' ')}</Badge>
+                  {intakeOrder.customer && (
+                    <span className="text-xs text-muted-foreground">
+                      {(intakeOrder.customer as Record<string, string>).company_name || (intakeOrder.customer as Record<string, string>).full_name}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {intakeOrder.items?.reduce((s, i) => s + (i.quantity || 1), 0)} devices expected
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {intakeMismatchSummary.condition > 0 && (
+                    <span className="flex items-center gap-1 text-amber-600">
+                      <AlertCircle className="h-3 w-3" />{intakeMismatchSummary.condition} condition mismatch{intakeMismatchSummary.condition !== 1 ? 'es' : ''}
+                    </span>
+                  )}
+                  {intakeMismatchSummary.device > 0 && (
+                    <span className="flex items-center gap-1 text-red-600">
+                      <XCircle className="h-3 w-3" />{intakeMismatchSummary.device} wrong model{intakeMismatchSummary.device !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {intakeMismatchSummary.duplicate > 0 && (
+                    <span className="flex items-center gap-1 text-blue-600">
+                      <AlertCircle className="h-3 w-3" />{intakeMismatchSummary.duplicate} duplicate{intakeMismatchSummary.duplicate !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Per-item intake panels */}
+              <div className="space-y-3">
+                {(intakeOrder.items || []).map(item => {
+                  const slots = intakeSlots[item.id] || []
+                  const registered = slots.length
+                  const expected = item.quantity || 1
+                  const deviceLabel = item.device ? `${item.device.make} ${item.device.model}` : 'Unknown device'
+                  const countColor = registered === 0 ? 'text-muted-foreground' : registered >= expected ? 'text-green-600' : 'text-amber-600'
+
+                  return (
+                    <Card key={item.id}>
+                      <CardHeader className="pb-2 pt-3 px-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">{deviceLabel}</span>
+                            {item.storage && <span className="text-xs text-muted-foreground">({item.storage})</span>}
+                            <span className={`text-xs font-medium ${CONDITION_CONFIG[item.claimed_condition as DeviceCondition]?.color || ''}`}>
+                              Claimed: {CONDITION_CONFIG[item.claimed_condition as DeviceCondition]?.label || item.claimed_condition}
+                            </span>
+                            {item.quoted_price != null && (
+                              <span className="text-xs text-muted-foreground">Quoted: {formatCurrency(item.quoted_price)}</span>
+                            )}
+                          </div>
+                          <span className={`text-xs font-semibold tabular-nums ${countColor}`}>
+                            {registered} / {expected}
+                          </span>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-3 space-y-3">
+                        {/* IMEI entry row */}
+                        <div className="flex gap-2">
+                          <Input
+                            ref={el => { intakeImeiInputRefs.current[item.id] = el }}
+                            placeholder="Scan or enter IMEI"
+                            value={intakeDraft[item.id] || ''}
+                            onChange={e => setIntakeDraft(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddIntakeImei(item) }}
+                            className="font-mono text-sm flex-1"
+                          />
+                          <Select
+                            value={intakeDraftCondition[item.id] || item.claimed_condition}
+                            onValueChange={v => setIntakeDraftCondition(prev => ({ ...prev, [item.id]: v as DeviceCondition }))}
+                          >
+                            <SelectTrigger className="w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {conditions.map(c => (
+                                <SelectItem key={c} value={c}>
+                                  <span className={CONDITION_CONFIG[c].color}>{CONDITION_CONFIG[c].label}</span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            onClick={() => handleAddIntakeImei(item)}
+                            disabled={!(intakeDraft[item.id] || '').trim()}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />Add
+                          </Button>
+                        </div>
+
+                        {/* Registered slots list */}
+                        {slots.length > 0 && (
+                          <div className="rounded-lg border divide-y text-xs overflow-hidden">
+                            {slots.map(slot => (
+                              <div key={slot.imei} className={`flex items-center gap-2 px-3 py-2 ${
+                                slot.mismatch === 'device_model' || slot.mismatch === 'both' ? 'bg-red-50/60' :
+                                slot.mismatch === 'condition' ? 'bg-amber-50/60' :
+                                slot.mismatch === 'duplicate' ? 'bg-blue-50/60' : ''
+                              }`}>
+                                <span className="font-mono flex-1 truncate">{slot.imei}</span>
+                                <span className={CONDITION_CONFIG[slot.actualCondition]?.color || ''}>
+                                  {CONDITION_CONFIG[slot.actualCondition]?.label || slot.actualCondition}
+                                </span>
+                                {slot.validating ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                ) : slot.mismatch === null ? (
+                                  <span className="flex items-center gap-1 text-green-600 shrink-0">
+                                    <CheckCircle className="h-3.5 w-3.5" />Matched
+                                  </span>
+                                ) : slot.mismatch === 'condition' ? (
+                                  <span className="flex items-center gap-1 text-amber-600 shrink-0">
+                                    <AlertCircle className="h-3.5 w-3.5" />Condition mismatch
+                                  </span>
+                                ) : slot.mismatch === 'device_model' ? (
+                                  <span className="flex items-center gap-1 text-red-600 shrink-0">
+                                    <XCircle className="h-3.5 w-3.5" />
+                                    Wrong model{slot.validation?.device ? ` (${slot.validation.device.make})` : ''}
+                                  </span>
+                                ) : slot.mismatch === 'both' ? (
+                                  <span className="flex items-center gap-1 text-red-600 shrink-0">
+                                    <XCircle className="h-3.5 w-3.5" />Model + condition mismatch
+                                  </span>
+                                ) : slot.mismatch === 'duplicate' ? (
+                                  <span className="flex items-center gap-1 text-blue-600 shrink-0">
+                                    <AlertCircle className="h-3.5 w-3.5" />Already in system
+                                  </span>
+                                ) : null}
+                                <button
+                                  onClick={() => handleRemoveIntakeSlot(item.id, slot.imei)}
+                                  className="text-muted-foreground hover:text-red-600 shrink-0"
+                                  title="Remove"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {slots.length === 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {expected - registered} slot{expected - registered !== 1 ? 's' : ''} remaining — scan or type an IMEI above
+                          </p>
+                        )}
+                        {slots.length > 0 && registered < expected && (
+                          <p className="text-xs text-muted-foreground">
+                            {expected - registered} more device{expected - registered !== 1 ? 's' : ''} expected
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+
+              {/* Submit footer */}
+              <div className="flex items-center justify-between pt-2 border-t">
+                <div className="text-sm text-muted-foreground">
+                  {intakeMismatchSummary.valid} device{intakeMismatchSummary.valid !== 1 ? 's' : ''} ready to register
+                  {intakeMismatchSummary.duplicate > 0 && ` (${intakeMismatchSummary.duplicate} duplicate${intakeMismatchSummary.duplicate !== 1 ? 's' : ''} skipped)`}
+                </div>
+                <Button
+                  onClick={handleSubmitIntake}
+                  disabled={intakeSubmitting || intakeMismatchSummary.valid === 0}
+                >
+                  {intakeSubmitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                  Register {intakeMismatchSummary.valid > 0 ? intakeMismatchSummary.valid : ''} Device{intakeMismatchSummary.valid !== 1 ? 's' : ''} to Triage Queue
+                </Button>
+              </div>
+            </>
+          )}
+        </TabsContent>
+
+        {/* ══ PENDING QUEUE TAB ═════════════════════════════════════════════ */}
+        <TabsContent value="queue" className="space-y-6 mt-4">
 
       {/* ── Order / Quote Reference Lookup ──────────────────────────────── */}
       <Card>
@@ -787,6 +1185,9 @@ export default function COETriagePage() {
           )}
         </CardContent>
       </Card>
+
+        </TabsContent>
+      </Tabs>
 
       {/* ── Triage Dialog ───────────────────────────────────────────────── */}
       <Dialog open={triageDialogOpen} onOpenChange={setTriageDialogOpen}>

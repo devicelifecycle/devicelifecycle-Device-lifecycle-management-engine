@@ -18,7 +18,8 @@ const addDeviceSchema = z.object({
   storage: z.string().optional(),
   color: z.string().optional(),
   notes: z.string().optional(),
-  order_id: z.string().uuid().optional(), // Optional - can add without order
+  order_id: z.string().uuid().optional(),
+  order_item_id: z.string().uuid().optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const { imei, device_id, claimed_condition, storage, color, notes, order_id } = validation.data
+      const { imei, device_id, claimed_condition, storage, color, notes, order_id, order_item_id } = validation.data
 
       // Check if IMEI already exists
       const { data: existing } = await supabase
@@ -125,6 +126,7 @@ export async function POST(request: NextRequest) {
           },
           triage_status: 'pending',
           order_id: order_id || null,
+          order_item_id: order_item_id || null,
         })
         .select(`
           *,
@@ -155,6 +157,7 @@ export async function POST(request: NextRequest) {
         repair_cost?: number
         notes?: string
         order_id?: string
+        order_item_id?: string
       }
       const importRows: ImportRow[] = Array.isArray(body.rows) ? body.rows : []
       const validConditions = ['new', 'excellent', 'good', 'fair', 'poor']
@@ -182,6 +185,7 @@ export async function POST(request: NextRequest) {
           claimed_condition: condition,
           triage_status: 'pending',
           order_id: row.order_id || null,
+          order_item_id: row.order_item_id || null,
           metadata: {
             storage: row.storage,
             color: row.color,
