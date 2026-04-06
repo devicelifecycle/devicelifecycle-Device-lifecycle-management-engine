@@ -229,6 +229,14 @@ export default function COETriagePage() {
     } catch {} finally { setIsLoading(false) }
   }, [])
 
+  const removePendingItem = useCallback((itemId: string) => {
+    setPendingItems((prev) => prev.filter((item) => item.id !== itemId))
+  }, [])
+
+  const prependPendingItem = useCallback((item: IMEIRecord) => {
+    setPendingItems((prev) => [item, ...prev.filter((existing) => existing.id !== item.id)])
+  }, [])
+
   useEffect(() => { fetchPending() }, [fetchPending])
 
   // Device search for add dialog
@@ -324,9 +332,12 @@ export default function COETriagePage() {
         const err = await res.json()
         throw new Error(err.error || 'Failed to add device')
       }
+      const data = await res.json()
+      if (data?.data) {
+        prependPendingItem(data.data as IMEIRecord)
+      }
       toast.success('Device added to triage queue')
       setAddDialogOpen(false)
-      fetchPending()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to add device')
     } finally { setIsAdding(false) }
@@ -397,8 +408,8 @@ export default function COETriagePage() {
       } else {
         toast.success('Triage complete — device passed')
       }
+      removePendingItem(selectedItem.id)
       setTriageDialogOpen(false)
-      fetchPending()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to submit triage')
     } finally { setIsSubmitting(false) }
