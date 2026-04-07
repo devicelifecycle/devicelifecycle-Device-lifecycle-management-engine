@@ -2,14 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useMemo } from 'react'
 import {
   AlertTriangle,
   BarChart3,
   Bell,
   Building2,
-  ChevronDown,
   ClipboardCheck,
   DollarSign,
   FilePlus2,
@@ -83,7 +81,6 @@ const navSections: NavSection[] = [
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   const { user, hasRole, logout } = useAuth()
-  const [collapsedSections, setCollapsedSections] = useState<string[]>([])
 
   const filteredSections = useMemo(
     () =>
@@ -96,117 +93,77 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     [hasRole]
   )
 
+  const initials = user?.full_name
+    ? user.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+    : 'U'
+
   return (
-    <aside className="sidebar-surface flex h-full w-[292px] flex-col overflow-hidden text-stone-100">
-      <div className="relative border-b border-white/8 px-6 pb-6 pt-7">
-        <div className="absolute inset-x-0 top-0 h-px copper-line opacity-70" />
-        <div className="eyebrow-label mb-5">Operational Studio</div>
-        <div className="flex items-start gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-primary text-primary-foreground shadow-[0_20px_40px_-22px_rgba(182,93,47,0.9)]">
-            <Package className="h-6 w-6" />
-          </div>
-          <div className="space-y-1">
-            <p className="editorial-title text-3xl leading-none brand-gradient">DLM</p>
-            <p className="text-sm font-medium text-stone-200">Device Lifecycle Engine</p>
-            <p className="text-xs uppercase tracking-[0.25em] text-stone-500">Trade-In + CPO OS</p>
-          </div>
+    <aside className="sidebar-surface flex h-full w-[260px] flex-col overflow-hidden">
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-5 py-5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Package className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-stone-100 leading-none">DLM Engine</p>
+          <p className="text-[10px] text-stone-500 mt-0.5">Device Lifecycle OS</p>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-7 overflow-y-auto px-4 py-6">
-        {filteredSections.map((section) => {
-          const isCollapsed = collapsedSections.includes(section.title)
-          return (
-            <div key={section.title} className="space-y-2">
-              <button
-                className="flex w-full items-center justify-between px-3 text-left"
-                onClick={() =>
-                  setCollapsedSections((prev) =>
-                    prev.includes(section.title) ? prev.filter((s) => s !== section.title) : [...prev, section.title]
-                  )
-                }
-              >
-                <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">{section.title}</span>
-                <ChevronDown
-                  className={cn('h-4 w-4 text-stone-600 transition-transform', isCollapsed && '-rotate-90')}
-                />
-              </button>
-
-              <AnimatePresence initial={false}>
-                {!isCollapsed && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.22 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="space-y-1">
-                      {section.items.map((item) => {
-                        const isActive =
-                          pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
-                        return (
-                          <Link key={item.href} href={item.href} onClick={onNavigate} prefetch={false}>
-                            <div
-                              className={cn(
-                                'group relative flex items-center gap-3 rounded-[1.1rem] px-3.5 py-3 text-sm transition-all duration-200',
-                                isActive
-                                  ? 'bg-white/[0.075] text-stone-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                                  : 'text-stone-400 hover:bg-white/[0.04] hover:text-stone-200'
-                              )}
-                            >
-                              {isActive && <div className="absolute inset-y-3 left-0 w-1 rounded-full bg-primary" />}
-                              <div
-                                className={cn(
-                                  'flex h-9 w-9 items-center justify-center rounded-xl border transition-colors',
-                                  isActive
-                                    ? 'border-primary/30 bg-primary/15 text-primary'
-                                    : 'border-white/5 bg-white/[0.03] text-stone-500 group-hover:border-white/10 group-hover:text-stone-200'
-                                )}
-                              >
-                                <item.icon className="h-4 w-4" />
-                              </div>
-                              <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                                <span className="truncate font-medium">{item.title}</span>
-                                {isActive && <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_14px_rgba(209,124,67,0.8)]" />}
-                              </div>
-                            </div>
-                          </Link>
-                        )
-                      })}
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-5">
+        {filteredSections.map((section) => (
+          <div key={section.title}>
+            <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-600">
+              {section.title}
+            </p>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
+                return (
+                  <Link key={item.title} href={item.href} onClick={onNavigate} prefetch={false}>
+                    <div
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                        isActive
+                          ? 'bg-white/[0.07] text-stone-100'
+                          : 'text-stone-500 hover:bg-white/[0.04] hover:text-stone-300'
+                      )}
+                    >
+                      <item.icon className={cn('h-[15px] w-[15px] shrink-0', isActive ? 'text-primary' : '')} />
+                      <span className="flex-1 truncate font-medium">{item.title}</span>
+                      {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  </Link>
+                )
+              })}
             </div>
-          )
-        })}
+          </div>
+        ))}
       </nav>
 
-      <div className="border-t border-white/8 p-4">
-        <Link href="/profile" onClick={onNavigate} className="surface-muted block rounded-[1.4rem] p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-primary/15 text-base font-semibold text-primary">
-              {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+      {/* User profile */}
+      <div className="border-t border-white/[0.07] p-3">
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
+          <Link href="/profile" onClick={onNavigate} className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-xs font-bold text-primary">
+              {initials}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-stone-100">{user?.full_name || 'User'}</p>
-              <p className="truncate text-xs uppercase tracking-[0.18em] text-stone-500">
-                {user?.role?.replace('_', ' ') || 'Role'}
-              </p>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-stone-200 leading-none">{user?.full_name || 'User'}</p>
+              <p className="truncate text-[10px] text-stone-500 mt-0.5 capitalize">{user?.role?.replace('_', ' ') || 'Role'}</p>
             </div>
-            <button
-              onClick={(event) => {
-                event.preventDefault()
-                logout()
-              }}
-              className="rounded-xl border border-white/8 bg-white/[0.03] p-2.5 text-stone-400 hover:border-primary/20 hover:text-stone-100"
-              title="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        </Link>
+          </Link>
+          <button
+            onClick={logout}
+            className="shrink-0 rounded-md p-1.5 text-stone-600 hover:bg-white/[0.06] hover:text-stone-300 transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </aside>
   )

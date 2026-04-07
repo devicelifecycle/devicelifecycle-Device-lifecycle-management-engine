@@ -1062,6 +1062,8 @@ export default function AdminPricingPage() {
         averageSellPrice: undefined as number | undefined,
         highestSellPrice: undefined as number | undefined,
         latestRetrievedAt: undefined as string | undefined,
+        marketRefPrice: undefined as number | undefined,
+        goRecellGoodPrice: undefined as number | undefined,
       }
     }
 
@@ -1087,6 +1089,8 @@ export default function AdminPricingPage() {
         averageSellPrice: undefined as number | undefined,
         highestSellPrice: undefined as number | undefined,
         latestRetrievedAt: undefined as string | undefined,
+        marketRefPrice: undefined as number | undefined,
+        goRecellGoodPrice: undefined as number | undefined,
       }
     }
 
@@ -1144,6 +1148,23 @@ export default function AdminPricingPage() {
       return new Date(row.retrieved_at).getTime() > new Date(latest).getTime() ? row.retrieved_at : latest
     }, undefined)
 
+    // Market Reference Price: (Bell + Telus + GoRecell_Good × 2) / 4
+    // GoRecell_Good is always the "Good" condition price, regardless of selected condition.
+    // This anchors our quote to the most representative refurbished market signal.
+    const bellPrice = rows.find(r => r.name === 'Bell')?.price
+    const telusPrice = rows.find(r => r.name === 'Telus')?.price
+    const goRecellGoodRow = sameDeviceAndStorage
+      .filter(cp => normalizeCompetitorName(cp.competitor_name) === 'GoRecell' && (cp.condition || 'good') === 'good')
+      .sort((a, b) => {
+        const tA = a.retrieved_at || a.scraped_at || a.updated_at || a.created_at || ''
+        const tB = b.retrieved_at || b.scraped_at || b.updated_at || b.created_at || ''
+        return tB.localeCompare(tA)
+      })[0]
+    const goRecellGoodPrice = goRecellGoodRow?.trade_in_price
+    const marketRefPrice = (bellPrice != null && telusPrice != null && goRecellGoodPrice != null)
+      ? Math.round((bellPrice + telusPrice + goRecellGoodPrice * 2) / 4)
+      : undefined
+
     return {
       rows,
       condition,
@@ -1153,6 +1174,8 @@ export default function AdminPricingPage() {
       averageSellPrice,
       highestSellPrice,
       latestRetrievedAt,
+      marketRefPrice,
+      goRecellGoodPrice,
     }
   })()
 
@@ -1882,6 +1905,24 @@ export default function AdminPricingPage() {
                             </div>
                           )}
                         </div>
+                        {calculatorCompetitorSnapshot.marketRefPrice != null && (
+                          <div className="rounded-lg border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-3 py-2.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-semibold text-amber-700 dark:text-amber-400">Market Reference Price</p>
+                                <p className="text-muted-foreground mt-0.5">
+                                  (Bell + Telus + GoRecell Good × 2) ÷ 4
+                                  {calculatorCompetitorSnapshot.goRecellGoodPrice != null && (
+                                    <span className="ml-1 text-amber-600 dark:text-amber-500">· GoRecell Good = {formatCurrency(calculatorCompetitorSnapshot.goRecellGoodPrice)}</span>
+                                  )}
+                                </p>
+                              </div>
+                              <span className="font-mono text-base font-bold text-amber-700 dark:text-amber-400">
+                                {formatCurrency(calculatorCompetitorSnapshot.marketRefPrice)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         <div className="space-y-1">
                           {calculatorCompetitorSnapshot.rows.map((row) => (
                             <div key={row.name} className="flex items-center justify-between rounded-md border px-3 py-2">
