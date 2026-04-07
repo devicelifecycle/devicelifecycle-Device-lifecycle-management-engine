@@ -65,23 +65,24 @@ export class CompetitorBeatPricingModel implements IPricingModel {
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
 
-    const byName = new Map<string, number>()
+    // Deduplicate by name, prefer exact condition match then freshest
+    const byName = new Map<string, { price: number; condition: string }>()
     let highestCompetitor = 0
-    let goRecellGoodPrice = 0
 
     for (const c of competitors || []) {
       const p = Number(c.trade_in_price) || 0
       if (p <= 0) continue
       const name = (c.competitor_name || 'Unknown').trim()
-      if (!byName.has(name)) byName.set(name, p)
-      if (p > highestCompetitor) highestCompetitor = p
-      const nameLower = name.toLowerCase()
-      if (
-        (nameLower.includes('gorecell') || nameLower.includes('go recell') || nameLower.includes('goresell')) &&
-        (c.condition || 'good') === 'good'
-      ) {
-        goRecellGoodPrice = p
+      const existing = byName.get(name)
+      if (!existing) {
+        byName.set(name, { price: p, condition: c.condition || 'good' })
+      } else {
+        // Prefer exact condition match
+        if (!existing.condition.includes(competitorCondition) && (c.condition || '').includes(competitorCondition)) {
+          byName.set(name, { price: p, condition: c.condition || 'good' })
+        }
       }
+      if (p > highestCompetitor) highestCompetitor = p
     }
 
     if (byName.size === 0 && !(input.base_price && input.base_price > 0)) {
@@ -96,14 +97,30 @@ export class CompetitorBeatPricingModel implements IPricingModel {
       }
     }
 
-    // Weighted average: GoRecell Good ×2, all others ×1
-    const prices = Array.from(byName.values())
-    const sumAll = prices.reduce((s, p) => s + p, 0)
-    const extraGoRecell = goRecellGoodPrice > 0 ? goRecellGoodPrice : 0
-    const totalWeight = prices.length + (extraGoRecell > 0 ? 1 : 0)
-    const weightedAvg = totalWeight > 0
-      ? (sumAll + extraGoRecell) / totalWeight
-      : sumAll / Math.max(prices.length, 1)
+    // Two-step formula:
+    // Step 1: carrier_avg = average of all non-GoRecell competitors
+    // Step 2: final = (carrier_avg + GoRecell_Good) / 2
+    const isGoRecell = (name: string) => {
+      const n = name.toLowerCase()
+      return n.includes('gorecell') || n.includes('go recell') || n.includes('goresell')
+    }
+    let goRecellGoodPrice = 0
+    const carrierPrices: number[] = []
+    for (const [name, entry] of byName) {
+      if (isGoRecell(name)) {
+        goRecellGoodPrice = entry.price
+      } else {
+        carrierPrices.push(entry.price)
+      }
+    }
+    const carrierAvg = carrierPrices.length > 0
+      ? carrierPrices.reduce((s, p) => s + p, 0) / carrierPrices.length
+      : 0
+    const weightedAvg = carrierAvg > 0 && goRecellGoodPrice > 0
+      ? (carrierAvg + goRecellGoodPrice) / 2
+      : goRecellGoodPrice > 0
+        ? goRecellGoodPrice
+        : carrierAvg
 
     // Apply issue deductions
     let anchorPrice = round2(weightedAvg > 0 ? weightedAvg : (input.base_price ?? 0) * (CONDITION_MULT[input.condition] ?? 0.85))
@@ -137,11 +154,13 @@ export class CompetitorBeatPricingModel implements IPricingModel {
       valid_for_hours: 12,
       breakdown: {
         competitors_found: byName.size,
-        competitor_names: Array.from(byName.keys()).join(', '),
-        sum_all_prices: round2(sumAll),
+        carrier_competitors: carrierPrices.length,
+        carrier_names: Array.from(byName.entries()).filter(([n]) => !isGoRecell(n)).map(([n]) => n).join(', '),
+        carrier_avg: round2(carrierAvg),
         gorecell_good_price: goRecellGoodPrice,
-        gorecell_extra_weight: extraGoRecell > 0,
-        total_weight: totalWeight,
+        formula: carrierAvg > 0 && goRecellGoodPrice > 0
+          ? `(carrier_avg $${round2(carrierAvg)} + GoRecell $${goRecellGoodPrice}) / 2`
+          : goRecellGoodPrice > 0 ? 'GoRecell only' : 'Carrier avg only',
         weighted_avg: round2(weightedAvg),
         highest_competitor: highestCompetitor,
         beat_enabled: cfg.beat_enabled,
