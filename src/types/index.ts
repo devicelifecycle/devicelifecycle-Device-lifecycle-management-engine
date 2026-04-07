@@ -286,6 +286,8 @@ export interface Order extends BaseEntity {
   type: OrderType;
   direction?: OrderDirection;
   status: OrderStatus;
+  discrepancy_count?: number;
+  unresolved_discrepancy_count?: number;
   
   customer_id?: string;
   vendor_id?: string;

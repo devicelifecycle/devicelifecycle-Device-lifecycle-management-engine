@@ -399,9 +399,21 @@ export default function OrdersPage() {
                           <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(order.id)} />
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
-                            {order.order_number}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
+                              {order.order_number}
+                            </Link>
+                            {(order.unresolved_discrepancy_count || 0) > 0 && (
+                              <Badge variant="destructive" className="h-5 px-2 text-[10px] uppercase tracking-wide">
+                                {order.unresolved_discrepancy_count} exception{order.unresolved_discrepancy_count === 1 ? '' : 's'}
+                              </Badge>
+                            )}
+                            {(order.unresolved_discrepancy_count || 0) === 0 && (order.discrepancy_count || 0) > 0 && (
+                              <Badge variant="secondary" className="h-5 px-2 text-[10px] uppercase tracking-wide">
+                                resolved
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{order.type === 'trade_in' ? 'Trade-In' : 'CPO'}</Badge>

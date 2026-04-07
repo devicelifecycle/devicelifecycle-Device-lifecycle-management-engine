@@ -173,8 +173,36 @@ export class OrderService {
       throw new Error(error.message)
     }
 
+    const orders = (data || []) as Order[]
+
+    if (orders.length > 0) {
+      const orderIds = orders.map((order) => order.id)
+      const { data: exceptions } = await supabase
+        .from('order_exceptions')
+        .select('order_id, approval_status')
+        .in('order_id', orderIds)
+
+      const byOrder: Record<string, { total: number; unresolved: number }> = {}
+      for (const ex of exceptions || []) {
+        const orderId = ex.order_id as string
+        if (!byOrder[orderId]) {
+          byOrder[orderId] = { total: 0, unresolved: 0 }
+        }
+        byOrder[orderId].total += 1
+        if (ex.approval_status !== 'admin_approved') {
+          byOrder[orderId].unresolved += 1
+        }
+      }
+
+      for (const order of orders) {
+        const counts = byOrder[order.id]
+        order.discrepancy_count = counts?.total || 0
+        order.unresolved_discrepancy_count = counts?.unresolved || 0
+      }
+    }
+
     return {
-      data: data as Order[],
+      data: orders,
       total: count || 0,
       page,
       page_size,
