@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Switch } from '@/components/ui/switch'
 import { PageHero } from '@/components/ui/page-hero'
-import { CONDITION_CONFIG, STORAGE_OPTIONS, MARGIN_TIER_CONFIG, COMPETITORS as COMPETITOR_LIST, COMPETITOR_DISPLAY_NAMES, getMarketRefEntry } from '@/lib/constants'
+import { CONDITION_CONFIG, STORAGE_OPTIONS, MARGIN_TIER_CONFIG, COMPETITORS as COMPETITOR_LIST, COMPETITOR_DISPLAY_NAMES } from '@/lib/constants'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import type { CompetitorPrice, DeviceCondition, Device, PriceCalculationResultV2 } from '@/types'
 
@@ -1064,7 +1064,7 @@ export default function AdminPricingPage() {
         latestRetrievedAt: undefined as string | undefined,
         marketRefPrice: undefined as number | undefined,
         goRecellGoodPrice: undefined as number | undefined,
-        refEntry: undefined as import('@/lib/constants').MarketRefEntry | null | undefined,
+        competitorCount: 0,
       }
     }
 
@@ -1092,7 +1092,7 @@ export default function AdminPricingPage() {
         latestRetrievedAt: undefined as string | undefined,
         marketRefPrice: undefined as number | undefined,
         goRecellGoodPrice: undefined as number | undefined,
-        refEntry: undefined as import('@/lib/constants').MarketRefEntry | null | undefined,
+        competitorCount: 0,
       }
     }
 
@@ -1150,12 +1150,20 @@ export default function AdminPricingPage() {
       return new Date(row.retrieved_at).getTime() > new Date(latest).getTime() ? row.retrieved_at : latest
     }, undefined)
 
-    // Market Reference Price: look up from hardcoded benchmark table
-    // (Bell + Telus + GoRecell_Good × 2) / 4 — precomputed per device model
-    const deviceLabel = getDeviceLabel(calcForm.device_id)
-    const refEntry = getMarketRefEntry(deviceLabel)
-    const marketRefPrice = refEntry?.avg
-    const goRecellGoodPrice = refEntry?.goRecellGood
+    // Weighted Market Average: GoRecell Good ×2, all other competitors ×1
+    // Applies to every device dynamically — no hardcoded list needed
+    const goRecellGoodRow = rows.find(r => {
+      const n = r.name.toLowerCase()
+      return n.includes('gorecell') || n.includes('go recell') || n.includes('goresell')
+    })
+    const goRecellGoodPrice = goRecellGoodRow?.price
+    const validRows = rows.filter(r => r.price != null && r.price > 0)
+    const sumAll = validRows.reduce((s, r) => s + (r.price ?? 0), 0)
+    const extraGoRecell = goRecellGoodPrice ?? 0
+    const totalWeight = validRows.length + (extraGoRecell > 0 ? 1 : 0)
+    const marketRefPrice = totalWeight > 0
+      ? Math.round((sumAll + extraGoRecell) / totalWeight)
+      : undefined
 
     return {
       rows,
@@ -1166,9 +1174,9 @@ export default function AdminPricingPage() {
       averageSellPrice,
       highestSellPrice,
       latestRetrievedAt,
-      marketRefPrice,
+      marketRefPrice: marketRefPrice ?? undefined,
       goRecellGoodPrice,
-      refEntry,
+      competitorCount: validRows.length,
     }
   })()
 
@@ -1898,29 +1906,33 @@ export default function AdminPricingPage() {
                             </div>
                           )}
                         </div>
-                        {calculatorCompetitorSnapshot.marketRefPrice != null && calculatorCompetitorSnapshot.refEntry != null && (
+                        {calculatorCompetitorSnapshot.marketRefPrice != null && (
                           <div className="rounded-lg border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-3 py-3 text-xs space-y-2">
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="font-semibold text-amber-700 dark:text-amber-400">Market Reference Price</p>
-                                <p className="text-muted-foreground mt-0.5">(Bell + Telus + GoRecell Good × 2) ÷ 4</p>
+                                <p className="text-muted-foreground mt-0.5">Weighted avg of all competitors (GoRecell Good ×2)</p>
                               </div>
                               <span className="font-mono text-base font-bold text-amber-700 dark:text-amber-400">
                                 {formatCurrency(calculatorCompetitorSnapshot.marketRefPrice)}
                               </span>
                             </div>
-                            <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-amber-200/40 dark:border-amber-800/40">
-                              {[
-                                { label: 'Bell', val: calculatorCompetitorSnapshot.refEntry.bell },
-                                { label: 'Telus', val: calculatorCompetitorSnapshot.refEntry.telus },
-                                { label: 'GoRecell Good', val: calculatorCompetitorSnapshot.refEntry.goRecellGood },
-                                { label: 'GoRecell Fair', val: calculatorCompetitorSnapshot.refEntry.goRecellFair },
-                              ].map(({ label, val }) => (
-                                <div key={label} className="rounded bg-white/50 dark:bg-white/5 px-2 py-1.5 text-center">
-                                  <p className="text-[10px] text-muted-foreground">{label}</p>
-                                  <p className="font-mono font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(val)}</p>
-                                </div>
-                              ))}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1 border-t border-amber-200/40 dark:border-amber-800/40">
+                              {calculatorCompetitorSnapshot.rows.filter(r => r.price != null && r.price > 0).map((row) => {
+                                const isGoRecellGood = (() => {
+                                  const n = row.name.toLowerCase()
+                                  return (n.includes('gorecell') || n.includes('go recell') || n.includes('goresell')) && n.includes('good')
+                                })()
+                                return (
+                                  <div key={row.name} className="rounded bg-white/50 dark:bg-white/5 px-2 py-1.5 text-center relative">
+                                    {isGoRecellGood && (
+                                      <span className="absolute -top-1.5 right-1 text-[8px] bg-amber-500 text-white rounded px-1 leading-tight">×2</span>
+                                    )}
+                                    <p className="text-[10px] text-muted-foreground truncate">{row.name}</p>
+                                    <p className="font-mono font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(row.price!)}</p>
+                                  </div>
+                                )
+                              })}
                             </div>
                           </div>
                         )}
