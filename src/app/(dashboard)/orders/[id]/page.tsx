@@ -34,6 +34,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrderShipments } from '@/hooks/useShipments'
+import { DiscrepancyDetail } from '@/components/orders/DiscrepancyDetail'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
@@ -2116,6 +2117,11 @@ export default function OrderDetailPage() {
             </Card>
           )}
 
+          {/* Discrepancies / Exceptions Section */}
+          {(['accepted', 'sourcing', 'sourced', 'shipped_to_coe', 'received', 'in_triage', 'qc_complete', 'ready_to_ship'] as const).includes(order.status as any) && (
+              <DiscrepancyDetail orderId={order.id} />
+
+              )}
           {/* Create Shipment Dialog */}
           <Dialog open={shipmentDialogOpen} onOpenChange={setShipmentDialogOpen}>
             <DialogContent className="max-w-[95vw] sm:max-w-lg">
