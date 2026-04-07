@@ -239,15 +239,15 @@ export default function COETriagePage() {
   })
   const [isAdding, setIsAdding] = useState(false)
 
-  const fetchPending = useCallback(async () => {
-    setIsLoading(true)
+  const fetchPending = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true)
     try {
-      const res = await fetch('/api/triage?type=pending')
+      const res = await fetch('/api/triage?type=pending', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setPendingItems(data.data || [])
       }
-    } catch {} finally { setIsLoading(false) }
+    } catch {} finally { if (!silent) setIsLoading(false) }
   }, [])
 
   const removePendingItem = useCallback((itemId: string) => {
@@ -258,7 +258,21 @@ export default function COETriagePage() {
     setPendingItems((prev) => [item, ...prev.filter((existing) => existing.id !== item.id)])
   }, [])
 
-  useEffect(() => { fetchPending() }, [fetchPending])
+  // Initial load + 30-second polling so all devices stay in sync
+  useEffect(() => {
+    fetchPending()
+    const interval = setInterval(() => fetchPending(true), 30_000)
+    return () => clearInterval(interval)
+  }, [fetchPending])
+
+  // Refetch immediately when user switches back to this tab
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchPending(true)
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [fetchPending])
 
   // Device search for add dialog
   useEffect(() => {
