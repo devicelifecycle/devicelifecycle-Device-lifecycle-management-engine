@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; exceptionId: string } }
+  { params }: { params: Promise<{ id: string; exceptionId: string }> }
 ) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -20,7 +20,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { id: orderId, exceptionId } = params
+    const { id: orderId, exceptionId } = await params
 
     if (!orderId || !exceptionId) {
       return NextResponse.json(
