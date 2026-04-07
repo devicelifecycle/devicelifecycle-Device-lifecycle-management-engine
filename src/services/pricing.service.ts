@@ -15,7 +15,6 @@ import {
   BROKEN_DEVICE_MULTIPLIER,
   RISK_MODE_CONFIG,
   ISSUE_TO_DEDUCTION_KEY,
-  getMarketRefEntry,
 } from '@/lib/constants'
 import type {
   PricingTable,
@@ -436,20 +435,6 @@ export class PricingService {
     }
     const carrier = normalizedInput.carrier || 'Unlocked'
     const settings = await this.getPricingSettings(supabase)
-
-    // Look up hardcoded market reference entry (Bell/Telus/GoRecell benchmark table).
-    // Used in Step 8 as the primary trade-in anchor for known devices.
-    const deviceInfo = await this.runPricingRead<{ make: string; model: string }>(
-      'device_catalog make+model lookup',
-      () => supabase
-        .from('device_catalog')
-        .select('make, model')
-        .eq('id', normalizedInput.device_id)
-        .single(),
-      { allowNoRows: true }
-    )
-    const deviceLabel = deviceInfo ? `${deviceInfo.make} ${deviceInfo.model}` : ''
-    const marketRef = deviceLabel ? getMarketRefEntry(deviceLabel) : null
 
     try {
       // Step 1: Get market reference prices
@@ -948,45 +933,55 @@ export class PricingService {
       )
 
       // Step 8: Determine trade price
-      // Primary strategy: use the market reference average = (Bell + Telus + GoRecell_Good × 2) / 4.
-      // This is the midpoint between carrier prices and the refurbished market — not above the highest.
-      // The reference table (16 devices) is hardcoded from our carrier/GoRecell benchmark sheet.
-      // For devices not in the table, fall back to avgCompetitorPrice (plain average, no beat-up).
-      // Beat-competitor settings are honoured ONLY when explicitly overridden per-request (not as default).
-      const beatPercent = (input.beat_competitor_percent ?? 0)  // only honour explicit per-request override
-      const beatAmount = input.beat_competitor_amount ?? 0       // only honour explicit per-request override
+      // Formula: weighted average of ALL available competitors — GoRecell Good gets weight ×2
+      // because it represents the most liquid refurbished resale market.
+      // All other competitors (Bell, Telus, UniverCell, Apple, etc.) get weight ×1.
+      // This applies to every device in the catalog dynamically — no hardcoded device list.
+      // Beat-competitor settings honoured ONLY when caller explicitly passes them per-request.
+      const beatPercent = (input.beat_competitor_percent ?? 0)
+      const beatAmount = input.beat_competitor_amount ?? 0
       const hasCompetitorData = filteredCompetitors.length > 0 && avgCompetitorPrice > 0
 
       let tradePrice: number
       let competitorCeilingApplied = false
       let competitorCeilingValue: number | undefined
       let beatPricingApplied = false
+      let weightedAvgUsed = false
 
-      // The ref avg is calibrated for Good condition. Scale to the requested condition
-      // using the ratio vs Good multiplier (0.85) so all conditions are consistent.
-      const goodMult = CONDITION_MULTIPLIERS['good'] ?? 0.85
-      const refTradePrice = marketRef
-        ? round2((marketRef.avg / goodMult) * (CONDITION_MULTIPLIERS[normalizedInput.condition] ?? goodMult))
-        : null
+      // Compute weighted average: GoRecell Good is fetched at the selected condition
+      // (competitorData already has condition-matched rows). Identify GoRecell Good price
+      // from the raw competitor data — it gets an extra weight slot.
+      const goRecellGoodEntry = competitorData.find(cp => {
+        const name = (cp.competitor_name || '').toLowerCase()
+        return (name.includes('gorecell') || name.includes('go recell') || name.includes('goresell')) &&
+          (cp.condition || 'good') === 'good'
+      })
+      const goRecellGoodPrice = goRecellGoodEntry?.trade_in_price ?? 0
+
+      let weightedAvgPrice = 0
+      if (filteredCompetitors.length > 0) {
+        // Sum all competitor prices (weight 1 each) + GoRecell Good once more (extra weight)
+        const sumAll = filteredCompetitors.reduce((s, c) => s + c.price, 0)
+        const extraGoRecell = goRecellGoodPrice > 0 ? goRecellGoodPrice : 0
+        const totalWeight = filteredCompetitors.length + (extraGoRecell > 0 ? 1 : 0)
+        weightedAvgPrice = totalWeight > 0 ? (sumAll + extraGoRecell) / totalWeight : avgCompetitorPrice
+      }
 
       if (isBroken) {
         // Broken = 50% of good working trade price (Brian's rule)
         tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
-      } else if (refTradePrice != null && refTradePrice > 0 && !beatPercent && !beatAmount) {
-        // Known device: use hardcoded market reference average as trade-in price.
-        // (Bell + Telus + GoRecell_Good × 2) / 4 — sits between carrier and GoRecell prices.
-        tradePrice = refTradePrice
+      } else if (hasCompetitorData && !beatPercent && !beatAmount) {
+        // All devices: weighted average (GoRecell Good ×2, all others ×1)
+        tradePrice = round2(weightedAvgPrice > 0 ? weightedAvgPrice : avgCompetitorPrice)
+        weightedAvgUsed = true
       } else if (hasCompetitorData) {
-        // Unknown device or per-request beat override: use avg competitor price.
-        // Only apply beat-up when caller explicitly requested it (not as system default).
+        // Per-request beat override
         if (beatPercent > 0) {
           tradePrice = round2(avgCompetitorPrice * (1 + beatPercent / 100))
           beatPricingApplied = true
-        } else if (beatAmount > 0) {
+        } else {
           tradePrice = round2(avgCompetitorPrice + beatAmount)
           beatPricingApplied = true
-        } else {
-          tradePrice = round2(avgCompetitorPrice)
         }
       } else {
         // No competitor data — use anchor-based formula as fallback
@@ -1081,8 +1076,10 @@ export class PricingService {
       }
 
       // Append risk mode context
-      if (refTradePrice != null && refTradePrice > 0 && !beatPricingApplied) {
-        reasoning = `Market ref avg $${refTradePrice} (Bell $${marketRef!.bell} + Telus $${marketRef!.telus} + GoRecell Good $${marketRef!.goRecellGood}×2) ÷ 4, scaled for ${normalizedInput.condition}.`
+      if (weightedAvgUsed) {
+        const compNames = filteredCompetitors.map(c => c.name).join(', ')
+        const goStr = goRecellGoodPrice > 0 ? ` (GoRecell Good $${goRecellGoodPrice} counted ×2)` : ''
+        reasoning = `Weighted avg $${round2(tradePrice)} from ${filteredCompetitors.length} competitor(s): ${compNames}${goStr}.`
       } else if (beatPricingApplied) {
         const beatDesc = beatPercent > 0 ? `${beatPercent}%` : `$${beatAmount}`
         reasoning = `Beat avg competitor ($${round2(avgCompetitorPrice)}) by ${beatDesc} — quote $${round2(tradePrice)}.`
@@ -1153,8 +1150,8 @@ export class PricingService {
       }
 
       // Determine price source
-      const priceSource = refTradePrice != null && !beatPricingApplied
-        ? 'Market Reference Benchmark'
+      const priceSource = weightedAvgUsed
+        ? 'Weighted Competitor Average'
         : marketEntry ? 'Market Data' : 'Pricing Table'
 
       // Apply quantity
