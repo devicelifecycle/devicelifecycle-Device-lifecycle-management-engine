@@ -750,15 +750,26 @@ export default function NewTradeInPage() {
                           <TableCell className="text-right text-xs">{item.quantity}</TableCell>
                           <TableCell className="text-right font-mono text-xs text-muted-foreground">{formatCurrency(price.engine_price)}</TableCell>
                           {/* Competitor prices — internal only, never shown to customers */}
-                          <TableCell className="bg-amber-50/40 min-w-[160px]">
+                          <TableCell className="bg-amber-50/40 min-w-[180px]">
                             {price.competitors.length > 0 ? (
                               <div className="space-y-0.5">
-                                {price.competitors.map(c => (
-                                  <div key={c.name} className="flex items-center justify-between gap-2 text-[11px]">
-                                    <span className="text-muted-foreground truncate max-w-[90px]">{c.name}</span>
-                                    <span className="font-mono font-medium text-amber-800">{formatCurrency(c.price)}</span>
+                                {price.competitors.map(c => {
+                                  const isGoRecell = c.name.toLowerCase().includes('gorecell') || c.name.toLowerCase().includes('go recell')
+                                  return (
+                                    <div key={c.name} className="flex items-center justify-between gap-2 text-[11px]">
+                                      <span className="text-muted-foreground truncate max-w-[100px]">
+                                        {c.name}{isGoRecell && <span className="ml-0.5 text-[9px] bg-amber-500 text-white rounded px-0.5">×2</span>}
+                                      </span>
+                                      <span className="font-mono font-medium text-amber-800">{formatCurrency(c.price)}</span>
+                                    </div>
+                                  )
+                                })}
+                                {price.competitors.length >= 2 && (
+                                  <div className="flex items-center justify-between gap-2 text-[11px] border-t border-amber-200/60 pt-0.5 mt-0.5">
+                                    <span className="text-muted-foreground">Wtd avg →</span>
+                                    <span className="font-mono font-semibold text-amber-900">{formatCurrency(price.engine_price)}</span>
                                   </div>
-                                ))}
+                                )}
                               </div>
                             ) : (
                               <span className="text-xs text-muted-foreground">No data</span>

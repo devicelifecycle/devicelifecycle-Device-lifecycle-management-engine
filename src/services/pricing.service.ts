@@ -718,44 +718,48 @@ export class PricingService {
         }
       }
 
-      // Step 2: Pull competitor prices early so competitor-backed devices can still quote
-      // Apply same 14-day staleness cutoff used for anchor pricing — stale prices cause
-      // quotes to drift from current competitor websites.
+      // Step 2: Pull ALL competitor prices for this device+storage (all conditions).
+      // Fetch across all conditions so every competitor contributes to the weighted average —
+      // not just those that happen to have data for the exact requested condition.
+      // Deduplicate by competitor name: prefer exact condition match, then freshest row.
       const competitorCondition = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
-      const filterFreshCompetitors = (rows: CompetitorPrice[] | null): CompetitorPrice[] =>
-        (rows || []).filter((cp) => {
-          const ts = cp.updated_at || cp.scraped_at || cp.created_at
-          return ts && new Date(ts) > staleCutoff
-        })
 
-      let competitorData = filterFreshCompetitors(
-        await this.runPricingRead<CompetitorPrice[]>(
-          'competitor_prices exact condition',
-          () => supabase
-            .from('competitor_prices')
-            .select('*')
-            .eq('device_id', normalizedInput.device_id)
-            .eq('storage', normalizedInput.storage)
-            .eq('condition', competitorCondition)
-            .gte('scraped_at', staleCutoff.toISOString()),
-          { allowNoRows: true, retries: 2 }
-        )
-      )
+      const allCompetitorRows = await this.runPricingRead<CompetitorPrice[]>(
+        'competitor_prices all conditions',
+        () => supabase
+          .from('competitor_prices')
+          .select('*')
+          .eq('device_id', normalizedInput.device_id)
+          .eq('storage', normalizedInput.storage)
+          .not('trade_in_price', 'is', null)
+          .gt('trade_in_price', 0),
+        { allowNoRows: true, retries: 2 }
+      ) || []
 
-      if (competitorData.length === 0) {
-        competitorData = filterFreshCompetitors(
-          await this.runPricingRead<CompetitorPrice[]>(
-            'competitor_prices storage fallback',
-            () => supabase
-              .from('competitor_prices')
-              .select('*')
-              .eq('device_id', normalizedInput.device_id)
-              .eq('storage', normalizedInput.storage)
-              .gte('scraped_at', staleCutoff.toISOString()),
-            { allowNoRows: true, retries: 2 }
-          )
-        ) || []
+      // Deduplicate: one row per competitor name, prefer exact condition then freshest
+      const competitorMap = new Map<string, CompetitorPrice>()
+      for (const cp of allCompetitorRows) {
+        const price = Number(cp.trade_in_price) || 0
+        if (price <= 0) continue
+        const name = (cp.competitor_name || 'Unknown').trim()
+        const existing = competitorMap.get(name)
+        if (!existing) {
+          competitorMap.set(name, cp)
+        } else {
+          const existingIsExact = existing.condition === competitorCondition
+          const currentIsExact = cp.condition === competitorCondition
+          if (currentIsExact && !existingIsExact) {
+            competitorMap.set(name, cp)
+          } else if (currentIsExact === existingIsExact) {
+            // Same priority — keep fresher
+            const existingTs = new Date((existing.scraped_at || existing.created_at) ?? 0).getTime()
+            const currentTs = new Date((cp.scraped_at || cp.created_at) ?? 0).getTime()
+            if (currentTs > existingTs) competitorMap.set(name, cp)
+          }
+        }
       }
+
+      let competitorData = Array.from(competitorMap.values())
 
       if (!anchorPrice && competitorData && competitorData.length > 0) {
         const competitorAnchorCandidates = competitorData
@@ -953,8 +957,7 @@ export class PricingService {
       // from the raw competitor data — it gets an extra weight slot.
       const goRecellGoodEntry = competitorData.find(cp => {
         const name = (cp.competitor_name || '').toLowerCase()
-        return (name.includes('gorecell') || name.includes('go recell') || name.includes('goresell')) &&
-          (cp.condition || 'good') === 'good'
+        return (name.includes('gorecell') || name.includes('go recell') || name.includes('goresell'))
       })
       const goRecellGoodPrice = goRecellGoodEntry?.trade_in_price ?? 0
 
@@ -999,34 +1002,9 @@ export class PricingService {
         tradePrice = Math.max(tradePrice, competitiveFloor)
       }
 
-      // Apply competitor ceiling for all non-beat pricing paths, including broken-condition quotes.
-      const exactConditionCompetitors = await this.runPricingRead<Array<{
-        competitor_name?: string
-        trade_in_price?: number
-      }>>(
-        'competitor_prices final sanity ceiling',
-        () => supabase
-          .from('competitor_prices')
-          .select('competitor_name, trade_in_price')
-          .eq('device_id', normalizedInput.device_id)
-          .eq('storage', normalizedInput.storage)
-          .eq('condition', competitorCondition)
-          .not('trade_in_price', 'is', null)
-          .gt('trade_in_price', 0),
-        { allowNoRows: true, retries: 2 }
-      )
-
-      const exactFilteredCompetitors = filterCompetitorOutliers(
-        (exactConditionCompetitors || [])
-          .map((row) => ({
-            name: row.competitor_name || 'Unknown',
-            price: Number(row.trade_in_price) || 0,
-          }))
-          .filter((row) => row.price > 0)
-      )
-
-      const competitorCeilingReference = exactFilteredCompetitors.length > 0
-        ? Math.max(...exactFilteredCompetitors.map((entry) => entry.price))
+      // Apply competitor ceiling — use the same deduplicated competitor set already built above.
+      const competitorCeilingReference = filteredCompetitors.length > 0
+        ? Math.max(...filteredCompetitors.map((entry) => entry.price))
         : highestCompetitor
 
       if (!beatPricingApplied && competitorCeilingReference > 0) {
