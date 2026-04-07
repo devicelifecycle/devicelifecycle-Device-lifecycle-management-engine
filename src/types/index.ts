@@ -18,6 +18,8 @@ export type OrganizationType = 'internal' | 'customer' | 'vendor';
 
 export type OrderType = 'cpo' | 'trade_in';
 
+export type OrderDirection = 'inbound' | 'outbound';
+
 export type OrderStatus =
   | 'draft'
   | 'submitted'
@@ -282,6 +284,7 @@ export interface PriceCalculationResultV2 {
 export interface Order extends BaseEntity {
   order_number: string;
   type: OrderType;
+  direction?: OrderDirection;
   status: OrderStatus;
   
   customer_id?: string;
@@ -446,9 +449,72 @@ export interface TriageResult extends BaseEntity {
   triaged_by_id?: string;
   triaged_at?: string;
   
+  // Exception tracking fields
+  exception_type?: 'condition_mismatch' | 'price_variance' | 'missing_device' | 'other';
+  mismatch_severity?: 'minor' | 'moderate' | 'major';
+  approval_status?: 'pending' | 'coe_approved' | 'admin_approved' | 'rejected' | 'overridden';
+  coe_notes?: string;
+  admin_notes?: string;
+  approved_by_coe_id?: string;
+  approved_by_admin_id?: string;
+  approved_at?: string;
+  
   // Joined relations
   imei_record?: IMEIRecord;
   triaged_by?: User;
+}
+
+// ============================================================================
+// EXCEPTION TYPES
+// ============================================================================
+
+export interface OrderException extends BaseEntity {
+  order_id: string;
+  order_item_id: string;
+  exception_type: 'condition_mismatch' | 'price_variance' | 'missing_device' | 'other';
+  severity: 'minor' | 'moderate' | 'major';
+  summary: string;
+  approval_status: 'pending' | 'coe_approved' | 'admin_approved' | 'rejected' | 'overridden';
+  notes?: string;
+  created_by_id?: string;
+  resolved_at?: string;
+  
+  // Joined relations
+  order?: Order;
+  order_item?: OrderItem;
+  created_by?: User;
+}
+
+export interface DiscrepancyDetails {
+  exceptionId: string;
+  itemId: string;
+  deviceName: string;
+  claimedCondition: DeviceCondition;
+  actualCondition: DeviceCondition;
+  claimedPrice?: number;
+  actualPrice?: number;
+  priceDifference?: number;
+  severity: 'minor' | 'moderate' | 'major';
+  type: string;
+  approvalStatus: 'pending' | 'coe_approved' | 'admin_approved' | 'rejected' | 'overridden';
+  coeApprovedAt?: string;
+  adminApprovedAt?: string;
+  coeNotes?: string;
+  adminNotes?: string;
+}
+
+export interface OrderDiscrepancyResponse {
+  orderId: string;
+  totalItems: number;
+  itemsWithDiscrepancies: number;
+  discrepancyRate: string;
+  exceptions: DiscrepancyDetails[];
+  summaryByStatus: {
+    pending: number;
+    coe_approved: number;
+    admin_approved: number;
+    rejected: number;
+  };
 }
 
 // ============================================================================
@@ -783,6 +849,7 @@ export interface OrderFilters extends PaginationParams {
 
 export interface CreateOrderInput {
   type: OrderType;
+  direction?: OrderDirection; // inferred from type if not provided
   customer_id: string;
   vendor_id?: string;
   items: Array<{
