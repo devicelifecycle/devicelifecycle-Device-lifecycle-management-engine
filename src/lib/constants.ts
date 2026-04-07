@@ -731,3 +731,63 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     message: (n) => `Order #${n} has been completed and closed. Thank you for your business!`,
   },
 }
+
+// ============================================================================
+// MARKET REFERENCE PRICES
+// Source: internal carrier/reseller benchmark table (Bell, Telus, GoRecell)
+// Formula: Average Carrier/Go = (Bell + Telus + GoRecell_Good × 2) / 4
+// Used as trade-in anchor in Admin → Pricing calculator.
+// ============================================================================
+
+export interface MarketRefEntry {
+  bell: number
+  telus: number
+  goRecellGood: number
+  goRecellFair: number
+  /** Precomputed: Math.round((bell + telus + goRecellGood * 2) / 4) */
+  avg: number
+  /** Patterns to match against `${make} ${model}` (case-insensitive) */
+  patterns: string[]
+}
+
+export const MARKET_REFERENCE_PRICES: MarketRefEntry[] = [
+  // ── iPhone ────────────────────────────────────────────────────
+  { bell: 50,  telus: 50,  goRecellGood: 152, goRecellFair: 104, avg: 101, patterns: ['iphone 11'] },
+  { bell: 80,  telus: 70,  goRecellGood: 152, goRecellFair: 113, avg: 114, patterns: ['iphone 12'] },
+  { bell: 165, telus: 175, goRecellGood: 225, goRecellFair: 181, avg: 198, patterns: ['iphone 13'] },
+  { bell: 295, telus: 270, goRecellGood: 354, goRecellFair: 312, avg: 318, patterns: ['iphone 13 pro max', 'iphone 13 max', 'iphone 13pro max'] },
+  { bell: 215, telus: 215, goRecellGood: 263, goRecellFair: 236, avg: 239, patterns: ['iphone 14'] },
+  { bell: 390, telus: 295, goRecellGood: 461, goRecellFair: 413, avg: 402, patterns: ['iphone 14 pro max', 'iphone 14 max', 'iphone 14pro max'] },
+  { bell: 350, telus: 305, goRecellGood: 382, goRecellFair: 328, avg: 355, patterns: ['iphone 15'] },
+  { bell: 590, telus: 465, goRecellGood: 579, goRecellFair: 524, avg: 553, patterns: ['iphone 15 pro max', 'iphone 15 max', 'iphone 15pro max'] },
+  // ── Samsung ───────────────────────────────────────────────────
+  // Ultra variants listed before base so longest-match resolution works correctly
+  { bell: 210, telus: 210, goRecellGood: 275, goRecellFair: 240, avg: 243, patterns: ['galaxy s22 ultra', 's22 ultra', 'galaxy s22u', 's22u'] },
+  { bell: 70,  telus: 70,  goRecellGood: 161, goRecellFair: 123, avg: 116, patterns: ['galaxy s22', 's22'] },
+  { bell: 330, telus: 270, goRecellGood: 330, goRecellFair: 281, avg: 315, patterns: ['galaxy s23 ultra', 's23 ultra', 'galaxy s23u', 's23u'] },
+  { bell: 200, telus: 150, goRecellGood: 206, goRecellFair: 172, avg: 191, patterns: ['galaxy s23', 's23'] },
+  { bell: 370, telus: 350, goRecellGood: 541, goRecellFair: 497, avg: 451, patterns: ['galaxy s24 ultra', 's24 ultra', 'galaxy s24u', 's24u'] },
+  { bell: 210, telus: 170, goRecellGood: 333, goRecellFair: 292, avg: 262, patterns: ['galaxy s24', 's24'] },
+  { bell: 855, telus: 570, goRecellGood: 760, goRecellFair: 697, avg: 736, patterns: ['galaxy s25 ultra', 's25 ultra', 'galaxy s25u', 's25u'] },
+  { bell: 445, telus: 320, goRecellGood: 447, goRecellFair: 395, avg: 415, patterns: ['galaxy s25', 's25'] },
+]
+
+/**
+ * Find the market reference entry for a given device label (e.g. "Apple iPhone 14 Pro Max").
+ * Matches longest pattern first to avoid iPhone 13 matching iPhone 13 Max.
+ */
+export function getMarketRefEntry(deviceLabel: string): MarketRefEntry | null {
+  const label = deviceLabel.toLowerCase()
+  // Sort all (entry, pattern) pairs by pattern length descending — longest match wins
+  const candidates: Array<{ entry: MarketRefEntry; pattern: string }> = []
+  for (const entry of MARKET_REFERENCE_PRICES) {
+    for (const pattern of entry.patterns) {
+      candidates.push({ entry, pattern })
+    }
+  }
+  candidates.sort((a, b) => b.pattern.length - a.pattern.length)
+  for (const { entry, pattern } of candidates) {
+    if (label.includes(pattern)) return entry
+  }
+  return null
+}

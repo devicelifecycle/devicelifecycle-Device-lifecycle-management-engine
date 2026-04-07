@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Switch } from '@/components/ui/switch'
 import { PageHero } from '@/components/ui/page-hero'
-import { CONDITION_CONFIG, STORAGE_OPTIONS, MARGIN_TIER_CONFIG, COMPETITORS as COMPETITOR_LIST, COMPETITOR_DISPLAY_NAMES } from '@/lib/constants'
+import { CONDITION_CONFIG, STORAGE_OPTIONS, MARGIN_TIER_CONFIG, COMPETITORS as COMPETITOR_LIST, COMPETITOR_DISPLAY_NAMES, getMarketRefEntry } from '@/lib/constants'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import type { CompetitorPrice, DeviceCondition, Device, PriceCalculationResultV2 } from '@/types'
 
@@ -1064,6 +1064,7 @@ export default function AdminPricingPage() {
         latestRetrievedAt: undefined as string | undefined,
         marketRefPrice: undefined as number | undefined,
         goRecellGoodPrice: undefined as number | undefined,
+        refEntry: undefined as import('@/lib/constants').MarketRefEntry | null | undefined,
       }
     }
 
@@ -1091,6 +1092,7 @@ export default function AdminPricingPage() {
         latestRetrievedAt: undefined as string | undefined,
         marketRefPrice: undefined as number | undefined,
         goRecellGoodPrice: undefined as number | undefined,
+        refEntry: undefined as import('@/lib/constants').MarketRefEntry | null | undefined,
       }
     }
 
@@ -1148,22 +1150,12 @@ export default function AdminPricingPage() {
       return new Date(row.retrieved_at).getTime() > new Date(latest).getTime() ? row.retrieved_at : latest
     }, undefined)
 
-    // Market Reference Price: (Bell + Telus + GoRecell_Good × 2) / 4
-    // GoRecell_Good is always the "Good" condition price, regardless of selected condition.
-    // This anchors our quote to the most representative refurbished market signal.
-    const bellPrice = rows.find(r => r.name === 'Bell')?.price
-    const telusPrice = rows.find(r => r.name === 'Telus')?.price
-    const goRecellGoodRow = sameDeviceAndStorage
-      .filter(cp => normalizeCompetitorName(cp.competitor_name) === 'GoRecell' && (cp.condition || 'good') === 'good')
-      .sort((a, b) => {
-        const tA = a.retrieved_at || a.scraped_at || a.updated_at || a.created_at || ''
-        const tB = b.retrieved_at || b.scraped_at || b.updated_at || b.created_at || ''
-        return tB.localeCompare(tA)
-      })[0]
-    const goRecellGoodPrice = goRecellGoodRow?.trade_in_price
-    const marketRefPrice = (bellPrice != null && telusPrice != null && goRecellGoodPrice != null)
-      ? Math.round((bellPrice + telusPrice + goRecellGoodPrice * 2) / 4)
-      : undefined
+    // Market Reference Price: look up from hardcoded benchmark table
+    // (Bell + Telus + GoRecell_Good × 2) / 4 — precomputed per device model
+    const deviceLabel = getDeviceLabel(calcForm.device_id)
+    const refEntry = getMarketRefEntry(deviceLabel)
+    const marketRefPrice = refEntry?.avg
+    const goRecellGoodPrice = refEntry?.goRecellGood
 
     return {
       rows,
@@ -1176,6 +1168,7 @@ export default function AdminPricingPage() {
       latestRetrievedAt,
       marketRefPrice,
       goRecellGoodPrice,
+      refEntry,
     }
   })()
 
@@ -1905,21 +1898,29 @@ export default function AdminPricingPage() {
                             </div>
                           )}
                         </div>
-                        {calculatorCompetitorSnapshot.marketRefPrice != null && (
-                          <div className="rounded-lg border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-3 py-2.5 text-xs">
+                        {calculatorCompetitorSnapshot.marketRefPrice != null && calculatorCompetitorSnapshot.refEntry != null && (
+                          <div className="rounded-lg border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-3 py-3 text-xs space-y-2">
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="font-semibold text-amber-700 dark:text-amber-400">Market Reference Price</p>
-                                <p className="text-muted-foreground mt-0.5">
-                                  (Bell + Telus + GoRecell Good × 2) ÷ 4
-                                  {calculatorCompetitorSnapshot.goRecellGoodPrice != null && (
-                                    <span className="ml-1 text-amber-600 dark:text-amber-500">· GoRecell Good = {formatCurrency(calculatorCompetitorSnapshot.goRecellGoodPrice)}</span>
-                                  )}
-                                </p>
+                                <p className="text-muted-foreground mt-0.5">(Bell + Telus + GoRecell Good × 2) ÷ 4</p>
                               </div>
                               <span className="font-mono text-base font-bold text-amber-700 dark:text-amber-400">
                                 {formatCurrency(calculatorCompetitorSnapshot.marketRefPrice)}
                               </span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-amber-200/40 dark:border-amber-800/40">
+                              {[
+                                { label: 'Bell', val: calculatorCompetitorSnapshot.refEntry.bell },
+                                { label: 'Telus', val: calculatorCompetitorSnapshot.refEntry.telus },
+                                { label: 'GoRecell Good', val: calculatorCompetitorSnapshot.refEntry.goRecellGood },
+                                { label: 'GoRecell Fair', val: calculatorCompetitorSnapshot.refEntry.goRecellFair },
+                              ].map(({ label, val }) => (
+                                <div key={label} className="rounded bg-white/50 dark:bg-white/5 px-2 py-1.5 text-center">
+                                  <p className="text-[10px] text-muted-foreground">{label}</p>
+                                  <p className="font-mono font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(val)}</p>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
