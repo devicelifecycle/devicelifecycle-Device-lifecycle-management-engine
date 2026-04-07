@@ -66,24 +66,41 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No active vendor found for your organization' }, { status: 404 })
     }
 
-    // Query vendor_bids filtered to this vendor, optionally scoped to an order
-    let query = supabase
+    // Step 1: fetch bids for this vendor
+    let bidsQuery = supabase
       .from('vendor_bids')
-      .select('*, order:orders!vendor_bids_order_id_fkey(id, order_number, type, status, total_quantity, created_at)')
+      .select('*')
       .eq('vendor_id', vendor.id)
       .order('created_at', { ascending: false })
 
     if (orderId) {
-      query = query.eq('order_id', orderId)
+      bidsQuery = bidsQuery.eq('order_id', orderId)
     }
 
-    const { data: bids, error: bidsError } = await query
+    const { data: rawBids, error: bidsError } = await bidsQuery
 
     if (bidsError) {
       throw new Error(bidsError.message)
     }
 
-    return NextResponse.json({ data: bids || [] })
+    if (!rawBids?.length) {
+      return NextResponse.json({ data: [] })
+    }
+
+    // Step 2: fetch order details separately (avoids FK join ambiguity)
+    const orderIds = [...new Set(rawBids.map(b => b.order_id))]
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('id, order_number, type, status, total_quantity, created_at')
+      .in('id', orderIds)
+
+    const ordersMap = new Map((orders || []).map(o => [o.id, o]))
+    const bids = rawBids.map(bid => ({
+      ...bid,
+      order: ordersMap.get(bid.order_id) || null,
+    }))
+
+    return NextResponse.json({ data: bids })
   } catch (error) {
     console.error('Error fetching vendor bids:', error)
     return NextResponse.json(

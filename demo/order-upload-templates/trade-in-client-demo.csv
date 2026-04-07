@@ -1,0 +1,5 @@
+device_make,device_model,quantity,condition,storage,serial_number,color,notes
+Apple,iPhone 15,5,excellent,128GB,359876543210001,Blue,Corporate refresh batch - top grade devices
+Apple,iPhone 15,3,good,256GB,,Black,Standard employee return batch
+Apple,iPhone 15 Pro,2,fair,256GB,,Natural Titanium,Visible wear but functional demo batch
+Apple,iPhone 15 Pro Max,1,poor,256GB,350123456789012,Natural Titanium,Cracked screen demo item to show condition-based pricing

@@ -5,13 +5,14 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { VALID_ORDER_TRANSITIONS } from '@/lib/constants'
-import { generateOrderNumber, sanitizeSearchInput } from '@/lib/utils'
+import { sanitizeSearchInput } from '@/lib/utils'
 import { OrderSplitService } from './order-split.service'
 import { PricingService } from './pricing.service'
 import type {
   Order,
   OrderStatus,
   OrderType,
+  OrderDirection,
   OrderFilters,
   CreateOrderInput,
   UpdateOrderInput,
@@ -241,7 +242,28 @@ export class OrderService {
     // Use service role to bypass RLS - API has already validated permissions
     const supabase = createServiceRoleClient()
 
-    const orderNumber = generateOrderNumber()
+    // Infer direction from type if not provided
+    // trade_in = inbound (vendor to COE)
+    // cpo = outbound (COE to customer)
+    const direction = input.direction || (input.type === 'trade_in' ? 'inbound' : 'outbound')
+
+    // Validate direction matches type
+    if (input.type === 'trade_in' && direction !== 'inbound') {
+      throw new Error('Trade-in orders must have direction "inbound"')
+    }
+    if (input.type === 'cpo' && direction !== 'outbound') {
+      throw new Error('CPO orders must have direction "outbound"')
+    }
+
+    // Generate order number using database function
+    const { data: orderNumberData, error: rnError } = await supabase
+      .rpc('generate_order_number', { direction })
+
+    if (rnError || !orderNumberData) {
+      throw new Error(`Failed to generate order number: ${rnError?.message || 'Unknown error'}`)
+    }
+
+    const orderNumber = orderNumberData as string
 
     // Create the order
     const { data: order, error: orderError } = await supabase
@@ -249,6 +271,7 @@ export class OrderService {
       .insert({
         order_number: orderNumber,
         type: input.type,
+        order_direction: direction,
         status: 'draft',
         customer_id: input.customer_id,
         created_by_id: userId,
