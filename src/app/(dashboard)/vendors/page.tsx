@@ -3,8 +3,10 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Download, Plus, Search, Store } from 'lucide-react'
+import { Download, Plus, Search, Store, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useVendors } from '@/hooks/useVendors'
+import { useAuth } from '@/hooks/useAuth'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,13 +15,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Pagination } from '@/components/ui/pagination'
 import { PageHero } from '@/components/ui/page-hero'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import type { Vendor } from '@/types'
 
 export default function VendorsPage() {
   const router = useRouter()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const debouncedSearch = useDebounce(search)
+  const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const isActiveFilter = statusFilter === 'all' ? undefined : statusFilter === 'active'
   const { vendors, total, isLoading, totalPages, error } = useVendors({
@@ -27,6 +38,22 @@ export default function VendorsPage() {
     page,
     is_active: isActiveFilter,
   })
+
+  const handleDeleteVendor = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/vendors/${deleteTarget.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to delete vendor')
+      }
+      toast.success(`${deleteTarget.company_name} deleted`)
+      setDeleteTarget(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete vendor')
+    } finally { setDeleting(false) }
+  }
 
   const stats = useMemo(() => {
     const active = vendors.filter((vendor) => vendor.is_active).length
@@ -157,6 +184,7 @@ export default function VendorsPage() {
                     <TableHead>Warranty</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
+                    {isAdmin && <TableHead className="w-12" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -189,6 +217,19 @@ export default function VendorsPage() {
                       <TableCell className="text-stone-400">
                         {vendor.created_at ? new Date(vendor.created_at).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }) : '—'}
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteTarget(vendor)}
+                            title="Delete vendor"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -198,6 +239,27 @@ export default function VendorsPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Vendor</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete <strong>{deleteTarget?.company_name}</strong>? This removes the vendor and all associated bids and records. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteVendor}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Vendor'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
