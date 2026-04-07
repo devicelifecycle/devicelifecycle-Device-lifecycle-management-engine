@@ -741,11 +741,11 @@ export class NotificationService {
     try {
       const supabase = createServiceRoleClient()
 
-      // Find all active admins
+      // Find all active admins and COE managers
       const { data: admins } = await supabase
         .from('users')
         .select('id')
-        .eq('role', 'admin')
+        .in('role', ['admin', 'coe_manager'])
         .eq('is_active', true)
 
       if (!admins || admins.length === 0) return

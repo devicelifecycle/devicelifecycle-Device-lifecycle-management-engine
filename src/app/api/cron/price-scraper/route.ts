@@ -8,6 +8,7 @@ import { timingSafeEqual } from 'crypto'
 import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { runScraperPipeline } from '@/lib/scrapers'
 import { SCRAPER_PROVIDERS, getPersistedScraperImplementation } from '@/lib/scrapers/rollout-metadata'
+import { runPostScrapeCleanup } from '@/lib/scrapers/post-scrape'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 function safeCompare(a: string, b: string): boolean {
@@ -135,9 +136,16 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createServiceRoleClient()
+    const scrapeStartedAt = new Date().toISOString()
     const result = await runScraperPipeline(undefined, supabase)
     await persistUniversalSourceHealth(supabase, result)
     await persistScraperRolloutHealth(supabase, result)
+
+    // Clean up stale rows and seed benchmark prices for known devices
+    const postScrape = await runPostScrapeCleanup(supabase, scrapeStartedAt)
+    if (postScrape.errors.length > 0) {
+      console.warn('[PostScrape] Errors:', postScrape.errors)
+    }
 
     // Optional auto-train after scraping so scraped data feeds into the AI model
     let trainingResult = null
@@ -151,6 +159,7 @@ export async function GET(request: NextRequest) {
     }
 
     const failedScrapers = result.results.filter(r => !r.success).map(r => r.competitor_name)
+    void postScrape // already logged above
     const partialFailure = failedScrapers.length > 0 || result.errors.length > 0
 
     // Notify admins about price update (never fail cron response)
@@ -179,6 +188,11 @@ export async function GET(request: NextRequest) {
         count: r.prices.length,
         duration_ms: r.duration_ms,
       })),
+      cleanup: {
+        stale_rows_deleted: postScrape.deleted,
+        benchmark_rows_seeded: postScrape.seeded,
+        errors: postScrape.errors,
+      },
       training: trainingResult ? {
         baselines_upserted: trainingResult.baselines_upserted,
         sample_counts: trainingResult.sample_counts,

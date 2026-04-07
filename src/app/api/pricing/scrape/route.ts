@@ -11,6 +11,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { runScraperPipeline } from '@/lib/scrapers'
 import type { ScraperProviderId } from '@/lib/scrapers'
+import { runPostScrapeCleanup } from '@/lib/scrapers/post-scrape'
 export const dynamic = 'force-dynamic'
 
 const VALID_PROVIDERS: ScraperProviderId[] = ['gorecell', 'telus', 'bell', 'universal', 'apple']
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const serviceSupabase = createServiceRoleClient()
+    const scrapeStartedAt = new Date().toISOString()
     const providers = request.nextUrl.searchParams
       .get('providers')
       ?.split(',')
@@ -42,6 +44,9 @@ export async function POST(request: NextRequest) {
       .filter((provider): provider is ScraperProviderId => VALID_PROVIDERS.includes(provider as ScraperProviderId))
 
     const result = await runScraperPipeline(undefined, serviceSupabase, true, providers?.length ? providers : undefined)
+
+    // Clean up stale rows and seed benchmark prices
+    const postScrape = await runPostScrapeCleanup(serviceSupabase, scrapeStartedAt)
 
     let trainingResult = null
     const shouldTrainInline =
@@ -73,6 +78,10 @@ export async function POST(request: NextRequest) {
         count: r.prices.length,
         duration_ms: r.duration_ms,
       })),
+      cleanup: {
+        stale_rows_deleted: postScrape.deleted,
+        benchmark_rows_seeded: postScrape.seeded,
+      },
       training: trainingResult ? {
         ...(trainingResult && 'baselines_upserted' in trainingResult
           ? {
