@@ -15,6 +15,7 @@ import {
   BROKEN_DEVICE_MULTIPLIER,
   RISK_MODE_CONFIG,
   ISSUE_TO_DEDUCTION_KEY,
+  getMarketRefEntry,
 } from '@/lib/constants'
 import type {
   PricingTable,
@@ -435,6 +436,20 @@ export class PricingService {
     }
     const carrier = normalizedInput.carrier || 'Unlocked'
     const settings = await this.getPricingSettings(supabase)
+
+    // Look up hardcoded market reference entry (Bell/Telus/GoRecell benchmark table).
+    // Used in Step 8 as the primary trade-in anchor for known devices.
+    const deviceInfo = await this.runPricingRead<{ make: string; model: string }>(
+      'device_catalog make+model lookup',
+      () => supabase
+        .from('device_catalog')
+        .select('make, model')
+        .eq('id', normalizedInput.device_id)
+        .single(),
+      { allowNoRows: true }
+    )
+    const deviceLabel = deviceInfo ? `${deviceInfo.make} ${deviceInfo.model}` : ''
+    const marketRef = deviceLabel ? getMarketRefEntry(deviceLabel) : null
 
     try {
       // Step 1: Get market reference prices
@@ -933,13 +948,13 @@ export class PricingService {
       )
 
       // Step 8: Determine trade price
-      // Primary strategy: quote = highest_competitor + beat_amount (default $12).
-      // This means we always offer MORE than competitors — customers choose us.
-      // beat_competitor_amount is adjustable in Admin → Pricing → Settings (0–$50).
-      // beat_competitor_percent (old %) is still honoured if explicitly set > 0.
-      const beatPercent = (input.beat_competitor_percent ?? settings.beat_competitor_percent ?? 0)
-      // Per-request beat_competitor_amount overrides the saved setting — used for per-quote adjustments
-      const beatAmount = input.beat_competitor_amount ?? settings.beat_competitor_amount ?? 12
+      // Primary strategy: use the market reference average = (Bell + Telus + GoRecell_Good × 2) / 4.
+      // This is the midpoint between carrier prices and the refurbished market — not above the highest.
+      // The reference table (16 devices) is hardcoded from our carrier/GoRecell benchmark sheet.
+      // For devices not in the table, fall back to avgCompetitorPrice (plain average, no beat-up).
+      // Beat-competitor settings are honoured ONLY when explicitly overridden per-request (not as default).
+      const beatPercent = (input.beat_competitor_percent ?? 0)  // only honour explicit per-request override
+      const beatAmount = input.beat_competitor_amount ?? 0       // only honour explicit per-request override
       const hasCompetitorData = filteredCompetitors.length > 0 && avgCompetitorPrice > 0
 
       let tradePrice: number
@@ -947,19 +962,32 @@ export class PricingService {
       let competitorCeilingValue: number | undefined
       let beatPricingApplied = false
 
+      // The ref avg is calibrated for Good condition. Scale to the requested condition
+      // using the ratio vs Good multiplier (0.85) so all conditions are consistent.
+      const goodMult = CONDITION_MULTIPLIERS['good'] ?? 0.85
+      const refTradePrice = marketRef
+        ? round2((marketRef.avg / goodMult) * (CONDITION_MULTIPLIERS[normalizedInput.condition] ?? goodMult))
+        : null
+
       if (isBroken) {
         // Broken = 50% of good working trade price (Brian's rule)
         tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
+      } else if (refTradePrice != null && refTradePrice > 0 && !beatPercent && !beatAmount) {
+        // Known device: use hardcoded market reference average as trade-in price.
+        // (Bell + Telus + GoRecell_Good × 2) / 4 — sits between carrier and GoRecell prices.
+        tradePrice = refTradePrice
       } else if (hasCompetitorData) {
-        // Beat competitors: avg + beat_amount OR avg * (1 + beat_percent/100).
-        // The two modes are mutually exclusive — percent takes priority when explicitly set > 0,
-        // otherwise the flat dollar amount is used. This prevents double-stacking.
+        // Unknown device or per-request beat override: use avg competitor price.
+        // Only apply beat-up when caller explicitly requested it (not as system default).
         if (beatPercent > 0) {
           tradePrice = round2(avgCompetitorPrice * (1 + beatPercent / 100))
-        } else {
+          beatPricingApplied = true
+        } else if (beatAmount > 0) {
           tradePrice = round2(avgCompetitorPrice + beatAmount)
+          beatPricingApplied = true
+        } else {
+          tradePrice = round2(avgCompetitorPrice)
         }
-        beatPricingApplied = true
       } else {
         // No competitor data — use anchor-based formula as fallback
         const hasMarginOverride = retailOverride || enterpriseOverride
@@ -1053,7 +1081,9 @@ export class PricingService {
       }
 
       // Append risk mode context
-      if (beatPricingApplied) {
+      if (refTradePrice != null && refTradePrice > 0 && !beatPricingApplied) {
+        reasoning = `Market ref avg $${refTradePrice} (Bell $${marketRef!.bell} + Telus $${marketRef!.telus} + GoRecell Good $${marketRef!.goRecellGood}×2) ÷ 4, scaled for ${normalizedInput.condition}.`
+      } else if (beatPricingApplied) {
         const beatDesc = beatPercent > 0 ? `${beatPercent}%` : `$${beatAmount}`
         reasoning = `Beat avg competitor ($${round2(avgCompetitorPrice)}) by ${beatDesc} — quote $${round2(tradePrice)}.`
       } else {
@@ -1123,7 +1153,9 @@ export class PricingService {
       }
 
       // Determine price source
-      const priceSource = marketEntry ? 'Market Data' : 'Pricing Table'
+      const priceSource = refTradePrice != null && !beatPricingApplied
+        ? 'Market Reference Benchmark'
+        : marketEntry ? 'Market Data' : 'Pricing Table'
 
       // Apply quantity
       const qty = input.quantity || 1
