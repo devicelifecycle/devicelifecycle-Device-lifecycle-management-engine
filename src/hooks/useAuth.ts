@@ -270,9 +270,26 @@ function useProvideAuth(): AuthContextValue {
         throw lastError || new Error('Invalid login credentials')
       }
 
+      const userId = authData?.user?.id
+      if (!userId) {
+        await fetchUser()
+        router.replace('/')
+        return
+      }
+
+      const profilePromise = supabase
+        .from('users')
+        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
+        .eq('id', userId)
+        .single()
+
+      const aalPromise = supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+
+      const [profileResult, aalResult] = await Promise.all([profilePromise, aalPromise])
+
       // MFA check — only fetch enrolled factors when the session actually needs MFA.
       try {
-        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+        const aalData = aalResult.data
         if (aalData?.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
           const { data: factorsData } = await supabase.auth.mfa.listFactors()
           const totpFactor = factorsData?.totp?.[0]
@@ -289,23 +306,10 @@ function useProvideAuth(): AuthContextValue {
         if ((mfaCheckError as { type?: string })?.type === 'MFA_REQUIRED') throw mfaCheckError
       }
 
-      const userId = authData?.user?.id
-      if (!userId) {
-        await fetchUser()
-        router.replace('/')
-        return
-      }
-
       // Resolve profile before navigating — one DB query (~50-100ms) to avoid
       // the double-navigation: /login → /dashboard → /role-specific-path.
       try {
-        const result = await supabase
-          .from('users')
-          .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
-          .eq('id', userId)
-          .single()
-
-        const profile = result.data as User | null
+        const profile = profileResult.data as User | null
         if (profile?.is_active) {
           writeCachedUser(profile)
           setRoleCookie(profile.role)
