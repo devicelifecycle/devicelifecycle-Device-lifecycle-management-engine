@@ -15,14 +15,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Consider data stale after 5s so background refetches keep all
-            // devices in sync without hammering the server on every render.
-            staleTime: 5 * 1000,
-            // Always refetch when the user switches back to the tab or
-            // reconnects so a colleague's update is visible immediately.
+            // staleTime: 0 — data is always considered stale so any window-focus
+            // or remount triggers a background refetch. This is the key fix for
+            // cross-device sync: a change made on device A shows on device B the
+            // moment the user on device B switches back to the tab.
+            staleTime: 0,
+            // Keep unused cache entries for 60s so navigating back is instant
+            // while still serving fresh data via background refetch.
+            gcTime: 60 * 1000,
             refetchOnWindowFocus: true,
             refetchOnReconnect: true,
-            // Retry once on error before showing a failure state.
+            refetchOnMount: true,
             retry: 1,
           },
         },

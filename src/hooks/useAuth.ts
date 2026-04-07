@@ -90,43 +90,6 @@ function clearRoleCookie() {
   document.cookie = `${ROLE_COOKIE}=; path=/; max-age=0; SameSite=Lax`
 }
 
-function hardNavigate(path: string, router: ReturnType<typeof useRouter>) {
-  if (typeof window !== 'undefined') {
-    window.location.replace(path)
-    return
-  }
-  router.replace(path)
-}
-
-function fastNavigate(path: string, router: ReturnType<typeof useRouter>) {
-  if (typeof window !== 'undefined') {
-    const pendingKey = '__dlm_post_login_navigation_pending'
-    window.sessionStorage.setItem(pendingKey, path)
-
-    // Prefer the prefetched App Router transition for a snappier handoff after auth.
-    router.replace(path)
-
-    // If the client transition stalls on the dashboard loading shell, fall back to
-    // a full navigation so middleware/session hydration can recover.
-    window.setTimeout(() => {
-      if (window.sessionStorage.getItem(pendingKey) === path) {
-        const currentPath = window.location.pathname
-        const stillOnLogin = currentPath === '/login' || currentPath.startsWith('/login/')
-
-        if (stillOnLogin) {
-          window.location.replace(path)
-          return
-        }
-
-        // The user has already moved into the app on a different route, so the
-        // fallback should stand down instead of snapping them back to /dashboard.
-        window.sessionStorage.removeItem(pendingKey)
-      }
-    }, 1200)
-    return
-  }
-  router.replace(path)
-}
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -329,64 +292,54 @@ function useProvideAuth(): AuthContextValue {
       const userId = authData?.user?.id
       if (!userId) {
         await fetchUser()
-        router.push('/dashboard')
+        router.replace('/')
         return
       }
 
-      // Navigate immediately after auth succeeds; profile hydration continues in the background.
+      // Resolve profile before navigating — one DB query (~50-100ms) to avoid
+      // the double-navigation: /login → /dashboard → /role-specific-path.
+      try {
+        const result = await supabase
+          .from('users')
+          .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
+          .eq('id', userId)
+          .single()
+
+        const profile = result.data as User | null
+        if (profile?.is_active) {
+          writeCachedUser(profile)
+          setRoleCookie(profile.role)
+          setState({
+            user: profile,
+            isLoading: false,
+            isInitializing: false,
+            isAuthenticated: true,
+          })
+          // Single navigation directly to the right path — no intermediate stop.
+          router.replace(getDefaultAppPathForRole(profile.role))
+          return
+        }
+      } catch (profileError) {
+        if (!isAbortError(profileError)) {
+          console.error('Error resolving post-login profile:', profileError)
+        }
+      }
+
+      // Fallback: profile fetch failed, go to root and let middleware sort it out.
       setState((prev) => ({
         ...prev,
         isLoading: false,
         isInitializing: false,
         isAuthenticated: true,
       }))
-
-      const profilePromise: Promise<User | null> = (async () => {
-        try {
-          const result = await supabase
-            .from('users')
-            .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
-            .eq('id', userId)
-            .single()
-
-          const data = result.data as User | null
-          if (!data?.is_active) return null
-          writeCachedUser(data)
-          setRoleCookie(data.role)
-          return data
-        } catch (profileError) {
-          if (!isAbortError(profileError)) {
-            console.error('Error resolving post-login profile:', profileError)
-          }
-          return null
-        }
-      })()
-
-      void profilePromise.then((resolvedProfile) => {
-        if (!resolvedProfile) return
-        const targetPath = getDefaultAppPathForRole(resolvedProfile.role)
-        setState((prev) => ({
-          ...prev,
-          user: resolvedProfile,
-          isAuthenticated: true,
-        }))
-
-        if (typeof window !== 'undefined') {
-          const currentPath = window.location.pathname
-          if (currentPath === '/dashboard' && targetPath !== '/dashboard') {
-            fastNavigate(targetPath, router)
-          }
-        }
-      })
-
-      fastNavigate('/dashboard', router)
+      router.replace('/')
     } catch (error) {
       setState((prev) => ({ ...prev, isLoading: false }))
       if (isAbortError(error)) {
         await fetchUser()
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          fastNavigate('/dashboard', router)
+          router.replace('/')
         }
         return
       }
@@ -394,17 +347,20 @@ function useProvideAuth(): AuthContextValue {
     }
   }, [fetchUser, router])
 
-  // Logout — clear local state and navigate immediately; signOut completes in the background
+  // Logout — clear local state immediately, navigate via client router (no full reload),
+  // then fire signOut in the background so the JWT is revoked server-side.
   const logout = useCallback(async () => {
     writeCachedUser(null)
     clearRoleCookie()
-    // Fire-and-forget: don't await signOut so the redirect is instantaneous
+    setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+    // Client-side navigation — instant, no full page reload.
+    router.replace('/login')
+    // Revoke JWT in background after UI has already moved to login.
     supabase.auth.signOut().catch((error: unknown) => {
       if (!isAbortError(error)) {
         console.error('Error signing out:', error)
       }
     })
-    hardNavigate('/login', router)
   }, [router])
 
   // Check if user has a specific role
@@ -444,12 +400,12 @@ function useProvideAuth(): AuthContextValue {
       if (typedProfile?.is_active) {
         writeCachedUser(typedProfile)
         setState({ user: typedProfile, isLoading: false, isInitializing: false, isAuthenticated: true })
-        fastNavigate(getDefaultAppPathForRole(typedProfile.role), router)
+        router.replace(getDefaultAppPathForRole(typedProfile.role))
         return
       }
 
       setState((prev) => ({ ...prev, isLoading: false }))
-      fastNavigate('/dashboard', router)
+      router.replace('/')
     } catch (error) {
       setState((prev) => ({ ...prev, isLoading: false }))
       throw error
