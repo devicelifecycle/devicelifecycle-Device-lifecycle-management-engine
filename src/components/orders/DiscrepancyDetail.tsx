@@ -4,8 +4,9 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { AlertTriangle, CheckCircle2, XCircle, FileDown, Loader2, BarChart3 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -61,88 +62,101 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = 
 
 export function DiscrepancyDetail({ orderId }: DiscrepancyDetailProps) {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const isCOE = user?.role === 'coe_manager' || user?.role === 'coe_tech'
   const isAdmin = user?.role === 'admin'
-  
-  const [data, setData] = useState<OrderDiscrepancyResponse | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [approvalDialog, setApprovalDialog] = useState<{ exceptionId: string; type: 'coe' | 'admin' } | null>(null)
   const [rejectDialog, setRejectDialog] = useState<{ exceptionId: string } | null>(null)
   const [approvalNotes, setApprovalNotes] = useState('')
   const [rejectionReason, setRejectionReason] = useState('')
-  const [isProcessing, setIsProcessing] = useState(false)
+  const discrepanciesQuery = useQuery({
+    queryKey: ['order-discrepancies', orderId],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders/${orderId}/discrepancies`)
+      if (!res.ok) throw new Error('Failed to fetch discrepancies')
+      return res.json() as Promise<OrderDiscrepancyResponse>
+    },
+  })
 
-  // Fetch discrepancies
-  useEffect(() => {
-    const fetchDiscrepancies = async () => {
-      try {
-        setIsLoading(true)
-        const res = await fetch(`/api/orders/${orderId}/discrepancies`)
-        if (!res.ok) throw new Error('Failed to fetch discrepancies')
-        const result = await res.json()
-        setData(result)
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to load discrepancies')
-      } finally {
-        setIsLoading(false)
-      }
-    }
+  const refreshDiscrepancies = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['order-discrepancies', orderId] })
+  }
 
-    fetchDiscrepancies()
-  }, [orderId])
+  type ApprovalMutationVars = {
+    exceptionId: string
+    endpoint: 'approve-coe' | 'approve-admin'
+    approvalType: 'coe' | 'admin'
+    notes: string
+  }
 
-  const handleApproveCOE = async () => {
-    if (!approvalDialog) return
-    setIsProcessing(true)
-    try {
+  type RejectMutationVars = {
+    exceptionId: string
+    reason: string
+  }
+
+  const approveMutation = useMutation({
+    mutationFn: async (vars: ApprovalMutationVars) => {
       const res = await fetch(
-        `/api/orders/${orderId}/discrepancies/${approvalDialog.exceptionId}/approve-coe`,
+        `/api/orders/${orderId}/discrepancies/${vars.exceptionId}/${vars.endpoint}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notes: approvalNotes }),
+          body: JSON.stringify({ notes: vars.notes }),
         }
       )
       if (!res.ok) throw new Error('Failed to approve exception')
-      toast.success('Exception approved by COE')
+      return res.json()
+    },
+    onSuccess: async (_data, variables) => {
+      toast.success(variables.approvalType === 'coe' ? 'Exception approved by COE' : 'Exception approved by Admin')
       setApprovalDialog(null)
       setApprovalNotes('')
-      // Refetch
-      const updateRes = await fetch(`/api/orders/${orderId}/discrepancies`)
-      const updated = await updateRes.json()
-      setData(updated)
-    } catch (err) {
+      await refreshDiscrepancies()
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Failed to approve')
-    } finally {
-      setIsProcessing(false)
-    }
+    },
+  })
+
+  const rejectMutation = useMutation({
+    mutationFn: async (vars: RejectMutationVars) => {
+      const res = await fetch(`/api/orders/${orderId}/discrepancies/${vars.exceptionId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: vars.reason }),
+      })
+      if (!res.ok) throw new Error('Failed to reject exception')
+      return res.json()
+    },
+    onSuccess: async () => {
+      toast.success('Exception rejected')
+      setRejectDialog(null)
+      setRejectionReason('')
+      await refreshDiscrepancies()
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to reject')
+    },
+  })
+
+  const handleApproveCOE = async () => {
+    if (!approvalDialog) return
+    await approveMutation.mutateAsync({
+      exceptionId: approvalDialog.exceptionId,
+      endpoint: 'approve-coe',
+      approvalType: 'coe',
+      notes: approvalNotes,
+    })
   }
 
   const handleApproveAdmin = async () => {
     if (!approvalDialog) return
-    setIsProcessing(true)
-    try {
-      const res = await fetch(
-        `/api/orders/${orderId}/discrepancies/${approvalDialog.exceptionId}/approve-admin`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notes: approvalNotes }),
-        }
-      )
-      if (!res.ok) throw new Error('Failed to approve exception')
-      toast.success('Exception approved by Admin')
-      setApprovalDialog(null)
-      setApprovalNotes('')
-      // Refetch
-      const updateRes = await fetch(`/api/orders/${orderId}/discrepancies`)
-      const updated = await updateRes.json()
-      setData(updated)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to approve')
-    } finally {
-      setIsProcessing(false)
-    }
+    await approveMutation.mutateAsync({
+      exceptionId: approvalDialog.exceptionId,
+      endpoint: 'approve-admin',
+      approvalType: 'admin',
+      notes: approvalNotes,
+    })
   }
 
   const handleReject = async () => {
@@ -150,32 +164,13 @@ export function DiscrepancyDetail({ orderId }: DiscrepancyDetailProps) {
       toast.error('Rejection reason required')
       return
     }
-    setIsProcessing(true)
-    try {
-      const res = await fetch(
-        `/api/orders/${orderId}/discrepancies/${rejectDialog.exceptionId}/reject`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: rejectionReason }),
-        }
-      )
-      if (!res.ok) throw new Error('Failed to reject exception')
-      toast.success('Exception rejected')
-      setRejectDialog(null)
-      setRejectionReason('')
-      // Refetch
-      const updateRes = await fetch(`/api/orders/${orderId}/discrepancies`)
-      const updated = await updateRes.json()
-      setData(updated)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reject')
-    } finally {
-      setIsProcessing(false)
-    }
+    await rejectMutation.mutateAsync({
+      exceptionId: rejectDialog.exceptionId,
+      reason: rejectionReason,
+    })
   }
 
-  if (isLoading) {
+  if (discrepanciesQuery.isLoading) {
     return (
       <Card>
         <CardContent className="py-8 flex items-center justify-center">
@@ -184,6 +179,8 @@ export function DiscrepancyDetail({ orderId }: DiscrepancyDetailProps) {
       </Card>
     )
   }
+
+  const data = discrepanciesQuery.data
 
   if (!data || data.exceptions.length === 0) {
     return (
@@ -360,7 +357,7 @@ export function DiscrepancyDetail({ orderId }: DiscrepancyDetailProps) {
             <Button
               variant="outline"
               onClick={() => setApprovalDialog(null)}
-              disabled={isProcessing}
+              disabled={approveMutation.isPending}
             >
               Cancel
             </Button>
@@ -370,9 +367,9 @@ export function DiscrepancyDetail({ orderId }: DiscrepancyDetailProps) {
                   ? handleApproveCOE
                   : handleApproveAdmin
               }
-              disabled={isProcessing}
+              disabled={approveMutation.isPending}
             >
-              {isProcessing ? (
+              {approveMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-2" />
@@ -409,16 +406,16 @@ export function DiscrepancyDetail({ orderId }: DiscrepancyDetailProps) {
             <Button
               variant="outline"
               onClick={() => setRejectDialog(null)}
-              disabled={isProcessing}
+              disabled={rejectMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={handleReject}
-              disabled={isProcessing || !rejectionReason.trim()}
+              disabled={rejectMutation.isPending || !rejectionReason.trim()}
             >
-              {isProcessing ? (
+              {rejectMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <XCircle className="h-4 w-4 mr-2" />

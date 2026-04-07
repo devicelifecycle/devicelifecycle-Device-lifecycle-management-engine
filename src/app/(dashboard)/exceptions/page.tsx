@@ -4,9 +4,10 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, XCircle, Filter, RefreshCw, Loader2 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -46,19 +47,12 @@ export default function ExceptionsDashboard() {
   const { user } = useAuth()
   const isCOE = user?.role === 'coe_manager' || user?.role === 'coe_tech'
   const isAdmin = user?.role === 'admin'
-  
-  const [exceptions, setExceptions] = useState<Exception[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [severityFilter, setSeverityFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('pending')
 
-  // Fetch pending exceptions
-  const fetchExceptions = async (isRefresh = false) => {
-    if (isRefresh) setIsRefreshing(true)
-    else setIsLoading(true)
-
-    try {
+  const exceptionsQuery = useQuery({
+    queryKey: ['exceptions', severityFilter, statusFilter],
+    queryFn: async () => {
       const params = new URLSearchParams()
       if (severityFilter !== 'all') params.append('severity', severityFilter)
       if (statusFilter !== 'all') params.append('status', statusFilter)
@@ -66,19 +60,13 @@ export default function ExceptionsDashboard() {
       const res = await fetch(`/api/exceptions?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch exceptions')
       const data = await res.json()
-      setExceptions(Array.isArray(data) ? data : [])
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load exceptions')
-      setExceptions([])
-    } finally {
-      if (isRefresh) setIsRefreshing(false)
-      else setIsLoading(false)
-    }
-  }
+      return Array.isArray(data) ? (data as Exception[]) : []
+    },
+  })
 
-  useEffect(() => {
-    fetchExceptions()
-  }, [severityFilter, statusFilter])
+  const exceptions = exceptionsQuery.data ?? []
+  const isLoading = exceptionsQuery.isLoading
+  const isRefreshing = exceptionsQuery.isFetching && !exceptionsQuery.isLoading
 
   const hasPendingApprovals = exceptions.some(
     (e) => e.approval_status === 'pending' || (isCOE && e.approval_status === 'coe_approved' && isAdmin === false)
@@ -100,7 +88,7 @@ export default function ExceptionsDashboard() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => fetchExceptions(true)}
+          onClick={() => exceptionsQuery.refetch()}
           disabled={isRefreshing}
         >
           {isRefreshing ? (

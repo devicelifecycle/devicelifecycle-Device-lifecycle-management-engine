@@ -2,9 +2,7 @@
 // ORDERS HOOK
 // ============================================================================
 
-import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Order, OrderStatus, OrderType } from '@/types'
 
 interface OrderFilters {
@@ -121,32 +119,14 @@ async function bulkDeleteOrders(orderIds: string[]): Promise<BulkResult> {
 
 export function useOrders(filters: OrderFilters = {}) {
   const queryClient = useQueryClient()
-  const supabase = createBrowserSupabaseClient()
 
-  // Query for orders list — poll every 30s as a fallback when Realtime drops
+  // Realtime invalidation is handled globally by useRealtimeSync in providers.tsx.
+  // Poll every 30s as a safety net for Realtime reconnections.
   const ordersQuery = useQuery({
     queryKey: ['orders', filters],
     queryFn: () => fetchOrders(filters),
     refetchInterval: 30 * 1000,
   })
-
-  // Supabase Realtime — auto-refresh on INSERT/UPDATE/DELETE
-  useEffect(() => {
-    const channel = supabase
-      .channel('orders-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['orders'] })
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [queryClient, supabase])
 
   // Mutation for creating orders
   const createMutation = useMutation({
