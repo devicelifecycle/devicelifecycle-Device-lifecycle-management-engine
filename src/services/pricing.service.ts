@@ -1734,22 +1734,32 @@ export class PricingService {
     const supabase = await createServerSupabaseClient()
     const deviceId = await resolveComparablePricingDeviceId(supabase, input.device_id)
     const normalizedStorage = normalizeStorageInput(input.storage)
+    const competitorCondition = input.condition // already mapped by caller
+
+    // Fetch all conditions — deduplicate by name, prefer exact condition match
     const { data } = await supabase
       .from('competitor_prices')
-      .select('competitor_name, trade_in_price, retrieved_at, scraped_at, updated_at')
+      .select('competitor_name, trade_in_price, condition, retrieved_at, scraped_at, updated_at')
       .eq('device_id', deviceId)
       .eq('storage', normalizedStorage)
-      .eq('condition', input.condition)
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
 
-    const prices = (data || [])
-      .filter(cp => cp.trade_in_price != null && cp.trade_in_price > 0)
-      .map(cp => ({
-        name: cp.competitor_name,
-        price: cp.trade_in_price as number,
-        retrieved_at: cp.retrieved_at || cp.scraped_at || cp.updated_at || undefined,
-      }))
+    const byName = new Map<string, { price: number; retrieved_at?: string }>()
+    for (const cp of data || []) {
+      const p = Number(cp.trade_in_price) || 0
+      if (p <= 0) continue
+      const name = (cp.competitor_name || 'Unknown').trim()
+      const existing = byName.get(name)
+      const isExact = (cp.condition || '') === competitorCondition
+      if (!existing) {
+        byName.set(name, { price: p, retrieved_at: cp.retrieved_at || cp.scraped_at || cp.updated_at || undefined })
+      } else if (isExact) {
+        byName.set(name, { price: p, retrieved_at: cp.retrieved_at || cp.scraped_at || cp.updated_at || undefined })
+      }
+    }
+
+    const prices = Array.from(byName.entries()).map(([name, v]) => ({ name, price: v.price, retrieved_at: v.retrieved_at }))
 
     if (prices.length === 0) {
       return { success: false, trade_price: 0, source: 'no_data', competitor_count: 0, prices: [], highest_price: null, average_price: null }

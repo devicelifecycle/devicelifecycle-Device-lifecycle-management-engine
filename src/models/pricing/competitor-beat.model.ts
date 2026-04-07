@@ -55,21 +55,22 @@ export class CompetitorBeatPricingModel implements IPricingModel {
       : input.condition === 'poor' ? 'broken'
       : 'good'
 
-    // Fetch all competitor trade-in prices for this device+storage+condition
-    const { data: competitors } = await supabase
+    // Fetch ALL conditions for this device+storage — not just exact match.
+    // This ensures every competitor contributes regardless of which condition
+    // rows they happen to have scraped. Deduplicate below: prefer exact match.
+    const { data: allRows } = await supabase
       .from('competitor_prices')
-      .select('competitor_name, trade_in_price, condition')
+      .select('competitor_name, trade_in_price, condition, scraped_at, created_at')
       .eq('device_id', input.device_id)
       .eq('storage', storage)
-      .eq('condition', competitorCondition)
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
 
-    // Deduplicate by name, prefer exact condition match then freshest
+    // Deduplicate: one row per competitor, prefer exact condition match then freshest
     const byName = new Map<string, { price: number; condition: string }>()
     let highestCompetitor = 0
 
-    for (const c of competitors || []) {
+    for (const c of allRows || []) {
       const p = Number(c.trade_in_price) || 0
       if (p <= 0) continue
       const name = (c.competitor_name || 'Unknown').trim()
@@ -77,9 +78,14 @@ export class CompetitorBeatPricingModel implements IPricingModel {
       if (!existing) {
         byName.set(name, { price: p, condition: c.condition || 'good' })
       } else {
-        // Prefer exact condition match
-        if (!existing.condition.includes(competitorCondition) && (c.condition || '').includes(competitorCondition)) {
+        const existingIsExact = existing.condition === competitorCondition
+        const currentIsExact = (c.condition || '') === competitorCondition
+        if (currentIsExact && !existingIsExact) {
           byName.set(name, { price: p, condition: c.condition || 'good' })
+        } else if (currentIsExact === existingIsExact) {
+          const existingTs = new Date((c.scraped_at || c.created_at) ?? 0).getTime()
+          const currentTs = new Date((c.scraped_at || c.created_at) ?? 0).getTime()
+          if (currentTs > existingTs) byName.set(name, { price: p, condition: c.condition || 'good' })
         }
       }
       if (p > highestCompetitor) highestCompetitor = p
