@@ -955,26 +955,44 @@ export class PricingService {
       // Compute weighted average: GoRecell Good is fetched at the selected condition
       // (competitorData already has condition-matched rows). Identify GoRecell Good price
       // from the raw competitor data — it gets an extra weight slot.
-      const goRecellGoodEntry = competitorData.find(cp => {
-        const name = (cp.competitor_name || '').toLowerCase()
-        return (name.includes('gorecell') || name.includes('go recell') || name.includes('goresell'))
-      })
-      const goRecellGoodPrice = goRecellGoodEntry?.trade_in_price ?? 0
+      // ── Two-step market pricing formula ─────────────────────────────────────
+      // Step A: carrier_avg = average of ALL non-GoRecell competitors
+      //         (Bell, Telus, Rogers, UniverCell, Apple, etc.)
+      // Step B: final = (carrier_avg + GoRecell_Good) / 2
+      //
+      // GoRecell always carries 50% weight regardless of how many carriers exist.
+      // This prevents a cluster of low-paying carriers from drowning out the
+      // most liquid refurbished market signal.
+      // If only carriers: use carrier_avg. If only GoRecell: use GoRecell price.
+      const isGoRecell = (name: string) => {
+        const n = name.toLowerCase()
+        return n.includes('gorecell') || n.includes('go recell') || n.includes('goresell')
+      }
+      const goRecellEntry = filteredCompetitors.find(c => isGoRecell(c.name))
+      const goRecellGoodPrice = goRecellEntry?.price ?? 0
+
+      const carrierCompetitors = filteredCompetitors.filter(c => !isGoRecell(c.name))
+      const carrierAvg = carrierCompetitors.length > 0
+        ? carrierCompetitors.reduce((s, c) => s + c.price, 0) / carrierCompetitors.length
+        : 0
 
       let weightedAvgPrice = 0
-      if (filteredCompetitors.length > 0) {
-        // Sum all competitor prices (weight 1 each) + GoRecell Good once more (extra weight)
-        const sumAll = filteredCompetitors.reduce((s, c) => s + c.price, 0)
-        const extraGoRecell = goRecellGoodPrice > 0 ? goRecellGoodPrice : 0
-        const totalWeight = filteredCompetitors.length + (extraGoRecell > 0 ? 1 : 0)
-        weightedAvgPrice = totalWeight > 0 ? (sumAll + extraGoRecell) / totalWeight : avgCompetitorPrice
+      if (carrierAvg > 0 && goRecellGoodPrice > 0) {
+        // Both groups present — 50/50 split
+        weightedAvgPrice = (carrierAvg + goRecellGoodPrice) / 2
+      } else if (goRecellGoodPrice > 0) {
+        // Only GoRecell available
+        weightedAvgPrice = goRecellGoodPrice
+      } else if (carrierAvg > 0) {
+        // Only carriers available
+        weightedAvgPrice = carrierAvg
       }
 
       if (isBroken) {
         // Broken = 50% of good working trade price (Brian's rule)
         tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
       } else if (hasCompetitorData && !beatPercent && !beatAmount) {
-        // All devices: weighted average (GoRecell Good ×2, all others ×1)
+        // Two-step formula: carrier avg → average with GoRecell Good
         tradePrice = round2(weightedAvgPrice > 0 ? weightedAvgPrice : avgCompetitorPrice)
         weightedAvgUsed = true
       } else if (hasCompetitorData) {
@@ -1055,9 +1073,14 @@ export class PricingService {
 
       // Append risk mode context
       if (weightedAvgUsed) {
-        const compNames = filteredCompetitors.map(c => c.name).join(', ')
-        const goStr = goRecellGoodPrice > 0 ? ` (GoRecell Good $${goRecellGoodPrice} counted ×2)` : ''
-        reasoning = `Weighted avg $${round2(tradePrice)} from ${filteredCompetitors.length} competitor(s): ${compNames}${goStr}.`
+        const carrierNames = carrierCompetitors.map(c => c.name).join(', ')
+        if (carrierAvg > 0 && goRecellGoodPrice > 0) {
+          reasoning = `Carrier avg $${round2(carrierAvg)} (${carrierNames}) → avg with GoRecell Good $${goRecellGoodPrice} → quote $${round2(tradePrice)}.`
+        } else if (goRecellGoodPrice > 0) {
+          reasoning = `GoRecell Good only — quote $${round2(tradePrice)}.`
+        } else {
+          reasoning = `Carrier avg only (${carrierNames}) — quote $${round2(tradePrice)}.`
+        }
       } else if (beatPricingApplied) {
         const beatDesc = beatPercent > 0 ? `${beatPercent}%` : `$${beatAmount}`
         reasoning = `Beat avg competitor ($${round2(avgCompetitorPrice)}) by ${beatDesc} — quote $${round2(tradePrice)}.`
