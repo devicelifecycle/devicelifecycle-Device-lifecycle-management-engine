@@ -146,7 +146,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!isValidUUID((await params).id)) {
+    const targetId = (await params).id
+    if (!isValidUUID(targetId)) {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
     }
     const supabase = await createServerSupabaseClient()
@@ -156,7 +157,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check admin role
     const { data: currentProfile } = await supabase
       .from('users')
       .select('role')
@@ -167,20 +167,47 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Soft delete - deactivate user
+    // Prevent self-deletion
+    if (targetId === user.id) {
+      return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })
+    }
+
+    const { data: targetProfile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', targetId)
+      .single()
+
+    // Prevent deletion of other admins
+    if (targetProfile?.role === 'admin') {
+      return NextResponse.json({ error: 'Cannot delete another admin account' }, { status: 400 })
+    }
+
+    const hardDelete = new URL(request.url).searchParams.get('hard') === 'true'
+
+    if (hardDelete) {
+      // Hard delete: remove from auth + users table via service-role client
+      const { createServiceRoleClient } = await import('@/lib/supabase/service-role')
+      const serviceClient = createServiceRoleClient()
+      const { error: authError } = await serviceClient.auth.admin.deleteUser(targetId)
+      if (authError) {
+        console.error('Error deleting auth user:', authError)
+        return NextResponse.json({ error: 'Failed to delete user from auth' }, { status: 500 })
+      }
+      // users table row is removed via ON DELETE CASCADE on the auth.users FK
+      return NextResponse.json({ success: true, hard: true })
+    }
+
+    // Soft delete — deactivate only
     const { error } = await supabase
       .from('users')
       .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('id', (await params).id)
+      .eq('id', targetId)
 
     if (error) throw error
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, hard: false })
   } catch (error) {
-    console.error('Error deactivating user:', error)
-    return NextResponse.json(
-      { error: 'Failed to deactivate user' },
-      { status: 500 }
-    )
+    console.error('Error deleting user:', error)
+    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 })
   }
 }

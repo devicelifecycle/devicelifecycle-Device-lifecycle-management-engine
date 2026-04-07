@@ -5,7 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Shield, Pencil, Copy } from 'lucide-react'
+import { Plus, Shield, Pencil, Copy, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,6 +48,10 @@ export default function AdminUsersPage() {
 
   // Deactivate state
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null)
+
+  // Hard delete state
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true)
@@ -122,6 +126,23 @@ export default function AdminUsersPage() {
       fetchUsers()
     } catch { toast.error('Failed to update user') }
     finally { setSaving(false) }
+  }
+
+  const handleHardDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/users/${deleteTarget.id}?hard=true`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to delete user')
+      }
+      toast.success(`${deleteTarget.full_name} permanently deleted`)
+      setDeleteTarget(null)
+      fetchUsers()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete user')
+    } finally { setDeleting(false) }
   }
 
   const handleToggleActive = async (user: User) => {
@@ -314,14 +335,26 @@ export default function AdminUsersPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{u.last_login_at ? formatDateTime(u.last_login_at) : 'Never'}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenEdit(u)}
-                        title="Edit user"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenEdit(u)}
+                          title="Edit user"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTarget(u)}
+                          title="Permanently delete user"
+                          disabled={u.role === 'admin'}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -378,6 +411,28 @@ export default function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Hard Delete Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{deleteTarget?.full_name}</strong> and remove all their login credentials. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleHardDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete Permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Deactivate/Reactivate Confirmation */}
       <AlertDialog open={!!deactivateTarget} onOpenChange={(open) => { if (!open) setDeactivateTarget(null) }}>
