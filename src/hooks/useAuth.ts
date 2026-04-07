@@ -18,7 +18,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (emailOrId: string, password: string) => Promise<void>
-  logout: () => Promise<void>
+  logout: () => void
   hasRole: (role: UserRole | UserRole[]) => boolean
   isCOEUser: () => boolean
   isAdmin: () => boolean
@@ -248,123 +248,91 @@ function useProvideAuth(): AuthContextValue {
     })()
 
     try {
-      let authData: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>['data'] | null = null
-      let lastError: unknown = null
+      // Try all candidate email formats in parallel — first success wins.
+      // Serial loop was slow: wrong format = two full roundtrips back-to-back.
+      type SignInResponse = Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
+      type SignInData = SignInResponse['data']
+      const authData = await Promise.any(
+        candidates.map(email => supabase.auth.signInWithPassword({ email, password })
+          .then((res: SignInResponse): SignInData => {
+            if (res.error) throw res.error
+            return res.data
+          })
+        )
+      ).catch((): SignInData | null => null)
 
-      for (const email of candidates) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-
-        if (!error) {
-          authData = data
-          lastError = null
-          break
-        }
-
-        lastError = error
+      if (!authData?.user) {
+        throw new Error('Invalid login credentials')
       }
 
-      if (!authData) {
-        throw lastError || new Error('Invalid login credentials')
-      }
+      const userId = authData.user.id
 
-      const userId = authData?.user?.id
-      if (!userId) {
-        await fetchUser()
-        router.replace('/')
+      // ── Navigate immediately using cached role ──────────────────────────
+      // If the user has logged in before on this browser, the role cookie is
+      // still set. Use it to navigate instantly — profile hydration follows
+      // in the background. First-time login falls through to the profile fetch.
+      const cachedRole = typeof document !== 'undefined'
+        ? decodeURIComponent(document.cookie.split('; ').find(r => r.startsWith('dlm_role='))?.split('=')[1] ?? '')
+        : ''
+
+      if (cachedRole) {
+        setState({ user: readCachedUser(), isLoading: false, isInitializing: false, isAuthenticated: true })
+        router.replace(getDefaultAppPathForRole(cachedRole as User['role']))
+        // Hydrate full profile in background — updates state without blocking nav
+        fetchUser().catch(() => {})
         return
       }
 
-      const profilePromise = supabase
-        .from('users')
-        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
-        .eq('id', userId)
-        .single()
+      // ── First login or cleared cookie: fetch profile + MFA in parallel ──
+      const [profileResult, aalResult] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
+          .eq('id', userId)
+          .single(),
+        supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+      ])
 
-      const aalPromise = supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-
-      const [profileResult, aalResult] = await Promise.all([profilePromise, aalPromise])
-
-      // MFA check — only fetch enrolled factors when the session actually needs MFA.
-      try {
-        const aalData = aalResult.data
-        if (aalData?.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
-          const { data: factorsData } = await supabase.auth.mfa.listFactors()
-          const totpFactor = factorsData?.totp?.[0]
-          if (totpFactor) {
-            setState((prev) => ({ ...prev, isLoading: false }))
-            throw Object.assign(new Error('MFA_REQUIRED'), {
-              type: 'MFA_REQUIRED',
-              factorId: totpFactor.id,
-            })
-          }
-        }
-      } catch (mfaCheckError) {
-        // Re-throw MFA_REQUIRED; swallow other errors so login proceeds normally
-        if ((mfaCheckError as { type?: string })?.type === 'MFA_REQUIRED') throw mfaCheckError
-      }
-
-      // Resolve profile before navigating — one DB query (~50-100ms) to avoid
-      // the double-navigation: /login → /dashboard → /role-specific-path.
-      try {
-        const profile = profileResult.data as User | null
-        if (profile?.is_active) {
-          writeCachedUser(profile)
-          setRoleCookie(profile.role)
-          setState({
-            user: profile,
-            isLoading: false,
-            isInitializing: false,
-            isAuthenticated: true,
-          })
-          // Single navigation directly to the right path — no intermediate stop.
-          router.replace(getDefaultAppPathForRole(profile.role))
-          return
-        }
-      } catch (profileError) {
-        if (!isAbortError(profileError)) {
-          console.error('Error resolving post-login profile:', profileError)
+      // MFA check — only if session actually requires it
+      const aalData = aalResult.data
+      if (aalData?.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
+        const { data: factorsData } = await supabase.auth.mfa.listFactors()
+        const totpFactor = factorsData?.totp?.[0]
+        if (totpFactor) {
+          setState((prev) => ({ ...prev, isLoading: false }))
+          throw Object.assign(new Error('MFA_REQUIRED'), { type: 'MFA_REQUIRED', factorId: totpFactor.id })
         }
       }
 
-      // Fallback: profile fetch failed, go to root and let middleware sort it out.
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        isInitializing: false,
-        isAuthenticated: true,
-      }))
-      router.replace('/')
+      const profile = profileResult.data as User | null
+      if (profile?.is_active) {
+        writeCachedUser(profile)
+        setRoleCookie(profile.role)
+        setState({ user: profile, isLoading: false, isInitializing: false, isAuthenticated: true })
+        router.replace(getDefaultAppPathForRole(profile.role))
+        return
+      }
+
+      // Profile missing or inactive — bail
+      setState((prev) => ({ ...prev, isLoading: false }))
+      throw new Error('Account not found or inactive')
     } catch (error) {
       setState((prev) => ({ ...prev, isLoading: false }))
-      if (isAbortError(error)) {
-        await fetchUser()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          router.replace('/')
-        }
-        return
-      }
+      if ((error as { type?: string })?.type === 'MFA_REQUIRED') throw error
+      if (isAbortError(error)) return
       throw error
     }
   }, [fetchUser, router])
 
-  // Logout — clear local state immediately, navigate via client router (no full reload),
-  // then fire signOut in the background so the JWT is revoked server-side.
-  const logout = useCallback(async () => {
+  // Logout — synchronously clear all local state and navigate, then revoke
+  // the JWT server-side in the background. The user sees /login instantly.
+  const logout = useCallback(() => {
     writeCachedUser(null)
     clearRoleCookie()
     setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
-    // Client-side navigation — instant, no full page reload.
     router.replace('/login')
-    // Revoke JWT in background after UI has already moved to login.
-    supabase.auth.signOut().catch((error: unknown) => {
-      if (!isAbortError(error)) {
-        console.error('Error signing out:', error)
-      }
-    })
+    // Fire-and-forget: revoke JWT after UI is already gone
+    void supabase.auth.signOut().catch(() => {})
   }, [router])
 
   // Check if user has a specific role
