@@ -37,34 +37,35 @@
   }
 
   .dark {
-    --background: 22 24% 8%;
-    --foreground: 36 29% 93%;
-    --card: 24 22% 10%;
-    --card-foreground: 36 29% 93%;
-    --popover: 24 22% 10%;
-    --popover-foreground: 36 29% 93%;
-    --primary: 24 79% 57%;
-    --primary-foreground: 18 28% 8%;
-    --secondary: 22 18% 15%;
-    --secondary-foreground: 34 20% 88%;
-    --muted: 24 17% 13%;
-    --muted-foreground: 28 10% 63%;
-    --accent: 21 28% 17%;
+    /* Apple-inspired neutral dark — clean, no warm cast */
+    --background: 240 6% 7%;
+    --foreground: 210 16% 93%;
+    --card: 240 5% 11%;
+    --card-foreground: 210 16% 93%;
+    --popover: 240 5% 11%;
+    --popover-foreground: 210 16% 93%;
+    --primary: 24 85% 56%;
+    --primary-foreground: 240 6% 7%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 210 14% 84%;
+    --muted: 240 4% 14%;
+    --muted-foreground: 240 5% 52%;
+    --accent: 240 5% 16%;
     --accent-foreground: 33 64% 72%;
     --destructive: 1 66% 54%;
-    --destructive-foreground: 36 29% 93%;
+    --destructive-foreground: 210 16% 93%;
     --success: 146 43% 42%;
     --success-foreground: 0 0% 100%;
     --warning: 37 88% 58%;
     --warning-foreground: 0 0% 0%;
-    --border: 24 14% 18%;
-    --input: 24 14% 18%;
-    --ring: 24 79% 57%;
-    --sidebar-bg: 20 22% 7%;
-    --sidebar-foreground: 34 27% 92%;
-    --sidebar-muted: 24 10% 55%;
-    --sidebar-accent: 24 79% 57%;
-    --color-brand: hsl(24 79% 57%);
+    --border: 240 4% 18%;
+    --input: 240 4% 18%;
+    --ring: 24 85% 56%;
+    --sidebar-bg: 240 8% 6%;
+    --sidebar-foreground: 210 14% 85%;
+    --sidebar-muted: 240 5% 48%;
+    --sidebar-accent: 24 85% 58%;
+    --color-brand: hsl(24 85% 56%);
   }
 }
 
@@ -1287,42 +1288,13 @@ textarea {
 
 .app-shell-bg {
   position: relative;
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(194, 110, 49, 0.16),
-      transparent 25%
-    ),
-    radial-gradient(
-      circle at 80% 12%,
-      rgba(192, 146, 74, 0.1),
-      transparent 20%
-    ),
-    linear-gradient(180deg, #171311 0%, #0d0a09 100%);
-}
-
-.app-shell-bg::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(to right, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.75), transparent 88%);
+  background: #0f0f11;
 }
 
 .surface-panel {
-  background: linear-gradient(
-    180deg,
-    rgba(37, 28, 24, 0.88) 0%,
-    rgba(20, 16, 14, 0.92) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  box-shadow:
-    0 20px 70px -40px rgba(0, 0, 0, 0.8),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: #1a1a1d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 64px -20px rgba(0, 0, 0, 0.6);
 }
 
 .surface-panel-light {
@@ -1338,8 +1310,8 @@ textarea {
 }
 
 .surface-muted {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .editorial-title {
@@ -1373,52 +1345,19 @@ textarea {
 }
 
 .sidebar-surface {
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(209, 124, 67, 0.18),
-      transparent 30%
-    ),
-    linear-gradient(180deg, rgba(16, 13, 11, 0.98) 0%, rgba(9, 7, 6, 0.98) 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 24px 0 80px -40px rgba(0, 0, 0, 0.85);
+  background: #0c0c0e;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .topbar-surface {
-  background: linear-gradient(
-    180deg,
-    rgba(28, 22, 19, 0.9) 0%,
-    rgba(20, 16, 14, 0.82) 100%
-  );
-  backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 15, 17, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .dashboard-canvas {
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(193, 110, 61, 0.14),
-      transparent 20%
-    ),
-    radial-gradient(
-      circle at 20% 80%,
-      rgba(143, 93, 50, 0.14),
-      transparent 22%
-    ),
-    linear-gradient(180deg, #14100f 0%, #0d0a09 100%);
-}
-
-.dashboard-canvas::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 48px 48px;
-  opacity: 0.5;
+  background: #0f0f11;
 }
 
 .grain-overlay::after {

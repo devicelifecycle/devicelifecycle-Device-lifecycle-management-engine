@@ -3,19 +3,12 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bell, ChevronRight, Menu, Moon, Sparkles, Sun } from 'lucide-react'
+import { Bell, ChevronRight, Menu, Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
 import { snakeToTitle } from '@/lib/utils'
-
-function getGreeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
-}
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname()
@@ -36,62 +29,53 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   })
 
   return (
-    <header className="topbar-surface sticky top-0 z-40 px-4 py-4 sm:px-6 lg:px-8">
+    <header className="topbar-surface sticky top-0 z-40 px-4 py-3 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <Button variant="outline" size="icon" className="lg:hidden" onClick={onMenuClick}>
+        {/* Left: breadcrumbs */}
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="outline" size="icon" className="lg:hidden h-8 w-8" onClick={onMenuClick}>
             <Menu className="h-4 w-4" />
           </Button>
 
-          <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-2">
-              <span className="eyebrow-label hidden sm:inline-flex">Control Layer</span>
-              <span className="hidden text-xs uppercase tracking-[0.2em] text-stone-500 lg:inline">
-                {getGreeting()}, {user?.full_name?.split(' ')[0] || 'Operator'}
+          <motion.nav
+            key={pathname}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex min-w-0 items-center gap-1 text-sm"
+          >
+            <Link href="/dashboard" className="text-stone-500 hover:text-stone-300 transition-colors">
+              Home
+            </Link>
+            {breadcrumbs.map((crumb) => (
+              <span key={crumb.href} className="flex min-w-0 items-center gap-1">
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-stone-700" />
+                {crumb.isLast ? (
+                  <span className="truncate font-medium text-stone-200">{crumb.label}</span>
+                ) : (
+                  <Link href={crumb.href} className="truncate text-stone-500 hover:text-stone-300 transition-colors">
+                    {crumb.label}
+                  </Link>
+                )}
               </span>
-            </div>
-            <motion.nav
-              key={pathname}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex min-w-0 items-center gap-1 text-sm text-stone-400"
-            >
-              <Link href="/dashboard" className="truncate hover:text-stone-100">
-                Home
-              </Link>
-              {breadcrumbs.map((crumb) => (
-                <span key={crumb.href} className="flex min-w-0 items-center gap-1">
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-stone-600" />
-                  {crumb.isLast ? (
-                    <span className="truncate font-medium text-stone-100">{crumb.label}</span>
-                  ) : (
-                    <Link href={crumb.href} className="truncate hover:text-stone-100">
-                      {crumb.label}
-                    </Link>
-                  )}
-                </span>
-              ))}
-            </motion.nav>
-          </div>
+            ))}
+          </motion.nav>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-stone-400 md:flex">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <span>Live operational view</span>
-          </div>
-
+        {/* Right: actions */}
+        <div className="flex items-center gap-1.5">
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
+            className="h-8 w-8 text-stone-500 hover:text-stone-200"
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
                 key={resolvedTheme ?? 'light'}
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.15 }}
               >
                 {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </motion.span>
@@ -99,7 +83,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
           </Button>
 
           <Link href="/notifications">
-            <Button variant="outline" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative h-8 w-8 text-stone-500 hover:text-stone-200">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
@@ -107,6 +91,12 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                 </span>
               )}
             </Button>
+          </Link>
+
+          <Link href="/profile">
+            <div className="ml-1 flex h-7 w-7 items-center justify-center rounded-md bg-primary/15 text-[11px] font-bold text-primary hover:bg-primary/25 transition-colors">
+              {user?.full_name?.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() || 'U'}
+            </div>
           </Link>
         </div>
       </div>
