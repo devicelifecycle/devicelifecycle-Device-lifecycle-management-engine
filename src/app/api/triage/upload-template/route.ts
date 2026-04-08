@@ -282,41 +282,61 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Resolve device_catalog IDs by make/model ──────────────────────────
+    // ── Resolve device_catalog IDs by make/model (case-insensitive) ──────────
     const deviceLookupMap = new Map<string, string>() // "make|model" → device_id
     const makes = [...new Set(rows.map(r => r.brand).filter(Boolean) as string[])]
     if (makes.length > 0) {
+      // Fetch all catalog devices and do case-insensitive matching in JS
       const { data: catalogDevices } = await supabase
         .from('device_catalog')
         .select('id, make, model')
-        .in('make', makes)
       if (catalogDevices) {
         for (const d of catalogDevices) {
           const key = `${d.make.toLowerCase()}|${d.model.toLowerCase()}`
           if (!deviceLookupMap.has(key)) deviceLookupMap.set(key, d.id)
+        }
+        // Also build partial-match fallback: for each CSV row try fuzzy catalog match
+        for (const row of rows) {
+          const makeLower = (row.brand ?? '').toLowerCase()
+          const modelLower = (row.model ?? '').toLowerCase()
+          const exactKey = `${makeLower}|${modelLower}`
+          if (deviceLookupMap.has(exactKey)) continue // already resolved
+          const fuzzy = catalogDevices.find(d =>
+            (d.make.toLowerCase().includes(makeLower) || makeLower.includes(d.make.toLowerCase())) &&
+            (d.model.toLowerCase().includes(modelLower) || modelLower.includes(d.model.toLowerCase()))
+          )
+          if (fuzzy) deviceLookupMap.set(exactKey, fuzzy.id)
         }
       }
     }
 
     // ── Match rows against order items ─────────────────────────────────────
     type RowResult = ParsedRow & {
-      match_status: 'matched' | 'condition_mismatch' | 'not_in_order' | 'no_order'
+      match_status: 'matched' | 'condition_mismatch' | 'not_in_order'
       matched_item?: OrderItem
       quoted_price?: number | null
       device_id?: string | null
     }
 
     const results: RowResult[] = rows.map(row => {
-      const deviceKey = `${(row.brand ?? '').toLowerCase()}|${(row.model ?? '').toLowerCase()}`
+      const makeLower = (row.brand ?? '').toLowerCase()
+      const modelLower = (row.model ?? '').toLowerCase()
+      const deviceKey = `${makeLower}|${modelLower}`
       const device_id = deviceLookupMap.get(deviceKey) ?? null
-      if (!order) return { ...row, device_id, match_status: 'no_order' as const }
+
+      // No order found — still resolve device from catalog so the user can import
+      if (!order) {
+        return {
+          ...row,
+          device_id,
+          match_status: device_id ? 'matched' as const : 'not_in_order' as const,
+        }
+      }
 
       // Try to match by make+model (IMEIs are per-unit, order items are aggregates)
       let matched = order.items.find(i => {
         const d = i.device
         if (!d) return false
-        const makeLower = (row.brand ?? '').toLowerCase()
-        const modelLower = (row.model ?? '').toLowerCase()
         return (
           d.make.toLowerCase().includes(makeLower) ||
           makeLower.includes(d.make.toLowerCase())
