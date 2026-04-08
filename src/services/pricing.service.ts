@@ -4,7 +4,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { resolveComparablePricingDeviceId } from '@/lib/pricing-device-resolution'
-import { sanitizeSearchInput } from '@/lib/utils'
+import { normalizeCompetitorName, sanitizeSearchInput } from '@/lib/utils'
 import { PricingModelRegistry } from '@/models/pricing'
 import {
   CHANNEL_DECISION_THRESHOLDS,
@@ -116,11 +116,72 @@ function normalizeStorageInput(storage: string): string {
   return s || '128GB'
 }
 
+const APPROVED_TRADE_IN_PRICING_COMPETITORS = ['Bell', 'Telus', 'GoRecell'] as const
+
+function isApprovedTradeInPricingCompetitor(name?: string | null): boolean {
+  const canonical = normalizeCompetitorName(name || undefined)
+  return (APPROVED_TRADE_IN_PRICING_COMPETITORS as readonly string[]).includes(canonical)
+}
+
+function getApprovedTradeInPricingCompetitorName(name?: string | null): 'Bell' | 'Telus' | 'GoRecell' | null {
+  const canonical = normalizeCompetitorName(name || undefined)
+  if ((APPROVED_TRADE_IN_PRICING_COMPETITORS as readonly string[]).includes(canonical)) {
+    return canonical as 'Bell' | 'Telus' | 'GoRecell'
+  }
+  return null
+}
+
+function buildApprovedTradeInPricingBlend(
+  list: Array<{ name: string; price: number }>
+): {
+  approvedCompetitors: Array<{ name: 'Bell' | 'Telus' | 'GoRecell'; price: number }>
+  bellTelusCompetitors: Array<{ name: 'Bell' | 'Telus'; price: number }>
+  bellTelusAvg: number
+  goRecellPrice: number
+  referencePrice: number
+} {
+  const deduped = new Map<'Bell' | 'Telus' | 'GoRecell', { name: 'Bell' | 'Telus' | 'GoRecell'; price: number }>()
+  for (const entry of list) {
+    if (!Number.isFinite(entry.price) || entry.price <= 0) continue
+    const canonical = getApprovedTradeInPricingCompetitorName(entry.name)
+    if (!canonical) continue
+    if (!deduped.has(canonical)) {
+      deduped.set(canonical, { name: canonical, price: entry.price })
+    }
+  }
+
+  const approvedCompetitors = Array.from(deduped.values())
+  const bellTelusCompetitors = approvedCompetitors.filter(
+    (entry): entry is { name: 'Bell' | 'Telus'; price: number } => entry.name === 'Bell' || entry.name === 'Telus'
+  )
+  const bellTelusAvg = bellTelusCompetitors.length > 0
+    ? bellTelusCompetitors.reduce((sum, entry) => sum + entry.price, 0) / bellTelusCompetitors.length
+    : 0
+  const goRecellPrice = approvedCompetitors.find((entry) => entry.name === 'GoRecell')?.price ?? 0
+
+  let referencePrice = 0
+  if (bellTelusAvg > 0 && goRecellPrice > 0) {
+    referencePrice = (bellTelusAvg + goRecellPrice) / 2
+  } else if (goRecellPrice > 0) {
+    referencePrice = goRecellPrice
+  } else if (bellTelusAvg > 0) {
+    referencePrice = bellTelusAvg
+  }
+
+  return {
+    approvedCompetitors,
+    bellTelusCompetitors,
+    bellTelusAvg,
+    goRecellPrice,
+    referencePrice,
+  }
+}
+
 /** Filter competitor outliers — discard highest if >1.3x second-highest (e.g. Bell promotion) */
 function filterCompetitorOutliers(
   list: Array<{ name: string; price: number }>
 ): Array<{ name: string; price: number }> {
-  if (list.length < 3) return list
+  if (list.length < 4) return list
   const sorted = [...list].sort((a, b) => b.price - a.price)
   const highest = sorted[0].price
   const secondHighest = sorted[1].price
@@ -306,6 +367,11 @@ export class PricingService {
       !hasFormulaOverrides &&
       input.risk_mode !== 'enterprise'
 
+    const formulaResult = await this.calculatePriceV2(normalizedInput, supabase)
+    if (formulaResult.success && formulaResult.trade_price > 0) {
+      return formulaResult
+    }
+
     if (shouldUseDataDriven) {
       const model = PricingModelRegistry.get('data_driven')
       if (model) {
@@ -321,45 +387,16 @@ export class PricingService {
         }))
 
         if (modelResult.success && (modelResult.trade_price ?? modelResult.final_price) > 0) {
-          const adaptedResult = this.adaptModelResultToV2(
+          return this.adaptModelResultToV2(
             modelResult,
             qty,
             normalizedInput.risk_mode || 'retail'
           )
-
-          const fallbackResult = await this.calculatePriceV2(normalizedInput, supabase)
-          const adaptedTradePrice = adaptedResult.trade_price
-          const fallbackTradePrice = fallbackResult.trade_price
-
-          if (
-            adaptedTradePrice > 0 &&
-            fallbackResult.success &&
-            fallbackTradePrice > 0 &&
-            adaptedTradePrice > fallbackTradePrice
-          ) {
-            const clampedTradePrice = round2(fallbackTradePrice)
-
-            return {
-              ...adaptedResult,
-              trade_price: clampedTradePrice,
-              breakdown: {
-                ...adaptedResult.breakdown,
-                final_trade_price: clampedTradePrice,
-                data_driven_trade_price_before_market_sanity: round2(adaptedTradePrice),
-                market_sanity_reference_trade_price: clampedTradePrice,
-                market_sanity_clamped: true,
-              },
-              channel_decision: fallbackResult.channel_decision,
-              data_staleness_warning: fallbackResult.data_staleness_warning,
-            }
-          }
-
-          return adaptedResult
         }
       }
     }
 
-    return this.calculatePriceV2(normalizedInput, supabase)
+    return formulaResult
   }
 
   /**
@@ -465,6 +502,7 @@ export class PricingService {
       // First try same-condition competitors, then fall back to all conditions.
       const competitorConditionForAnchor = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
       const compForAnchorCondition = await this.runPricingRead<Array<{
+        competitor_name?: string
         trade_in_price?: number
         updated_at?: string
         scraped_at?: string
@@ -472,7 +510,7 @@ export class PricingService {
         'competitor_prices anchor exact condition',
         () => supabase
           .from('competitor_prices')
-          .select('trade_in_price, updated_at, scraped_at')
+          .select('competitor_name, trade_in_price, updated_at, scraped_at')
           .eq('device_id', normalizedInput.device_id)
           .eq('storage', normalizedInput.storage)
           .eq('condition', competitorConditionForAnchor)
@@ -483,8 +521,11 @@ export class PricingService {
 
       const staleDays = settings.price_staleness_days
       const staleCutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000)
-      const extractFreshPrices = (rows: Array<{ trade_in_price?: number; updated_at?: string; scraped_at?: string }> | null): number[] =>
+      const extractFreshPrices = (
+        rows: Array<{ competitor_name?: string; trade_in_price?: number; updated_at?: string; scraped_at?: string }> | null
+      ): number[] =>
         (rows || [])
+          .filter((c) => isApprovedTradeInPricingCompetitor(c.competitor_name))
           .filter((c) => {
             const ts = c.updated_at || c.scraped_at
             return ts && new Date(ts) > staleCutoff
@@ -497,6 +538,7 @@ export class PricingService {
       // Fall back to all conditions if no same-condition prices found
       if (freshCompetitorPrices.length === 0) {
         const compForAnchorAll = await this.runPricingRead<Array<{
+          competitor_name?: string
           trade_in_price?: number
           updated_at?: string
           scraped_at?: string
@@ -504,7 +546,7 @@ export class PricingService {
           'competitor_prices anchor all conditions',
           () => supabase
             .from('competitor_prices')
-            .select('trade_in_price, updated_at, scraped_at')
+            .select('competitor_name, trade_in_price, updated_at, scraped_at')
             .eq('device_id', normalizedInput.device_id)
             .eq('storage', normalizedInput.storage)
             .not('trade_in_price', 'is', null)
@@ -527,11 +569,11 @@ export class PricingService {
       // Stale competitor fallback — use before wholesale so quotes stay anchored to real
       // competitor offers rather than inflated wholesale prices when scraper data is >14 days old.
       if (!anchorPrice) {
-        const staleCompSameCondition = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
+        const staleCompSameCondition = await this.runPricingRead<Array<{ competitor_name?: string; trade_in_price?: number }>>(
           'competitor_prices stale same condition anchor',
           () => supabase
             .from('competitor_prices')
-            .select('trade_in_price')
+            .select('competitor_name, trade_in_price')
             .eq('device_id', normalizedInput.device_id)
             .eq('storage', normalizedInput.storage)
             .eq('condition', competitorConditionForAnchor)
@@ -540,6 +582,7 @@ export class PricingService {
           { allowNoRows: true, retries: 2 }
         )
         const staleConditionPrices = (staleCompSameCondition || [])
+          .filter((c) => isApprovedTradeInPricingCompetitor(c.competitor_name))
           .map((c) => Number(c.trade_in_price) || 0)
           .filter((p) => p > 0)
         if (staleConditionPrices.length > 0) {
@@ -548,11 +591,11 @@ export class PricingService {
         }
       }
       if (!anchorPrice) {
-        const staleCompAllConditions = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
+        const staleCompAllConditions = await this.runPricingRead<Array<{ competitor_name?: string; trade_in_price?: number }>>(
           'competitor_prices stale all conditions anchor',
           () => supabase
             .from('competitor_prices')
-            .select('trade_in_price')
+            .select('competitor_name, trade_in_price')
             .eq('device_id', normalizedInput.device_id)
             .eq('storage', normalizedInput.storage)
             .not('trade_in_price', 'is', null)
@@ -560,6 +603,7 @@ export class PricingService {
           { allowNoRows: true, retries: 2 }
         )
         const staleAllPrices = (staleCompAllConditions || [])
+          .filter((c) => isApprovedTradeInPricingCompetitor(c.competitor_name))
           .map((c) => Number(c.trade_in_price) || 0)
           .filter((p) => p > 0)
         if (staleAllPrices.length > 0) {
@@ -593,16 +637,17 @@ export class PricingService {
         void pricingEntry
       }
       if (!anchorPrice) {
-        const compFallback = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
+        const compFallback = await this.runPricingRead<Array<{ competitor_name?: string; trade_in_price?: number }>>(
           'competitor_prices anchor fallback',
           () => supabase
             .from('competitor_prices')
-            .select('trade_in_price')
+            .select('competitor_name, trade_in_price')
             .eq('device_id', normalizedInput.device_id)
             .eq('storage', normalizedInput.storage),
           { allowNoRows: true, retries: 2 }
         )
         const tradePrices = (compFallback || [])
+          .filter((c) => isApprovedTradeInPricingCompetitor(c.competitor_name))
           .map((c: { trade_in_price?: number }) => c.trade_in_price || 0)
           .filter((p: number) => p > 0)
         if (tradePrices.length > 0) {
@@ -613,15 +658,16 @@ export class PricingService {
 
       // Fallback: same device, any storage — use competitor or market data from other storage variants (e.g. UNKNOWN → 128GB)
       if (!anchorPrice) {
-        const compAnyStorage = await this.runPricingRead<Array<{ trade_in_price?: number }>>(
+        const compAnyStorage = await this.runPricingRead<Array<{ competitor_name?: string; trade_in_price?: number }>>(
           'competitor_prices any storage fallback',
           () => supabase
             .from('competitor_prices')
-            .select('trade_in_price')
+            .select('competitor_name, trade_in_price')
             .eq('device_id', normalizedInput.device_id),
           { allowNoRows: true, retries: 2 }
         )
         const tradePrices = (compAnyStorage || [])
+          .filter((c) => isApprovedTradeInPricingCompetitor(c.competitor_name))
           .map((c: { trade_in_price?: number }) => c.trade_in_price || 0)
           .filter((p: number) => p > 0)
         if (tradePrices.length > 0) {
@@ -760,6 +806,7 @@ export class PricingService {
       }
 
       let competitorData = Array.from(competitorMap.values())
+        .filter((cp) => isApprovedTradeInPricingCompetitor(cp.competitor_name))
 
       if (!anchorPrice && competitorData && competitorData.length > 0) {
         const competitorAnchorCandidates = competitorData
@@ -937,11 +984,10 @@ export class PricingService {
       )
 
       // Step 8: Determine trade price
-      // Formula: weighted average of ALL available competitors — GoRecell Good gets weight ×2
-      // because it represents the most liquid refurbished resale market.
-      // All other competitors (Bell, Telus, UniverCell, Apple, etc.) get weight ×1.
-      // This applies to every device in the catalog dynamically — no hardcoded device list.
-      // Beat-competitor settings honoured ONLY when caller explicitly passes them per-request.
+      // Bell and Telus form the carrier average. That result is then averaged with GoRecell.
+      // Apple Trade-In and UniverCell stay visible in the catalog for reference, but they do
+      // not drive live trade-in quotes.
+      // Beat-competitor settings are honoured only when the caller explicitly passes them.
       const beatPercent = (input.beat_competitor_percent ?? 0)
       const beatAmount = input.beat_competitor_amount ?? 0
       const hasCompetitorData = filteredCompetitors.length > 0 && avgCompetitorPrice > 0
@@ -952,49 +998,18 @@ export class PricingService {
       let beatPricingApplied = false
       let weightedAvgUsed = false
 
-      // Compute weighted average: GoRecell Good is fetched at the selected condition
-      // (competitorData already has condition-matched rows). Identify GoRecell Good price
-      // from the raw competitor data — it gets an extra weight slot.
-      // ── Two-step market pricing formula ─────────────────────────────────────
-      // Step A: carrier_avg = average of ALL non-GoRecell competitors
-      //         (Bell, Telus, Rogers, UniverCell, Apple, etc.)
-      // Step B: final = (carrier_avg + GoRecell_Good) / 2
-      //
-      // GoRecell always carries 50% weight regardless of how many carriers exist.
-      // This prevents a cluster of low-paying carriers from drowning out the
-      // most liquid refurbished market signal.
-      // If only carriers: use carrier_avg. If only GoRecell: use GoRecell price.
-      const isGoRecell = (name: string) => {
-        const n = name.toLowerCase()
-        return n.includes('gorecell') || n.includes('go recell') || n.includes('goresell')
-      }
-      const goRecellEntry = filteredCompetitors.find(c => isGoRecell(c.name))
-      const goRecellGoodPrice = goRecellEntry?.price ?? 0
+      const approvedPricingBlend = buildApprovedTradeInPricingBlend(filteredCompetitors)
+      const goRecellPrice = approvedPricingBlend.goRecellPrice
+      const bellTelusAvg = approvedPricingBlend.bellTelusAvg
+      const policyReferencePrice = approvedPricingBlend.referencePrice
+      const bellTelusCompetitors = approvedPricingBlend.bellTelusCompetitors
 
-      const carrierCompetitors = filteredCompetitors.filter(c => !isGoRecell(c.name))
-      const carrierAvg = carrierCompetitors.length > 0
-        ? carrierCompetitors.reduce((s, c) => s + c.price, 0) / carrierCompetitors.length
-        : 0
-
-      let weightedAvgPrice = 0
-      if (carrierAvg > 0 && goRecellGoodPrice > 0) {
-        // Both groups present — 50/50 split
-        weightedAvgPrice = (carrierAvg + goRecellGoodPrice) / 2
-      } else if (goRecellGoodPrice > 0) {
-        // Only GoRecell available
-        weightedAvgPrice = goRecellGoodPrice
-      } else if (carrierAvg > 0) {
-        // Only carriers available
-        weightedAvgPrice = carrierAvg
-      }
-
-      if (isBroken) {
+      if (hasCompetitorData && !beatPercent && !beatAmount) {
+        tradePrice = round2(policyReferencePrice > 0 ? policyReferencePrice : avgCompetitorPrice)
+        weightedAvgUsed = true
+      } else if (isBroken) {
         // Broken = 50% of good working trade price (Brian's rule)
         tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
-      } else if (hasCompetitorData && !beatPercent && !beatAmount) {
-        // Two-step formula: carrier avg → average with GoRecell Good
-        tradePrice = round2(weightedAvgPrice > 0 ? weightedAvgPrice : avgCompetitorPrice)
-        weightedAvgUsed = true
       } else if (hasCompetitorData) {
         // Per-request beat override
         if (beatPercent > 0) {
@@ -1073,13 +1088,13 @@ export class PricingService {
 
       // Append risk mode context
       if (weightedAvgUsed) {
-        const carrierNames = carrierCompetitors.map(c => c.name).join(', ')
-        if (carrierAvg > 0 && goRecellGoodPrice > 0) {
-          reasoning = `Carrier avg $${round2(carrierAvg)} (${carrierNames}) → avg with GoRecell Good $${goRecellGoodPrice} → quote $${round2(tradePrice)}.`
-        } else if (goRecellGoodPrice > 0) {
-          reasoning = `GoRecell Good only — quote $${round2(tradePrice)}.`
+        const carrierNames = bellTelusCompetitors.map(c => c.name).join(', ')
+        if (bellTelusAvg > 0 && goRecellPrice > 0) {
+          reasoning = `Bell/Telus avg $${round2(bellTelusAvg)} (${carrierNames}) → avg with GoRecell $${goRecellPrice} → quote $${round2(tradePrice)}.`
+        } else if (goRecellPrice > 0) {
+          reasoning = `GoRecell only — quote $${round2(tradePrice)}.`
         } else {
-          reasoning = `Carrier avg only (${carrierNames}) — quote $${round2(tradePrice)}.`
+          reasoning = `Bell/Telus avg only (${carrierNames}) — quote $${round2(tradePrice)}.`
         }
       } else if (beatPricingApplied) {
         const beatDesc = beatPercent > 0 ? `${beatPercent}%` : `$${beatAmount}`
@@ -1737,7 +1752,7 @@ export class PricingService {
     const competitorCondition = input.condition // already mapped by caller
 
     // Fetch all conditions — deduplicate by name, prefer exact condition match
-    const { data } = await supabase
+      const { data } = await supabase
       .from('competitor_prices')
       .select('competitor_name, trade_in_price, condition, retrieved_at, scraped_at, updated_at')
       .eq('device_id', deviceId)
@@ -1745,11 +1760,12 @@ export class PricingService {
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
 
-    const byName = new Map<string, { price: number; retrieved_at?: string }>()
+    const byName = new Map<'Bell' | 'Telus' | 'GoRecell', { price: number; retrieved_at?: string }>()
     for (const cp of data || []) {
       const p = Number(cp.trade_in_price) || 0
       if (p <= 0) continue
-      const name = (cp.competitor_name || 'Unknown').trim()
+      const name = getApprovedTradeInPricingCompetitorName(cp.competitor_name)
+      if (!name) continue
       const existing = byName.get(name)
       const isExact = (cp.condition || '') === competitorCondition
       if (!existing) {
@@ -1765,7 +1781,10 @@ export class PricingService {
       return { success: false, trade_price: 0, source: 'no_data', competitor_count: 0, prices: [], highest_price: null, average_price: null }
     }
 
-    const avg = prices.reduce((s, p) => s + p.price, 0) / prices.length
+    const blend = buildApprovedTradeInPricingBlend(prices)
+    const avg = blend.referencePrice > 0
+      ? blend.referencePrice
+      : prices.reduce((s, p) => s + p.price, 0) / prices.length
     const highest = Math.max(...prices.map(p => p.price))
 
     return {
