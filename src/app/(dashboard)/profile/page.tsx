@@ -221,7 +221,7 @@ function MfaCard() {
             <div className="flex justify-center">
               {/* qr_code is an SVG string from Supabase — force it to fill the box */}
               <div
-                className="h-48 w-48 rounded-lg border p-2 bg-white [&>svg]:h-full [&>svg]:w-full"
+                className="h-48 w-48 rounded-lg border p-2 bg-white overflow-hidden [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
                 dangerouslySetInnerHTML={{ __html: qrCode }}
               />
             </div>
