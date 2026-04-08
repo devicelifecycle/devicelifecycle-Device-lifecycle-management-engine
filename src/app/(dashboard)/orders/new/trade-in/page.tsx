@@ -108,6 +108,8 @@ export default function NewTradeInPage() {
   const [csvData, setCsvData] = useState<CSVRow[]>([])
   const [csvErrors, setCsvErrors] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const latestLookupRequestRef = useRef<Record<number, number>>({})
+  const nextLookupRequestIdRef = useRef(1)
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
@@ -128,7 +130,15 @@ export default function NewTradeInPage() {
 
   // Price lookup for internal staff
   const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, condition: DeviceCondition, beatModeArg?: 'amount' | 'percent', beatValArg?: string) => {
-    if (!deviceId || !storage || !isInternal) return
+    if (!isInternal) return
+    if (!deviceId || !storage) {
+      delete latestLookupRequestRef.current[index]
+      setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, manual_price: '', cpo_unit_price: 0, loading: false, error: null, source: '', competitors: [] } }))
+      return
+    }
+
+    const requestId = nextLookupRequestIdRef.current++
+    latestLookupRequestRef.current[index] = requestId
 
     setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, manual_price: '', cpo_unit_price: 0, loading: true, error: null, source: '', competitors: [] } }))
 
@@ -151,6 +161,7 @@ export default function NewTradeInPage() {
       if (res.ok) {
         const data = await res.json()
         if (data.success && data.trade_price > 0) {
+          if (latestLookupRequestRef.current[index] !== requestId) return
           setItemPrices(prev => ({
             ...prev,
             [index]: {
@@ -167,11 +178,13 @@ export default function NewTradeInPage() {
         }
       }
 
+      if (latestLookupRequestRef.current[index] !== requestId) return
       setItemPrices(prev => ({
         ...prev,
         [index]: { engine_price: 0, manual_price: '', cpo_unit_price: 0, loading: false, error: 'No price data', source: '', competitors: [] },
       }))
     } catch {
+      if (latestLookupRequestRef.current[index] !== requestId) return
       setItemPrices(prev => ({
         ...prev,
         [index]: { engine_price: 0, manual_price: '', cpo_unit_price: 0, loading: false, error: 'Lookup failed', source: '', competitors: [] },
@@ -185,6 +198,7 @@ export default function NewTradeInPage() {
   }
   const removeItem = (i: number) => {
     setItems(items.filter((_, idx) => idx !== i))
+    latestLookupRequestRef.current = {}
     setItemPrices(prev => {
       const next = { ...prev }
       delete next[i]
@@ -219,11 +233,7 @@ export default function NewTradeInPage() {
     // Trigger price lookup when device, storage, or condition changes
     if (isInternal && ['device_id', 'storage', 'condition'].includes(field)) {
       const updatedItem = newItems[index]
-      if (updatedItem) {
-        setTimeout(() => {
-          lookupPrice(index, updatedItem.device_id, updatedItem.storage, updatedItem.condition)
-        }, 100)
-      }
+      if (updatedItem) lookupPrice(index, updatedItem.device_id, updatedItem.storage, updatedItem.condition)
     }
   }
 

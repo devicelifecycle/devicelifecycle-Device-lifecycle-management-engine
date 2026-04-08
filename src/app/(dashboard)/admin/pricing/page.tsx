@@ -467,6 +467,21 @@ export default function AdminPricingPage() {
 
   const selectedCalcDevice = deviceMap.get(calcForm.device_id)
   const calcStorageOptions = getStorageOptionsForDevice(selectedCalcDevice)
+
+  useEffect(() => {
+    setCalcResult(null)
+  }, [
+    calcForm.device_id,
+    calcForm.storage,
+    calcForm.condition,
+    calcForm.carrier,
+    calcForm.risk_mode,
+    calcForm.trade_in_profit_percent,
+    calcForm.cpo_markup_percent,
+    calcForm.enterprise_margin_percent,
+    calcForm.beat_competitor_percent,
+  ])
+
   const filteredCpDevices = useMemo(() => {
     const query = cpDeviceSearch.trim().toLowerCase()
     if (!query) return devices

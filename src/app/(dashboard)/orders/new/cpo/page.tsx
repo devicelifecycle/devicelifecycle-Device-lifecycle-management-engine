@@ -99,6 +99,8 @@ export default function NewCPOOrderPage() {
   const [csvData, setCsvData] = useState<CSVRow[]>([])
   const [csvErrors, setCsvErrors] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const latestLookupRequestRef = useRef<Record<number, number>>({})
+  const nextLookupRequestIdRef = useRef(1)
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
@@ -110,7 +112,18 @@ export default function NewCPOOrderPage() {
   }, [])
 
   const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, beatModeArg?: 'amount' | 'percent', beatValArg?: string) => {
-    if (!deviceId || !storage || !isInternal) return
+    if (!isInternal) return
+    if (!deviceId || !storage) {
+      delete latestLookupRequestRef.current[index]
+      setItemPrices(prev => ({
+        ...prev,
+        [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: '', cpo_competitors: [] },
+      }))
+      return
+    }
+
+    const requestId = nextLookupRequestIdRef.current++
+    latestLookupRequestRef.current[index] = requestId
 
     setItemPrices(prev => ({
       ...prev,
@@ -136,6 +149,7 @@ export default function NewCPOOrderPage() {
       if (res.ok) {
         const data = await res.json()
         if (data.success && data.cpo_price > 0) {
+          if (latestLookupRequestRef.current[index] !== requestId) return
           setItemPrices(prev => ({
             ...prev,
             [index]: {
@@ -151,11 +165,13 @@ export default function NewCPOOrderPage() {
         }
       }
 
+      if (latestLookupRequestRef.current[index] !== requestId) return
       setItemPrices(prev => ({
         ...prev,
         [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: 'No price data', source: '', cpo_competitors: [] },
       }))
     } catch {
+      if (latestLookupRequestRef.current[index] !== requestId) return
       setItemPrices(prev => ({
         ...prev,
         [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: 'Lookup failed', source: '', cpo_competitors: [] },
@@ -169,6 +185,7 @@ export default function NewCPOOrderPage() {
 
   const removeItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index))
+    latestLookupRequestRef.current = {}
     setItemPrices(prev => {
       const next = { ...prev }
       delete next[index]
@@ -201,9 +218,7 @@ export default function NewCPOOrderPage() {
 
     if (isInternal && ['device_id', 'storage'].includes(field)) {
       const updated = newItems[index]
-      if (updated) {
-        setTimeout(() => lookupPrice(index, updated.device_id, updated.storage), 100)
-      }
+      if (updated) lookupPrice(index, updated.device_id, updated.storage)
     }
   }
 
