@@ -267,6 +267,9 @@ function useProvideAuth(): AuthContextValue {
 
       const userId = authData.user.id
 
+      // Update last_login_at in background — don't block navigation
+      void supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userId)
+
       // ── Navigate immediately using cached role ──────────────────────────
       // If the user has logged in before on this browser, the role cookie is
       // still set. Use it to navigate instantly — profile hydration follows
