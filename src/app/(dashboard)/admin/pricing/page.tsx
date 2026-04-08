@@ -92,6 +92,31 @@ function buildTradeInPolicyReference(rows: Array<{ name: string; price: number |
   }
 }
 
+function applyGoRecellFairFloor(
+  selectedCondition: 'excellent' | 'good' | 'fair' | 'broken',
+  referencePrice: number | undefined,
+  goRecellFairPrice: number | undefined
+) {
+  if (selectedCondition !== 'good') {
+    return {
+      referencePrice,
+      goRecellFloorApplied: false,
+    }
+  }
+
+  if (referencePrice == null || goRecellFairPrice == null || goRecellFairPrice <= 0) {
+    return {
+      referencePrice,
+      goRecellFloorApplied: false,
+    }
+  }
+
+  return {
+    referencePrice: Math.max(referencePrice, goRecellFairPrice),
+    goRecellFloorApplied: referencePrice < goRecellFairPrice,
+  }
+}
+
 function normalizeStorageOption(value: string): string {
   return value.replace(/\s+/g, '').toUpperCase()
 }
@@ -1118,6 +1143,8 @@ export default function AdminPricingPage() {
         latestRetrievedAt: undefined as string | undefined,
         marketRefPrice: undefined as number | undefined,
         goRecellGoodPrice: undefined as number | undefined,
+        goRecellFairPrice: undefined as number | undefined,
+        goRecellFloorApplied: false,
         competitorCount: 0,
       }
     }
@@ -1146,6 +1173,8 @@ export default function AdminPricingPage() {
         latestRetrievedAt: undefined as string | undefined,
         marketRefPrice: undefined as number | undefined,
         goRecellGoodPrice: undefined as number | undefined,
+        goRecellFairPrice: undefined as number | undefined,
+        goRecellFloorApplied: false,
         competitorCount: 0,
       }
     }
@@ -1202,8 +1231,17 @@ export default function AdminPricingPage() {
       return new Date(row.retrieved_at).getTime() > new Date(latest).getTime() ? row.retrieved_at : latest
     }, undefined)
 
-    const marketRefPrice = tradeInPolicyReference.referencePrice
-    const goRecellGoodPrice = tradeInPolicyReference.goRecellPrice
+    const goRecellGoodPrice = pickLatest(
+      canonicalRows.filter((row) => row.canonical_name === 'GoRecell' && row.canonical_condition === 'good')
+    )?.trade_in_price
+    const goRecellFairPrice = pickLatest(
+      canonicalRows.filter((row) => row.canonical_name === 'GoRecell' && row.canonical_condition === 'fair')
+    )?.trade_in_price
+    const flooredPolicyReference = applyGoRecellFairFloor(
+      condition,
+      tradeInPolicyReference.referencePrice ?? undefined,
+      goRecellFairPrice ?? undefined
+    )
 
     return {
       rows,
@@ -1214,8 +1252,10 @@ export default function AdminPricingPage() {
       averageSellPrice,
       highestSellPrice,
       latestRetrievedAt,
-      marketRefPrice: marketRefPrice ?? undefined,
+      marketRefPrice: flooredPolicyReference.referencePrice ?? undefined,
       goRecellGoodPrice,
+      goRecellFairPrice,
+      goRecellFloorApplied: flooredPolicyReference.goRecellFloorApplied,
       competitorCount: tradeInPolicyReference.canonicalRows.length,
     }
   })()
@@ -1945,9 +1985,9 @@ export default function AdminPricingPage() {
                               Highest pricing-source offer: <span className="font-mono font-medium">{formatCurrency(calculatorCompetitorSnapshot.highestPrice)}</span>
                             </div>
                           )}
-                          {calculatorCompetitorSnapshot.averagePrice != null && (
-                            <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-xs">
-                              Bell/Telus/GoRecell avg: <span className="font-mono font-medium text-blue-600">{formatCurrency(calculatorCompetitorSnapshot.averagePrice)}</span>
+                        {calculatorCompetitorSnapshot.averagePrice != null && (
+                            <div className="rounded-lg border border-sky-300/60 bg-sky-50 dark:border-sky-800/60 dark:bg-sky-950/30 px-3 py-2 text-xs text-sky-950 dark:text-sky-100">
+                              Approved competitor average: <span className="font-mono font-semibold text-sky-700 dark:text-sky-300">{formatCurrency(calculatorCompetitorSnapshot.averagePrice)}</span>
                             </div>
                           )}
                         </div>
@@ -1962,17 +2002,25 @@ export default function AdminPricingPage() {
                                 {formatCurrency(calculatorCompetitorSnapshot.marketRefPrice)}
                               </span>
                             </div>
+                            {calculatorCompetitorSnapshot.goRecellFloorApplied && calculatorCompetitorSnapshot.goRecellFairPrice != null && (
+                              <div className="rounded-md border border-amber-300/50 bg-white/70 dark:border-amber-800/50 dark:bg-black/10 px-2.5 py-2 text-[11px] text-amber-900 dark:text-amber-200">
+                                Good-condition floor applied to stay at or above GoRecell fair: {formatCurrency(calculatorCompetitorSnapshot.goRecellFairPrice)}
+                              </div>
+                            )}
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1 border-t border-amber-200/40 dark:border-amber-800/40">
                               {calculatorCompetitorSnapshot.rows.filter(r => r.price != null && r.price > 0).map((row) => {
                                 const canonicalName = normalizeCompetitorName(row.name)
                                 const isPricingDriver = ['Bell', 'Telus', 'GoRecell'].includes(canonicalName)
                                 return (
-                                  <div key={row.name} className="rounded bg-white/50 dark:bg-white/5 px-2 py-1.5 text-center relative">
+                                  <div key={row.name} className={`rounded border px-2 py-1.5 text-center relative ${isPricingDriver ? 'border-amber-300/60 bg-white/80 dark:border-amber-700/60 dark:bg-black/15' : 'border-white/10 bg-white/40 dark:bg-white/5'}`}>
                                     {isPricingDriver && (
                                       <span className="absolute -top-1.5 right-1 text-[8px] bg-amber-500 text-white rounded px-1 leading-tight">used</span>
                                     )}
-                                    <p className="text-[10px] text-muted-foreground truncate">{row.name}</p>
-                                    <p className="font-mono font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(row.price!)}</p>
+                                    <p className="text-[10px] font-medium text-slate-800 dark:text-slate-100 truncate">
+                                      {row.name}
+                                      {row.source_condition && row.source_condition !== calculatorCompetitorSnapshot.condition ? ` (${row.source_condition})` : ''}
+                                    </p>
+                                    <p className="font-mono font-semibold text-amber-800 dark:text-amber-300">{formatCurrency(row.price!)}</p>
                                   </div>
                                 )
                               })}
@@ -1981,9 +2029,12 @@ export default function AdminPricingPage() {
                         )}
                         <div className="space-y-1">
                           {calculatorCompetitorSnapshot.rows.map((row) => (
-                            <div key={row.name} className="flex items-center justify-between rounded-md border px-3 py-2">
-                              <span className="text-muted-foreground">{row.name}</span>
-                              <div className="font-mono text-blue-600">{row.price != null ? formatCurrency(row.price) : '-'}</div>
+                            <div key={row.name} className="flex items-center justify-between rounded-md border border-white/10 bg-white/60 px-3 py-2 dark:bg-white/5">
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {row.name}
+                                {row.source_condition && row.source_condition !== calculatorCompetitorSnapshot.condition ? ` (${row.source_condition})` : ''}
+                              </span>
+                              <div className="font-mono font-semibold text-sky-700 dark:text-sky-300">{row.price != null ? formatCurrency(row.price) : '-'}</div>
                             </div>
                           ))}
                         </div>
