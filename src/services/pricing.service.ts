@@ -108,12 +108,20 @@ function isBrokenDevice(condition: DeviceCondition, deductionKeys: string[]): bo
 /** Normalize storage string to match what scrapers store in competitor_prices table.
  *  e.g. "128 GB" → "128GB", "1024GB" → "1TB", "1 TB" → "1TB" */
 function normalizeStorageInput(storage: string): string {
-  let s = (storage || '128GB').trim().toUpperCase().replace(/\s+/g, '')
-  if (s === '1024GB') s = '1TB'
-  if (s === '2048GB') s = '2TB'
-  if (s === '4096GB') s = '4TB'
-  if (s === '8192GB') s = '8TB'
-  return s || '128GB'
+  const raw = (storage || '128GB').trim().replace(/\s+/g, ' ')
+  if (!raw) return '128GB'
+
+  const compact = raw.toUpperCase().replace(/\s+/g, '')
+  if (/^\d+(GB|TB)$/.test(compact)) {
+    let s = compact
+    if (s === '1024GB') s = '1TB'
+    if (s === '2048GB') s = '2TB'
+    if (s === '4096GB') s = '4TB'
+    if (s === '8192GB') s = '8TB'
+    return s
+  }
+
+  return raw
 }
 
 const APPROVED_TRADE_IN_PRICING_COMPETITORS = ['Bell', 'Telus', 'GoRecell'] as const
@@ -782,9 +790,15 @@ export class PricingService {
         { allowNoRows: true, retries: 2 }
       ) || []
 
-      // Deduplicate: one row per competitor name, prefer exact condition then freshest
+      // Deduplicate one row per competitor name. If we have any exact-condition rows,
+      // use only those; otherwise fall back to the freshest row from another condition.
+      const approvedCompetitorRows = allCompetitorRows.filter((cp) => isApprovedTradeInPricingCompetitor(cp.competitor_name))
+      const preferredCompetitorRows = approvedCompetitorRows.some((cp) => cp.condition === competitorCondition)
+        ? approvedCompetitorRows.filter((cp) => cp.condition === competitorCondition)
+        : approvedCompetitorRows
+
       const competitorMap = new Map<string, CompetitorPrice>()
-      for (const cp of allCompetitorRows) {
+      for (const cp of preferredCompetitorRows) {
         const price = Number(cp.trade_in_price) || 0
         if (price <= 0) continue
         const name = (cp.competitor_name || 'Unknown').trim()
@@ -792,21 +806,13 @@ export class PricingService {
         if (!existing) {
           competitorMap.set(name, cp)
         } else {
-          const existingIsExact = existing.condition === competitorCondition
-          const currentIsExact = cp.condition === competitorCondition
-          if (currentIsExact && !existingIsExact) {
-            competitorMap.set(name, cp)
-          } else if (currentIsExact === existingIsExact) {
-            // Same priority — keep fresher
-            const existingTs = new Date((existing.scraped_at || existing.created_at) ?? 0).getTime()
-            const currentTs = new Date((cp.scraped_at || cp.created_at) ?? 0).getTime()
-            if (currentTs > existingTs) competitorMap.set(name, cp)
-          }
+          const existingTs = new Date((existing.scraped_at || existing.created_at) ?? 0).getTime()
+          const currentTs = new Date((cp.scraped_at || cp.created_at) ?? 0).getTime()
+          if (currentTs > existingTs) competitorMap.set(name, cp)
         }
       }
 
-      let competitorData = Array.from(competitorMap.values())
-        .filter((cp) => isApprovedTradeInPricingCompetitor(cp.competitor_name))
+      const competitorData = Array.from(competitorMap.values())
 
       if (!anchorPrice && competitorData && competitorData.length > 0) {
         const competitorAnchorCandidates = competitorData
@@ -1760,18 +1766,26 @@ export class PricingService {
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
 
+    const approvedRows = (data || []).filter((cp) => getApprovedTradeInPricingCompetitorName(cp.competitor_name))
+    const preferredRows = approvedRows.some((cp) => (cp.condition || '') === competitorCondition)
+      ? approvedRows.filter((cp) => (cp.condition || '') === competitorCondition)
+      : approvedRows
+
     const byName = new Map<'Bell' | 'Telus' | 'GoRecell', { price: number; retrieved_at?: string }>()
-    for (const cp of data || []) {
+    for (const cp of preferredRows) {
       const p = Number(cp.trade_in_price) || 0
       if (p <= 0) continue
       const name = getApprovedTradeInPricingCompetitorName(cp.competitor_name)
       if (!name) continue
       const existing = byName.get(name)
-      const isExact = (cp.condition || '') === competitorCondition
       if (!existing) {
         byName.set(name, { price: p, retrieved_at: cp.retrieved_at || cp.scraped_at || cp.updated_at || undefined })
-      } else if (isExact) {
-        byName.set(name, { price: p, retrieved_at: cp.retrieved_at || cp.scraped_at || cp.updated_at || undefined })
+      } else {
+        const existingTs = existing.retrieved_at ? new Date(existing.retrieved_at).getTime() : 0
+        const currentTs = new Date(cp.retrieved_at || cp.scraped_at || cp.updated_at || 0).getTime()
+        if (currentTs >= existingTs) {
+          byName.set(name, { price: p, retrieved_at: cp.retrieved_at || cp.scraped_at || cp.updated_at || undefined })
+        }
       }
     }
 

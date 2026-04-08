@@ -61,6 +61,27 @@ const BROKEN_ROWS = [
   compRow('UniverCell', 'broken', 95),
 ]
 
+const CONDITION_BLEED_ROWS = [
+  compRow('GoRecell', 'good', 50),
+  compRow('GoRecell', 'fair', 37.5),
+  compRow('Bell', 'good', 47.75),
+]
+
+const COMPLEX_STORAGE_ROWS = [
+  {
+    ...compRow('GoRecell', 'good', 500),
+    storage: '24GB RAM 512GB SSD',
+  },
+  {
+    ...compRow('Bell', 'good', 460),
+    storage: '24GB RAM 512GB SSD',
+  },
+  {
+    ...compRow('Telus', 'good', 440),
+    storage: '24GB RAM 512GB SSD',
+  },
+]
+
 const REFERENCE_ONLY_ROWS = [
   compRow('Apple Trade-In', 'good', 240),
   compRow('UniverCell', 'good', 230),
@@ -200,6 +221,34 @@ describe('PricingService trade-in pricing policy', () => {
     expect(result.trade_price).toBe(113.5)
     expect(result.competitor_count).toBe(3)
     expect(result.prices.map((entry) => entry.name).sort()).toEqual(['Bell', 'GoRecell', 'Telus'])
+  })
+
+  it('does not pull a different condition into the quote when at least one exact-condition row exists', async () => {
+    mockFrom.mockImplementation(buildMock(CONDITION_BLEED_ROWS))
+
+    const { PricingService } = await import('@/services/pricing.service')
+    const result = await PricingService.calculatePriceV2({
+      device_id: DEVICE_ID,
+      storage: '128GB',
+      condition: 'fair',
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.trade_price).toBe(37.5)
+  })
+
+  it('matches complex storage labels exactly instead of over-normalizing them', async () => {
+    mockFrom.mockImplementation(buildMock(COMPLEX_STORAGE_ROWS))
+
+    const { PricingService } = await import('@/services/pricing.service')
+    const result = await PricingService.calculatePriceV2({
+      device_id: DEVICE_ID,
+      storage: '24GB RAM 512GB SSD',
+      condition: 'good',
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.trade_price).toBe(475)
   })
 
   it('keeps the Bell/Telus + GoRecell formula authoritative even when data-driven pricing is enabled', async () => {
