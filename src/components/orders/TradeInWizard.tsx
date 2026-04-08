@@ -5,7 +5,7 @@
 // Apple / GoRecell / UniverCell-inspired multi-step flow
 // ============================================================================
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Smartphone, Tablet, Laptop, Package,
@@ -214,6 +214,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
   const [quote, setQuote] = useState<QuoteResult | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteRevealed, setQuoteRevealed] = useState(false)
+  const latestQuoteRequestRef = useRef(0)
 
   // Load device catalog
   useEffect(() => {
@@ -228,9 +229,16 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
 
   // Fetch quote when condition + device are set
   useEffect(() => {
-    if (!device || !condition || !storage) { setQuote(null); return }
+    if (!device || !condition || !storage) {
+      latestQuoteRequestRef.current += 1
+      setQuote(null)
+      setQuoteLoading(false)
+      return
+    }
     setQuoteLoading(true)
     setQuoteRevealed(false)
+    const requestId = latestQuoteRequestRef.current + 1
+    latestQuoteRequestRef.current = requestId
 
     const mapped = condition === 'new' || condition === 'excellent'
       ? 'excellent' : condition === 'fair' ? 'fair'
@@ -243,6 +251,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
     })
       .then(r => r.json())
       .then(data => {
+        if (latestQuoteRequestRef.current !== requestId) return
         setQuote({
           unit_price: data.unit_price ?? 0,
           cpo_unit_price: data.cpo_unit_price ?? 0,
@@ -250,10 +259,16 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
           competitor_count: data.competitor_count ?? 0,
         })
         // Small delay then reveal with animation
-        setTimeout(() => setQuoteRevealed(true), 400)
+        setTimeout(() => {
+          if (latestQuoteRequestRef.current === requestId) setQuoteRevealed(true)
+        }, 400)
       })
-      .catch(() => setQuote(null))
-      .finally(() => setQuoteLoading(false))
+      .catch(() => {
+        if (latestQuoteRequestRef.current === requestId) setQuote(null)
+      })
+      .finally(() => {
+        if (latestQuoteRequestRef.current === requestId) setQuoteLoading(false)
+      })
   }, [device, condition, storage])
 
   const go = useCallback((next: number) => {

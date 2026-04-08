@@ -178,6 +178,8 @@ export default function NewOrderPage() {
   // Multi-CSV state
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const latestLookupRequestRef = useRef<Record<number, number>>({})
+  const nextLookupRequestIdRef = useRef(1)
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
@@ -193,7 +195,15 @@ export default function NewOrderPage() {
 
   // Price lookup for internal staff
   const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, condition: DeviceCondition) => {
-    if (!deviceId || !storage || !isInternal) return
+    if (!isInternal) return
+    if (!deviceId || !storage) {
+      delete latestLookupRequestRef.current[index]
+      setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: '', competitors: [] } }))
+      return
+    }
+
+    const requestId = nextLookupRequestIdRef.current++
+    latestLookupRequestRef.current[index] = requestId
 
     setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: true, error: null, source: '', competitors: [] } }))
 
@@ -207,6 +217,7 @@ export default function NewOrderPage() {
       if (res.ok) {
         const data = await res.json()
         if (data.success && (data.trade_price > 0 || data.cpo_price > 0)) {
+          if (latestLookupRequestRef.current[index] !== requestId) return
           setItemPrices(prev => ({
             ...prev,
             [index]: {
@@ -223,11 +234,13 @@ export default function NewOrderPage() {
         }
       }
 
+      if (latestLookupRequestRef.current[index] !== requestId) return
       setItemPrices(prev => ({
         ...prev,
         [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: 'No price data', source: '', competitors: [] },
       }))
     } catch {
+      if (latestLookupRequestRef.current[index] !== requestId) return
       setItemPrices(prev => ({
         ...prev,
         [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: 'Lookup failed', source: '', competitors: [] },
@@ -257,6 +270,7 @@ export default function NewOrderPage() {
 
   const removeItem = (i: number) => {
     setItems(items.filter((_, idx) => idx !== i))
+    latestLookupRequestRef.current = {}
     setItemPrices(prev => {
       const next = { ...prev }
       delete next[i]
@@ -298,11 +312,7 @@ export default function NewOrderPage() {
     // Trigger price lookup when device, storage, condition, or order_type changes
     if (isInternal && ['device_id', 'storage', 'condition', 'order_type'].includes(field)) {
       const updatedItem = newItems[index]
-      if (updatedItem) {
-        setTimeout(() => {
-          lookupPrice(index, updatedItem.device_id, updatedItem.storage, updatedItem.condition)
-        }, 100)
-      }
+      if (updatedItem) lookupPrice(index, updatedItem.device_id, updatedItem.storage, updatedItem.condition)
     }
   }
 
