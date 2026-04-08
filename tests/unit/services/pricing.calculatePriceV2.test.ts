@@ -67,6 +67,19 @@ const CONDITION_BLEED_ROWS = [
   compRow('Bell', 'good', 47.75),
 ]
 
+const PER_COMPETITOR_FALLBACK_ROWS = [
+  compRow('Bell', 'good', 120),
+  compRow('Telus', 'good', 124),
+  compRow('GoRecell', 'fair', 140),
+]
+
+const GORECELL_FAIR_FLOOR_ROWS = [
+  compRow('Bell', 'good', 120),
+  compRow('Telus', 'good', 124),
+  compRow('GoRecell', 'good', 228),
+  compRow('GoRecell', 'fair', 182),
+]
+
 const COMPLEX_STORAGE_ROWS = [
   {
     ...compRow('GoRecell', 'good', 500),
@@ -235,6 +248,38 @@ describe('PricingService trade-in pricing policy', () => {
 
     expect(result.success).toBe(true)
     expect(result.trade_price).toBe(37.5)
+  })
+
+  it('falls back per competitor instead of dropping GoRecell when only Bell and Telus have exact-condition rows', async () => {
+    mockFrom.mockImplementation(buildMock(PER_COMPETITOR_FALLBACK_ROWS))
+
+    const { PricingService } = await import('@/services/pricing.service')
+    const result = await PricingService.calculatePriceV2({
+      device_id: DEVICE_ID,
+      storage: '128GB',
+      condition: 'good',
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'GoRecell', 'Telus'])
+    expect(result.trade_price).toBe(140)
+    expect(result.channel_decision.reasoning).toContain('GoRecell fair floor applied')
+  })
+
+  it('keeps a good-condition quote at or above GoRecell fair when the midpoint blend falls too low', async () => {
+    mockFrom.mockImplementation(buildMock(GORECELL_FAIR_FLOOR_ROWS))
+
+    const { PricingService } = await import('@/services/pricing.service')
+    const result = await PricingService.calculatePriceV2({
+      device_id: DEVICE_ID,
+      storage: '128GB',
+      condition: 'good',
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.trade_price).toBe(182)
+    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'GoRecell', 'Telus'])
+    expect(result.channel_decision.reasoning).toContain('GoRecell fair floor applied at $182')
   })
 
   it('matches complex storage labels exactly instead of over-normalizing them', async () => {

@@ -125,6 +125,16 @@ function normalizeStorageInput(storage: string): string {
 }
 
 const APPROVED_TRADE_IN_PRICING_COMPETITORS = ['Bell', 'Telus', 'GoRecell'] as const
+type ApprovedTradeInPricingCompetitor = (typeof APPROVED_TRADE_IN_PRICING_COMPETITORS)[number]
+type TradeInCompetitorRowLike = {
+  competitor_name?: string | null
+  trade_in_price?: number | null
+  condition?: string | null
+  updated_at?: string | null
+  scraped_at?: string | null
+  created_at?: string | null
+  retrieved_at?: string | null
+}
 
 function isApprovedTradeInPricingCompetitor(name?: string | null): boolean {
   const canonical = normalizeCompetitorName(name || undefined)
@@ -183,6 +193,71 @@ function buildApprovedTradeInPricingBlend(
     goRecellPrice,
     referencePrice,
   }
+}
+
+function getTradeInCompetitorRowTimestamp(row: TradeInCompetitorRowLike): number {
+  const ts = row.retrieved_at || row.updated_at || row.scraped_at || row.created_at
+  const parsed = ts ? new Date(ts).getTime() : 0
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function pickLatestTradeInCompetitorRow<T extends TradeInCompetitorRowLike>(rows: T[]): T | undefined {
+  if (rows.length === 0) return undefined
+  return rows.reduce((latest, current) => (
+    getTradeInCompetitorRowTimestamp(current) >= getTradeInCompetitorRowTimestamp(latest) ? current : latest
+  ))
+}
+
+function selectApprovedTradeInPricingRows<T extends TradeInCompetitorRowLike>(
+  rows: T[],
+  preferredCondition?: string,
+  options?: { fallbackCompetitors?: ApprovedTradeInPricingCompetitor[] }
+): T[] {
+  const grouped = new Map<ApprovedTradeInPricingCompetitor, T[]>()
+
+  for (const row of rows) {
+    const canonical = getApprovedTradeInPricingCompetitorName(row.competitor_name)
+    const price = Number(row.trade_in_price) || 0
+    if (!canonical || price <= 0) continue
+    const existing = grouped.get(canonical) || []
+    existing.push(row)
+    grouped.set(canonical, existing)
+  }
+
+  const fallbackCompetitors = new Set(options?.fallbackCompetitors || [])
+  const hasAnyExactConditionRows = preferredCondition
+    ? rows.some((row) => {
+        const canonical = getApprovedTradeInPricingCompetitorName(row.competitor_name)
+        return canonical != null && (row.condition || '') === preferredCondition && (Number(row.trade_in_price) || 0) > 0
+      })
+    : false
+
+  return APPROVED_TRADE_IN_PRICING_COMPETITORS.flatMap((competitorName) => {
+    const pool = grouped.get(competitorName) || []
+    if (pool.length === 0) return []
+
+    const exactConditionPool = preferredCondition
+      ? pool.filter((row) => (row.condition || '') === preferredCondition)
+      : []
+    let selected: T | undefined
+    if (exactConditionPool.length > 0) {
+      selected = pickLatestTradeInCompetitorRow(exactConditionPool)
+    } else if (!preferredCondition || !hasAnyExactConditionRows || fallbackCompetitors.has(competitorName)) {
+      selected = pickLatestTradeInCompetitorRow(pool)
+    }
+    return selected ? [selected] : []
+  })
+}
+
+function getApprovedTradeInCompetitorConditionPrice<T extends TradeInCompetitorRowLike>(
+  rows: T[],
+  competitorName: ApprovedTradeInPricingCompetitor,
+  condition: 'excellent' | 'good' | 'fair' | 'broken'
+): number {
+  const selected = pickLatestTradeInCompetitorRow(
+    rows.filter((row) => getApprovedTradeInPricingCompetitorName(row.competitor_name) === competitorName && (row.condition || '') === condition)
+  )
+  return round2(Number(selected?.trade_in_price) || 0)
 }
 
 /** Filter competitor outliers — discard highest if >1.3x second-highest (e.g. Bell promotion) */
@@ -790,29 +865,15 @@ export class PricingService {
         { allowNoRows: true, retries: 2 }
       ) || []
 
-      // Deduplicate one row per competitor name. If we have any exact-condition rows,
-      // use only those; otherwise fall back to the freshest row from another condition.
-      const approvedCompetitorRows = allCompetitorRows.filter((cp) => isApprovedTradeInPricingCompetitor(cp.competitor_name))
-      const preferredCompetitorRows = approvedCompetitorRows.some((cp) => cp.condition === competitorCondition)
-        ? approvedCompetitorRows.filter((cp) => cp.condition === competitorCondition)
-        : approvedCompetitorRows
-
-      const competitorMap = new Map<string, CompetitorPrice>()
-      for (const cp of preferredCompetitorRows) {
-        const price = Number(cp.trade_in_price) || 0
-        if (price <= 0) continue
-        const name = (cp.competitor_name || 'Unknown').trim()
-        const existing = competitorMap.get(name)
-        if (!existing) {
-          competitorMap.set(name, cp)
-        } else {
-          const existingTs = new Date((existing.scraped_at || existing.created_at) ?? 0).getTime()
-          const currentTs = new Date((cp.scraped_at || cp.created_at) ?? 0).getTime()
-          if (currentTs > existingTs) competitorMap.set(name, cp)
-        }
-      }
-
-      const competitorData = Array.from(competitorMap.values())
+      // Select one row per approved competitor. Each competitor gets its own
+      // exact-condition preference, then falls back independently to its freshest
+      // row. This prevents Bell/Telus exact rows from accidentally dropping
+      // GoRecell out of the blend when GoRecell only has a fallback condition row.
+      const competitorData = selectApprovedTradeInPricingRows(
+        allCompetitorRows,
+        competitorCondition,
+        { fallbackCompetitors: competitorCondition === 'good' ? ['GoRecell'] : [] }
+      ) as CompetitorPrice[]
 
       if (!anchorPrice && competitorData && competitorData.length > 0) {
         const competitorAnchorCandidates = competitorData
@@ -897,6 +958,7 @@ export class PricingService {
       const avgCompetitorPrice = filteredCompetitors.length > 0
         ? filteredCompetitors.reduce((s, c) => s + c.price, 0) / filteredCompetitors.length
         : 0
+      const goRecellFairPrice = getApprovedTradeInCompetitorConditionPrice(allCompetitorRows, 'GoRecell', 'fair')
 
       // Step 5: Risk mode — enterprise has lower margin target. API overrides take precedence over saved settings.
       const riskMode: RiskMode = normalizedInput.risk_mode || 'retail'
@@ -1003,6 +1065,7 @@ export class PricingService {
       let competitorCeilingValue: number | undefined
       let beatPricingApplied = false
       let weightedAvgUsed = false
+      let goRecellFairFloorApplied = false
 
       const approvedPricingBlend = buildApprovedTradeInPricingBlend(filteredCompetitors)
       const goRecellPrice = approvedPricingBlend.goRecellPrice
@@ -1039,6 +1102,16 @@ export class PricingService {
           tradePrice = Math.max(tradePrice, 0)
         }
         tradePrice = Math.max(tradePrice, competitiveFloor)
+      }
+
+      if (
+        weightedAvgUsed &&
+        normalizedInput.condition === 'good' &&
+        goRecellFairPrice > 0 &&
+        tradePrice < goRecellFairPrice
+      ) {
+        tradePrice = round2(goRecellFairPrice)
+        goRecellFairFloorApplied = true
       }
 
       // Apply competitor ceiling — use the same deduplicated competitor set already built above.
@@ -1101,6 +1174,9 @@ export class PricingService {
           reasoning = `GoRecell only — quote $${round2(tradePrice)}.`
         } else {
           reasoning = `Bell/Telus avg only (${carrierNames}) — quote $${round2(tradePrice)}.`
+        }
+        if (goRecellFairFloorApplied) {
+          reasoning += ` GoRecell fair floor applied at $${round2(goRecellFairPrice)}.`
         }
       } else if (beatPricingApplied) {
         const beatDesc = beatPercent > 0 ? `${beatPercent}%` : `$${beatAmount}`
@@ -1766,13 +1842,13 @@ export class PricingService {
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
 
-    const approvedRows = (data || []).filter((cp) => getApprovedTradeInPricingCompetitorName(cp.competitor_name))
-    const preferredRows = approvedRows.some((cp) => (cp.condition || '') === competitorCondition)
-      ? approvedRows.filter((cp) => (cp.condition || '') === competitorCondition)
-      : approvedRows
-
     const byName = new Map<'Bell' | 'Telus' | 'GoRecell', { price: number; retrieved_at?: string }>()
-    for (const cp of preferredRows) {
+    const selectedRows = selectApprovedTradeInPricingRows(
+      data || [],
+      competitorCondition,
+      { fallbackCompetitors: competitorCondition === 'good' ? ['GoRecell'] : [] }
+    )
+    for (const cp of selectedRows) {
       const p = Number(cp.trade_in_price) || 0
       if (p <= 0) continue
       const name = getApprovedTradeInPricingCompetitorName(cp.competitor_name)
@@ -1796,9 +1872,13 @@ export class PricingService {
     }
 
     const blend = buildApprovedTradeInPricingBlend(prices)
-    const avg = blend.referencePrice > 0
+    let avg = blend.referencePrice > 0
       ? blend.referencePrice
       : prices.reduce((s, p) => s + p.price, 0) / prices.length
+    const goRecellFairPrice = getApprovedTradeInCompetitorConditionPrice(data || [], 'GoRecell', 'fair')
+    if (input.condition === 'good' && goRecellFairPrice > 0 && avg < goRecellFairPrice) {
+      avg = goRecellFairPrice
+    }
     const highest = Math.max(...prices.map(p => p.price))
 
     return {
