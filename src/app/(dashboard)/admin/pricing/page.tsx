@@ -53,6 +53,45 @@ function normalizeCompetitorName(name?: string): string {
   return name || 'Unknown'
 }
 
+function buildTradeInPolicyReference(rows: Array<{ name: string; price: number | null | undefined }>) {
+  const canonicalRows = rows
+    .map((row) => ({
+      name: normalizeCompetitorName(row.name),
+      price: row.price != null && row.price > 0 ? row.price : null,
+    }))
+    .filter((row): row is { name: string; price: number } => row.price != null && ['Bell', 'Telus', 'GoRecell'].includes(row.name))
+
+  const bellTelusRows = canonicalRows.filter((row) => row.name === 'Bell' || row.name === 'Telus')
+  const bellTelusAvg = bellTelusRows.length > 0
+    ? bellTelusRows.reduce((sum, row) => sum + row.price, 0) / bellTelusRows.length
+    : undefined
+  const goRecellPrice = canonicalRows.find((row) => row.name === 'GoRecell')?.price
+
+  let referencePrice: number | undefined
+  if (bellTelusAvg != null && goRecellPrice != null) {
+    referencePrice = (bellTelusAvg + goRecellPrice) / 2
+  } else if (goRecellPrice != null) {
+    referencePrice = goRecellPrice
+  } else if (bellTelusAvg != null) {
+    referencePrice = bellTelusAvg
+  }
+
+  const highestPrice = canonicalRows.length > 0 ? Math.max(...canonicalRows.map((row) => row.price)) : undefined
+  const averagePrice = canonicalRows.length > 0
+    ? canonicalRows.reduce((sum, row) => sum + row.price, 0) / canonicalRows.length
+    : undefined
+
+  return {
+    canonicalRows,
+    bellTelusRows,
+    bellTelusAvg,
+    goRecellPrice,
+    referencePrice,
+    highestPrice,
+    averagePrice,
+  }
+}
+
 function normalizeStorageOption(value: string): string {
   return value.replace(/\s+/g, '').toUpperCase()
 }
@@ -1132,11 +1171,9 @@ export default function AdminPricingPage() {
       row => row.price != null && row.source_condition != null && row.source_condition !== condition
     )
 
-    const priceValues = rows
-      .map(r => r.price)
-      .filter((price): price is number => price != null && price > 0)
-    const highestPrice = priceValues.length > 0 ? Math.max(...priceValues) : undefined
-    const averagePrice = priceValues.length > 0 ? priceValues.reduce((s, p) => s + p, 0) / priceValues.length : undefined
+    const tradeInPolicyReference = buildTradeInPolicyReference(rows)
+    const highestPrice = tradeInPolicyReference.highestPrice
+    const averagePrice = tradeInPolicyReference.averagePrice
 
     const sellPriceValues = rows
       .map(r => r.sellPrice)
@@ -1150,20 +1187,8 @@ export default function AdminPricingPage() {
       return new Date(row.retrieved_at).getTime() > new Date(latest).getTime() ? row.retrieved_at : latest
     }, undefined)
 
-    // Weighted Market Average: GoRecell Good ×2, all other competitors ×1
-    // Applies to every device dynamically — no hardcoded list needed
-    const goRecellGoodRow = rows.find(r => {
-      const n = r.name.toLowerCase()
-      return n.includes('gorecell') || n.includes('go recell') || n.includes('goresell')
-    })
-    const goRecellGoodPrice = goRecellGoodRow?.price
-    const validRows = rows.filter(r => r.price != null && r.price > 0)
-    const sumAll = validRows.reduce((s, r) => s + (r.price ?? 0), 0)
-    const extraGoRecell = goRecellGoodPrice ?? 0
-    const totalWeight = validRows.length + (extraGoRecell > 0 ? 1 : 0)
-    const marketRefPrice = totalWeight > 0
-      ? Math.round((sumAll + extraGoRecell) / totalWeight)
-      : undefined
+    const marketRefPrice = tradeInPolicyReference.referencePrice
+    const goRecellGoodPrice = tradeInPolicyReference.goRecellPrice
 
     return {
       rows,
@@ -1176,7 +1201,7 @@ export default function AdminPricingPage() {
       latestRetrievedAt,
       marketRefPrice: marketRefPrice ?? undefined,
       goRecellGoodPrice,
-      competitorCount: validRows.length,
+      competitorCount: tradeInPolicyReference.canonicalRows.length,
     }
   })()
 
@@ -1400,7 +1425,7 @@ export default function AdminPricingPage() {
                     <h4 className="text-sm font-semibold">Scrape Competitors</h4>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Daily scrape of trade-in offers from <strong>Telus</strong>, <strong>Bell</strong>, <strong>GoRecell</strong>, and <strong>UniverCell</strong> across all conditions.
+                    Daily scrape of trade-in offers from <strong>Telus</strong>, <strong>Bell</strong>, and <strong>GoRecell</strong>. Apple and UniverCell stay visible as reference data.
                   </p>
                 </div>
                 <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 space-y-2">
@@ -1409,16 +1434,16 @@ export default function AdminPricingPage() {
                     <h4 className="text-sm font-semibold">Calculate Average</h4>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    For each device + storage + condition, we compute the <strong>market average</strong> from competitor trade-in prices.
+                    For each device + storage + condition, we compute the <strong>Bell/Telus average</strong> first, then compare it with <strong>GoRecell</strong>.
                   </p>
                 </div>
                 <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500 text-white text-xs font-bold">3</div>
-                    <h4 className="text-sm font-semibold">Apply Margin</h4>
+                    <h4 className="text-sm font-semibold">Final Quote</h4>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    <strong>Our Quote = Avg x (1 - {parseFloat(settingsForm.trade_in_profit_percent || '20') >= 1 ? settingsForm.trade_in_profit_percent : '20'}%)</strong>
+                    <strong>Our Quote = Average( Bell/Telus Avg, GoRecell )</strong>
                   </p>
                 </div>
               </div>
@@ -1427,8 +1452,12 @@ export default function AdminPricingPage() {
                   <div>
                     <span className="text-muted-foreground">Trade-In Formula:</span>{' '}
                     <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
-                      Our Quote = Competitor Avg x (1 - {parseFloat(settingsForm.trade_in_profit_percent || '20') >= 1 ? settingsForm.trade_in_profit_percent : '20'}%)
+                      Our Quote = ((Bell + Telus) / 2 + GoRecell) / 2
                     </code>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Reference-only competitors:</span>{' '}
+                    <span>Apple Trade-In, UniverCell</span>
                   </div>
                   <div className="w-full">
                     <span className="text-muted-foreground font-medium">Condition Multipliers:</span>
@@ -1606,19 +1635,22 @@ export default function AdminPricingPage() {
                         {COMPETITOR_LIST.map(c => (
                           <TableHead key={c} className="text-right">{COMPETITOR_DISPLAY_NAMES[c] || c}</TableHead>
                         ))}
-                        <TableHead className="text-right">Avg</TableHead>
+                        <TableHead className="text-right">Policy Ref</TableHead>
                         <TableHead className="text-right font-semibold text-primary">Our Quote</TableHead>
                         <TableHead className="text-right text-xs text-muted-foreground">Last Updated</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {competitorMatrixRows.map((row) => {
+                        const policyReference = buildTradeInPolicyReference(
+                          COMPETITOR_LIST.map((competitor) => ({
+                            name: competitor,
+                            price: row.prices[competitor],
+                          }))
+                        )
                         const tradeValues = COMPETITOR_LIST
                           .map(c => row.prices[c])
                           .filter((p): p is number => p != null && p > 0)
-                        const avg = tradeValues.length > 0
-                          ? tradeValues.reduce((s, p) => s + p, 0) / tradeValues.length
-                          : null
                         const highestPrice = tradeValues.length > 0 ? Math.max(...tradeValues) : null
 
                         return (
@@ -1642,9 +1674,9 @@ export default function AdminPricingPage() {
                               )
                             })}
                             <TableCell className="text-right font-mono text-muted-foreground">
-                              {avg != null ? formatCurrency(avg) : (formulaLoading ? '...' : '-')}
+                              {policyReference.referencePrice != null ? formatCurrency(policyReference.referencePrice) : (formulaLoading ? '...' : '-')}
                             </TableCell>
-                            <TableCell className="text-right font-mono font-semibold text-primary" title="Backend-computed price (margin applied to competitor avg)">
+                            <TableCell className="text-right font-mono font-semibold text-primary" title="Backend-computed Bell/Telus + GoRecell quote">
                               {(() => {
                                 const key = `${row.device_id}|${row.storage}|${row.condition}`
                                 // Always prefer backend API result (calculate-batch) — single source of truth
@@ -1653,11 +1685,9 @@ export default function AdminPricingPage() {
                                   return fp.trade_price != null && fp.trade_price > 0 ? formatCurrency(fp.trade_price) : '-'
                                 }
                                 if (formulaLoading) return <span className="text-muted-foreground text-xs">...</span>
-                                // Fallback while batch loads: client-side approximation using competitor avg
-                                if (avg != null) {
-                                  const rawMargin = parseFloat(settingsForm.trade_in_profit_percent || '0')
-                                  const marginPct = rawMargin >= 1 ? rawMargin : 20
-                                  return formatCurrency(avg * (1 - marginPct / 100))
+                                // Fallback while batch loads: same policy formula as the backend
+                                if (policyReference.referencePrice != null) {
+                                  return formatCurrency(policyReference.referencePrice)
                                 }
                                 return '-'
                               })()}
@@ -1897,12 +1927,12 @@ export default function AdminPricingPage() {
                         <div className="grid grid-cols-2 gap-3">
                           {calculatorCompetitorSnapshot.highestPrice != null && (
                             <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
-                              Highest trade-in: <span className="font-mono font-medium">{formatCurrency(calculatorCompetitorSnapshot.highestPrice)}</span>
+                              Highest pricing-source offer: <span className="font-mono font-medium">{formatCurrency(calculatorCompetitorSnapshot.highestPrice)}</span>
                             </div>
                           )}
                           {calculatorCompetitorSnapshot.averagePrice != null && (
                             <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-xs">
-                              Avg trade-in: <span className="font-mono font-medium text-blue-600">{formatCurrency(calculatorCompetitorSnapshot.averagePrice)}</span>
+                              Bell/Telus/GoRecell avg: <span className="font-mono font-medium text-blue-600">{formatCurrency(calculatorCompetitorSnapshot.averagePrice)}</span>
                             </div>
                           )}
                         </div>
@@ -1910,8 +1940,8 @@ export default function AdminPricingPage() {
                           <div className="rounded-lg border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-3 py-3 text-xs space-y-2">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="font-semibold text-amber-700 dark:text-amber-400">Market Reference Price</p>
-                                <p className="text-muted-foreground mt-0.5">Weighted avg of all competitors (GoRecell Good ×2)</p>
+                                <p className="font-semibold text-amber-700 dark:text-amber-400">Policy Reference Price</p>
+                                <p className="text-muted-foreground mt-0.5">Average the Bell/Telus midpoint with GoRecell</p>
                               </div>
                               <span className="font-mono text-base font-bold text-amber-700 dark:text-amber-400">
                                 {formatCurrency(calculatorCompetitorSnapshot.marketRefPrice)}
@@ -1919,14 +1949,12 @@ export default function AdminPricingPage() {
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1 border-t border-amber-200/40 dark:border-amber-800/40">
                               {calculatorCompetitorSnapshot.rows.filter(r => r.price != null && r.price > 0).map((row) => {
-                                const isGoRecellGood = (() => {
-                                  const n = row.name.toLowerCase()
-                                  return (n.includes('gorecell') || n.includes('go recell') || n.includes('goresell')) && n.includes('good')
-                                })()
+                                const canonicalName = normalizeCompetitorName(row.name)
+                                const isPricingDriver = ['Bell', 'Telus', 'GoRecell'].includes(canonicalName)
                                 return (
                                   <div key={row.name} className="rounded bg-white/50 dark:bg-white/5 px-2 py-1.5 text-center relative">
-                                    {isGoRecellGood && (
-                                      <span className="absolute -top-1.5 right-1 text-[8px] bg-amber-500 text-white rounded px-1 leading-tight">×2</span>
+                                    {isPricingDriver && (
+                                      <span className="absolute -top-1.5 right-1 text-[8px] bg-amber-500 text-white rounded px-1 leading-tight">used</span>
                                     )}
                                     <p className="text-[10px] text-muted-foreground truncate">{row.name}</p>
                                     <p className="font-mono font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(row.price!)}</p>
@@ -1961,9 +1989,7 @@ export default function AdminPricingPage() {
                         </p>
                       </div>
                       {calculatorCompetitorSnapshot.averagePrice != null && (() => {
-                        const rawMargin = parseFloat(settingsForm.trade_in_profit_percent || '0')
-                        const tradeMarginPct = rawMargin >= 1 ? rawMargin : 20
-                        const suggestedTradeIn = calculatorCompetitorSnapshot.averagePrice * (1 - tradeMarginPct / 100)
+                        const suggestedTradeIn = calculatorCompetitorSnapshot.marketRefPrice ?? calculatorCompetitorSnapshot.averagePrice
                         return (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="rounded-xl border p-5">
@@ -1972,7 +1998,7 @@ export default function AdminPricingPage() {
                                 {formatCurrency(suggestedTradeIn)}
                               </p>
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                Avg {formatCurrency(calculatorCompetitorSnapshot.averagePrice)} - {tradeMarginPct}% margin
+                                Bell/Telus midpoint blended with GoRecell
                               </p>
                             </div>
                             {calculatorCompetitorSnapshot.highestPrice != null && (
