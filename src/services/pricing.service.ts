@@ -383,7 +383,11 @@ export class PricingService {
     priceSource = 'Data-Driven Model'
   ): PriceCalculationResultV2 {
     const tradePrice = round2(modelResult.trade_price ?? modelResult.final_price)
-    const cpoPrice = round2(modelResult.cpo_price ?? tradePrice)
+    // If model doesn't provide a CPO price, compute it as trade + 18% markup
+    // so CPO sell price is always distinct from the trade-in buyback price.
+    const cpoPrice = round2(modelResult.cpo_price && modelResult.cpo_price > tradePrice
+      ? modelResult.cpo_price
+      : tradePrice * 1.18)
     const priceDate = modelResult.price_date || new Date().toISOString()
     const validForHours = modelResult.valid_for_hours ?? (modelResult.confidence >= 0.8 ? 24 : 12)
 

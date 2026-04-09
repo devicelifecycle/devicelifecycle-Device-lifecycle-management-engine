@@ -63,6 +63,16 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
+  // Re-fetch when users table changes on any device (via Supabase Realtime)
+  useEffect(() => {
+    const handle = (e: Event) => {
+      const table = (e as CustomEvent<{ table: string }>).detail?.table
+      if (!table || table === 'users') fetchUsers()
+    }
+    window.addEventListener('dlm:db-change', handle)
+    return () => window.removeEventListener('dlm:db-change', handle)
+  }, [fetchUsers])
+
   useEffect(() => {
     if (['customer', 'vendor', 'sales'].includes(form.role)) {
       const typeParam = form.role === 'customer' ? '&type=customer' : form.role === 'vendor' ? '&type=vendor' : ''

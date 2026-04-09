@@ -15,10 +15,13 @@ export const dynamic = 'force-dynamic'
 /** Adapt model result to V2-compatible shape for UI */
 function adaptModelToV2(modelResult: { success: boolean; final_price: number; trade_price?: number; cpo_price?: number; confidence: number; breakdown: Record<string, unknown>; error?: string }, quantity: number) {
   const tradePrice = modelResult.trade_price ?? modelResult.final_price
+  const cpoPrice = (modelResult.cpo_price && modelResult.cpo_price > tradePrice)
+    ? modelResult.cpo_price
+    : Math.round(tradePrice * 1.18 * 100) / 100
   return {
     success: modelResult.success,
     trade_price: tradePrice,
-    cpo_price: modelResult.cpo_price ?? tradePrice,
+    cpo_price: cpoPrice,
     confidence: modelResult.confidence,
     quantity,
     channel_decision: {
