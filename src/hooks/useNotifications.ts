@@ -2,9 +2,8 @@
 // NOTIFICATIONS HOOK
 // ============================================================================
 
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Notification } from '@/types'
 
 interface NotificationsResponse {
@@ -40,7 +39,6 @@ async function markAllAsRead(): Promise<void> {
 
 export function useNotifications() {
   const queryClient = useQueryClient()
-  const supabase = createBrowserSupabaseClient()
 
   const notificationsQuery = useQuery({
     queryKey: ['notifications'],
@@ -61,28 +59,6 @@ export function useNotifications() {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
-
-  // Subscribe to realtime notifications
-  useEffect(() => {
-    const channel = supabase
-      .channel('notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['notifications'] })
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [queryClient, supabase])
 
   return {
     notifications: notificationsQuery.data?.data || [],

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -45,6 +45,8 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState('')
   const { login, isLoading, isAuthenticated, isInitializing, user, verifyMfa } = useAuth()
   const [isNavigating, setIsNavigating] = useState(false)
+  // Tracks whether login/verifyMfa already called router.replace() — prevents double-navigation
+  const loginHandledNavRef = useRef(false)
   const shouldReduceMotion = useReducedMotion()
 
   useEffect(() => {
@@ -62,6 +64,12 @@ export default function LoginPage() {
   useEffect(() => {
     if (!isInitializing && isAuthenticated) {
       setIsNavigating(true)
+      if (loginHandledNavRef.current) {
+        // login() / verifyMfa() already navigated — just keep the overlay up
+        loginHandledNavRef.current = false
+        return
+      }
+      // User visited /login while already authenticated — navigate them away
       const redirect = searchParams.get('redirect')
       const dest =
         redirect && redirect.startsWith('/')
@@ -78,6 +86,8 @@ export default function LoginPage() {
     setError('')
     try {
       await login(email, password)
+      // login() already called router.replace() — tell the useEffect not to double-navigate
+      loginHandledNavRef.current = true
     } catch (err: unknown) {
       const e = err as { type?: string; factorId?: string } & Error
       if (e?.type === 'MFA_REQUIRED' && e.factorId) {
@@ -99,6 +109,8 @@ export default function LoginPage() {
     setError('')
     try {
       await verifyMfa(mfaFactorId, mfaCode)
+      // verifyMfa() already called router.replace() — tell the useEffect not to double-navigate
+      loginHandledNavRef.current = true
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Invalid code'
       if (message.toLowerCase().includes('invalid') || message.toLowerCase().includes('expired')) {
