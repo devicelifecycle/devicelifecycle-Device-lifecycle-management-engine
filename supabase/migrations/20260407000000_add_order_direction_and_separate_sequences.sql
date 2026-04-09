@@ -55,11 +55,11 @@ $$;
 -- CPO orders are outbound (COE to customer)
 UPDATE orders
 SET order_direction = CASE
-  WHEN type = 'trade_in' THEN 'inbound'
-  WHEN type = 'cpo' THEN 'outbound'
-  ELSE 'inbound'
+  WHEN type = 'trade_in' THEN 'inbound'::order_direction
+  WHEN type = 'cpo' THEN 'outbound'::order_direction
+  ELSE 'inbound'::order_direction
 END
-WHERE order_direction = 'inbound';
+WHERE order_direction = 'inbound'::order_direction;
 
 -- Step 6: Initialize sequences to avoid collisions
 -- Extract max numeric part from existing order numbers and set sequences
@@ -98,13 +98,21 @@ $$;
 
 -- Step 7: Renumber existing orders to new format
 -- Only renumber orders that still have old ORD- format
+-- (Window functions not allowed directly in UPDATE — use a CTE)
+WITH ranked AS (
+  SELECT id, order_direction, created_at,
+    ROW_NUMBER() OVER (PARTITION BY order_direction, DATE_TRUNC('year', created_at) ORDER BY created_at, id) AS rn
+  FROM orders
+  WHERE order_number LIKE 'ORD-%'
+)
 UPDATE orders
-SET order_number = CASE order_direction
-  WHEN 'inbound' THEN 'PO-' || TO_CHAR(created_at, 'YYYY') || '-' || LPAD(ROW_NUMBER() OVER (PARTITION BY order_direction, DATE_TRUNC('year', created_at) ORDER BY created_at, id)::TEXT, 4, '0')
-  WHEN 'outbound' THEN 'INV-' || TO_CHAR(created_at, 'YYYY') || '-' || LPAD(ROW_NUMBER() OVER (PARTITION BY order_direction, DATE_TRUNC('year', created_at) ORDER BY created_at, id)::TEXT, 4, '0')
-  ELSE order_number
+SET order_number = CASE orders.order_direction
+  WHEN 'inbound'  THEN 'PO-'  || TO_CHAR(orders.created_at, 'YYYY') || '-' || LPAD(ranked.rn::TEXT, 4, '0')
+  WHEN 'outbound' THEN 'INV-' || TO_CHAR(orders.created_at, 'YYYY') || '-' || LPAD(ranked.rn::TEXT, 4, '0')
+  ELSE orders.order_number
 END
-WHERE order_number LIKE 'ORD-%';
+FROM ranked
+WHERE orders.id = ranked.id;
 
 -- Step 8: Make order_direction NOT NULL if backfill succeeded
 ALTER TABLE orders
