@@ -106,6 +106,36 @@ export default function COETriagePage() {
   const [imeiLookup, setImeiLookup] = useState<ImeiLookupResult | null>(null)
   const [isLookingUp, setIsLookingUp] = useState(false)
 
+  // ── TestPod diagnostic data ──────────────────────────────────────────────
+  type TestPodResult = {
+    found: boolean
+    imei?: string
+    serial_number?: string
+    manufacturer?: string
+    model_name?: string
+    storage?: string
+    color?: string
+    os_type?: string
+    os_version?: string
+    battery_max_capacity_pct?: number | null
+    cycle_count?: number | null
+    fmi_status?: string
+    mdm_status?: string
+    jailbreak?: string
+    gsma_blacklisted?: string
+    erasure_status?: string
+    carrier?: string
+    sim_lock?: string | null
+    cosmetic_grade?: string
+    suggested_condition?: string
+    screen_condition?: string
+    battery_status?: string
+    issues?: string[]
+    checklist?: Record<string, boolean>
+  }
+  const [testpodData, setTestpodData] = useState<TestPodResult | null>(null)
+  const [testpodLoading, setTestpodLoading] = useState(false)
+
   // ── Order / Quote reference lookup panel ────────────────────────────────
   const [refType, setRefType] = useState<'order' | 'quote'>('order')
   const [refInput, setRefInput] = useState('')
@@ -586,7 +616,49 @@ export default function COETriagePage() {
     setIssues([])
     setNotes('')
     setImeiLookup(null)
+    setTestpodData(null)
     setTriageDialogOpen(true)
+
+    // Auto-fetch TestPod diagnostics if we have an IMEI
+    if (item.imei) {
+      setTestpodLoading(true)
+      fetch(`/api/testpod/lookup?imei=${encodeURIComponent(item.imei)}`)
+        .then(r => r.json())
+        .then((data: TestPodResult) => {
+          setTestpodData(data)
+          if (!data.found) return
+          // Auto-fill battery health
+          if (data.battery_max_capacity_pct != null) {
+            setBatteryHealth(String(data.battery_max_capacity_pct))
+          }
+          // Auto-fill condition from cosmetic grade
+          if (data.suggested_condition) {
+            setPhysicalCondition(data.suggested_condition as DeviceCondition)
+          }
+          // Auto-fill screen condition
+          if (data.screen_condition) {
+            setScreenCondition(data.screen_condition)
+          }
+          // Auto-fill checklist from diagnostics
+          if (data.checklist) {
+            setChecklist(prev => ({ ...prev, ...data.checklist }))
+          }
+          // Auto-add detected issues
+          if (data.issues && data.issues.length > 0) {
+            setIssues(prev => [...new Set([...prev, ...data.issues!])])
+          }
+          // Auto-add security flags to notes
+          const flags: string[] = []
+          if (data.fmi_status === 'ON') flags.push('⚠️ Find My iPhone is ON')
+          if (data.mdm_status === 'ON') flags.push('⚠️ MDM locked')
+          if (data.jailbreak === 'ON') flags.push('⚠️ Jailbroken')
+          if (data.erasure_status === 'Failed') flags.push('⚠️ Erasure NOT verified')
+          if (data.gsma_blacklisted === 'Blacklisted') flags.push('🚫 GSMA Blacklisted')
+          if (flags.length > 0) setNotes(flags.join('\n'))
+        })
+        .catch(() => setTestpodData(null))
+        .finally(() => setTestpodLoading(false))
+    }
   }
 
   const toggleChecklistItem = (id: string) => {
@@ -1351,6 +1423,82 @@ export default function COETriagePage() {
               </div>
             </DialogDescription>
           </DialogHeader>
+
+          {/* ── TestPod Diagnostics Panel ─────────────────────────────────── */}
+          {(testpodLoading || testpodData) && (
+            <div className={`rounded-lg border px-4 py-3 text-xs space-y-2 ${
+              testpodData?.found ? 'bg-blue-50/60 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800' : 'bg-muted/40'
+            }`}>
+              {testpodLoading && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Fetching HiteKNova / TestPod diagnostics...</span>
+                </div>
+              )}
+              {testpodData && !testpodLoading && (
+                <>
+                  {!testpodData.found ? (
+                    <p className="text-muted-foreground">No TestPod record found for this IMEI.</p>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1">
+                          <ShieldCheck className="h-3.5 w-3.5" /> HiteKNova Diagnostics — auto-filled below
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {testpodData.cosmetic_grade && (
+                            <span className="rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 font-mono font-bold dark:bg-blue-900 dark:text-blue-200">
+                              Grade {testpodData.cosmetic_grade}
+                            </span>
+                          )}
+                          {testpodData.battery_max_capacity_pct != null && (
+                            <span className={`rounded-full px-2 py-0.5 font-medium ${testpodData.battery_max_capacity_pct >= 80 ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                              🔋 {testpodData.battery_max_capacity_pct}%{testpodData.cycle_count ? ` · ${testpodData.cycle_count} cycles` : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11px]">
+                        {testpodData.carrier && <span><span className="text-muted-foreground">Carrier:</span> {testpodData.carrier}{testpodData.sim_lock ? ` (${testpodData.sim_lock})` : ''}</span>}
+                        {testpodData.os_version && <span><span className="text-muted-foreground">OS:</span> {testpodData.os_type} {testpodData.os_version}</span>}
+                        {testpodData.color && <span><span className="text-muted-foreground">Color:</span> {testpodData.color}</span>}
+                        {testpodData.storage && <span><span className="text-muted-foreground">Storage:</span> {testpodData.storage}</span>}
+                        <span>
+                          <span className="text-muted-foreground">Find My:</span>{' '}
+                          <span className={testpodData.fmi_status === 'ON' ? 'text-red-600 font-semibold' : 'text-green-700'}>{testpodData.fmi_status ?? '—'}</span>
+                        </span>
+                        <span>
+                          <span className="text-muted-foreground">MDM:</span>{' '}
+                          <span className={testpodData.mdm_status === 'ON' ? 'text-red-600 font-semibold' : 'text-green-700'}>{testpodData.mdm_status ?? '—'}</span>
+                        </span>
+                        <span>
+                          <span className="text-muted-foreground">Erasure:</span>{' '}
+                          <span className={testpodData.erasure_status === 'Passed' ? 'text-green-700' : 'text-red-600 font-semibold'}>{testpodData.erasure_status ?? '—'}</span>
+                        </span>
+                        <span>
+                          <span className="text-muted-foreground">Jailbreak:</span>{' '}
+                          <span className={testpodData.jailbreak === 'ON' ? 'text-red-600 font-semibold' : 'text-green-700'}>{testpodData.jailbreak ?? '—'}</span>
+                        </span>
+                        {testpodData.gsma_blacklisted && testpodData.gsma_blacklisted !== 'Not tested' && (
+                          <span className="col-span-2">
+                            <span className="text-muted-foreground">GSMA:</span>{' '}
+                            <span className={testpodData.gsma_blacklisted === 'Blacklisted' ? 'text-red-600 font-bold' : 'text-green-700'}>{testpodData.gsma_blacklisted}</span>
+                          </span>
+                        )}
+                      </div>
+                      {testpodData.issues && testpodData.issues.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {testpodData.issues.map(issue => (
+                            <span key={issue} className="rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] dark:bg-amber-900/40 dark:text-amber-300">{issue}</span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           <Separator />
 
