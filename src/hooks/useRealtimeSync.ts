@@ -1,10 +1,12 @@
 // ============================================================================
 // REALTIME SYNC HOOK
 // ============================================================================
-// Single Supabase Realtime channel that listens to all key DB tables and
-// invalidates the matching React Query cache entries the moment a row
-// changes — so every open device/browser sees updates instantly without
-// polling or manual refresh.
+// Single Supabase Realtime channel that listens to all key DB tables and:
+// 1. Invalidates matching React Query cache entries (for hooks using useQuery)
+// 2. Fires a custom DOM event 'dlm:db-change' so plain-fetch pages can also
+//    refetch without needing React Query (e.g. triage page, admin pages).
+//
+// Every open browser tab / device sees updates the moment a DB row changes.
 
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -21,12 +23,19 @@ const TABLE_KEY_MAP: Record<string, string[][]> = {
   device_catalog:   [['devices'], ['device']],
   customers:        [['customers'], ['customer']],
   vendors:          [['vendors'], ['vendor']],
+  users:            [['users']],
   shipments:        [['shipments']],
   competitor_prices:[['competitor_prices'], ['pricing']],
   notifications:    [['notifications']],
 }
 
 const supabase = createBrowserSupabaseClient()
+
+/** Dispatch a custom DOM event so non-React-Query pages can subscribe */
+function notifyTable(table: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('dlm:db-change', { detail: { table } }))
+}
 
 export function useRealtimeSync() {
   const queryClient = useQueryClient()
@@ -39,10 +48,13 @@ export function useRealtimeSync() {
         'postgres_changes',
         { event: '*', schema: 'public', table },
         () => {
+          // 1. Invalidate React Query cache
           const keys = TABLE_KEY_MAP[table] ?? []
           for (const key of keys) {
             queryClient.invalidateQueries({ queryKey: key })
           }
+          // 2. Fire DOM event for plain-fetch pages
+          notifyTable(table)
         }
       )
     }

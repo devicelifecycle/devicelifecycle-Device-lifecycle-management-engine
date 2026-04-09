@@ -329,6 +329,18 @@ export default function COETriagePage() {
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [fetchPending])
 
+  // Refetch when any DB table changes (from any device via Supabase Realtime)
+  useEffect(() => {
+    const handleDbChange = (e: Event) => {
+      const table = (e as CustomEvent<{ table: string }>).detail?.table
+      if (!table || ['imei_records', 'triage_results', 'orders', 'order_items'].includes(table)) {
+        fetchPending(true)
+      }
+    }
+    window.addEventListener('dlm:db-change', handleDbChange)
+    return () => window.removeEventListener('dlm:db-change', handleDbChange)
+  }, [fetchPending])
+
   // Device search for add dialog
   useEffect(() => {
     if (!debouncedDeviceSearch.trim()) { setDeviceResults([]); return }
