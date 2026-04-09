@@ -8,7 +8,7 @@
 //
 // Every open browser tab / device sees updates the moment a DB row changes.
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 
@@ -39,6 +39,10 @@ function notifyTable(table: string) {
 
 export function useRealtimeSync() {
   const queryClient = useQueryClient()
+  // Ref keeps the latest queryClient accessible inside the effect without
+  // it being a dependency — prevents re-subscribe on queryClient identity change
+  const queryClientRef = useRef(queryClient)
+  queryClientRef.current = queryClient
 
   useEffect(() => {
     const channel = supabase.channel('dlm-realtime-sync')
@@ -51,7 +55,7 @@ export function useRealtimeSync() {
           // 1. Invalidate React Query cache
           const keys = TABLE_KEY_MAP[table] ?? []
           for (const key of keys) {
-            queryClient.invalidateQueries({ queryKey: key })
+            queryClientRef.current.invalidateQueries({ queryKey: key })
           }
           // 2. Fire DOM event for plain-fetch pages
           notifyTable(table)
@@ -64,5 +68,5 @@ export function useRealtimeSync() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [queryClient])
+  }, []) // Empty deps — subscribe once on mount, never re-subscribe
 }
