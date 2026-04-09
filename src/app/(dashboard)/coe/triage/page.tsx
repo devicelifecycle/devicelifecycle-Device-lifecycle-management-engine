@@ -157,6 +157,9 @@ export default function COETriagePage() {
   const [uploadError, setUploadError] = useState('')
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null)
+  const [manualOrderRef, setManualOrderRef] = useState('')
+  const [manualOrderId, setManualOrderId] = useState<string | null>(null)
+  const [manualOrderLooking, setManualOrderLooking] = useState(false)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -178,6 +181,28 @@ export default function COETriagePage() {
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally { setIsUploading(false) }
+  }
+
+  const lookupManualOrder = async (ref: string) => {
+    const trimmed = ref.trim().toUpperCase()
+    if (!trimmed) { setManualOrderId(null); return }
+    setManualOrderLooking(true)
+    try {
+      const res = await fetch(`/api/orders?search=${encodeURIComponent(trimmed)}&page_size=5`)
+      const data = await res.json()
+      const match = (data.data || []).find((o: { order_number: string; id: string }) =>
+        o.order_number.toUpperCase() === trimmed
+      )
+      if (match) {
+        setManualOrderId(match.id)
+        toast.success(`Linked to ${match.order_number}`)
+      } else {
+        setManualOrderId(null)
+        toast.error('Order not found')
+      }
+    } catch {
+      setManualOrderId(null)
+    } finally { setManualOrderLooking(false) }
   }
 
   const handleBulkImport = async () => {
@@ -207,7 +232,7 @@ export default function COETriagePage() {
             device_cost: r.device_cost,
             repair_cost: r.repair_cost,
             notes: r.notes,
-            order_id: uploadResult.order?.id,
+            order_id: uploadResult.order?.id ?? manualOrderId ?? undefined,
           })),
         }),
       })
@@ -1044,6 +1069,25 @@ export default function COETriagePage() {
             )}
             {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
           </div>
+
+          {/* Manual order number link — shown when no order auto-detected */}
+          {(!uploadResult?.order) && (
+            <div className="mt-3 flex items-center gap-2">
+              <Input
+                placeholder="Link to order number (e.g. ORD-2026-0050)"
+                value={manualOrderRef}
+                onChange={e => { setManualOrderRef(e.target.value); setManualOrderId(null) }}
+                onKeyDown={e => { if (e.key === 'Enter') lookupManualOrder(manualOrderRef) }}
+                className="h-8 text-xs max-w-xs"
+              />
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => lookupManualOrder(manualOrderRef)} disabled={manualOrderLooking || !manualOrderRef.trim()}>
+                {manualOrderLooking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link Order'}
+              </Button>
+              {manualOrderId && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" />Linked</span>}
+              {!manualOrderId && manualOrderRef && !manualOrderLooking && <span className="text-xs text-muted-foreground">Optional — paste order number to link devices to an order</span>}
+              {!manualOrderRef && <span className="text-xs text-muted-foreground">Optional — link to an existing order</span>}
+            </div>
+          )}
 
           {uploadResult && (
             <div className="mt-4 space-y-3">

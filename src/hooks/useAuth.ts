@@ -102,6 +102,9 @@ function useProvideAuth(): AuthContextValue {
   })
   const router = useRouter()
   const mountedRef = useRef(true)
+  // Set to true by login() so the onAuthStateChange SIGNED_IN handler skips
+  // the duplicate fetchUser — login() already fetched and populated state.
+  const skipNextSignedInRef = useRef(false)
 
   // Fetch current user — no deps since supabase is module-level
   const fetchUser = useCallback(async () => {
@@ -193,6 +196,11 @@ function useProvideAuth(): AuthContextValue {
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           if (session) {
+            // login() already fetched the user — skip the duplicate round-trip
+            if (skipNextSignedInRef.current) {
+              skipNextSignedInRef.current = false
+              return
+            }
             await fetchUser()
           } else {
             writeCachedUser(null)
@@ -248,6 +256,8 @@ function useProvideAuth(): AuthContextValue {
     })()
 
     try {
+      // Tell onAuthStateChange to skip its fetchUser — we handle it here.
+      skipNextSignedInRef.current = true
       // Try all candidate email formats in parallel — first success wins.
       // Serial loop was slow: wrong format = two full roundtrips back-to-back.
       type SignInResponse = Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
@@ -320,6 +330,7 @@ function useProvideAuth(): AuthContextValue {
       setState((prev) => ({ ...prev, isLoading: false }))
       throw new Error('Account not found or inactive')
     } catch (error) {
+      skipNextSignedInRef.current = false // ensure flag doesn't linger on failure
       setState((prev) => ({ ...prev, isLoading: false }))
       if ((error as { type?: string })?.type === 'MFA_REQUIRED') throw error
       if (isAbortError(error)) return
