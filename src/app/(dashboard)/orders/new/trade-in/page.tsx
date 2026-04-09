@@ -773,27 +773,27 @@ export default function NewTradeInPage() {
                                   {/* Carrier rows */}
                                   {carriers.map(c => (
                                     <div key={c.name} className="flex items-center justify-between gap-2">
-                                      <span className="text-muted-foreground truncate max-w-[100px]">{c.name}</span>
+                                      <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[100px]">{c.name}</span>
                                       <span className="font-mono text-amber-800">{formatCurrency(c.price)}</span>
                                     </div>
                                   ))}
                                   {/* Carrier avg subtotal */}
                                   {carriers.length >= 2 && (
                                     <div className="flex items-center justify-between gap-2 border-t border-amber-200/40 pt-0.5">
-                                      <span className="text-muted-foreground italic">Carrier avg</span>
+                                      <span className="text-slate-600 dark:text-slate-400 italic font-medium">Carrier avg</span>
                                       <span className="font-mono text-amber-700">{formatCurrency(carrierAvg)}</span>
                                     </div>
                                   )}
                                   {/* GoRecell row */}
                                   {goRecell && (
                                     <div className="flex items-center justify-between gap-2">
-                                      <span className="text-amber-700 font-medium truncate max-w-[100px]">{goRecell.name}</span>
+                                      <span className="text-amber-700 font-semibold truncate max-w-[100px]">{goRecell.name}</span>
                                       <span className="font-mono font-semibold text-amber-700">{formatCurrency(goRecell.price)}</span>
                                     </div>
                                   )}
                                   {/* Final formula result */}
                                   <div className="flex items-center justify-between gap-2 border-t border-amber-300/60 pt-0.5 mt-0.5">
-                                    <span className="text-muted-foreground font-medium">
+                                    <span className="text-slate-800 dark:text-slate-200 font-semibold">
                                       {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'Quote'}
                                     </span>
                                     <span className="font-mono font-bold text-amber-900">{formatCurrency(price.engine_price)}</span>

@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   ClipboardCheck, Search, AlertTriangle, CheckCircle2, Plus, Smartphone,
   Loader2, ShieldAlert, ShieldCheck, ShieldQuestion, Hash, FileText,
-  Upload, X, CheckCircle, XCircle, AlertCircle, PackageSearch, Trash2,
+  Upload, X, CheckCircle, XCircle, AlertCircle, PackageSearch, Trash2, Download,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -221,6 +221,36 @@ export default function COETriagePage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Bulk import failed')
     } finally { setIsImporting(false) }
+  }
+
+  // ── Download triage queue as CSV ────────────────────────────────────────
+  const handleDownloadTriageData = () => {
+    if (pendingItems.length === 0) { toast.error('No triage items to export'); return }
+    const csvHeaders = ['IMEI', 'Serial', 'Make', 'Model', 'Claimed Condition', 'Actual Condition', 'Quoted Price', 'Final Price', 'Status', 'Received At']
+    const rows = pendingItems.map(item => {
+      const dev = item.device as unknown as Record<string, string> | null
+      return [
+        item.imei ?? '',
+        item.serial_number ?? '',
+        dev?.make ?? '',
+        dev?.model ?? '',
+        item.claimed_condition ?? '',
+        item.actual_condition ?? '',
+        item.quoted_price != null ? String(item.quoted_price) : '',
+        item.final_price != null ? String(item.final_price) : '',
+        item.triage_status ?? 'pending',
+        item.created_at ? new Date(item.created_at).toLocaleString() : '',
+      ]
+    })
+    const csv = [csvHeaders, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `triage-queue-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${pendingItems.length} items`)
   }
 
   // ── Add device dialog state ──────────────────────────────────────────────
@@ -965,20 +995,28 @@ export default function COETriagePage() {
       {/* ── Template File Upload ────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Upload className="h-4 w-4 text-muted-foreground" />
-            Upload Device Template (CSV)
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Upload a spreadsheet with IMEI, make, model, condition — the system auto-detects order/quote numbers and flags mismatches.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Upload className="h-4 w-4 text-muted-foreground" />
+                Upload Device List (CSV / Excel)
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">
+                Upload CSV or Excel (.xlsx) with IMEI, make, model, condition. Order number auto-detected. Spelling mistakes auto-corrected.
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleDownloadTriageData} className="flex items-center gap-1.5 text-xs shrink-0">
+              <Download className="h-3.5 w-3.5" />
+              Export Queue
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3">
             <label className="cursor-pointer">
               <input
                 type="file"
-                accept=".csv,.txt"
+                accept=".csv,.txt,.xlsx,.xls"
                 className="sr-only"
                 onChange={handleFileUpload}
                 disabled={isUploading}
@@ -986,7 +1024,7 @@ export default function COETriagePage() {
               <div className={`flex items-center gap-2 rounded-lg border border-dashed px-4 py-2.5 text-sm font-medium transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-pointer'}`}>
                 {isUploading
                   ? <><Loader2 className="h-4 w-4 animate-spin" />Processing...</>
-                  : <><Upload className="h-4 w-4" />Choose CSV file</>
+                  : <><Upload className="h-4 w-4" />Choose CSV or Excel file</>
                 }
               </div>
             </label>
