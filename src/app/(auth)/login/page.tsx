@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, Eye, EyeOff, KeyRound, Loader2, Package, RadioTower, ShieldCheck, Sparkles, Truck } from 'lucide-react'
+import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 
@@ -42,7 +43,8 @@ export default function LoginPage() {
   const [mfaStep, setMfaStep] = useState(false)
   const [mfaFactorId, setMfaFactorId] = useState('')
   const [mfaCode, setMfaCode] = useState('')
-  const { login, isLoading, verifyMfa } = useAuth()
+  const { login, isLoading, isAuthenticated, isInitializing, user, verifyMfa } = useAuth()
+  const [isNavigating, setIsNavigating] = useState(false)
   const shouldReduceMotion = useReducedMotion()
 
   useEffect(() => {
@@ -56,6 +58,20 @@ export default function LoginPage() {
     router.prefetch('/customer/orders')
     router.prefetch('/vendor/orders')
   }, [router])
+
+  useEffect(() => {
+    if (!isInitializing && isAuthenticated) {
+      setIsNavigating(true)
+      const redirect = searchParams.get('redirect')
+      const dest =
+        redirect && redirect.startsWith('/')
+          ? redirect
+          : user
+            ? getDefaultAppPathForRole(user.role)
+            : '/'
+      router.replace(dest)
+    }
+  }, [isAuthenticated, isInitializing, user, searchParams, router])
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -97,6 +113,12 @@ export default function LoginPage() {
     <div className="relative min-h-screen overflow-hidden bg-[#120f0d] text-stone-100">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(209,124,67,0.16),transparent_26%),radial-gradient(circle_at_80%_18%,rgba(235,199,135,0.1),transparent_18%),linear-gradient(180deg,#120f0d_0%,#090706_100%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:52px_52px] opacity-30" />
+      {(isLoading || isNavigating) && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#120f0d]/90 backdrop-blur-sm">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-stone-400">Signing in…</p>
+        </div>
+      )}
       <OrbitingDeviceField className="opacity-55 sm:opacity-70" compact />
       <motion.div
         className="absolute -left-20 top-20 h-64 w-64 rounded-full bg-primary/18 blur-3xl"
