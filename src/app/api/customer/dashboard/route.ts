@@ -48,7 +48,22 @@ export async function GET() {
     }
 
     const serviceRole = createServiceRoleClient()
-    await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, profile)
+    try {
+      await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, profile)
+    } catch {
+      // Organization or customer profile not yet set up — return empty dashboard
+      return NextResponse.json(
+        {
+          total_orders: 0,
+          active_orders: 0,
+          quotes_ready: 0,
+          completed_orders: 0,
+          visible_value: 0,
+          recent_orders: [],
+        },
+        { status: 200 }
+      )
+    }
 
     const { data: customers, error: customerError } = await serviceRole
       .from('customers')
@@ -63,7 +78,17 @@ export async function GET() {
     const customerIds = (customers || []).map((customer) => customer.id).filter(Boolean)
 
     if (customerIds.length === 0) {
-      throw new Error('No active customer profiles available for this organization')
+      return NextResponse.json(
+        {
+          total_orders: 0,
+          active_orders: 0,
+          quotes_ready: 0,
+          completed_orders: 0,
+          visible_value: 0,
+          recent_orders: [],
+        },
+        { status: 200 }
+      )
     }
 
     const [totalResult, activeResult, quotedResult, completedResult, valueResult, recentResult] =

@@ -313,7 +313,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
 }
 
 function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
-  const { summary, recentOrders, isLoading } = useCustomerDashboard()
+  const { summary, recentOrders, isLoading, error } = useCustomerDashboard()
   const totalOrders = summary?.total_orders || 0
   const activeOrders = summary?.active_orders || 0
   const quotesReady = summary?.quotes_ready || 0
@@ -421,7 +421,12 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                 Loading your orders...
               </div>
             )}
-            {!isLoading && recentOrders.length === 0 && (
+            {!isLoading && error && (
+              <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center text-sm text-stone-500">
+                Unable to load orders. Please refresh the page.
+              </div>
+            )}
+            {!isLoading && !error && recentOrders.length === 0 && (
               <div className="space-y-4 rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center">
                 <div>
                   <p className="text-base font-semibold text-stone-100">No orders yet</p>
@@ -439,7 +444,7 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                 </div>
               </div>
             )}
-            {!isLoading && recentOrders.map((order) => (
+            {!isLoading && !error && recentOrders.map((order) => (
               <Link key={order.id} href={`/orders/${order.id}`}>
                 <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-5 py-4 transition hover:bg-white/[0.05]">
                   <div className="flex flex-wrap items-center justify-between gap-3">
