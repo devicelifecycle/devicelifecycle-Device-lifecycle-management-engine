@@ -4,6 +4,11 @@
 // Upload accepts alternate columns: Make/Model, Brand, Storage/GB, etc.
 // ============================================================================
 
+export interface ParsedTabularUpload {
+  headers: string[]
+  rows: Record<string, string>[]
+}
+
 /** Trade-In template: device_make, device_model, quantity, condition, storage, serial_number, color, notes */
 export const TRADE_IN_CSV_HEADERS = [
   'device_make',
@@ -71,4 +76,82 @@ export const CSV_COLUMN_ALIASES: Record<string, string> = {
 /** Build CSV content from headers and rows */
 export function buildCsvContent(headers: readonly string[], rows: string[][]): string {
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+}
+
+/** Build a downloadable Excel template with a single sheet. */
+export async function buildXlsxTemplateBlob(
+  sheetName: string,
+  headers: readonly string[],
+  rows: string[][],
+): Promise<Blob> {
+  const XLSX = await import('xlsx')
+  const workbook = XLSX.utils.book_new()
+  const worksheet = XLSX.utils.aoa_to_sheet([Array.from(headers), ...rows])
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+
+  const arrayBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  return new Blob([arrayBuffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+}
+
+/** Parse a CSV or Excel file into normalized header/value records. */
+export async function parseTabularUpload(file: File): Promise<ParsedTabularUpload> {
+  const ext = file.name.toLowerCase().split('.').pop() ?? ''
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    const XLSX = await import('xlsx')
+    const arrayBuffer = await file.arrayBuffer()
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    if (!sheet) {
+      throw new Error('Excel file does not contain a worksheet')
+    }
+
+    const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][]
+    if (!raw || raw.length < 2) {
+      throw new Error('Excel file must have a header row and at least one data row')
+    }
+
+    const headers = raw[0].map((value, index) => String(value ?? '').trim() || `column_${index + 1}`)
+    const rows = raw
+      .slice(1)
+      .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
+      .map((row) => {
+        const record: Record<string, string> = {}
+        headers.forEach((header, index) => {
+          record[header] = String(row[index] ?? '').trim()
+        })
+        return record
+      })
+
+    return { headers, rows }
+  }
+
+  if (ext !== 'csv') {
+    throw new Error('Supported formats: CSV, Excel (.xlsx/.xls)')
+  }
+
+  const { default: Papa } = await import('papaparse')
+  return await new Promise<ParsedTabularUpload>((resolve, reject) => {
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const rows = (results.data as Record<string, string>[]).map((row) => {
+          const normalized: Record<string, string> = {}
+          for (const [key, value] of Object.entries(row)) {
+            normalized[key] = String(value ?? '').trim()
+          }
+          return normalized
+        })
+
+        resolve({
+          headers: results.meta.fields || [],
+          rows,
+        })
+      },
+      error: (error) => reject(error),
+    })
+  })
 }

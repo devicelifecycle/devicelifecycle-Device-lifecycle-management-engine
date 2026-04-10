@@ -73,7 +73,7 @@ Use this guide to log in as each role and explore their functions. **App URL:** 
 
 ---
 
-## 5. Customer (`acme`)
+## 5. Customer (`customer-org`)
 
 **Access:** Their organization’s orders only
 
@@ -106,7 +106,7 @@ Use this guide to log in as each role and explore their functions. **App URL:** 
 ```bash
 npm run dev
 npm run seed-test-users   # admin, coemgr, coetech, sales
-npm run seed-acme        # acme customer
+npm run seed-org-customer # org-linked customer
 ```
 
 Then go to http://localhost:3001/login (or :3000) and use each Login ID with `Test123!`.

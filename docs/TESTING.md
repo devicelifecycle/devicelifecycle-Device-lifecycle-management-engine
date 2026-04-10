@@ -10,10 +10,10 @@ npx playwright install
 ### 1. Seed test users (required for E2E)
 ```bash
 npm run seed-test-users
-npm run seed-acme
+npm run seed-org-customer
 ```
 - **Internal users** (admin, coemgr, coetech, sales) — use Login ID + `Test123!`
-- **Organization login** — `acme` for Acme Corporation (customer). Always use org-linked logins; avoid generic `customer` or `vendor` as they have no organization.
+- **Organization login** — `customer-org` for the org-linked customer. Always use org-linked logins; avoid generic `customer` or `vendor` as they have no organization.
 
 **If app runs on a different port** (e.g. 3001), set: `PLAYWRIGHT_BASE_URL=http://localhost:3001 npm run test:e2e`
 

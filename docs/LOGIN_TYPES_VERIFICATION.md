@@ -4,7 +4,7 @@ Manual checklist to verify all login types and their role-based access.
 
 **Password for all: `Test123!`**
 
-**Setup:** Run `npm run seed-test-users` and `npm run seed-acme` before testing.
+**Setup:** Run `npm run seed-test-users` and `npm run seed-org-customer` before testing.
 
 ---
 
@@ -81,17 +81,17 @@ Manual checklist to verify all login types and their role-based access.
 
 ---
 
-## 6. Acme (org-linked customer) (`acme`)
+## 6. Org-linked customer (`customer-org`)
 
 | Login ID | Password   | Expected sidebar |
 |----------|------------|------------------|
-| acme     | Test123!   | Same as customer: My Orders, Requests, Notifications, Profile |
+| customer-org | Test123!   | Same as customer: My Orders, Requests, Notifications, Profile |
 
 **Verify:**
-- [ ] Run `npm run seed-acme` first
+- [ ] Run `npm run seed-org-customer` first
 - [ ] Can access `/customer/orders`, `/customer/requests`
 - [ ] Cannot access `/admin/*`, `/customers`, `/vendor/orders`, `/orders` (internal)
-- [ ] Has org context (Acme Corporation)
+- [ ] Has org context (customer org)
 
 ---
 
@@ -133,5 +133,5 @@ First-time setup: `npx playwright install` (Chromium).
 | CoE Tech    | coetech  | COE Receiving/Triage/Shipping, orders | Exceptions, admin, devices |
 | Sales       | sales    | Orders, customers, vendors            | Admin, COE, devices |
 | Customer    | customer | My Orders, Requests                   | Internal pages |
-| Acme        | acme     | My Orders, Requests                   | Internal pages |
+| Customer Org| customer-org | My Orders, Requests                | Internal pages |
 | Vendor      | vendor   | Vendor Orders                         | Internal pages |

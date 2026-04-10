@@ -13,6 +13,42 @@ import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
 
+function incrementOrderNumber(orderNumber: string): string {
+  const match = /^(PO|INV)-(\d{4})-(\d+)$/.exec(orderNumber)
+  if (!match) return orderNumber
+
+  const [, prefix, year, serialRaw] = match
+  const nextSerial = Number.parseInt(serialRaw, 10) + 1
+  return `${prefix}-${year}-${String(nextSerial).padStart(Math.max(4, serialRaw.length), '0')}`
+}
+
+async function getNextOrderNumberFromTable(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  direction: 'inbound' | 'outbound',
+): Promise<string> {
+  const prefix = direction === 'inbound' ? 'PO' : 'INV'
+  const year = String(new Date().getFullYear())
+
+  const { data } = await supabase
+    .from('orders')
+    .select('order_number')
+    .like('order_number', `${prefix}-${year}-%`)
+
+  let maxSerial = 0
+  for (const row of data || []) {
+    const orderNumber = row.order_number
+    if (typeof orderNumber !== 'string') continue
+    const match = new RegExp(`^${prefix}-${year}-(\\d+)$`).exec(orderNumber)
+    if (!match) continue
+    const parsed = Number.parseInt(match[1], 10)
+    if (Number.isFinite(parsed) && parsed > maxSerial) {
+      maxSerial = parsed
+    }
+  }
+
+  return `${prefix}-${year}-${String(maxSerial + 1).padStart(4, '0')}`
+}
+
 
 type TemplateType = 'trade_in' | 'cpo' | 'vendor_inventory'
 
@@ -464,9 +500,17 @@ export async function POST(request: NextRequest) {
     // Create order with retry on duplicate order_number (race-condition guard)
     const MAX_ATTEMPTS = 5
     let order: Record<string, unknown> | null = null
+    let lastConflictedOrderNumber: string | null = null
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const { data: orderNumResult } = await supabase.rpc('generate_order_number', { direction })
-      const orderNumber = orderNumResult || `${effectiveOrderType === 'cpo' ? 'CPO' : 'TI'}-${Date.now()}`
+      let orderNumber = orderNumResult || `${effectiveOrderType === 'cpo' ? 'CPO' : 'TI'}-${Date.now()}`
+
+      if (lastConflictedOrderNumber && orderNumber === lastConflictedOrderNumber) {
+        orderNumber = await getNextOrderNumberFromTable(supabase, direction)
+        if (orderNumber === lastConflictedOrderNumber) {
+          orderNumber = incrementOrderNumber(lastConflictedOrderNumber)
+        }
+      }
 
       const { data: createdOrder, error: orderError } = await supabase
         .from('orders')
@@ -498,6 +542,8 @@ export async function POST(request: NextRequest) {
       if (!isConflict || attempt === MAX_ATTEMPTS) {
         throw orderError || new Error('Failed to create order')
       }
+
+      lastConflictedOrderNumber = String(orderNumber)
     }
 
     if (!order) throw new Error('Failed to create order')

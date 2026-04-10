@@ -208,10 +208,10 @@ export default function AdminUsersPage() {
                   type="text"
                   value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  placeholder="acme or john@acme.com"
+                  placeholder="customer-org or john@example.com"
                 />
                 <p className="text-xs text-muted-foreground">
-                  <strong>Email:</strong> Enter a real email (e.g. john@acme.com). Credentials are sent there; user logs in with that email. &middot; <strong>Login ID:</strong> Enter an ID (e.g. acme). Provide an email below to send credentials; user signs in with the ID.
+                  <strong>Email:</strong> Enter a real email (e.g. john@example.com). Credentials are sent there; user logs in with that email. &middot; <strong>Login ID:</strong> Enter an ID (e.g. customer-org). Provide an email below to send credentials; user signs in with the ID.
                 </p>
               </div>
               {!form.email.includes('@') && form.email.length > 0 && (

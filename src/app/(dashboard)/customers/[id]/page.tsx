@@ -143,7 +143,7 @@ export default function CustomerDetailPage() {
         </Card>
       )}
 
-      {customer.company_name?.toLowerCase().includes('acme') && (
+      {customer.company_name?.toLowerCase().includes('customer') && (
         <Card className="border-primary/20 bg-primary/5">
           <CardHeader><CardTitle className="text-base">Verify customer view (exception flow)</CardTitle></CardHeader>
           <CardContent className="space-y-2">
@@ -151,7 +151,7 @@ export default function CustomerDetailPage() {
               To confirm this customer sees notifications and order details for triage exceptions:
             </p>
             <ol className="text-sm list-decimal list-inside space-y-1 text-muted-foreground">
-              <li>Log out, then log in as <strong className="text-foreground">acme</strong> / <strong className="text-foreground">Test123!</strong></li>
+              <li>Log out, then log in as <strong className="text-foreground">customer-org</strong> / <strong className="text-foreground">Test123!</strong></li>
               <li>Go to <Link href="/notifications" className="font-medium text-primary hover:underline">Notifications</Link> — exception updates appear here</li>
               <li>Go to <Link href="/customer/orders" className="font-medium text-primary hover:underline">My Orders</Link> — click any order to see full details including triage/exception info</li>
             </ol>

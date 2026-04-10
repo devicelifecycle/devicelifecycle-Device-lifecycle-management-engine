@@ -126,29 +126,11 @@ export default async function globalSetup() {
   if (orgError && !firstOrg) throw orgError
   const defaultOrgId = firstOrg?.id || '00000000-0000-0000-0000-000000000001'
 
-  const { data: acmeOrg, error: acmeOrgError } = await supabase
-    .from('organizations')
-    .select('id')
-    .eq('type', 'customer')
-    .ilike('name', '%Acme%')
-    .limit(1)
-    .maybeSingle()
-
-  if (acmeOrgError) throw acmeOrgError
-  const acmeOrgId = acmeOrg?.id || defaultOrgId
-
   await ensureCustomerRecord(supabase, {
     organization_id: defaultOrgId,
     company_name: 'Default Customer Org',
     contact_name: 'Default Customer',
     contact_email: 'customer@example.com',
-  })
-
-  await ensureCustomerRecord(supabase, {
-    organization_id: acmeOrgId,
-    company_name: 'Acme Corporation',
-    contact_name: 'Acme Corporation',
-    contact_email: 'acme@example.com',
   })
 
   const users: SeedUser[] = [
@@ -158,13 +140,8 @@ export default async function globalSetup() {
     { email: 'sales@login.local', full_name: 'Test Sales', role: 'sales', organization_id: defaultOrgId },
     { email: 'customer@login.local', full_name: 'Test Customer', role: 'customer', organization_id: defaultOrgId },
     { email: 'vendor@login.local', full_name: 'Test Vendor', role: 'vendor', organization_id: defaultOrgId },
-    { email: 'acme@login.local', full_name: 'Acme Corporation', role: 'customer', organization_id: acmeOrgId },
+    { email: 'customer-org@login.local', full_name: 'Customer Org', role: 'customer', organization_id: defaultOrgId },
   ]
-
-  await supabase
-    .from('customers')
-    .update({ organization_id: acmeOrgId })
-    .eq('company_name', 'Acme Corporation')
 
   for (const user of users) {
     const userId = await ensureAuthUser(supabase, user.email, user.full_name)

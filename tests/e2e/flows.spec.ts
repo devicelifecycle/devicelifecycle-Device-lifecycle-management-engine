@@ -63,7 +63,7 @@ test.describe('Critical flows', () => {
 
     test('org-linked customer can create a trade-in order', async ({ page }) => {
       test.setTimeout(90000)
-      await loginAs(page, 'acme')
+      await loginAs(page, 'customer_org')
       await page.goto('/orders/new', { waitUntil: 'domcontentloaded' })
       await expect(page).toHaveURL(/\/orders\/new/)
 

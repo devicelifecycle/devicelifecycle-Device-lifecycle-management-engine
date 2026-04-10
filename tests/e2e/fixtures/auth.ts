@@ -9,8 +9,8 @@ export const TEST_USERS = {
   sales: { email: process.env.E2E_SALES_EMAIL || 'sales', password: TEST_PASSWORD },
   customer: { email: process.env.E2E_CUSTOMER_EMAIL || 'customer', password: TEST_PASSWORD },
   vendor: { email: process.env.E2E_VENDOR_EMAIL || 'vendor', password: TEST_PASSWORD },
-  /** Org-linked customer (run npm run seed-acme) */
-  acme: { email: process.env.E2E_ACME_EMAIL || 'acme', password: TEST_PASSWORD },
+  /** Org-linked customer (run npm run seed-org-customer) */
+  customer_org: { email: process.env.E2E_CUSTOMER_ORG_EMAIL || 'customer-org', password: TEST_PASSWORD },
 } as const
 
 export type TestUserRole = keyof typeof TEST_USERS
@@ -18,7 +18,7 @@ export type TestUserRole = keyof typeof TEST_USERS
 function getPostLoginUrlMatcher(user: TestUserRole): RegExp {
   switch (user) {
     case 'customer':
-    case 'acme':
+    case 'customer_org':
       return /\/(dashboard|customer\/orders)/
     case 'vendor':
       return /\/(dashboard|vendor\/orders)/
@@ -29,7 +29,7 @@ function getPostLoginUrlMatcher(user: TestUserRole): RegExp {
 
 /**
  * Log in as a test user. Navigates to login page, fills credentials, submits.
- * Requires: npm run seed-test-users and npm run seed-acme (for acme)
+ * Requires: npm run seed-test-users and npm run seed-org-customer (for customer_org)
  */
 export async function loginAs(page: Page, user: TestUserRole): Promise<void> {
   const { email, password } = TEST_USERS[user]

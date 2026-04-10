@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import Papa from 'papaparse'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers, useMyCustomer } from '@/hooks/useCustomers'
 import { useAuth } from '@/hooks/useAuth'
@@ -30,6 +29,8 @@ import {
   TRADE_IN_CSV_SAMPLE,
   CSV_COLUMN_ALIASES,
   buildCsvContent,
+  buildXlsxTemplateBlob,
+  parseTabularUpload,
 } from '@/lib/csv-templates'
 import { formatCurrency } from '@/lib/utils'
 import type { Device, DeviceCondition } from '@/types'
@@ -261,51 +262,58 @@ export default function NewTradeInPage() {
     toast.success('Template downloaded')
   }
 
+  const handleDownloadExcelTemplate = async () => {
+    const blob = await buildXlsxTemplateBlob('Trade-In Template', TRADE_IN_CSV_HEADERS, TRADE_IN_CSV_SAMPLE)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'trade-in-template.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Excel template downloaded')
+  }
+
   // CSV handling
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const errors: string[] = []
-        const rawRows = results.data as Record<string, string>[]
-        const normalizeRow = (r: Record<string, string>): CSVRow => {
-          const out: Partial<CSVRow> = {}
-          for (const [k, v] of Object.entries(r)) {
-            const key = k.toLowerCase().trim().replace(/\s+/g, '_')
-            const mapped = CSV_COLUMN_ALIASES[key] ?? (key === 'device_make' || key === 'device_model' ? key : null)
-            if (mapped) {
-              out[mapped as keyof CSVRow] = String(v ?? '').trim()
-            }
-          }
-          return {
-            device_make: out.device_make ?? '',
-            device_model: out.device_model ?? '',
-            quantity: out.quantity ?? '',
-            condition: out.condition ?? '',
-            storage: out.storage ?? '',
-            notes: out.notes ?? '',
+    try {
+      const { rows: rawRows } = await parseTabularUpload(file)
+      const errors: string[] = []
+      const normalizeRow = (r: Record<string, string>): CSVRow => {
+        const out: Partial<CSVRow> = {}
+        for (const [k, v] of Object.entries(r)) {
+          const key = k.toLowerCase().trim().replace(/\s+/g, '_')
+          const mapped = CSV_COLUMN_ALIASES[key] ?? (key === 'device_make' || key === 'device_model' ? key : null)
+          if (mapped) {
+            out[mapped as keyof CSVRow] = String(v ?? '').trim()
           }
         }
-        const rows = rawRows.map(normalizeRow)
+        return {
+          device_make: out.device_make ?? '',
+          device_model: out.device_model ?? '',
+          quantity: out.quantity ?? '',
+          condition: out.condition ?? '',
+          storage: out.storage ?? '',
+          notes: out.notes ?? '',
+        }
+      }
+      const rows = rawRows.map(normalizeRow)
 
-        rows.forEach((row, i) => {
-          if (!row.device_make) errors.push(`Row ${i + 1}: Missing device_make`)
-          if (!row.device_model) errors.push(`Row ${i + 1}: Missing device_model`)
-          if (!row.quantity || isNaN(Number(row.quantity))) errors.push(`Row ${i + 1}: Invalid quantity`)
-        })
+      rows.forEach((row, i) => {
+        if (!row.device_make) errors.push(`Row ${i + 1}: Missing device_make`)
+        if (!row.device_model) errors.push(`Row ${i + 1}: Missing device_model`)
+        if (!row.quantity || isNaN(Number(row.quantity))) errors.push(`Row ${i + 1}: Invalid quantity`)
+      })
 
-        setCsvErrors(errors)
-        setCsvData(rows)
-        if (errors.length === 0) toast.success(`${rows.length} rows parsed successfully`)
-      },
-      error: () => {
-        toast.error('Failed to parse CSV file')
-      },
-    })
+      setCsvErrors(errors)
+      setCsvData(rows)
+      if (errors.length === 0) toast.success(`${rows.length} rows parsed successfully`)
+      if (fileRef.current) fileRef.current.value = ''
+    } catch {
+      toast.error('Failed to parse file. Use CSV or Excel (.xlsx/.xls).')
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -567,15 +575,18 @@ export default function NewTradeInPage() {
                 <div className="rounded-lg border-2 border-dashed p-6 text-center">
                   <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground mb-3">
-                    Download the Trade-In template or upload your own CSV
+                    Download the Trade-In template or upload your own CSV or Excel file
                   </p>
-                  <input ref={fileRef} type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={handleDownloadTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <Download className="mr-2 h-4 w-4" />Download Trade-In Template
                     </Button>
+                    <Button type="button" variant="outline" onClick={handleDownloadExcelTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />Download Trade-In Excel Template
+                    </Button>
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                      <Upload className="mr-2 h-4 w-4" />Upload Your Own CSV
+                      <Upload className="mr-2 h-4 w-4" />Upload CSV or Excel
                     </Button>
                   </div>
                 </div>

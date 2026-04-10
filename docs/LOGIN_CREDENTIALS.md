@@ -6,7 +6,7 @@
 
 ## Important: Use Organization Logins
 
-There is no standalone user page — users always log in through their **organization**. For customer and vendor testing, **always use organization-linked logins** (e.g. `acme` for Acme Corporation). Do not use the generic `customer` or `vendor` logins; they are not tied to organizations and may not have full access.
+There is no standalone user page — users always log in through their **organization**. For customer and vendor testing, **always use organization-linked logins** (e.g. `customer-org`). Do not use the generic `customer` or `vendor` logins; they are not tied to organizations and may not have full access.
 
 ---
 
@@ -14,9 +14,9 @@ There is no standalone user page — users always log in through their **organiz
 
 | Organization       | Login ID | Password  | Role     |
 |--------------------|----------|-----------|----------|
-| Acme Corporation   | `acme`   | Test123!  | customer |
+| Customer Org       | `customer-org`   | Test123!  | customer |
 
-**Setup:** Run `npm run seed-acme` to create the Acme org user.
+**Setup:** Run `npm run seed-org-customer` to create the org-linked customer user.
 
 ---
 
@@ -33,7 +33,7 @@ There is no standalone user page — users always log in through their **organiz
 
 | Role     | Login ID  | Note |
 |----------|-----------|------|
-| Customer | `customer`| Not org-linked; use `acme` instead |
+| Customer | `customer`| Not org-linked; use `customer-org` instead |
 | Vendor   | `vendor`  | Not org-linked; add org-based vendor login if needed |
 
 ---
@@ -48,7 +48,7 @@ There is no standalone user page — users always log in through their **organiz
 | 2 | faisalahmed4629@gmail.com        | CoE Manager | Receiving, Triage, Exceptions    |
 | 3 | jamalhuss@gmail.com              | CoE Tech    | Receiving, Triage, Shipping      |
 | 4 | `sales`                          | Sales       | Orders, Customers, Vendors       |
-| 5 | `acme`                           | Customer    | My Orders, Exception approval    |
+| 5 | `customer-org`                  | Customer    | My Orders, Exception approval    |
 | 6 | `vendor`                         | Vendor      | Vendor orders (if seeded)        |
 
 **Multi-login:** Use Chrome profiles or different browsers — one window per account, log in once each, keep all six open at once.
@@ -59,14 +59,14 @@ There is no standalone user page — users always log in through their **organiz
 
 1. `npm run dev`
 2. `npm run seed-test-users` (internal users)
-3. `npm run seed-acme` (Acme customer org login)
-4. Login at http://localhost:3000/login with email (or Login ID for sales/acme/vendor) + Test123!
+3. `npm run seed-org-customer` (org-linked customer login)
+4. Login at http://localhost:3000/login with email (or Login ID for sales/customer-org/vendor) + Test123!
 
 ---
 
 ## Forgot Password
 
-Use the **Login ID** (e.g. `acme`, `admin`) or the **email** associated with your account. A reset link will be emailed to the address on file.
+Use the **Login ID** (e.g. `customer-org`, `admin`) or the **email** associated with your account. A reset link will be emailed to the address on file.
 
 **Email delivery requires:**
 - `RESEND_API_KEY` set in `.env` (get one at [resend.com](https://resend.com))
