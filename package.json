@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "create-admin": "node --env-file=.env.local scripts/create-admin-user.mjs",
     "seed-test-users": "node --env-file=.env.local scripts/seed-test-users.mjs",
-    "seed-acme": "node --env-file=.env.local scripts/seed-acme-user.mjs",
+    "seed-org-customer": "node --env-file=.env.local scripts/seed-org-customer.mjs",
     "cleanup-users": "node --env-file=.env.local scripts/cleanup-duplicate-users.mjs",
     "cleanup:duplicate-devices": "npx tsx scripts/cleanup-duplicate-devices.ts",
     "audit:fuzzy-devices": "npx tsx scripts/audit-fuzzy-device-names.ts",

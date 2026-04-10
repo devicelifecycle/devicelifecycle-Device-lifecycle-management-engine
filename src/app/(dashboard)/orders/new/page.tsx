@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, Files } from 'lucide-react'
 import { toast } from 'sonner'
-import Papa from 'papaparse'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers, useMyCustomer } from '@/hooks/useCustomers'
 import { useAuth } from '@/hooks/useAuth'
@@ -24,6 +23,11 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import { formatCurrency } from '@/lib/utils'
+import {
+  buildCsvContent,
+  buildXlsxTemplateBlob,
+  parseTabularUpload,
+} from '@/lib/csv-templates'
 import type { Device, DeviceCondition } from '@/types'
 
 // Column alias map — auto-corrects misspelled or alternative column names
@@ -333,7 +337,7 @@ export default function NewOrderPage() {
     return items[i]?.order_type === 'cpo' ? p.engine_cpo_price : p.engine_price
   }
 
-  // CSV template downloads - separate for Trade-In and CPO (demo data for Apple & Samsung)
+  // CSV and Excel template downloads - separate for Trade-In and CPO (demo data for Apple & Samsung)
   const handleDownloadTradeInTemplate = () => {
     const headers = ['device_make', 'device_model', 'quantity', 'condition', 'storage', 'serial_number', 'color', 'notes']
     const sampleData = [
@@ -353,6 +357,24 @@ export default function NewOrderPage() {
     toast.success('Trade-In template downloaded')
   }
 
+  const handleDownloadTradeInExcelTemplate = async () => {
+    const headers = ['device_make', 'device_model', 'quantity', 'condition', 'storage', 'serial_number', 'color', 'notes']
+    const sampleData = [
+      ['Apple', 'iPhone 15', '5', 'excellent', '128GB', '359876543210001', 'Blue', 'Demo trade-in'],
+      ['Apple', 'iPhone 15', '3', 'good', '256GB', '', 'Black', ''],
+      ['Apple', 'iPhone 15 Pro', '2', 'fair', '256GB', '', 'Natural Titanium', 'Bulk buyback'],
+      ['Samsung', 'Galaxy S24', '4', 'excellent', '128GB', '350123456789012', 'Onyx Black', ''],
+      ['Samsung', 'Galaxy S24 Ultra', '2', 'good', '512GB', '', 'Titanium Gray', 'Demo Samsung'],
+    ]
+    const blob = await buildXlsxTemplateBlob('Trade-In Template', headers, sampleData)
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'trade-in-template.xlsx'
+    a.click()
+    URL.revokeObjectURL(a.href)
+    toast.success('Trade-In Excel template downloaded')
+  }
+
   const handleDownloadCpoTemplate = () => {
     const headers = ['device_make', 'device_model', 'quantity', 'storage', 'notes']
     const sampleData = [
@@ -370,113 +392,119 @@ export default function NewOrderPage() {
     toast.success('CPO template downloaded')
   }
 
+  const handleDownloadCpoExcelTemplate = async () => {
+    const headers = ['device_make', 'device_model', 'quantity', 'storage', 'notes']
+    const sampleData = [
+      ['Apple', 'iPhone 15', '150', '128GB', 'CPO bulk - corporate devices'],
+      ['Apple', 'iPhone 15 Pro', '100', '256GB', ''],
+      ['Samsung', 'Galaxy S24 Ultra', '50', '512GB', 'CPO bulk purchase'],
+    ]
+    const blob = await buildXlsxTemplateBlob('CPO Template', headers, sampleData)
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'cpo-template.xlsx'
+    a.click()
+    URL.revokeObjectURL(a.href)
+    toast.success('CPO Excel template downloaded')
+  }
+
   // Multi-CSV handling — auto-corrects column names and condition values
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
 
-    Array.from(files).forEach(file => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          const errors: string[] = []
-          const rawHeaders = results.meta.fields || []
-          const rawRows = results.data as Record<string, string>[]
+    for (const file of Array.from(files)) {
+      try {
+        const { headers: rawHeaders, rows: rawRows } = await parseTabularUpload(file)
 
-          // Build header mapping: original → normalized canonical name
-          const headerMap: Record<string, string> = {}
-          const correctedHeaders: string[] = []
-          for (const h of rawHeaders) {
-            const canonical = normalizeHeader(h)
-            headerMap[h] = canonical
-            if (canonical !== h.toLowerCase().trim()) {
-              correctedHeaders.push(`"${h}" → ${canonical}`)
+        // Build header mapping: original → normalized canonical name
+        const headerMap: Record<string, string> = {}
+        const correctedHeaders: string[] = []
+        for (const h of rawHeaders) {
+          const canonical = normalizeHeader(h)
+          headerMap[h] = canonical
+          if (canonical !== h.toLowerCase().trim()) {
+            correctedHeaders.push(`"${h}" → ${canonical}`)
+          }
+        }
+
+        if (correctedHeaders.length > 0) {
+          toast.info(`Auto-corrected columns: ${correctedHeaders.join(', ')}`, { duration: 5000 })
+        }
+
+        // Infer default order type from file name when column is missing
+        const inferredOrderType: 'trade_in' | 'cpo' =
+          file.name.toLowerCase().includes('cpo') ? 'cpo' : 'trade_in'
+
+        // Normalize each row using header mapping
+        const rows: CSVRow[] = rawRows.map(rawRow => {
+          const mapped: Record<string, string> = {}
+          for (const [origKey, value] of Object.entries(rawRow)) {
+            const canonical = headerMap[origKey] || normalizeHeader(origKey)
+            mapped[canonical] = (mapped[canonical] || '') || (value || '').trim()
+          }
+
+          if (!mapped.device_make && mapped.device_model) {
+            const model = mapped.device_model.toLowerCase()
+            if (model.includes('iphone') || model.includes('ipad') || model.includes('macbook') || model.includes('apple watch')) {
+              mapped.device_make = 'Apple'
+            } else if (model.includes('galaxy') || model.includes('samsung')) {
+              mapped.device_make = 'Samsung'
+              mapped.device_model = mapped.device_model.replace(/samsung\s*/i, '')
+            } else if (model.includes('pixel')) {
+              mapped.device_make = 'Google'
             }
           }
 
-          if (correctedHeaders.length > 0) {
-            toast.info(`Auto-corrected columns: ${correctedHeaders.join(', ')}`, { duration: 5000 })
+          const rawCondition = mapped.condition || ''
+          mapped.condition = normalizeCondition(rawCondition)
+
+          if (!mapped.quantity || isNaN(Number(mapped.quantity))) {
+            mapped.quantity = '1'
           }
 
-          // Infer default order type from file name when column is missing
-          const inferredOrderType: 'trade_in' | 'cpo' =
-            file.name.toLowerCase().includes('cpo') ? 'cpo' : 'trade_in'
+          const rowType = mapped.order_type?.toLowerCase()
+          const orderType = rowType === 'cpo' ? 'cpo' : inferredOrderType
 
-          // Normalize each row using header mapping
-          const rows: CSVRow[] = rawRows.map(rawRow => {
-            const mapped: Record<string, string> = {}
-            for (const [origKey, value] of Object.entries(rawRow)) {
-              const canonical = headerMap[origKey] || normalizeHeader(origKey)
-              mapped[canonical] = (mapped[canonical] || '') || (value || '').trim()
-            }
-
-            // Handle "product" column (e.g. "iPhone 15 Pro") — split into make+model
-            if (!mapped.device_make && mapped.device_model) {
-              const model = mapped.device_model.toLowerCase()
-              if (model.includes('iphone') || model.includes('ipad') || model.includes('macbook') || model.includes('apple watch')) {
-                mapped.device_make = 'Apple'
-              } else if (model.includes('galaxy') || model.includes('samsung')) {
-                mapped.device_make = 'Samsung'
-                mapped.device_model = mapped.device_model.replace(/samsung\s*/i, '')
-              } else if (model.includes('pixel')) {
-                mapped.device_make = 'Google'
-              }
-            }
-
-            // Auto-correct condition value
-            const rawCondition = mapped.condition || ''
-            mapped.condition = normalizeCondition(rawCondition)
-
-            // Ensure quantity defaults to 1
-            if (!mapped.quantity || isNaN(Number(mapped.quantity))) {
-              mapped.quantity = '1'
-            }
-
-            // Determine order type
-            const rowType = mapped.order_type?.toLowerCase()
-            const orderType = rowType === 'cpo' ? 'cpo' : inferredOrderType
-
-            return {
-              device_make: mapped.device_make || '',
-              device_model: mapped.device_model || '',
-              quantity: mapped.quantity || '1',
-              condition: mapped.condition || 'good',
-              storage: mapped.storage || '',
-              notes: mapped.notes || '',
-              order_type: orderType,
-              serial_number: mapped.serial_number || '',
-              color: mapped.color || '',
-            }
-          })
-
-          if (!canCreateCpoOrder && rows.some((row) => row.order_type === 'cpo')) {
-            toast.error(cpoCreationBlockedMessage)
-            return
+          return {
+            device_make: mapped.device_make || '',
+            device_model: mapped.device_model || '',
+            quantity: mapped.quantity || '1',
+            condition: mapped.condition || 'good',
+            storage: mapped.storage || '',
+            notes: mapped.notes || '',
+            order_type: orderType,
+            serial_number: mapped.serial_number || '',
+            color: mapped.color || '',
           }
+        })
 
-          rows.forEach((row, i) => {
-            if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
-            if (!row.device_model) errors.push(`Row ${i + 1}: Missing model`)
-          })
+        if (!canCreateCpoOrder && rows.some((row) => row.order_type === 'cpo')) {
+          toast.error(cpoCreationBlockedMessage)
+          continue
+        }
 
-          setParsedFiles(prev => [...prev, {
-            filename: file.name,
-            rows,
-            errors,
-          }])
+        const errors: string[] = []
+        rows.forEach((row, i) => {
+          if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
+          if (!row.device_model) errors.push(`Row ${i + 1}: Missing model`)
+        })
 
-          if (errors.length === 0) {
-            toast.success(`${file.name}: ${rows.length} rows parsed successfully`)
-          } else {
-            toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors`)
-          }
-        },
-        error: () => {
-          toast.error(`Failed to parse ${file.name}`)
-        },
-      })
-    })
+        setParsedFiles(prev => [...prev, {
+          filename: file.name,
+          rows,
+          errors,
+        }])
+
+        if (errors.length === 0) {
+          toast.success(`${file.name}: ${rows.length} rows parsed successfully`)
+        } else {
+          toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors`)
+        }
+      } catch {
+        toast.error(`Failed to parse ${file.name}. Use CSV or Excel (.xlsx/.xls).`)
+      }
+    }
 
     // Reset input
     if (fileRef.current) fileRef.current.value = ''
@@ -897,20 +925,28 @@ export default function NewOrderPage() {
                 <div className="rounded-lg border-2 border-dashed p-6 text-center">
                   <Files className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground mb-3">
-                    {canCreateCpoOrder ? 'Download the template you need, or upload your own CSV' : 'Download the trade-in template, or upload your own trade-in CSV'}
+                    {canCreateCpoOrder ? 'Download the template you need, or upload your own CSV or Excel file' : 'Download the trade-in template, or upload your own trade-in CSV or Excel file'}
                   </p>
-                  <input ref={fileRef} type="file" accept=".csv" multiple onChange={handleFileUpload} className="hidden" />
+                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" multiple onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={handleDownloadTradeInTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <Download className="mr-2 h-4 w-4" />Download Trade-In Template
+                    </Button>
+                    <Button type="button" variant="outline" onClick={handleDownloadTradeInExcelTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />Download Trade-In Excel Template
                     </Button>
                     {canCreateCpoOrder && (
                       <Button type="button" variant="outline" onClick={handleDownloadCpoTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
                         <Download className="mr-2 h-4 w-4" />Download CPO Template
                       </Button>
                     )}
+                    {canCreateCpoOrder && (
+                      <Button type="button" variant="outline" onClick={handleDownloadCpoExcelTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />Download CPO Excel Template
+                      </Button>
+                    )}
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                      <Upload className="mr-2 h-4 w-4" />Upload Your Own CSV
+                      <Upload className="mr-2 h-4 w-4" />Upload CSV or Excel
                     </Button>
                   </div>
                 </div>

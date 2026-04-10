@@ -25,7 +25,7 @@ Playwright runs in a fresh Chrome context. Possible causes:
 2. **Run seed scripts if needed:**
    ```bash
    npm run seed-test-users
-   npm run seed-acme
+   npm run seed-org-customer
    ```
 
 3. **Manual verification:** Use `docs/LOGIN_TYPES_VERIFICATION.md` to manually check each role in a normal browser.

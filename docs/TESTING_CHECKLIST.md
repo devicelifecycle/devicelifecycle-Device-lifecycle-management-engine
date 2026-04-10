@@ -8,11 +8,11 @@
 ## 1. Pre-requisites
 
 - [ ] Run `npm run seed-test-users` (internal users; all password: `Test123!`)
-- [ ] Run `npm run seed-acme` (Acme Corporation org login)
+- [ ] Run `npm run seed-org-customer` (org-linked customer login)
 - [ ] Run `npm run dev` to start the application
 - [ ] **Use organization logins** — no standalone user page; always log in via organization:
   - Internal: admin, coemgr, coetech, sales
-  - Customer: `acme` (Acme Corp) — prefer over generic `customer`
+  - Customer: `customer-org` — prefer over generic `customer`
   - Vendor: use org-linked vendor if available
 
 ---
@@ -352,7 +352,7 @@
 - [ ] Delivered → Closed
 
 ### Customer Flow
-- [ ] Login as customer (use `acme` — Acme Corp org login)
+- [ ] Login as customer (use `customer-org` — org-linked customer login)
 - [ ] Go to Requests → New Trade-In Request
 - [ ] Create request (draft)
 - [ ] Submit → submitted

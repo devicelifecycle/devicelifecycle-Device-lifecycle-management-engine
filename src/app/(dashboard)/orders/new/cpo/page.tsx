@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import Papa from 'papaparse'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useAuth } from '@/hooks/useAuth'
@@ -31,6 +30,8 @@ import {
   CPO_CSV_SAMPLE,
   CSV_COLUMN_ALIASES,
   buildCsvContent,
+  buildXlsxTemplateBlob,
+  parseTabularUpload,
 } from '@/lib/csv-templates'
 import type { Device, DeviceCondition } from '@/types'
 
@@ -256,45 +257,52 @@ export default function NewCPOOrderPage() {
     toast.success('CPO template downloaded')
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDownloadCpoExcelTemplate = async () => {
+    const blob = await buildXlsxTemplateBlob('CPO Template', CPO_CSV_HEADERS, CPO_CSV_SAMPLE)
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'cpo-template.xlsx'
+    a.click()
+    URL.revokeObjectURL(a.href)
+    toast.success('CPO Excel template downloaded')
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const errors: string[] = []
-        const rawRows = results.data as Record<string, string>[]
-        const normalizeRow = (r: Record<string, string>): CSVRow => {
-          const out: Partial<CSVRow> = {}
-          for (const [k, v] of Object.entries(r)) {
-            const key = k.toLowerCase().trim().replace(/\s+/g, '_')
-            const mapped = CSV_COLUMN_ALIASES[key] ?? (key === 'device_make' || key === 'device_model' ? key : null)
-            if (mapped) {
-              out[mapped as keyof CSVRow] = String(v ?? '').trim()
-            }
-          }
-          return {
-            device_make: out.device_make ?? '',
-            device_model: out.device_model ?? '',
-            quantity: out.quantity ?? '',
-            storage: out.storage ?? '',
-            notes: out.notes ?? '',
+    try {
+      const { rows: rawRows } = await parseTabularUpload(file)
+      const errors: string[] = []
+      const normalizeRow = (r: Record<string, string>): CSVRow => {
+        const out: Partial<CSVRow> = {}
+        for (const [k, v] of Object.entries(r)) {
+          const key = k.toLowerCase().trim().replace(/\s+/g, '_')
+          const mapped = CSV_COLUMN_ALIASES[key] ?? (key === 'device_make' || key === 'device_model' ? key : null)
+          if (mapped) {
+            out[mapped as keyof CSVRow] = String(v ?? '').trim()
           }
         }
-        const rows = rawRows.map(normalizeRow)
-        rows.forEach((row, i) => {
-          if (!row.device_make) errors.push(`Row ${i + 1}: Missing device_make`)
-          if (!row.device_model) errors.push(`Row ${i + 1}: Missing device_model`)
-          if (!row.quantity || isNaN(Number(row.quantity))) errors.push(`Row ${i + 1}: Invalid quantity`)
-        })
-        setCsvErrors(errors)
-        setCsvData(rows)
-        if (errors.length === 0) toast.success(`${rows.length} rows parsed successfully`)
-      },
-      error: () => toast.error('Failed to parse CSV file'),
-    })
-    if (fileRef.current) fileRef.current.value = ''
+        return {
+          device_make: out.device_make ?? '',
+          device_model: out.device_model ?? '',
+          quantity: out.quantity ?? '',
+          storage: out.storage ?? '',
+          notes: out.notes ?? '',
+        }
+      }
+      const rows = rawRows.map(normalizeRow)
+      rows.forEach((row, i) => {
+        if (!row.device_make) errors.push(`Row ${i + 1}: Missing device_make`)
+        if (!row.device_model) errors.push(`Row ${i + 1}: Missing device_model`)
+        if (!row.quantity || isNaN(Number(row.quantity))) errors.push(`Row ${i + 1}: Invalid quantity`)
+      })
+      setCsvErrors(errors)
+      setCsvData(rows)
+      if (errors.length === 0) toast.success(`${rows.length} rows parsed successfully`)
+      if (fileRef.current) fileRef.current.value = ''
+    } catch {
+      toast.error('Failed to parse file. Use CSV or Excel (.xlsx/.xls).')
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -467,14 +475,17 @@ export default function NewCPOOrderPage() {
                 </div>
                 <div className="rounded-lg border-2 border-dashed p-6 text-center">
                   <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground mb-3">Download the CPO template or upload your own CSV</p>
-                  <input ref={fileRef} type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                  <p className="text-sm text-muted-foreground mb-3">Download the CPO template or upload your own CSV or Excel file</p>
+                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={handleDownloadCpoTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
                       <Download className="mr-2 h-4 w-4" />Download CPO Template
                     </Button>
+                    <Button type="button" variant="outline" onClick={handleDownloadCpoExcelTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />Download Excel Template
+                    </Button>
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                      <Upload className="mr-2 h-4 w-4" />Upload Your Own CSV
+                      <Upload className="mr-2 h-4 w-4" />Upload CSV or Excel
                     </Button>
                   </div>
                 </div>

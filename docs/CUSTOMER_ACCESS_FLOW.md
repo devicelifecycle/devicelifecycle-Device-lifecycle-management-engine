@@ -28,7 +28,7 @@ Customers **always log in through their organization**. A customer user must be 
 ### C. Create user for that organization
 
 - Go to **Admin → Users → Add User**
-- **Login ID**: e.g. `acme` (user will sign in with this or `acme@login.local`)
+- **Login ID**: e.g. `customer-org` (user will sign in with this or `customer-org@login.local`)
 - **Full Name**: e.g. "Acme Corporation"
 - **Role**: `customer`
 - **Organization**: select the same org from step A
@@ -38,7 +38,7 @@ Customers **always log in through their organization**. A customer user must be 
 ### D. Share credentials with the customer
 
 - **If you used a real email** (e.g. john@acme.com): Credentials are automatically emailed to that address. The user logs in with that email.
-- **If you used a Login ID** (e.g. acme): You must provide "Email to send credentials." Credentials are emailed there. The user logs in with the Login ID (or acme@login.local).
+- **If you used a Login ID** (e.g. customer-org): You must provide "Email to send credentials." Credentials are emailed there. The user logs in with the Login ID (or customer-org@login.local).
 - User can change their password in **Profile** or use **Forgot password** (supports both email and Login ID).
 
 ---
@@ -46,7 +46,7 @@ Customers **always log in through their organization**. A customer user must be 
 ## 2. Customer Logs In
 
 1. Go to **`/login`**
-2. Enter **Login ID** (e.g. `acme`) — or full email `acme@login.local`
+2. Enter **Login ID** (e.g. `customer-org`) — or full email `customer-org@login.local`
 3. Enter **password**
 4. Click **Sign In**
 5. Redirected to **Dashboard**
@@ -89,7 +89,7 @@ Customers **always log in through their organization**. A customer user must be 
 |-------|-------|-----|
 | "User has no organization" when creating order | User's `organization_id` is null | Admin: Edit user, assign Organization |
 | Customer sees no orders | No Customer linked to their org, or Customer has no `organization_id` | Admin: Link Customer to org; ensure org matches user's org |
-| Invalid login | Wrong Login ID or password | Use Login ID (e.g. `acme`) or full email (`acme@login.local`); reset password if needed |
+| Invalid login | Wrong Login ID or password | Use Login ID (e.g. `customer-org`) or full email (`customer-org@login.local`); reset password if needed |
 | Customer can't create order | Customer record not linked to org | Admin: Customers → edit → set Organization |
 
 ---
@@ -99,12 +99,12 @@ Customers **always log in through their organization**. A customer user must be 
 For local testing with Acme Corporation:
 
 ```bash
-npm run seed-acme
+npm run seed-org-customer
 ```
 
 Then login with:
 
-- **Login ID**: `acme`
+- **Login ID**: `customer-org`
 - **Password**: `Test123!`
 
 This user is linked to Acme Corporation org and can create orders, view orders, accept quotes, and track shipments.

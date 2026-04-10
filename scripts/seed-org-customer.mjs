@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Create Acme Corporation organization user for login.
- * Login: acme or acme@login.local, Password: Test123!
+ * Create a generic org-linked customer user for login.
+ * Login: customer-org or customer-org@login.local, Password: Test123!
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -20,36 +20,21 @@ const supabase = createClient(URL, SERVICE_KEY, {
 })
 
 async function main() {
-  // Find Acme Corporation organization (type customer)
-  const { data: acmeOrg } = await supabase
+  const { data: org } = await supabase
     .from('organizations')
     .select('id')
     .eq('type', 'customer')
-    .ilike('name', '%Acme%')
     .limit(1)
     .maybeSingle()
 
-  const orgId = acmeOrg?.id || '00000000-0000-0000-0000-000000000002' // seed default
+  const orgId = org?.id || '00000000-0000-0000-0000-000000000002'
 
-  if (!acmeOrg) {
-    console.log('Using default Acme org id:', orgId)
-  } else {
-    console.log('Found Acme org:', acmeOrg.id)
-  }
-
-  // Ensure Acme Customer record is linked to org
-  await supabase
-    .from('customers')
-    .update({ organization_id: orgId })
-    .eq('company_name', 'Acme Corporation')
-
-  // Create acme@login.local user
-  const email = 'acme@login.local'
+  const email = 'customer-org@login.local'
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
     password: PASSWORD,
     email_confirm: true,
-    user_metadata: { full_name: 'Acme Corporation' },
+    user_metadata: { full_name: 'Customer Org' },
   })
 
   if (authError) {
@@ -60,12 +45,12 @@ async function main() {
         await supabase.from('users').upsert({
           id: user.id,
           email,
-          full_name: 'Acme Corporation',
+          full_name: 'Customer Org',
           role: 'customer',
           organization_id: orgId,
           is_active: true,
         }, { onConflict: 'id' })
-        console.log('Updated existing acme user -> org', orgId)
+        console.log('Updated existing customer-org user -> org', orgId)
       }
     } else {
       console.error('Auth error:', authError.message)
@@ -75,17 +60,17 @@ async function main() {
     await supabase.from('users').insert({
       id: authData.user.id,
       email,
-      full_name: 'Acme Corporation',
+      full_name: 'Customer Org',
       role: 'customer',
       organization_id: orgId,
       is_active: true,
     })
-    console.log('Created acme user -> org', orgId)
+    console.log('Created customer-org user -> org', orgId)
   }
 
-  console.log('\nAcme Corporation login:')
-  console.log('  Login ID: acme')
-  console.log('  Email: acme@login.local')
+  console.log('\nCustomer Org login:')
+  console.log('  Login ID: customer-org')
+  console.log('  Email: customer-org@login.local')
   console.log('  Password: Test123!')
 }
 
