@@ -46,9 +46,9 @@ const statusColors: Record<string, string> = {
 
 export default function COEReceivingPage() {
   const [shipments, setShipments] = useState<Shipment[]>([])
-  const [outboundOrders, setOutboundOrders] = useState<Order[]>([])
+  const [tradeInOrders, setTradeInOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isOutboundLoading, setIsOutboundLoading] = useState(true)
+  const [isTradeInLoading, setIsTradeInLoading] = useState(true)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
@@ -98,21 +98,24 @@ export default function COEReceivingPage() {
     } catch {} finally { setIsLoading(false) }
   }, [])
 
-  const fetchOutboundOrders = useCallback(async () => {
-    setIsOutboundLoading(true)
+  const fetchTradeInOrders = useCallback(async () => {
+    setIsTradeInLoading(true)
     try {
-      const res = await fetch('/api/orders?type=cpo&page=1&page_size=10&sort_by=created_at&sort_order=desc')
+      const res = await fetch('/api/orders?type=trade_in&page=1&page_size=20&sort_by=created_at&sort_order=desc')
       if (res.ok) {
         const data = await res.json()
-        setOutboundOrders((data.data || []) as Order[])
+        const allTradeIns = (data.data || []) as Order[]
+        setTradeInOrders(
+          allTradeIns.filter(order => ['submitted', 'accepted', 'shipped_to_coe', 'received'].includes(order.status))
+        )
       }
-    } catch {} finally { setIsOutboundLoading(false) }
+    } catch {} finally { setIsTradeInLoading(false) }
   }, [])
 
   useEffect(() => { fetchShipments() }, [fetchShipments])
-  useEffect(() => { fetchOutboundOrders() }, [fetchOutboundOrders])
+  useEffect(() => { fetchTradeInOrders() }, [fetchTradeInOrders])
   useOnDbChange(fetchShipments)
-  useOnDbChange(fetchOutboundOrders)
+  useOnDbChange(fetchTradeInOrders)
 
   useEffect(() => {
     if (!debouncedOrderSearch.trim()) {
@@ -308,23 +311,23 @@ export default function COEReceivingPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Outbound Orders</CardTitle>
+          <CardTitle className="text-base">Trade-In Orders Awaiting Receiving</CardTitle>
           <CardDescription>
-            Customer-created outbound orders appear here automatically and can be used for shipping follow-up.
+            Customer-created trade-in orders show here automatically so COE can record inbound shipping and then receive with mismatch checks.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isOutboundLoading ? (
+          {isTradeInLoading ? (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />
               ))}
             </div>
-          ) : outboundOrders.length === 0 ? (
+          ) : tradeInOrders.length === 0 ? (
             <div className="flex flex-col items-center py-16 text-muted-foreground">
               <Truck className="h-10 w-10 mb-3 text-muted-foreground/40" />
-              <p className="text-sm font-medium">No outbound orders yet</p>
-              <p className="text-xs mt-1">New customer outbound orders will show up here automatically.</p>
+              <p className="text-sm font-medium">No trade-in orders in receiving queue</p>
+              <p className="text-xs mt-1">New customer trade-in orders will appear here automatically.</p>
             </div>
           ) : (
             <Table>
@@ -335,10 +338,11 @@ export default function COEReceivingPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Qty</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {outboundOrders.map(order => (
+                {tradeInOrders.map(order => (
                   <TableRow key={order.id}>
                     <TableCell className="font-mono text-sm font-medium">{order.order_number}</TableCell>
                     <TableCell className="text-sm">{order.customer?.company_name || order.customer?.contact_name || 'Customer'}</TableCell>
@@ -349,6 +353,18 @@ export default function COEReceivingPage() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{order.total_quantity || 0}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(order.created_at)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedOrder(order)
+                          setCreateDialogOpen(true)
+                        }}
+                      >
+                        Record Inbound
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
