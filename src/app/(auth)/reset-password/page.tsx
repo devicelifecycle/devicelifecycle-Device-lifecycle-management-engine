@@ -11,6 +11,9 @@ import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { Loader2, CheckCircle2, Eye, EyeOff, Package } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+
+// Module-level singleton — one client per page, not one per render
+const supabase = createBrowserSupabaseClient()
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 
@@ -29,8 +32,6 @@ export default function ResetPasswordPage() {
   const [sessionChecked, setSessionChecked] = useState(false)
 
   useEffect(() => {
-    const supabase = createBrowserSupabaseClient()
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (event === 'PASSWORD_RECOVERY') {
         setIsValidSession(true)
@@ -79,7 +80,6 @@ export default function ResetPasswordPage() {
     setIsLoading(true)
 
     try {
-      const supabase = createBrowserSupabaseClient()
       const { error: updateError } = await supabase.auth.updateUser({
         password,
       })
