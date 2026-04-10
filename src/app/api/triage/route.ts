@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
     if (body.action === 'bulk_import') {
       type ImportRow = {
         imei?: string
+        serial?: string
         device_id?: string | null
         claimed_condition?: string
         storage?: string
@@ -155,6 +156,7 @@ export async function POST(request: NextRequest) {
         locked_carrier?: string
         device_cost?: number
         repair_cost?: number
+        quantity?: number
         notes?: string
         order_id?: string
         order_item_id?: string
@@ -163,24 +165,44 @@ export async function POST(request: NextRequest) {
       const validConditions = ['new', 'excellent', 'good', 'fair', 'poor']
       let imported = 0
       let skipped = 0
+      let duplicate = 0
+      let failed = 0
+      let missingIdentifiers = 0
       const errors: string[] = []
 
       for (const row of importRows) {
-        if (!row.imei || !row.device_id) { skipped++; continue }
-        const imei = String(row.imei).trim()
-        if (!imei) { skipped++; continue }
+        if (!row.device_id) {
+          skipped++
+          errors.push('Skipped row without matched device ID')
+          continue
+        }
+        const imei = String(row.imei ?? '').trim()
+        const serial = String(row.serial ?? '').trim()
+        const identifier = imei || serial
+        if (!identifier) {
+          skipped++
+          missingIdentifiers++
+          errors.push('Skipped row without IMEI or Serial')
+          continue
+        }
 
         // Skip already-registered IMEIs
         const { data: existing } = await supabase
           .from('imei_records')
           .select('id')
-          .eq('imei', imei)
+          .or(`imei.eq.${imei || '__none__'},serial_number.eq.${serial || '__none__'}`)
           .maybeSingle()
-        if (existing) { skipped++; continue }
+        if (existing) {
+          skipped++
+          duplicate++
+          errors.push(`Skipped duplicate identifier: ${identifier}`)
+          continue
+        }
 
         const condition = validConditions.includes(row.claimed_condition ?? '') ? row.claimed_condition : 'good'
         const { error: insertError } = await supabase.from('imei_records').insert({
-          imei,
+          imei: imei || null,
+          serial_number: serial || null,
           device_id: row.device_id,
           claimed_condition: condition,
           triage_status: 'pending',
@@ -199,11 +221,22 @@ export async function POST(request: NextRequest) {
             imported_by_id: user.id,
           },
         })
-        if (insertError) { errors.push(imei); continue }
+        if (insertError) {
+          failed++
+          errors.push(`Failed to import ${identifier}: ${insertError.message}`)
+          continue
+        }
         imported++
       }
 
-      return NextResponse.json({ imported, skipped, errors }, { status: 201 })
+      return NextResponse.json({
+        imported,
+        skipped,
+        duplicate,
+        failed,
+        missing_identifiers: missingIdentifiers,
+        errors,
+      }, { status: 201 })
     }
 
     // Handle regular triage submission

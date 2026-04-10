@@ -231,7 +231,14 @@ export default function COETriagePage() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [isImporting, setIsImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null)
+  const [importResult, setImportResult] = useState<{
+    imported: number
+    skipped: number
+    duplicate?: number
+    failed?: number
+    missing_identifiers?: number
+    errors: string[]
+  } | null>(null)
   const [manualOrderRef, setManualOrderRef] = useState('')
   const [manualOrderId, setManualOrderId] = useState<string | null>(null)
   const [manualOrderLooking, setManualOrderLooking] = useState(false)
@@ -361,6 +368,8 @@ export default function COETriagePage() {
             locked_carrier: r.locked_carrier,
             device_cost: r.device_cost,
             repair_cost: r.repair_cost,
+            serial: r.serial,
+            quantity: r.quantity,
             notes: r.notes,
             order_id: linkedOrderId ?? undefined,
             order_item_id: r.matched_item?.id,
@@ -370,9 +379,15 @@ export default function COETriagePage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Import failed')
       setImportResult(data)
+      fetchPending(true)
       if (data.imported > 0) {
         toast.success(`${data.imported} device${data.imported !== 1 ? 's' : ''} added to triage queue`)
-        fetchPending()
+      } else {
+        const reasons: string[] = []
+        if (data.duplicate) reasons.push(`${data.duplicate} duplicate`)
+        if (data.missing_identifiers) reasons.push(`${data.missing_identifiers} missing IMEI/Serial`)
+        if (data.failed) reasons.push(`${data.failed} failed inserts`)
+        toast.error(`No devices imported${reasons.length ? ` (${reasons.join(', ')})` : ''}`)
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Bulk import failed')
@@ -1407,7 +1422,7 @@ export default function COETriagePage() {
                 <div className="flex items-center gap-2">
                   {importResult && (
                     <span className="text-xs text-green-700 font-medium">
-                      {importResult.imported} imported, {importResult.skipped} skipped{importResult.errors.length > 0 ? `, ${importResult.errors.length} errors` : ''}
+                      {importResult.imported} imported, {importResult.skipped} skipped{importResult.duplicate ? `, ${importResult.duplicate} duplicate` : ''}{importResult.failed ? `, ${importResult.failed} failed` : ''}{importResult.errors.length > 0 ? `, ${importResult.errors.length} errors` : ''}
                     </span>
                   )}
                   <Button
