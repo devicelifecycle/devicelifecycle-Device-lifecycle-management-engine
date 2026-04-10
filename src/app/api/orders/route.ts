@@ -149,11 +149,21 @@ export async function POST(request: NextRequest) {
       orgId = profile.organization_id ?? customer.organization_id ?? ''
     }
 
-    const order = await OrderService.createOrder(
+    let order = await OrderService.createOrder(
       orderData as Parameters<typeof OrderService.createOrder>[0],
       user.id,
       orgId
     )
+
+    // Customers have already reviewed their order — auto-submit so it enters the pricing queue
+    if (profile.role === 'customer') {
+      try {
+        order = await OrderService.transitionOrder(order.id, 'submitted', user.id, 'Auto-submitted by customer')
+      } catch (err) {
+        console.error('Failed to auto-submit customer order:', err)
+        // Non-fatal — order exists in draft, customer can submit manually
+      }
+    }
 
     // Send order confirmation email to customer (fire-and-forget)
     ;(async () => {
