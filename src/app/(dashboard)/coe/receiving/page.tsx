@@ -160,7 +160,12 @@ export default function COEReceivingPage() {
       const res = await fetch(`/api/shipments/${selectedShipment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'receive', notes: combinedNotes || undefined }),
+        body: JSON.stringify({
+          action: 'receive',
+          notes: combinedNotes || undefined,
+          received_quantity: receivedQty ?? undefined,
+          expected_quantity: expectedQty ?? undefined,
+        }),
       })
       if (!res.ok) throw new Error()
       const countSummary = receivedQty != null ? ` — ${receivedQty} device${receivedQty !== 1 ? 's' : ''} counted` : ''

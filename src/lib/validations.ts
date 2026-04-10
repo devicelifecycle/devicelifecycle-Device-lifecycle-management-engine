@@ -666,6 +666,8 @@ export const shipmentPatchSchema = z.object({
   action: z.enum(['receive']).optional(),
   status: z.enum(['label_created', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'exception']).optional(),
   notes: z.string().max(2000).optional(),
+  received_quantity: z.coerce.number().int().min(0).optional(),
+  expected_quantity: z.coerce.number().int().min(0).optional(),
   metadata: z.record(z.unknown()).optional(),
 })
 
