@@ -177,6 +177,8 @@ export default function COETriagePage() {
   const [refResult, setRefResult] = useState<OrderRefResult | null>(null)
   const [refLoading, setRefLoading] = useState(false)
   const [refError, setRefError] = useState('')
+  const [recentOrders, setRecentOrders] = useState<OrderRefResult[]>([])
+  const [recentOrdersLoading, setRecentOrdersLoading] = useState(false)
 
   // ── Order Intake tab state ───────────────────────────────────────────────
   const [intakeSearch, setIntakeSearch] = useState('')
@@ -234,6 +236,22 @@ export default function COETriagePage() {
   const [manualOrderId, setManualOrderId] = useState<string | null>(null)
   const [manualOrderLooking, setManualOrderLooking] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+
+  const handleRecentOrderSelect = async (orderId: string) => {
+    const selectedOrder = recentOrders.find(order => order.id === orderId)
+    if (!selectedOrder) return
+
+    setRefType('order')
+    setRefInput(selectedOrder.order_number)
+    setRefError('')
+    setRefResult(null)
+    setManualOrderRef(selectedOrder.order_number)
+    setManualOrderId(selectedOrder.id)
+
+    if (uploadedFile) {
+      await runTemplateUpload(uploadedFile, selectedOrder.order_number).catch(() => {})
+    }
+  }
 
   const runTemplateUpload = useCallback(async (file: File, orderRef?: string) => {
     setIsUploading(true)
@@ -520,6 +538,23 @@ export default function COETriagePage() {
     }
     run()
   }, [debouncedRef, refType])
+
+  useEffect(() => {
+    const run = async () => {
+      setRecentOrdersLoading(true)
+      try {
+        const res = await fetch('/api/orders?page=1&page_size=15&sort_by=created_at&sort_order=desc')
+        if (!res.ok) throw new Error('Failed to load recent orders')
+        const data = await res.json()
+        setRecentOrders((data.data || []) as OrderRefResult[])
+      } catch {
+        setRecentOrders([])
+      } finally {
+        setRecentOrdersLoading(false)
+      }
+    }
+    run()
+  }, [])
 
   // IMEI lookup for selected triage item
   const handleImeiLookup = async () => {
@@ -1121,31 +1156,55 @@ export default function COETriagePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2">
-            <div className="flex rounded-lg border overflow-hidden shrink-0">
-              <button
-                onClick={() => { setRefType('order'); setRefResult(null); setRefError('') }}
-                className={`px-3 py-2 text-xs font-medium transition-colors ${refType === 'order' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50'}`}
-              >
-                Order #
-              </button>
-              <button
-                onClick={() => { setRefType('quote'); setRefResult(null); setRefError('') }}
-                className={`px-3 py-2 text-xs font-medium transition-colors ${refType === 'quote' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50'}`}
-              >
-                Quote #
-              </button>
+          <div className="space-y-3">
+            <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Hash className="h-3.5 w-3.5" />
+                Recent Orders
+              </div>
+              <Select value={recentOrders.find(order => order.order_number === refInput)?.id ?? ''} onValueChange={handleRecentOrderSelect} disabled={recentOrdersLoading || recentOrders.length === 0}>
+                <SelectTrigger className="h-9 w-full text-xs">
+                  <SelectValue placeholder={recentOrdersLoading ? 'Loading recent orders...' : 'Pick a recent order'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {recentOrders.map(order => (
+                    <SelectItem key={order.id} value={order.id}>
+                      {order.order_number} {order.customer?.company_name ? `· ${order.customer.company_name}` : ''} · {order.status.replace(/_/g, ' ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {recentOrders.length === 0 && !recentOrdersLoading && (
+                <p className="text-[11px] text-muted-foreground">No recent orders found.</p>
+              )}
             </div>
-            <div className="relative flex-1">
-              <Hash className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder={refType === 'order' ? 'Enter order number (e.g. ORD-0001)' : 'Enter quote / order number'}
-                value={refInput}
-                onChange={e => setRefInput(e.target.value)}
-              />
+
+            <div className="flex gap-2">
+              <div className="flex rounded-lg border overflow-hidden shrink-0">
+                <button
+                  onClick={() => { setRefType('order'); setRefResult(null); setRefError('') }}
+                  className={`px-3 py-2 text-xs font-medium transition-colors ${refType === 'order' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50'}`}
+                >
+                  Order #
+                </button>
+                <button
+                  onClick={() => { setRefType('quote'); setRefResult(null); setRefError('') }}
+                  className={`px-3 py-2 text-xs font-medium transition-colors ${refType === 'quote' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50'}`}
+                >
+                  Quote #
+                </button>
+              </div>
+              <div className="relative flex-1">
+                <Hash className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder={refType === 'order' ? 'Enter order number (e.g. ORD-0001)' : 'Enter quote / order number'}
+                  value={refInput}
+                  onChange={e => setRefInput(e.target.value)}
+                />
+              </div>
+              {refLoading && <Loader2 className="h-4 w-4 animate-spin self-center text-muted-foreground" />}
             </div>
-            {refLoading && <Loader2 className="h-4 w-4 animate-spin self-center text-muted-foreground" />}
           </div>
 
           {refError && (
