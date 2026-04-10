@@ -211,7 +211,7 @@ export default function VendorOrdersPage() {
                 <div className="text-center py-14">
                   <Inbox className="mx-auto h-10 w-10 text-muted-foreground/40" />
                   <p className="mt-3 text-sm font-medium text-muted-foreground">No open orders</p>
-                  <p className="mt-1 text-xs text-muted-foreground">New CPO orders will appear here when customers accept quotes.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Open CPO requests appear here once they are ready for vendor sourcing.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">

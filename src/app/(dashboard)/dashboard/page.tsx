@@ -30,11 +30,12 @@ import {
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrders } from '@/hooks/useOrders'
+import { useCustomerDashboard } from '@/hooks/useCustomerDashboard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AnimatedCounter } from '@/components/ui/motion'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
-import { ORDER_STATUS_CONFIG } from '@/lib/constants'
+import { CUSTOMER_STATUS_CONFIG, ORDER_STATUS_CONFIG } from '@/lib/constants'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 
 const PIPELINE_COLORS = ['#f1d7af', '#d17843', '#6ec6b8', '#8da8d8', '#d95f5f', '#f0c36d']
@@ -312,24 +313,23 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
 }
 
 function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
-  const { orders, total, isLoading } = useOrders({ page_size: 200 })
-  const activeOrders = orders.filter((order) => !['delivered', 'closed', 'cancelled', 'rejected'].includes(order.status)).length
-  const quotesReady = orders.filter((order) => order.status === 'quoted').length
-  const completedOrders = orders.filter((order) => ['delivered', 'closed'].includes(order.status)).length
-  const visibleValue = orders.reduce((sum, order) => sum + (order.quoted_amount || order.total_amount || 0), 0)
-  const recentOrders = orders.slice(0, 6)
+  const { summary, recentOrders, isLoading } = useCustomerDashboard()
+  const totalOrders = summary?.total_orders || 0
+  const activeOrders = summary?.active_orders || 0
+  const quotesReady = summary?.quotes_ready || 0
+  const completedOrders = summary?.completed_orders || 0
+  const visibleValue = summary?.visible_value || 0
 
   const stats = [
-    { label: 'Total Orders', value: total, icon: ShoppingCart, tone: 'text-amber-200' },
+    { label: 'Total Orders', value: totalOrders, icon: ShoppingCart, tone: 'text-amber-200' },
     { label: 'Active Orders', value: activeOrders, icon: Activity, tone: 'text-teal-200' },
     { label: 'Quotes Ready', value: quotesReady, icon: ClipboardCheck, tone: 'text-sky-200' },
     { label: 'Completed', value: completedOrders, icon: Truck, tone: 'text-emerald-200' },
   ]
 
   const quickActions = [
-    { href: '/orders/new/trade-in', label: 'New Trade-In', icon: Plus, description: 'Create an intake request for devices you want to sell.' },
-    { href: '/orders/new/cpo', label: 'New CPO Request', icon: Package, description: 'Request devices for purchase or resale demand.' },
-    { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, description: 'Track submitted, quoted, shipped, and completed orders.' },
+    { href: '/orders/new', label: 'New Order', icon: Plus, description: 'Create a request.' },
+    { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, description: 'See latest updates.' },
   ]
 
   return (
@@ -341,18 +341,17 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
             <span className="eyebrow-label">Customer Workspace</span>
             <div className="space-y-3">
               <h1 className="editorial-title max-w-3xl text-4xl text-stone-100 sm:text-5xl">
-                Track every order, quote, and fulfillment update in one place.
+                Orders, quotes, and shipments in one view.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-stone-400 sm:text-lg">
-                Welcome back, {user.full_name || 'Customer'}. This dashboard is your front door for creating requests,
-                checking quote progress, and following device movement through the workflow.
+                Welcome back, {user.full_name || 'Customer'}.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/orders/new/trade-in">
+              <Link href="/orders/new">
                 <Button size="lg">
                   <Plus className="mr-2 h-4 w-4" />
-                  New Trade-In
+                  New Order
                 </Button>
               </Link>
               <Link href="/customer/orders">
@@ -410,7 +409,7 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           <CardHeader className="flex-row items-end justify-between space-y-0">
             <div>
               <CardTitle className="text-2xl text-stone-100">Recent Orders</CardTitle>
-              <CardDescription className="mt-2 text-stone-400">Your latest requests and their current status.</CardDescription>
+              <CardDescription className="mt-2 text-stone-400">Latest updates.</CardDescription>
             </div>
             <Link href="/customer/orders" className="text-sm text-primary hover:text-amber-200">
               View all
@@ -427,20 +426,14 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                 <div>
                   <p className="text-base font-semibold text-stone-100">No orders yet</p>
                   <p className="mt-2 text-sm text-stone-500">
-                    Create your first request and it will start showing up here right away.
+                    Create your first order to get started.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-3">
-                  <Link href="/orders/new/trade-in">
+                  <Link href="/orders/new">
                     <Button>
                       <Plus className="mr-2 h-4 w-4" />
-                      Create Trade-In
-                    </Button>
-                  </Link>
-                  <Link href="/orders/new/cpo">
-                    <Button variant="outline">
-                      <Package className="mr-2 h-4 w-4" />
-                      Create CPO
+                      Create Order
                     </Button>
                   </Link>
                 </div>
@@ -453,14 +446,14 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                     <div className="space-y-1">
                       <p className="font-semibold text-stone-100">{order.order_number || 'Untitled Order'}</p>
                       <p className="text-sm text-stone-400">
-                        {order.type === 'cpo' ? 'CPO workflow' : 'Trade-in workflow'} · Updated{' '}
+                        {order.type === 'cpo' ? 'CPO' : 'Trade-In'} · Updated{' '}
                         {formatRelativeTime(order.updated_at || order.created_at || new Date().toISOString())}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <StatusBadge
                         status={order.status}
-                        label={ORDER_STATUS_CONFIG[order.status as keyof typeof ORDER_STATUS_CONFIG]?.label}
+                        label={CUSTOMER_STATUS_CONFIG[order.status as keyof typeof CUSTOMER_STATUS_CONFIG]?.label}
                         dot
                       />
                       <ArrowRight className="h-4 w-4 text-stone-500" />
@@ -474,31 +467,22 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
 
         <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
           <CardHeader>
-            <CardTitle className="text-2xl text-stone-100">At a Glance</CardTitle>
-            <CardDescription className="text-stone-400">A simple status read for the client-facing workflow.</CardDescription>
+            <CardTitle className="text-2xl text-stone-100">Overview</CardTitle>
+            <CardDescription className="text-stone-400">Current status.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Open Work</p>
-              <p className="text-lg font-semibold text-stone-100">{activeOrders} orders are still in progress.</p>
-              <p className="mt-2 text-sm leading-6 text-stone-400">
-                Draft, submitted, quoted, sourcing, shipping, receiving, and quality-check stages all count as active work.
-              </p>
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">In Progress</p>
+              <p className="text-lg font-semibold text-stone-100">{activeOrders} active order{activeOrders === 1 ? '' : 's'}.</p>
             </div>
             <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Quotes Visible</p>
-              <p className="text-lg font-semibold text-stone-100">{formatCurrency(visibleValue)} in visible order value.</p>
-              <p className="mt-2 text-sm leading-6 text-stone-400">
-                This rolls up quoted and finalized values from your accessible orders, so the dashboard stays useful even before fulfillment is complete.
-              </p>
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Visible Value</p>
+              <p className="text-lg font-semibold text-stone-100">{formatCurrency(visibleValue)}</p>
             </div>
             <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Next Step</p>
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Next Action</p>
               <p className="text-lg font-semibold text-stone-100">
-                {quotesReady > 0 ? `${quotesReady} quote${quotesReady !== 1 ? 's are' : ' is'} ready for review.` : 'No quotes are waiting on you right now.'}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-stone-400">
-                Use the dashboard as a real landing page instead of bouncing straight to the orders list, so new accounts still have a clean first-run experience.
+                {quotesReady > 0 ? `${quotesReady} quote${quotesReady === 1 ? ' is' : 's are'} ready.` : 'No quotes waiting.'}
               </p>
             </div>
           </CardContent>

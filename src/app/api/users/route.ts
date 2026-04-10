@@ -36,7 +36,12 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json({ data: users || [] })
+    const visibleUsers = (users || []).filter((user) => {
+      const email = typeof user.email === 'string' ? user.email : ''
+      return !(email.startsWith('deleted+') && email.endsWith('@login.local'))
+    })
+
+    return NextResponse.json({ data: visibleUsers })
   } catch (error) {
     console.error('Error fetching users:', error)
     return NextResponse.json(

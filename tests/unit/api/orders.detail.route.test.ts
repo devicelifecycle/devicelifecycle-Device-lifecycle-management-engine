@@ -48,6 +48,57 @@ describe('GET /api/orders/[id]', () => {
     vi.clearAllMocks()
   })
 
+  it('lets vendors open unassigned CPO orders that are open for bidding, with pricing still redacted', async () => {
+    createServerSupabaseClientMock.mockReturnValue(
+      makeSupabase({
+        user: { id: 'vendor-user-open' },
+        profile: { role: 'vendor', organization_id: 'vendor-org-open' },
+      }),
+    )
+
+    getOrderByIdMock.mockResolvedValue({
+      id: 'c4f4a4c1-5f43-4694-b7fd-cdb04d3534c7',
+      order_number: 'INV-2026-0001',
+      type: 'cpo',
+      status: 'sourcing',
+      vendor_id: null,
+      customer_id: 'customer-1',
+      total_amount: 2500,
+      quoted_amount: 2700,
+      notes: 'Internal notes should not leak',
+      internal_notes: 'Bid privately',
+      customer: {
+        organization_id: 'customer-org-1',
+        company_name: 'Acme Corp',
+      },
+      items: [
+        {
+          id: 'item-open-1',
+          unit_price: 500,
+          quoted_price: 550,
+          final_price: 575,
+          notes: 'Hidden note',
+          pricing_metadata: { pricing_source: 'manual' },
+        },
+      ],
+    })
+
+    const { GET } = await import('@/app/api/orders/[id]/route')
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/orders/c4f4a4c1-5f43-4694-b7fd-cdb04d3534c7'),
+      { params: Promise.resolve({ id: 'c4f4a4c1-5f43-4694-b7fd-cdb04d3534c7' }) },
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.customer_id).toBeUndefined()
+    expect(json.customer).toBeUndefined()
+    expect(json.total_amount).toBe(0)
+    expect(json.quoted_amount).toBeUndefined()
+    expect(json.items[0].unit_price).toBeUndefined()
+    expect(json.items[0].pricing_metadata).toBeNull()
+  })
+
   it('redacts customer, notes, and pricing data for vendor order detail responses', async () => {
     createServerSupabaseClientMock.mockReturnValue(
       makeSupabase({

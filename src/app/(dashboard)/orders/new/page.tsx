@@ -906,26 +906,26 @@ export default function NewOrderPage() {
                   <div className={`grid gap-4 text-left ${canCreateCpoOrder ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
                     <div className="rounded-md border border-green-200 bg-green-50 dark:bg-green-950/30 p-3">
                       <p className="font-medium text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">For device buybacks. Columns: device_make, device_model, quantity, condition, storage, serial_number, color, notes</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">For device buybacks. CSV and Excel templates are available.</p>
                     </div>
                     {canCreateCpoOrder && (
                       <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-3">
                         <p className="font-medium text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">For Certified Pre-Owned purchases. Columns: device_make, device_model, quantity, storage, notes</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">For Certified Pre-Owned purchases. CSV and Excel templates are available.</p>
                       </div>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {canCreateCpoOrder
-                      ? 'You can also use your own CSV file if it has the same columns (or equivalent: make/model, storage, etc.).'
-                      : 'You can also use your own CSV file if it matches the trade-in columns (or equivalent: make/model, storage, etc.).'}
+                      ? 'You can also upload your own CSV or Excel file if it uses the same columns.'
+                      : 'You can also upload your own CSV or Excel file if it uses the trade-in columns.'}
                   </p>
                 </div>
 
                 <div className="rounded-lg border-2 border-dashed p-6 text-center">
                   <Files className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground mb-3">
-                    {canCreateCpoOrder ? 'Download the template you need, or upload your own CSV or Excel file' : 'Download the trade-in template, or upload your own trade-in CSV or Excel file'}
+                    {canCreateCpoOrder ? 'Download a CSV or Excel template, or upload your own file.' : 'Download a trade-in CSV or Excel template, or upload your own file.'}
                   </p>
                   <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" multiple onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
@@ -946,7 +946,7 @@ export default function NewOrderPage() {
                       </Button>
                     )}
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                      <Upload className="mr-2 h-4 w-4" />Upload CSV or Excel
+                      <Upload className="mr-2 h-4 w-4" />Upload Excel or CSV
                     </Button>
                   </div>
                 </div>

@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
-import { useCustomers, useMyCustomer } from '@/hooks/useCustomers'
+import { useCustomers } from '@/hooks/useCustomers'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +23,6 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import { matchDeviceFromCsv } from '@/lib/device-match'
-import TradeInWizard from '@/components/orders/TradeInWizard'
 import {
   TRADE_IN_CSV_HEADERS,
   TRADE_IN_CSV_SAMPLE,
@@ -98,7 +97,6 @@ export default function NewTradeInPage() {
   const { user } = useAuth()
   const { create, isCreating } = useOrders()
   const { customers } = useCustomers()
-  const { customer: myCustomer, isLoading: myCustomerLoading, error: myCustomerError } = useMyCustomer()
   const isCustomer = user?.role === 'customer'
   const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
   const [devices, setDevices] = useState<Device[]>([])
@@ -124,10 +122,11 @@ export default function NewTradeInPage() {
     fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
 
-  // For customer role: auto-set their org's customer (no selection needed)
   useEffect(() => {
-    if (isCustomer && myCustomer?.id) setCustomerId(myCustomer.id)
-  }, [isCustomer, myCustomer?.id])
+    if (isCustomer) {
+      router.replace('/orders/new')
+    }
+  }, [isCustomer, router])
 
   // Price lookup for internal staff
   const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, condition: DeviceCondition, beatModeArg?: 'amount' | 'percent', beatValArg?: string) => {
@@ -318,9 +317,8 @@ export default function NewTradeInPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const effectiveCustomerId = isCustomer ? myCustomer?.id : customerId
-    if (!effectiveCustomerId) {
-      toast.error(isCustomer ? 'Loading your organization...' : 'Please select a customer')
+    if (!customerId) {
+      toast.error('Please select a customer')
       return
     }
 
@@ -366,7 +364,7 @@ export default function NewTradeInPage() {
     try {
       const result = await create({
         type: 'trade_in',
-        customer_id: effectiveCustomerId,
+        customer_id: customerId,
         items: orderItems,
         notes,
       } as Record<string, unknown>)
@@ -398,23 +396,11 @@ export default function NewTradeInPage() {
   const quoteTotalItems = items.filter((_, i) => itemPrices[i]?.engine_price > 0)
   const grandTotal = items.reduce((sum, item, i) => sum + getFinalPrice(i) * item.quantity, 0)
 
-  // ── Customer role: premium wizard ────────────────────────────────────────
   if (isCustomer) {
-    const customerId = myCustomer?.id || ''
     return (
-      <TradeInWizard
-        customerId={customerId}
-        isSubmitting={isCreating}
-        onSubmit={async (payload) => {
-          try {
-            const result = await create(payload as Record<string, unknown>)
-            toast.success('Trade-in request submitted! Our team will send you a quote shortly.')
-            router.push(`/orders/${result.id}`)
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to submit trade-in request')
-          }
-        }}
-      />
+      <div className="mx-auto max-w-2xl rounded-2xl border bg-background p-8 text-center">
+        <p className="text-sm text-muted-foreground">Opening the customer order form...</p>
+      </div>
     )
   }
 
@@ -431,40 +417,17 @@ export default function NewTradeInPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Customer — only for internal staff (admin, sales, etc.). Customers use their own org automatically. */}
-        {!isCustomer && (
-          <Card>
-            <CardHeader><CardTitle>Customer</CardTitle><CardDescription>Who is this order for?</CardDescription></CardHeader>
-            <CardContent>
-              <Select value={customerId} onValueChange={setCustomerId}>
-                <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
-                <SelectContent>
-                  {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-        )}
-
-        {isCustomer && myCustomer && (
-          <Card>
-            <CardHeader><CardTitle>Order for</CardTitle><CardDescription>This request will be linked to your organization</CardDescription></CardHeader>
-            <CardContent>
-              <p className="font-medium">{myCustomer.company_name}</p>
-              <p className="text-sm text-muted-foreground">You can track this order in My Orders once submitted.</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {isCustomer && !myCustomerLoading && myCustomerError && (
-          <Card className="border-destructive/50 bg-destructive/5">
-            <CardContent className="py-4">
-              <p className="text-sm text-destructive">
-                Unable to load your organization profile. Please contact support to set up your account.
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader><CardTitle>Customer</CardTitle><CardDescription>Who is this order for?</CardDescription></CardHeader>
+          <CardContent>
+            <Select value={customerId} onValueChange={setCustomerId}>
+              <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
+              <SelectContent>
+                {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
 
         {/* Devices - Manual or CSV */}
         <Card>
@@ -871,13 +834,10 @@ export default function NewTradeInPage() {
         </Card>
 
         <div className="flex gap-2">
-          <Button
-            type="submit"
-            disabled={isCreating || (isCustomer && (myCustomerLoading || !myCustomer || !!myCustomerError))}
-          >
-            {isCreating ? 'Creating...' : isCustomer && (myCustomerLoading || !myCustomer) ? 'Loading...' : 'Create Trade-In Order'}
+          <Button type="submit" disabled={isCreating}>
+            {isCreating ? 'Creating...' : 'Create Trade-In Order'}
           </Button>
-          <Link href={isCustomer ? '/customer/requests' : '/orders'}>
+          <Link href="/orders">
             <Button variant="outline" type="button">Cancel</Button>
           </Link>
         </div>

@@ -186,13 +186,46 @@ export async function DELETE(
     const hardDelete = new URL(request.url).searchParams.get('hard') === 'true'
 
     if (hardDelete) {
-      // Hard delete: remove from auth + users table via service-role client
+      const archivedEmail = `deleted+${targetId}@login.local`
+      const archivedName = `Deleted User ${targetId.slice(0, 8)}`
+
+      // Hard delete: remove from auth + users table via service-role client.
+      // If historical foreign-key references block deletion, archive the user
+      // instead so they lose access and disappear from the admin list.
       const { createServiceRoleClient } = await import('@/lib/supabase/service-role')
       const serviceClient = createServiceRoleClient()
       const { error: authError } = await serviceClient.auth.admin.deleteUser(targetId)
       if (authError) {
-        console.error('Error deleting auth user:', authError)
-        return NextResponse.json({ error: 'Failed to delete user from auth' }, { status: 500 })
+        console.warn('Auth delete failed, archiving user instead:', authError)
+
+        await serviceClient.auth.admin.updateUserById(targetId, {
+          email: archivedEmail,
+          password: crypto.randomUUID(),
+          email_confirm: true,
+          user_metadata: {},
+          app_metadata: {},
+        }).catch((updateError) => {
+          console.warn('Failed to archive auth user credentials:', updateError)
+        })
+
+        const { error: archiveError } = await serviceClient
+          .from('users')
+          .update({
+            full_name: archivedName,
+            email: archivedEmail,
+            notification_email: null,
+            phone: null,
+            is_active: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', targetId)
+
+        if (archiveError) {
+          console.error('Error archiving user after delete failure:', archiveError)
+          return NextResponse.json({ error: 'Failed to remove user' }, { status: 500 })
+        }
+
+        return NextResponse.json({ success: true, hard: false, archived: true })
       }
       // users table row is removed via ON DELETE CASCADE on the auth.users FK
       return NextResponse.json({ success: true, hard: true })

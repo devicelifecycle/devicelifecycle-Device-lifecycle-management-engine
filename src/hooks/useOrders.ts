@@ -14,6 +14,8 @@ interface OrderFilters {
   search?: string
   page?: number
   page_size?: number
+  sort_by?: 'created_at' | 'updated_at' | 'order_number' | 'status' | 'total_amount' | 'quoted_amount'
+  sort_order?: 'asc' | 'desc'
 }
 
 interface OrdersResponse {

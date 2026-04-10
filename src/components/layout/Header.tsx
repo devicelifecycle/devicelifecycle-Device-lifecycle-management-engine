@@ -15,6 +15,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { unreadCount } = useNotifications()
   const { user } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
+  const notificationsHref = user?.role === 'customer' ? '/customer/notifications' : '/notifications'
 
   const segments = pathname.split('/').filter(Boolean)
   const breadcrumbs = segments.map((segment, index) => {
@@ -82,7 +83,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             </AnimatePresence>
           </Button>
 
-          <Link href="/notifications">
+          <Link href={notificationsHref}>
             <Button variant="ghost" size="icon" className="relative h-8 w-8 text-stone-500 hover:text-stone-200">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (

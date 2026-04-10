@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeSearchInput } from '@/lib/utils'
 import { OrderSplitService } from './order-split.service'
 import type {
@@ -80,7 +81,10 @@ export class VendorService {
    * Broadcast to all vendors; any vendor can bid.
    */
   static async getOpenOrdersForBidding(params: { page?: number; page_size?: number }) {
-    const supabase = await createServerSupabaseClient()
+    // Open CPO orders are intentionally visible to every vendor org for bidding.
+    // Use the service-role client here so vendor RLS on `orders` does not hide
+    // unassigned sourcing orders from the vendor marketplace view.
+    const supabase = createServiceRoleClient()
     const page = params.page ?? 1
     const page_size = params.page_size ?? 20
     const from = (page - 1) * page_size

@@ -94,6 +94,9 @@ export async function middleware(request: NextRequest) {
     for (const [route, allowedRoles] of roleRoutes) {
       if (pathname.startsWith(route)) {
         if (!allowedRoles.includes(role ?? '')) {
+          if (pathname.startsWith('/orders/new/cpo') && role === 'customer') {
+            return NextResponse.redirect(new URL('/orders/new', request.url))
+          }
           return NextResponse.redirect(new URL('/', request.url))
         }
         break // Most specific route matched — don't check broader routes
