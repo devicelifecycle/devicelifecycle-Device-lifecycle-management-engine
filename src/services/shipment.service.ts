@@ -508,7 +508,7 @@ export class ShipmentService {
     // Load order and items
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, status, order_number, type, customer_id, customer:customers(contact_email, contact_phone, contact_name, company_name, organization_id)')
+      .select('id, status, order_number, type, customer_id, total_quantity, total_amount, quoted_amount, customer:customers(contact_email, contact_phone, contact_name, company_name, organization_id)')
       .eq('id', orderId)
       .single()
 
@@ -561,8 +561,54 @@ export class ShipmentService {
       if (hasQuantityMismatch) {
         const orderNumber = order.order_number as string
         const orderType = (order.type as string | undefined) ?? 'trade_in'
-        const title = `Quantity mismatch — Order ${orderNumber}`
-        const message = `Receiving count mismatch recorded for ${orderType === 'trade_in' ? 'trade-in' : 'order'} #${orderNumber}: expected ${expectedQuantity}, received ${receivedQuantity}.`
+        const currentQuoted = (order.quoted_amount as number | null) ?? (order.total_amount as number | null)
+        const canAutoAdjustQuote =
+          orderType === 'trade_in' &&
+          currentQuoted != null &&
+          expectedQuantity != null &&
+          expectedQuantity > 0 &&
+          receivedQuantity != null &&
+          receivedQuantity >= 0
+
+        let quoteUpdateMode: 'auto' | 'manual' = 'manual'
+        let quoteOldAmount: number | null = currentQuoted
+        let quoteNewAmount: number | null = null
+
+        if (canAutoAdjustQuote) {
+          const perDeviceQuote = currentQuoted / expectedQuantity
+          const scaledQuote = Math.round(perDeviceQuote * receivedQuantity * 100) / 100
+          const orderUpdatePayload: Record<string, unknown> = {
+            total_quantity: receivedQuantity,
+            updated_at: new Date().toISOString(),
+          }
+
+          if (order.quoted_amount != null) {
+            orderUpdatePayload.quoted_amount = scaledQuote
+          }
+          if (order.total_amount != null || order.quoted_amount == null) {
+            orderUpdatePayload.total_amount = scaledQuote
+          }
+
+          const { error: quoteUpdateError } = await supabase
+            .from('orders')
+            .update(orderUpdatePayload)
+            .eq('id', orderId)
+
+          if (!quoteUpdateError) {
+            quoteUpdateMode = 'auto'
+            quoteNewAmount = scaledQuote
+          }
+        }
+
+        const title = quoteUpdateMode === 'auto'
+          ? `Quantity mismatch — Quote updated for Order ${orderNumber}`
+          : `Quantity mismatch — Quote review required for Order ${orderNumber}`
+
+        const baseMessage = `Receiving count mismatch recorded for ${orderType === 'trade_in' ? 'trade-in' : 'order'} #${orderNumber}: expected ${expectedQuantity}, received ${receivedQuantity}.`
+        const quoteMessage = quoteUpdateMode === 'auto' && quoteOldAmount != null && quoteNewAmount != null
+          ? ` Quote adjusted automatically from $${quoteOldAmount.toFixed(2)} to $${quoteNewAmount.toFixed(2)}.`
+          : ' Quote needs manual review before sending an updated amount.'
+        const message = `${baseMessage}${quoteMessage}`
 
         const { data: admins } = await supabase
           .from('users')
@@ -582,6 +628,9 @@ export class ShipmentService {
               order_number: orderNumber,
               received_quantity: receivedQuantity,
               expected_quantity: expectedQuantity,
+              quote_update_mode: quoteUpdateMode,
+              previous_quote_amount: quoteOldAmount,
+              updated_quote_amount: quoteNewAmount,
               audience: 'admin',
             },
           }).catch(() => {})
@@ -615,6 +664,9 @@ export class ShipmentService {
                 order_number: orderNumber,
                 received_quantity: receivedQuantity,
                 expected_quantity: expectedQuantity,
+                quote_update_mode: quoteUpdateMode,
+                previous_quote_amount: quoteOldAmount,
+                updated_quote_amount: quoteNewAmount,
                 audience: 'customer',
               },
             }).catch(() => {})
