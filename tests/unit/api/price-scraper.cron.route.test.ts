@@ -26,6 +26,12 @@ describe('GET /api/cron/price-scraper', () => {
     ;(process.env as Record<string, string | undefined>).CRON_SECRET = ' secret123 \n'
     ;(process.env as Record<string, string | undefined>).PRICE_SCRAPER_ENABLED = ' true \n'
     ;(process.env as Record<string, string | undefined>).PRICE_SCRAPER_AUTO_TRAINING = ' false \n'
+    // Set scraper implementations for rollout metadata test
+    ;(process.env as Record<string, string | undefined>).SCRAPER_UNIVERCELL_IMPL = 'scrapling'
+    ;(process.env as Record<string, string | undefined>).SCRAPER_APPLE_IMPL = 'ts'
+    ;(process.env as Record<string, string | undefined>).SCRAPER_BELL_IMPL = 'ts'
+    ;(process.env as Record<string, string | undefined>).SCRAPER_GORECELL_IMPL = 'ts'
+    ;(process.env as Record<string, string | undefined>).SCRAPER_TELUS_IMPL = 'ts'
 
     const upsertMock = vi.fn().mockResolvedValue({ error: null })
     createServiceRoleClientMock.mockReturnValue({

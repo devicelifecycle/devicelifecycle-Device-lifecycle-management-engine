@@ -406,7 +406,13 @@ export class NotificationService {
           .select('contact_phone, company_name')
           .eq('id', order.customer_id!)
           .single()
-        await this.sendSmsIfConfigured(cust?.contact_phone, smsText)
+        
+        // Guard: Only send SMS if phone number is provided
+        if (cust?.contact_phone) {
+          await this.sendSmsIfConfigured(cust.contact_phone, smsText)
+        } else {
+          console.warn(`[SMS] No contact phone for customer ${order.customer_id}, skipping SMS delivery`)
+        }
       })().catch((err) => console.error('[SMS] Failed:', err)))
     }
 
