@@ -44,21 +44,21 @@ export class ExceptionService {
       throw new Error(`Failed to fetch exceptions: ${exError.message}`)
     }
 
-    // Get triage results for price/condition details
+    // Get triage results for price/condition details, matching on order_item_id
     const { data: triageResults, error: triageError } = await supabase
       .from('triage_results')
-      .select('order_id, claimed_condition, actual_condition, price_adjustment, mismatch_severity, approval_status')
+      .select('id, order_id, order_item_id, claimed_condition, actual_condition, price_adjustment, mismatch_severity, approval_status')
       .eq('order_id', orderId)
 
     if (triageError) {
       throw new Error(`Failed to fetch triage results: ${triageError.message}`)
     }
 
-    // Build response with detailed discrepancy info
+    // Build response with detailed discrepancy info - properly join triage to each exception
     const discrepancies: DiscrepancyDetails[] = (exceptions || []).map(ex => {
-      const triage = triageResults?.find(t => t.order_id === orderId) // Simplified; in reality, need more linking
-      // Note: This is simplified. Real implementation would need better joining
-      // to match triage results to specific order items
+      // FIXED: Match triage result by order_item_id, not just by order_id
+      const triage = triageResults?.find(t => t.order_item_id === ex.order_item_id)
+      
       return {
         exceptionId: ex.id,
         itemId: ex.order_item_id,
