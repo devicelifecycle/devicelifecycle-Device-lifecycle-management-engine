@@ -60,15 +60,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Customer creation now provisions login credentials, so keep it admin-only
+    // Customer creation provisions login credentials; allow admin and COE manager.
     const { data: userData } = await supabase
       .from('users')
       .select('role, organization_id')
       .eq('id', user.id)
       .single()
 
-    if (userData?.role !== 'admin') {
-      return NextResponse.json({ error: 'Only admin can create customers and customer login IDs' }, { status: 403 })
+    if (!userData || !['admin', 'coe_manager'].includes(userData.role)) {
+      return NextResponse.json({ error: 'Only admin or COE manager can create customers and customer login IDs' }, { status: 403 })
     }
 
     const body = await request.json()

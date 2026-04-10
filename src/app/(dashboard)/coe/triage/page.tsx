@@ -635,7 +635,7 @@ export default function COETriagePage() {
       const item = intakeOrder.items.find(i => i.id === itemId)
       if (!item) return []
       return slots
-        .filter(s => !s.validating && s.mismatch !== 'duplicate')
+        .filter(s => !s.validating && (s.mismatch === null || s.mismatch === 'condition'))
         .map(s => ({
           imei: s.imei,
           device_id: item.device?.id || null,
@@ -656,6 +656,9 @@ export default function COETriagePage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Registration failed')
+      if (!data.imported || data.imported === 0) {
+        throw new Error('No devices were registered. Check IMEIs for duplicates and ensure exact order-item matching, including storage.')
+      }
       toast.success(`${data.imported} device${data.imported !== 1 ? 's' : ''} registered to triage queue`)
       fetchPending()
       setIntakeSlots({})
@@ -944,17 +947,17 @@ export default function COETriagePage() {
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   {intakeMismatchSummary.condition > 0 && (
-                    <span className="flex items-center gap-1 text-amber-600">
+                    <span className="flex items-center gap-1 text-muted-foreground">
                       <AlertCircle className="h-3 w-3" />{intakeMismatchSummary.condition} condition mismatch{intakeMismatchSummary.condition !== 1 ? 'es' : ''}
                     </span>
                   )}
                   {intakeMismatchSummary.device > 0 && (
-                    <span className="flex items-center gap-1 text-red-600">
+                    <span className="flex items-center gap-1 text-muted-foreground">
                       <XCircle className="h-3 w-3" />{intakeMismatchSummary.device} wrong model{intakeMismatchSummary.device !== 1 ? 's' : ''}
                     </span>
                   )}
                   {intakeMismatchSummary.duplicate > 0 && (
-                    <span className="flex items-center gap-1 text-blue-600">
+                    <span className="flex items-center gap-1 text-muted-foreground">
                       <AlertCircle className="h-3 w-3" />{intakeMismatchSummary.duplicate} duplicate{intakeMismatchSummary.duplicate !== 1 ? 's' : ''}
                     </span>
                   )}
@@ -1028,11 +1031,7 @@ export default function COETriagePage() {
                         {slots.length > 0 && (
                           <div className="rounded-lg border divide-y text-xs overflow-hidden">
                             {slots.map(slot => (
-                              <div key={slot.imei} className={`flex items-center gap-2 px-3 py-2 ${
-                                slot.mismatch === 'device_model' || slot.mismatch === 'both' ? 'bg-red-50/60' :
-                                slot.mismatch === 'condition' ? 'bg-amber-50/60' :
-                                slot.mismatch === 'duplicate' ? 'bg-blue-50/60' : ''
-                              }`}>
+                              <div key={slot.imei} className="flex items-center gap-2 px-3 py-2">
                                 <span className="font-mono flex-1 truncate">{slot.imei}</span>
                                 <span className={CONDITION_CONFIG[slot.actualCondition]?.color || ''}>
                                   {CONDITION_CONFIG[slot.actualCondition]?.label || slot.actualCondition}
@@ -1354,11 +1353,7 @@ export default function COETriagePage() {
                   </TableHeader>
                   <TableBody>
                     {uploadResult.rows.map(row => (
-                      <TableRow key={row.row} className={
-                        row.match_status === 'condition_mismatch' ? 'bg-amber-50' :
-                        row.match_status === 'not_in_order' || row.match_status === 'not_in_catalog' ? 'bg-red-50/50' :
-                        row.match_status === 'catalog_matched' ? 'bg-sky-50/50' : ''
-                      }>
+                      <TableRow key={row.row}>
                         <TableCell className="text-xs text-muted-foreground">{row.row}</TableCell>
                         <TableCell className="text-xs font-mono whitespace-nowrap">
                           <div>{row.imei || '—'}</div>

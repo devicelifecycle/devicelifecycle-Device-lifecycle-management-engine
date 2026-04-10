@@ -417,9 +417,12 @@ export async function POST(request: NextRequest) {
           const makeMatch = !makeLower || fuzzyContains(itemMake, makeLower) || fuzzyContains(makeLower, itemMake)
           const modelMatch = !modelLower || fuzzyContains(itemModel, modelLower) || fuzzyContains(modelLower, itemModel)
           const modelNumberMatch = haveCompatibleModelNumbers(itemModel, modelLower)
-          const storageMatch = !rowStorage || !itemStorage || rowStorage === itemStorage || rowStorage.includes(itemStorage) || itemStorage.includes(rowStorage)
+          const storageMatch =
+            (!rowStorage && !itemStorage) ||
+            (Boolean(rowStorage) && Boolean(itemStorage) && rowStorage === itemStorage)
+          const deviceIdentityMatch = sameDeviceId || (makeMatch && modelMatch && modelNumberMatch)
 
-          if (!sameDeviceId && (!makeMatch || !modelMatch || !modelNumberMatch || !storageMatch)) {
+          if (!deviceIdentityMatch || !storageMatch) {
             return { item, score: -1, remainingQty }
           }
 

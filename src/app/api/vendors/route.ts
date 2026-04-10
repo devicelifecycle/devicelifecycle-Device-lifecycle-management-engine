@@ -67,9 +67,9 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    // Vendor creation now provisions login credentials, so keep it admin-only
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Only admin can create vendors and vendor login IDs' }, { status: 403 })
+    // Vendor creation provisions login credentials; allow admin and COE manager.
+    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Only admin or COE manager can create vendors and vendor login IDs' }, { status: 403 })
     }
 
     const body = await request.json()

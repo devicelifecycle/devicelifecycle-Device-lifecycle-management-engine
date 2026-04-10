@@ -13,8 +13,8 @@ const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/auth/cal
 const roleRoutes: [string, string[]][] = [
   ['/admin', ['admin']],
   ['/coe', ['admin', 'coe_manager', 'coe_tech']],
-  ['/customers/new', ['admin']],
-  ['/vendors/new', ['admin']],
+  ['/customers/new', ['admin', 'coe_manager']],
+  ['/vendors/new', ['admin', 'coe_manager']],
   ['/customer/', ['customer']],
   ['/vendor/', ['vendor']],
   ['/customers', ['admin', 'coe_manager', 'sales']],
