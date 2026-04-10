@@ -896,6 +896,22 @@ export default function COETriagePage() {
     }
   })()
 
+  const intakeOrderQuantityTrail = intakeOrder
+    ? {
+        ordered: intakeOrder.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 0,
+        received: Object.values(intakeSlots).flat().filter(slot => !slot.validating && slot.mismatch !== 'duplicate').length,
+        mismatched: Object.values(intakeSlots).flat().filter(slot => !slot.validating && slot.mismatch !== null && slot.mismatch !== 'duplicate').length,
+      }
+    : null
+
+  const uploadOrderQuantityTrail = uploadResult?.order
+    ? {
+        ordered: uploadResult.order.total_quantity || 0,
+        received: uploadResult.ready_to_import || 0,
+        mismatched: uploadResult.condition_mismatches + uploadResult.not_in_order + uploadResult.not_in_catalog,
+      }
+    : null
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -998,6 +1014,13 @@ export default function COETriagePage() {
                   )}
                 </div>
               </div>
+
+              {intakeOrderQuantityTrail && (
+                <div className="rounded-lg border bg-background px-4 py-3 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Quantity trail:</span>{' '}
+                  Order {intakeOrderQuantityTrail.ordered} · Received {intakeOrderQuantityTrail.received} · Mismatch found {intakeOrderQuantityTrail.mismatched}
+                </div>
+              )}
 
               {/* Per-item intake panels */}
               <div className="space-y-3">
@@ -1375,6 +1398,11 @@ export default function COETriagePage() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {uploadResult.total} rows parsed — {uploadResult.ready_to_import} ready to import
                   </p>
+                  {uploadOrderQuantityTrail && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Quantity trail: Order {uploadOrderQuantityTrail.ordered} · Received {uploadOrderQuantityTrail.received} · Mismatch found {uploadOrderQuantityTrail.mismatched}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {importResult && (
