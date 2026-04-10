@@ -14,17 +14,18 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 
 // Map: DB table → React Query keys to invalidate on any change
 const TABLE_KEY_MAP: Record<string, string[][]> = {
-  orders:           [['orders'], ['order']],
-  order_items:      [['orders'], ['order']],
+  orders:           [['orders'], ['order'], ['customer-dashboard'], ['vendor-open-orders'], ['vendor-my-bids']],
+  order_items:      [['orders'], ['order'], ['customer-dashboard'], ['vendor-open-orders']],
   order_timeline:   [['orders'], ['order']],
   order_exceptions: [['orders'], ['order'], ['exceptions'], ['order-discrepancies']],
   imei_records:     [['imei_records'], ['triage']],
   triage_results:   [['triage_results'], ['triage']],
   device_catalog:   [['devices'], ['device']],
-  customers:        [['customers'], ['customer']],
-  vendors:          [['vendors'], ['vendor']],
+  customers:        [['customers'], ['customer'], ['customer-dashboard']],
+  vendors:          [['vendors'], ['vendor'], ['vendor-open-orders'], ['vendor-my-bids']],
   users:            [['users']],
-  shipments:        [['shipments']],
+  shipments:        [['shipments'], ['orders'], ['order']],
+  vendor_bids:      [['vendor-my-bids'], ['vendor-open-orders'], ['orders'], ['order']],
   competitor_prices:[['competitor_prices'], ['pricing']],
   notifications:    [['notifications']],
 }
