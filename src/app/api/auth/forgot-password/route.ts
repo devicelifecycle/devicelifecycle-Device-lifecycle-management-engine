@@ -29,12 +29,20 @@ export async function POST(request: NextRequest) {
     // Support Login ID: acme -> acme@login.local
     const email = emailRaw.includes('@') ? emailRaw : `${emailRaw}@login.local`
 
+    // Prefer the redirectTo the browser passed in — it always has the correct
+    // production origin (window.location.origin). Fall back to server-side
+    // detection only when the client didn't supply one (e.g. direct API calls).
+    const clientRedirectTo = typeof body.redirectTo === 'string' && body.redirectTo.startsWith('http')
+      ? body.redirectTo
+      : null
+    const redirectTo = clientRedirectTo || getAppPath('/reset-password', request)
+
     const supabase = createServiceRoleClient()
     const { data, error } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email,
       options: {
-        redirectTo: getAppPath('/reset-password', request),
+        redirectTo,
       },
     })
 

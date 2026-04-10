@@ -131,20 +131,29 @@ function useProvideAuth(): AuthContextValue {
   // the duplicate fetchUser — login() already fetched and populated state.
   const skipNextSignedInRef = useRef(false)
 
-  // Fetch current user — no deps since supabase is module-level
+  // Fetch current user — no deps since supabase is module-level.
+  // Uses getSession() (reads localStorage, no network) instead of getUser()
+  // (HTTP round-trip to Auth server) because:
+  //   1. Eliminates a ~200-400ms network call on every auth check.
+  //   2. Prevents a race condition: getUser() could complete while login()
+  //      is in-flight and reset isLoading → false, hiding the spinner.
+  // The 5-minute health-check interval and middleware (server-side) still
+  // validate the session server-side.  fetchUser must NOT touch isLoading —
+  // that flag is owned exclusively by login(), logout(), and verifyMfa().
   const fetchUser = useCallback(async () => {
     try {
-      // getUser() validates JWT locally — faster than getSession() which can trigger refresh
-      const { data: { user: authUser } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
 
       if (!mountedRef.current) return
 
-      if (!authUser) {
+      if (!session?.user) {
         writeCachedUser(null)
         clearRoutingCookies()
-        setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+        setState(prev => ({ ...prev, user: null, isInitializing: false, isAuthenticated: false }))
         return
       }
+
+      const authUser = session.user
 
       const { data: profile } = await supabase
         .from('users')
@@ -159,7 +168,7 @@ function useProvideAuth(): AuthContextValue {
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
         clearRoutingCookies()
-        setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+        setState(prev => ({ ...prev, user: null, isInitializing: false, isAuthenticated: false }))
         return
       }
 
@@ -167,34 +176,34 @@ function useProvideAuth(): AuthContextValue {
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
         clearRoutingCookies()
-        setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+        setState(prev => ({ ...prev, user: null, isInitializing: false, isAuthenticated: false }))
         return
       }
 
       setRoutingCookies(profile.role, profile.id)
       writeCachedUser(profile as User)
-      setState({
+      setState(prev => ({
+        ...prev,
         user: profile as User,
-        isLoading: false,
         isInitializing: false,
         isAuthenticated: true,
-      })
+      }))
     } catch (error) {
       if (isAbortError(error)) return
       console.error('Error fetching user:', error)
       if (mountedRef.current) {
         const cachedUser = readTrustedCachedUser()
         if (cachedUser) {
-          setState({
+          setState(prev => ({
+            ...prev,
             user: cachedUser,
-            isLoading: false,
             isInitializing: false,
             isAuthenticated: true,
-          })
+          }))
           return
         }
 
-        setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+        setState(prev => ({ ...prev, user: null, isInitializing: false, isAuthenticated: false }))
       }
     }
   }, [])

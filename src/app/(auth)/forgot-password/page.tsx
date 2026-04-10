@@ -39,10 +39,15 @@ export default function ForgotPasswordPage() {
       } else {
         // Login ID — use server API so it can look up notification_email
         // and send via the project's configured EmailService (Resend/Gmail).
+        // Pass redirectTo from the browser so the server uses the real
+        // production URL instead of falling back to localhost:3000.
         const res = await fetch('/api/auth/forgot-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: input }),
+          body: JSON.stringify({
+            email: input,
+            redirectTo: `${window.location.origin}/reset-password`,
+          }),
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok && data.error) throw new Error(data.error)

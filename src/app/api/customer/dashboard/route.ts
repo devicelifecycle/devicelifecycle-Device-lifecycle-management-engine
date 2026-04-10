@@ -48,8 +48,15 @@ export async function GET() {
     }
 
     const serviceRole = createServiceRoleClient()
+
+    // Use the canonical customer record for this organization.
+    // We intentionally use only this ONE customer record (not all customers
+    // for the org) so the dashboard reflects only THIS customer's orders —
+    // not orders from other customer accounts that may share the same org.
+    let canonicalCustomerId: string | null = null
     try {
-      await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, profile)
+      const customer = await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, profile)
+      canonicalCustomerId = customer.id
     } catch {
       // Organization or customer profile not yet set up — return empty dashboard
       return NextResponse.json(
@@ -65,19 +72,7 @@ export async function GET() {
       )
     }
 
-    const { data: customers, error: customerError } = await serviceRole
-      .from('customers')
-      .select('id')
-      .eq('organization_id', profile.organization_id)
-      .eq('is_active', true)
-
-    if (customerError) {
-      throw customerError
-    }
-
-    const customerIds = (customers || []).map((customer) => customer.id).filter(Boolean)
-
-    if (customerIds.length === 0) {
+    if (!canonicalCustomerId) {
       return NextResponse.json(
         {
           total_orders: 0,
@@ -90,6 +85,8 @@ export async function GET() {
         { status: 200 }
       )
     }
+
+    const customerIds = [canonicalCustomerId]
 
     const [totalResult, activeResult, quotedResult, completedResult, valueResult, recentResult] =
       await Promise.all([
