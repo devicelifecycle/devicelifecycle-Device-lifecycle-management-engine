@@ -508,7 +508,7 @@ export class ShipmentService {
     // Load order and items
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, status, order_number, type, customer_id, total_quantity, total_amount, quoted_amount, customer:customers(contact_email, contact_phone, contact_name, company_name, organization_id)')
+      .select('id, status, order_number, type, customer_id, internal_notes, total_quantity, total_amount, quoted_amount, customer:customers(contact_email, contact_phone, contact_name, company_name, organization_id)')
       .eq('id', orderId)
       .single()
 
@@ -597,6 +597,31 @@ export class ShipmentService {
           if (!quoteUpdateError) {
             quoteUpdateMode = 'auto'
             quoteNewAmount = scaledQuote
+
+            // Mark order for explicit quote acknowledgment workflow.
+            // Use current status model: transition to quoted if valid, otherwise keep status and add internal review marker.
+            if (OrderService.isValidTransition(order.status as import('@/types').OrderStatus, 'quoted')) {
+              try {
+                await OrderService.transitionOrder(
+                  orderId,
+                  'quoted',
+                  receivedById,
+                  'Auto re-quoted after receiving quantity mismatch',
+                )
+              } catch {
+                // Non-fatal: keep quote update and continue with notifications
+              }
+            }
+
+            const existingInternalNotes = (order.internal_notes as string | null)?.trim() || ''
+            const marker = `QUOTE_UPDATE_PENDING_CUSTOMER_ACK: receiving mismatch expected ${expectedQuantity}, received ${receivedQuantity}; quote ${currentQuoted.toFixed(2)} -> ${scaledQuote.toFixed(2)} (${new Date().toISOString()})`
+            await supabase
+              .from('orders')
+              .update({
+                internal_notes: [existingInternalNotes, marker].filter(Boolean).join('\n'),
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', orderId)
           }
         }
 
@@ -632,6 +657,32 @@ export class ShipmentService {
               previous_quote_amount: quoteOldAmount,
               updated_quote_amount: quoteNewAmount,
               audience: 'admin',
+            },
+          }).catch(() => {})
+        }
+
+        const { data: salesUsers } = await supabase
+          .from('users')
+          .select('id')
+          .eq('role', 'sales')
+          .eq('is_active', true)
+
+        for (const salesUser of salesUsers || []) {
+          await NotificationService.createNotification({
+            user_id: salesUser.id,
+            type: 'in_app',
+            title,
+            message,
+            link: `/orders/${orderId}`,
+            metadata: {
+              order_id: orderId,
+              order_number: orderNumber,
+              received_quantity: receivedQuantity,
+              expected_quantity: expectedQuantity,
+              quote_update_mode: quoteUpdateMode,
+              previous_quote_amount: quoteOldAmount,
+              updated_quote_amount: quoteNewAmount,
+              audience: 'sales',
             },
           }).catch(() => {})
         }
