@@ -1,0 +1,7 @@
+Order Number,IMEI,Make,Model,Storage,Condition,Color,Battery Health,SIM Lock,Locked Carrier,Device Cost,Repair Cost,Notes
+PO-2026-0050,351111111111111,Apple,iPhone 11,128GB,good,Black,88,Unlocked,,185,0,Matches order item 1
+PO-2026-0050,351111111111112,Apple,iPhone 11,128GB,fair,Black,79,Unlocked,,165,25,Condition mismatch example
+PO-2026-0050,351111111111113,Apple,iPhone 12,128GB,good,Blue,91,Unlocked,,235,0,Matches order item 2
+PO-2026-0050,351111111111114,Apple,iPhone 12,256GB,good,Green,86,Unlocked,,255,0,Storage variation example
+PO-2026-0050,351111111111115,Samsung,Galaxy S22,128GB,good,White,90,Unlocked,,210,0,Matches order item 3
+PO-2026-0050,351111111111116,Apple,iPhone 14,128GB,good,Purple,93,Unlocked,,320,0,Example not in linked order

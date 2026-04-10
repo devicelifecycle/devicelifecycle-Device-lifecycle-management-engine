@@ -19,6 +19,23 @@ import type {
   PaginatedResponse,
 } from '@/types'
 
+const MAX_ORDER_NUMBER_ATTEMPTS = 5
+
+type DatabaseErrorLike = {
+  code?: string | null
+  message?: string | null
+  details?: string | null
+  hint?: string | null
+}
+
+function isOrderNumberConflict(error: DatabaseErrorLike | null | undefined): boolean {
+  if (!error) return false
+  if (error.code !== '23505') return false
+
+  const errorText = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
+  return errorText.includes('order_number') || errorText.includes('orders_order_number_key')
+}
+
 export class OrderService {
   // ============================================================================
   // CRUD OPERATIONS
@@ -283,34 +300,50 @@ export class OrderService {
       throw new Error('CPO orders must have direction "outbound"')
     }
 
-    // Generate order number using database function
-    const { data: orderNumberData, error: rnError } = await supabase
-      .rpc('generate_order_number', { direction })
+    let order: Order | null = null
+    let orderNumber = ''
 
-    if (rnError || !orderNumberData) {
-      throw new Error(`Failed to generate order number: ${rnError?.message || 'Unknown error'}`)
+    for (let attempt = 1; attempt <= MAX_ORDER_NUMBER_ATTEMPTS; attempt++) {
+      const { data: orderNumberData, error: rnError } = await supabase
+        .rpc('generate_order_number', { direction })
+
+      if (rnError || !orderNumberData) {
+        throw new Error(`Failed to generate order number: ${rnError?.message || 'Unknown error'}`)
+      }
+
+      orderNumber = orderNumberData as string
+
+      const { data: createdOrder, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          order_number: orderNumber,
+          type: input.type,
+          order_direction: direction,
+          status: 'draft',
+          customer_id: input.customer_id,
+          created_by_id: userId,
+          notes: input.customer_notes,
+          internal_notes: input.internal_notes,
+        })
+        .select()
+        .single()
+
+      if (!orderError && createdOrder) {
+        order = createdOrder as Order
+        break
+      }
+
+      if (!isOrderNumberConflict(orderError) || attempt === MAX_ORDER_NUMBER_ATTEMPTS) {
+        throw new Error(
+          isOrderNumberConflict(orderError)
+            ? 'Failed to reserve a unique order number. Please try again.'
+            : orderError?.message || 'Failed to create order',
+        )
+      }
     }
 
-    const orderNumber = orderNumberData as string
-
-    // Create the order
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        order_number: orderNumber,
-        type: input.type,
-        order_direction: direction,
-        status: 'draft',
-        customer_id: input.customer_id,
-        created_by_id: userId,
-        notes: input.customer_notes,
-        internal_notes: input.internal_notes,
-      })
-      .select()
-      .single()
-
-    if (orderError) {
-      throw new Error(orderError.message)
+    if (!order) {
+      throw new Error('Failed to create order')
     }
 
     // Create order items

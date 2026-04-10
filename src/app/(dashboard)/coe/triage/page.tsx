@@ -156,6 +156,7 @@ export default function COETriagePage() {
   const intakeImeiInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   // ── Template file upload ─────────────────────────────────────────────────
+  type UploadMatchStatus = 'matched' | 'condition_mismatch' | 'not_in_order' | 'catalog_matched' | 'not_in_catalog'
   type UploadRow = {
     row: number
     imei?: string
@@ -172,17 +173,25 @@ export default function COETriagePage() {
     repair_cost?: number
     quantity?: number
     notes?: string
-    match_status: string
+    match_status: UploadMatchStatus
     device_id?: string | null
-    matched_item?: { device: { make: string; model: string } | null; claimed_condition: string | null; quoted_price: number | null } | null
+    matched_item?: { id: string; device: { make: string; model: string } | null; claimed_condition: string | null; quoted_price: number | null } | null
     quoted_price?: number | null
   }
-  const [uploadResult, setUploadResult] = useState<{
+  type UploadPreview = {
     detected_ref: string | null
     order: { id: string; order_number: string; status: string; total_quantity: number; quoted_amount: number | null } | null
     rows: UploadRow[]
-    total: number; matched: number; condition_mismatches: number; not_in_order: number
-  } | null>(null)
+    total: number
+    matched: number
+    order_matched: number
+    catalog_matched: number
+    ready_to_import: number
+    condition_mismatches: number
+    not_in_order: number
+    not_in_catalog: number
+  }
+  const [uploadResult, setUploadResult] = useState<UploadPreview | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [isImporting, setIsImporting] = useState(false)
@@ -190,27 +199,52 @@ export default function COETriagePage() {
   const [manualOrderRef, setManualOrderRef] = useState('')
   const [manualOrderId, setManualOrderId] = useState<string | null>(null)
   const [manualOrderLooking, setManualOrderLooking] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+
+  const runTemplateUpload = useCallback(async (file: File, orderRef?: string) => {
+    setIsUploading(true)
+    setUploadError('')
+    setImportResult(null)
+
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      if (orderRef?.trim()) {
+        form.append('order_ref', orderRef.trim().toUpperCase())
+      }
+
+      const res = await fetch('/api/triage/upload-template', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
+
+      setUploadResult(data)
+      if (data.detected_ref) {
+        setRefInput(data.detected_ref)
+        setManualOrderRef(data.order?.order_number || data.detected_ref)
+      }
+      if (data.order?.id) {
+        setManualOrderId(data.order.id)
+      } else if (!orderRef) {
+        setManualOrderId(null)
+      }
+
+      return data as UploadPreview
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed'
+      setUploadError(message)
+      throw err instanceof Error ? err : new Error(message)
+    } finally {
+      setIsUploading(false)
+    }
+  }, [])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    setIsUploading(true)
-    setUploadError('')
+    setUploadedFile(file)
     setUploadResult(null)
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch('/api/triage/upload-template', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      setUploadResult(data)
-      if (data.detected_ref) {
-        setRefInput(data.detected_ref)
-      }
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed')
-    } finally { setIsUploading(false) }
+    await runTemplateUpload(file, manualOrderRef || undefined).catch(() => {})
   }
 
   const lookupManualOrder = async (ref: string) => {
@@ -225,7 +259,13 @@ export default function COETriagePage() {
       )
       if (match) {
         setManualOrderId(match.id)
-        toast.success(`Linked to ${match.order_number}`)
+        setManualOrderRef(match.order_number)
+        if (uploadedFile) {
+          await runTemplateUpload(uploadedFile, match.order_number)
+          toast.success(`Linked to ${match.order_number} and rematched the upload`)
+        } else {
+          toast.success(`Linked to ${match.order_number}`)
+        }
       } else {
         setManualOrderId(null)
         toast.error('Order not found')
@@ -237,9 +277,17 @@ export default function COETriagePage() {
 
   const handleBulkImport = async () => {
     if (!uploadResult) return
-    const importable = uploadResult.rows.filter(r => r.imei && r.device_id && r.match_status !== 'not_in_order')
+    const linkedOrderId = uploadResult.order?.id ?? manualOrderId ?? null
+    const importableStatuses: UploadMatchStatus[] = linkedOrderId
+      ? ['matched', 'condition_mismatch']
+      : ['catalog_matched']
+    const importable = uploadResult.rows.filter(
+      (row) => row.imei && row.device_id && importableStatuses.includes(row.match_status)
+    )
     if (importable.length === 0) {
-      toast.error('No rows with both an IMEI and a recognised device to import')
+      toast.error(linkedOrderId
+        ? 'No rows matched the linked order. Check the order number and uploaded devices.'
+        : 'No rows with both an IMEI and a recognized catalog device are ready to import')
       return
     }
     setIsImporting(true)
@@ -262,7 +310,8 @@ export default function COETriagePage() {
             device_cost: r.device_cost,
             repair_cost: r.repair_cost,
             notes: r.notes,
-            order_id: uploadResult.order?.id ?? manualOrderId ?? undefined,
+            order_id: linkedOrderId ?? undefined,
+            order_item_id: r.matched_item?.id,
           })),
         }),
       })
@@ -1139,14 +1188,27 @@ export default function COETriagePage() {
             </label>
             {uploadResult && (
               <div className="flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-3.5 w-3.5" />{uploadResult.matched} matched</span>
+                <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-3.5 w-3.5" />{uploadResult.order_matched} order matched</span>
+                {uploadResult.catalog_matched > 0 && (
+                  <span className="flex items-center gap-1 text-sky-700"><PackageSearch className="h-3.5 w-3.5" />{uploadResult.catalog_matched} catalog matched</span>
+                )}
                 {uploadResult.condition_mismatches > 0 && (
                   <span className="flex items-center gap-1 text-amber-600"><AlertCircle className="h-3.5 w-3.5" />{uploadResult.condition_mismatches} condition mismatch{uploadResult.condition_mismatches !== 1 ? 'es' : ''}</span>
                 )}
                 {uploadResult.not_in_order > 0 && (
                   <span className="flex items-center gap-1 text-muted-foreground"><XCircle className="h-3.5 w-3.5" />{uploadResult.not_in_order} not in order</span>
                 )}
-                <button onClick={() => { setUploadResult(null); setUploadError('') }} className="text-muted-foreground hover:text-foreground">
+                {uploadResult.not_in_catalog > 0 && (
+                  <span className="flex items-center gap-1 text-rose-700"><XCircle className="h-3.5 w-3.5" />{uploadResult.not_in_catalog} not in catalog</span>
+                )}
+                <button onClick={() => {
+                  setUploadResult(null)
+                  setUploadError('')
+                  setImportResult(null)
+                  setUploadedFile(null)
+                  setManualOrderId(null)
+                  setManualOrderRef('')
+                }} className="text-muted-foreground hover:text-foreground">
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -1158,7 +1220,7 @@ export default function COETriagePage() {
           {(!uploadResult?.order) && (
             <div className="mt-3 flex items-center gap-2">
               <Input
-                placeholder="Link to order number (e.g. ORD-2026-0050)"
+                placeholder="Link to order number (e.g. PO-2026-0050)"
                 value={manualOrderRef}
                 onChange={e => { setManualOrderRef(e.target.value); setManualOrderId(null) }}
                 onKeyDown={e => { if (e.key === 'Enter') lookupManualOrder(manualOrderRef) }}
@@ -1168,7 +1230,7 @@ export default function COETriagePage() {
                 {manualOrderLooking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link Order'}
               </Button>
               {manualOrderId && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" />Linked</span>}
-              {!manualOrderId && manualOrderRef && !manualOrderLooking && <span className="text-xs text-muted-foreground">Optional — paste order number to link devices to an order</span>}
+              {!manualOrderId && manualOrderRef && !manualOrderLooking && <span className="text-xs text-muted-foreground">Linking rematches the uploaded rows against that order.</span>}
               {!manualOrderRef && <span className="text-xs text-muted-foreground">Optional — link to an existing order</span>}
             </div>
           )}
@@ -1185,7 +1247,7 @@ export default function COETriagePage() {
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {uploadResult.total} rows parsed — {uploadResult.rows.filter(r => r.imei && r.device_id).length} ready to import
+                    {uploadResult.total} rows parsed — {uploadResult.ready_to_import} ready to import
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1197,7 +1259,7 @@ export default function COETriagePage() {
                   <Button
                     size="sm"
                     onClick={handleBulkImport}
-                    disabled={isImporting || uploadResult.rows.filter(r => r.imei && r.device_id).length === 0}
+                    disabled={isImporting || uploadResult.ready_to_import === 0}
                   >
                     {isImporting ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Importing...</> : <><Plus className="h-3.5 w-3.5 mr-1.5" />Import to Triage Queue</>}
                   </Button>
@@ -1226,7 +1288,8 @@ export default function COETriagePage() {
                     {uploadResult.rows.map(row => (
                       <TableRow key={row.row} className={
                         row.match_status === 'condition_mismatch' ? 'bg-amber-50' :
-                        row.match_status === 'not_in_order' ? 'bg-red-50/50' : ''
+                        row.match_status === 'not_in_order' || row.match_status === 'not_in_catalog' ? 'bg-red-50/50' :
+                        row.match_status === 'catalog_matched' ? 'bg-sky-50/50' : ''
                       }>
                         <TableCell className="text-xs text-muted-foreground">{row.row}</TableCell>
                         <TableCell className="text-xs font-mono whitespace-nowrap">
@@ -1276,14 +1339,17 @@ export default function COETriagePage() {
                           {row.match_status === 'matched' && (
                             <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-3 w-3" />Matched</span>
                           )}
+                          {row.match_status === 'catalog_matched' && (
+                            <span className="flex items-center gap-1 text-sky-700"><PackageSearch className="h-3 w-3" />Catalog matched</span>
+                          )}
                           {row.match_status === 'condition_mismatch' && (
                             <span className="flex items-center gap-1 text-amber-600"><AlertCircle className="h-3 w-3" />Condition mismatch</span>
                           )}
                           {row.match_status === 'not_in_order' && (
                             <span className="flex items-center gap-1 text-muted-foreground"><XCircle className="h-3 w-3" />Not in order</span>
                           )}
-                          {row.match_status === 'no_order' && (
-                            <span className="text-muted-foreground">No order ref</span>
+                          {row.match_status === 'not_in_catalog' && (
+                            <span className="flex items-center gap-1 text-rose-700"><XCircle className="h-3 w-3" />Not in catalog</span>
                           )}
                         </TableCell>
                       </TableRow>
