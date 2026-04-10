@@ -645,10 +645,10 @@ export default function NewOrderPage() {
       }
 
       if (results.length === 1) {
-        toast.success(`${results[0].type} order created successfully`)
+        toast.success(isCustomer ? `${results[0].type} request submitted! Our team will send you a quote shortly.` : `${results[0].type} order created successfully`)
         router.push(`/orders/${results[0].id}`)
       } else if (results.length === 2) {
-        toast.success(`Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
+        toast.success(isCustomer ? `${results.length} requests submitted! Our team will send you quotes shortly.` : `Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
         router.push('/orders')
       }
     } catch (err) {

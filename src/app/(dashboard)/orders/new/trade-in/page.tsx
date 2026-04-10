@@ -398,9 +398,13 @@ export default function NewTradeInPage() {
         customerId={customerId}
         isSubmitting={isCreating}
         onSubmit={async (payload) => {
-          const result = await create(payload as Record<string, unknown>)
-          toast.success('Trade-in request submitted!')
-          router.push(`/orders/${result.id}`)
+          try {
+            const result = await create(payload as Record<string, unknown>)
+            toast.success('Trade-in request submitted! Our team will send you a quote shortly.')
+            router.push(`/orders/${result.id}`)
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to submit trade-in request')
+          }
         }}
       />
     )
