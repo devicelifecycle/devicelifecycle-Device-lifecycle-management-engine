@@ -49,6 +49,7 @@ export default function CustomersPage() {
   })
 
   const canDelete = user?.role === 'admin' || user?.role === 'coe_manager'
+  const canCreate = user?.role === 'admin' || user?.role === 'coe_manager'
   const stats = useMemo(() => {
     const active = customers.filter((customer) => customer.is_active).length
     const withPhone = customers.filter((customer) => customer.contact_phone).length
@@ -81,12 +82,14 @@ export default function CustomersPage() {
                 Download CSV
               </a>
             </Button>
-            <Link href="/customers/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Customer
-              </Button>
-            </Link>
+            {canCreate && (
+              <Link href="/customers/new">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Customer
+                </Button>
+              </Link>
+            )}
           </>
         }
         stats={[
@@ -144,9 +147,11 @@ export default function CustomersPage() {
               <Users className="mx-auto h-10 w-10 text-stone-600" />
               <p className="mt-4 text-lg font-semibold text-stone-200">No customers found.</p>
               <p className="mt-2 text-sm text-stone-500">Create a customer account to start building the customer-side operating view.</p>
-              <Link href="/customers/new">
-                <Button className="mt-5">Add customer</Button>
-              </Link>
+              {canCreate && (
+                <Link href="/customers/new">
+                  <Button className="mt-5">Add customer</Button>
+                </Link>
+              )}
             </div>
           ) : (
             <>

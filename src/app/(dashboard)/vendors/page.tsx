@@ -25,6 +25,7 @@ export default function VendorsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const canCreate = user?.role === 'admin' || user?.role === 'coe_manager'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
@@ -105,12 +106,14 @@ export default function VendorsPage() {
                 Download CSV
               </a>
             </Button>
-            <Link href="/vendors/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Vendor
-              </Button>
-            </Link>
+            {canCreate && (
+              <Link href="/vendors/new">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Vendor
+                </Button>
+              </Link>
+            )}
           </>
         }
         stats={[
@@ -167,9 +170,11 @@ export default function VendorsPage() {
               <Store className="mx-auto h-10 w-10 text-stone-600" />
               <p className="mt-4 text-lg font-semibold text-stone-200">No vendors found.</p>
               <p className="mt-2 text-sm text-stone-500">Add a vendor profile to activate the sourcing side of the system.</p>
-              <Link href="/vendors/new">
-                <Button className="mt-5">Add vendor</Button>
-              </Link>
+              {canCreate && (
+                <Link href="/vendors/new">
+                  <Button className="mt-5">Add vendor</Button>
+                </Link>
+              )}
             </div>
           ) : (
             <>
