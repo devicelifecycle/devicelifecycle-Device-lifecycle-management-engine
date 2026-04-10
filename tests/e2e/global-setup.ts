@@ -72,6 +72,49 @@ async function ensureProfile(supabase: SupabaseClient<any>, userId: string, user
   if (error) throw error
 }
 
+async function ensureCustomerRecord(
+  supabase: SupabaseClient<any>,
+  input: {
+    organization_id: string
+    company_name: string
+    contact_name: string
+    contact_email: string
+  },
+) {
+  const { data: existing, error: existingError } = await supabase
+    .from('customers')
+    .select('id')
+    .eq('organization_id', input.organization_id)
+    .limit(1)
+    .maybeSingle()
+
+  if (existingError) throw existingError
+
+  if (existing?.id) {
+    const { error: updateError } = await supabase
+      .from('customers')
+      .update({
+        company_name: input.company_name,
+        contact_name: input.contact_name,
+        contact_email: input.contact_email,
+        is_active: true,
+      })
+      .eq('id', existing.id)
+
+    if (updateError) throw updateError
+    return
+  }
+
+  const { error: insertError } = await supabase
+    .from('customers')
+    .insert({
+      ...input,
+      is_active: true,
+    })
+
+  if (insertError) throw insertError
+}
+
 export default async function globalSetup() {
   const url = requireEnv(supabaseUrl, 'SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL')
   const key = requireEnv(serviceRoleKey, 'SUPABASE_SERVICE_ROLE_KEY')
@@ -93,6 +136,20 @@ export default async function globalSetup() {
 
   if (acmeOrgError) throw acmeOrgError
   const acmeOrgId = acmeOrg?.id || defaultOrgId
+
+  await ensureCustomerRecord(supabase, {
+    organization_id: defaultOrgId,
+    company_name: 'Default Customer Org',
+    contact_name: 'Default Customer',
+    contact_email: 'customer@example.com',
+  })
+
+  await ensureCustomerRecord(supabase, {
+    organization_id: acmeOrgId,
+    company_name: 'Acme Corporation',
+    contact_name: 'Acme Corporation',
+    contact_email: 'acme@example.com',
+  })
 
   const users: SeedUser[] = [
     { email: 'admin@login.local', full_name: 'Test Admin', role: 'admin', organization_id: defaultOrgId },

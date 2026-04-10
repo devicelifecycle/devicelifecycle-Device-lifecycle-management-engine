@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { CustomerService } from '@/services/customer.service'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +21,7 @@ export async function GET() {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('role, organization_id')
+      .select('role, organization_id, full_name, email, notification_email, phone')
       .eq('id', user.id)
       .single()
 
@@ -36,21 +36,63 @@ export async function GET() {
       )
     }
 
-    const result = await CustomerService.getCustomers({
-      organization_id: profile.organization_id,
-      page: 1,
-      page_size: 1,
-    })
+    const serviceRole = createServiceRoleClient()
+    const { data: existingCustomers, error: existingCustomerError } = await serviceRole
+      .from('customers')
+      .select('*')
+      .eq('organization_id', profile.organization_id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
 
-    const customer = result.data?.[0]
-    if (!customer) {
+    if (existingCustomerError) {
+      throw existingCustomerError
+    }
+
+    const existingCustomer = existingCustomers?.[0]
+    if (existingCustomer) {
+      return NextResponse.json(existingCustomer)
+    }
+
+    const { data: organization, error: organizationError } = await serviceRole
+      .from('organizations')
+      .select('name, contact_email, contact_phone, address')
+      .eq('id', profile.organization_id)
+      .single()
+
+    if (organizationError || !organization) {
       return NextResponse.json(
         { error: 'No customer profile found for your organization. Please contact support.' },
         { status: 404 }
       )
     }
 
-    return NextResponse.json(customer)
+    const fallbackEmail =
+      organization.contact_email ||
+      profile.notification_email ||
+      (typeof profile.email === 'string' && !profile.email.endsWith('@login.local') ? profile.email : null) ||
+      `contact+${profile.organization_id}@dlm.local`
+
+    const { data: createdCustomer, error: createError } = await serviceRole
+      .from('customers')
+      .insert({
+        organization_id: profile.organization_id,
+        company_name: organization.name,
+        contact_name: profile.full_name || organization.name,
+        contact_email: fallbackEmail,
+        contact_phone: organization.contact_phone || profile.phone || null,
+        billing_address: organization.address || null,
+        shipping_address: organization.address || null,
+        is_active: true,
+      })
+      .select()
+      .single()
+
+    if (createError || !createdCustomer) {
+      throw createError || new Error('Failed to create customer profile')
+    }
+
+    return NextResponse.json(createdCustomer)
   } catch (error) {
     console.error('Error fetching my customer:', error)
     return NextResponse.json(

@@ -289,7 +289,22 @@ function useProvideAuth(): AuthContextValue {
         : ''
 
       if (cachedRole) {
-        setState({ user: readCachedUser(), isLoading: false, isInitializing: false, isAuthenticated: true })
+        const cachedUser = readCachedUser()
+        const optimisticUser = cachedUser ?? {
+          id: userId,
+          email: authData.user.email || normalizedInput,
+          full_name: (authData.user.user_metadata?.full_name as string | undefined) || normalizedInput,
+          role: cachedRole as User['role'],
+          organization_id: undefined,
+          is_active: true,
+          created_at: authData.user.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          notification_email: null,
+          last_login_at: new Date().toISOString(),
+        }
+
+        writeCachedUser(optimisticUser)
+        setState({ user: optimisticUser, isLoading: false, isInitializing: false, isAuthenticated: true })
         router.replace(getDefaultAppPathForRole(cachedRole as User['role']))
         // Hydrate full profile in background — updates state without blocking nav
         fetchUser().catch(() => {})

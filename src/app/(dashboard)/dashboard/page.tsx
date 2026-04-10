@@ -311,17 +311,215 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   )
 }
 
+function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
+  const { orders, total, isLoading } = useOrders({ page_size: 200 })
+  const activeOrders = orders.filter((order) => !['delivered', 'closed', 'cancelled', 'rejected'].includes(order.status)).length
+  const quotesReady = orders.filter((order) => order.status === 'quoted').length
+  const completedOrders = orders.filter((order) => ['delivered', 'closed'].includes(order.status)).length
+  const visibleValue = orders.reduce((sum, order) => sum + (order.quoted_amount || order.total_amount || 0), 0)
+  const recentOrders = orders.slice(0, 6)
+
+  const stats = [
+    { label: 'Total Orders', value: total, icon: ShoppingCart, tone: 'text-amber-200' },
+    { label: 'Active Orders', value: activeOrders, icon: Activity, tone: 'text-teal-200' },
+    { label: 'Quotes Ready', value: quotesReady, icon: ClipboardCheck, tone: 'text-sky-200' },
+    { label: 'Completed', value: completedOrders, icon: Truck, tone: 'text-emerald-200' },
+  ]
+
+  const quickActions = [
+    { href: '/orders/new/trade-in', label: 'New Trade-In', icon: Plus, description: 'Create an intake request for devices you want to sell.' },
+    { href: '/orders/new/cpo', label: 'New CPO Request', icon: Package, description: 'Request devices for purchase or resale demand.' },
+    { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, description: 'Track submitted, quoted, shipped, and completed orders.' },
+  ]
+
+  return (
+    <div className="relative space-y-8">
+      <section className="surface-panel relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8 lg:px-10">
+        <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
+        <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+          <div className="space-y-5">
+            <span className="eyebrow-label">Customer Workspace</span>
+            <div className="space-y-3">
+              <h1 className="editorial-title max-w-3xl text-4xl text-stone-100 sm:text-5xl">
+                Track every order, quote, and fulfillment update in one place.
+              </h1>
+              <p className="max-w-2xl text-base leading-7 text-stone-400 sm:text-lg">
+                Welcome back, {user.full_name || 'Customer'}. This dashboard is your front door for creating requests,
+                checking quote progress, and following device movement through the workflow.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/orders/new/trade-in">
+                <Button size="lg">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Trade-In
+                </Button>
+              </Link>
+              <Link href="/customer/orders">
+                <Button size="lg" variant="outline">
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  View My Orders
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            {quickActions.map((action) => (
+              <Link key={action.href} href={action.href}>
+                <div className="metric-tile h-full p-5 transition-transform duration-300 hover:-translate-y-1">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                    <action.icon className="h-5 w-5" />
+                  </div>
+                  <p className="mb-1 text-base font-semibold text-stone-100">{action.label}</p>
+                  <p className="text-sm leading-6 text-stone-400">{action.description}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat, index) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.08 }}
+            className="metric-tile p-6"
+          >
+            <div className="mb-8 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.18em] text-stone-500">{stat.label}</p>
+                <div className="mt-3 text-4xl font-semibold text-stone-50">
+                  {typeof stat.value === 'number' ? <AnimatedCounter value={stat.value} /> : stat.value}
+                </div>
+              </div>
+              <div className={stat.tone}>
+                <stat.icon className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="h-px w-full copper-line opacity-60" />
+          </motion.div>
+        ))}
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+          <CardHeader className="flex-row items-end justify-between space-y-0">
+            <div>
+              <CardTitle className="text-2xl text-stone-100">Recent Orders</CardTitle>
+              <CardDescription className="mt-2 text-stone-400">Your latest requests and their current status.</CardDescription>
+            </div>
+            <Link href="/customer/orders" className="text-sm text-primary hover:text-amber-200">
+              View all
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isLoading && (
+              <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center text-sm text-stone-500">
+                Loading your orders...
+              </div>
+            )}
+            {!isLoading && recentOrders.length === 0 && (
+              <div className="space-y-4 rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center">
+                <div>
+                  <p className="text-base font-semibold text-stone-100">No orders yet</p>
+                  <p className="mt-2 text-sm text-stone-500">
+                    Create your first request and it will start showing up here right away.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <Link href="/orders/new/trade-in">
+                    <Button>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Trade-In
+                    </Button>
+                  </Link>
+                  <Link href="/orders/new/cpo">
+                    <Button variant="outline">
+                      <Package className="mr-2 h-4 w-4" />
+                      Create CPO
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+            {!isLoading && recentOrders.map((order) => (
+              <Link key={order.id} href={`/orders/${order.id}`}>
+                <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-5 py-4 transition hover:bg-white/[0.05]">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="font-semibold text-stone-100">{order.order_number || 'Untitled Order'}</p>
+                      <p className="text-sm text-stone-400">
+                        {order.type === 'cpo' ? 'CPO workflow' : 'Trade-in workflow'} · Updated{' '}
+                        {formatRelativeTime(order.updated_at || order.created_at || new Date().toISOString())}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <StatusBadge
+                        status={order.status}
+                        label={ORDER_STATUS_CONFIG[order.status as keyof typeof ORDER_STATUS_CONFIG]?.label}
+                        dot
+                      />
+                      <ArrowRight className="h-4 w-4 text-stone-500" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+          <CardHeader>
+            <CardTitle className="text-2xl text-stone-100">At a Glance</CardTitle>
+            <CardDescription className="text-stone-400">A simple status read for the client-facing workflow.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Open Work</p>
+              <p className="text-lg font-semibold text-stone-100">{activeOrders} orders are still in progress.</p>
+              <p className="mt-2 text-sm leading-6 text-stone-400">
+                Draft, submitted, quoted, sourcing, shipping, receiving, and quality-check stages all count as active work.
+              </p>
+            </div>
+            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Quotes Visible</p>
+              <p className="text-lg font-semibold text-stone-100">{formatCurrency(visibleValue)} in visible order value.</p>
+              <p className="mt-2 text-sm leading-6 text-stone-400">
+                This rolls up quoted and finalized values from your accessible orders, so the dashboard stays useful even before fulfillment is complete.
+              </p>
+            </div>
+            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Next Step</p>
+              <p className="text-lg font-semibold text-stone-100">
+                {quotesReady > 0 ? `${quotesReady} quote${quotesReady !== 1 ? 's are' : ' is'} ready for review.` : 'No quotes are waiting on you right now.'}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-stone-400">
+                Use the dashboard as a real landing page instead of bouncing straight to the orders list, so new accounts still have a clean first-run experience.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const { user, isInitializing } = useAuth()
   const isInternal = user ? ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user.role) : false
+  const isCustomer = user?.role === 'customer'
   const targetPath = getDefaultAppPathForRole(user?.role)
 
   useEffect(() => {
-    if (!isInitializing && user && !isInternal) {
+    if (!isInitializing && user && !isInternal && !isCustomer) {
       router.replace(targetPath)
     }
-  }, [isInitializing, isInternal, router, targetPath, user])
+  }, [isCustomer, isInitializing, isInternal, router, targetPath, user])
 
   if (isInitializing || !user) {
     return (
@@ -329,6 +527,10 @@ export default function DashboardPage() {
         Loading your workspace...
       </div>
     )
+  }
+
+  if (isCustomer) {
+    return <CustomerDashboard user={user} />
   }
 
   if (!isInternal) {

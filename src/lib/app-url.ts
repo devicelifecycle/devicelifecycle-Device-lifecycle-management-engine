@@ -17,6 +17,17 @@ function toAbsoluteUrl(value?: string | null): string | null {
   return trimTrailingSlash(`https://${trimmed}`)
 }
 
+function isLocalOrigin(origin: string | null): boolean {
+  if (!origin) return false
+
+  try {
+    const { hostname } = new URL(origin)
+    return ['localhost', '127.0.0.1', '0.0.0.0'].includes(hostname)
+  } catch {
+    return false
+  }
+}
+
 function getRequestOrigin(request?: RequestLike | null): string | null {
   if (!request) return null
 
@@ -41,7 +52,14 @@ function getRequestOrigin(request?: RequestLike | null): string | null {
 
 export function getAppUrl(request?: RequestLike | null): string {
   const requestOrigin = getRequestOrigin(request)
-  if (requestOrigin) return requestOrigin
+  const configuredUrl =
+    toAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
+    toAbsoluteUrl(process.env.APP_URL) ||
+    toAbsoluteUrl(process.env.SITE_URL) ||
+    toAbsoluteUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL) ||
+    toAbsoluteUrl(process.env.VERCEL_URL)
+
+  if (requestOrigin && !isLocalOrigin(requestOrigin)) return requestOrigin
 
   if (process.env.VERCEL_ENV === 'preview') {
     const previewUrl =
@@ -50,12 +68,11 @@ export function getAppUrl(request?: RequestLike | null): string {
     if (previewUrl) return previewUrl
   }
 
-  const configuredUrl =
-    toAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
-    toAbsoluteUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL) ||
-    toAbsoluteUrl(process.env.VERCEL_URL)
+  if (configuredUrl) return configuredUrl
 
-  return configuredUrl || 'http://localhost:3000'
+  if (requestOrigin) return requestOrigin
+
+  return 'http://localhost:3000'
 }
 
 export function getAppPath(path: string, request?: RequestLike | null): string {

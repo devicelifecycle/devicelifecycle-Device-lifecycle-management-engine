@@ -2,6 +2,8 @@ import { getAppPath, getAppUrl } from '@/lib/app-url'
 
 const trackedEnvKeys = [
   'NEXT_PUBLIC_APP_URL',
+  'APP_URL',
+  'SITE_URL',
   'VERCEL_ENV',
   'VERCEL_BRANCH_URL',
   'VERCEL_URL',
@@ -40,6 +42,19 @@ describe('app url helpers', () => {
 
     expect(getAppUrl(request)).toBe('https://preview-feature.vercel.app')
     expect(getAppPath('/login', request)).toBe('https://preview-feature.vercel.app/login')
+  })
+
+  it('uses the configured public app url when the incoming request is localhost', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://prod.example.com'
+
+    const request = new Request('http://localhost:3000/api/auth/forgot-password', {
+      headers: {
+        host: 'localhost:3000',
+      },
+    })
+
+    expect(getAppUrl(request)).toBe('https://prod.example.com')
+    expect(getAppPath('/reset-password', request)).toBe('https://prod.example.com/reset-password')
   })
 
   it('prefers the branch preview url on Vercel preview deployments', () => {

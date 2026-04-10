@@ -60,6 +60,24 @@ test.describe('Critical flows', () => {
       await page.goto('/customer/requests')
       await expect(page).toHaveURL(/\/customer\/requests/)
     })
+
+    test('org-linked customer can create a trade-in order', async ({ page }) => {
+      test.setTimeout(90000)
+      await loginAs(page, 'acme')
+      await page.goto('/orders/new', { waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/orders\/new/)
+
+      await page.getByRole('button', { name: /trade-in item/i }).click()
+
+      const comboboxes = page.locator('[role="combobox"]')
+      await comboboxes.nth(1).click()
+      await page.getByRole('option').first().click()
+
+      await page.getByRole('button', { name: /^create order$/i }).click()
+
+      await page.waitForURL(/\/orders\/[0-9a-f-]+/i, { timeout: 60000, waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/orders\/[0-9a-f-]+/i)
+    })
   })
 
   test.describe('Vendor', () => {

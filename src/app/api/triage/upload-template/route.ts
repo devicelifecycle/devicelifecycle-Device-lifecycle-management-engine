@@ -96,6 +96,28 @@ function fuzzyContains(haystack: string, needle: string): boolean {
   return false
 }
 
+function normalizeStorage(value?: string | null): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/gigabytes?/g, 'gb')
+    .replace(/terabytes?/g, 'tb')
+    .trim()
+}
+
+function extractOrderRef(value?: string | null): string | null {
+  if (!value) return null
+  const match = value.toUpperCase().match(/\b(PO|INV|ORD|QUO|TRD|CPO)-[A-Z0-9-]+\b/)
+  return match?.[0] ?? null
+}
+
+function haveCompatibleModelNumbers(a: string, b: string): boolean {
+  const aNumbers: string[] = a.match(/\d+/g) ?? []
+  const bNumbers: string[] = b.match(/\d+/g) ?? []
+  if (aNumbers.length === 0 || bNumbers.length === 0) return true
+  return aNumbers.some((value) => bNumbers.includes(value))
+}
+
 // CSV parser (handles quoted cells and commas inside quotes)
 function parseCsvLine(line: string): string[] {
   const cells: string[] = []
@@ -248,21 +270,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No data rows found in file' }, { status: 400 })
     }
 
+    const requestedOrderId = String(formData.get('order_id') ?? '').trim()
+    const requestedOrderRef = extractOrderRef(String(formData.get('order_ref') ?? '').trim())
+
     // ── Auto-detect order/quote number ─────────────────────────────────────
-    let detectedRef: string | null = null
-    const refFromCol = rows.find(r => r.order_ref)?.order_ref ?? null
-    if (refFromCol) {
+    let detectedRef: string | null = requestedOrderRef
+    const refFromCol = extractOrderRef(rows.find(r => r.order_ref)?.order_ref ?? null)
+    if (!detectedRef && refFromCol) {
       detectedRef = refFromCol
-    } else {
+    } else if (!detectedRef) {
       for (const row of rows) {
         for (const val of Object.values(row.raw)) {
-          if (/^(ORD|QUO|TRD|CPO)-\d+$/i.test(val.trim())) {
-            detectedRef = val.trim().toUpperCase()
+          const ref = extractOrderRef(val)
+          if (ref) {
+            detectedRef = ref
             break
           }
         }
         if (detectedRef) break
       }
+    }
+
+    if (!detectedRef) {
+      detectedRef = extractOrderRef(file.name)
     }
 
     // ── Look up the order ──────────────────────────────────────────────────
@@ -286,8 +316,8 @@ export async function POST(request: NextRequest) {
       items: OrderItem[]
     } | null = null
 
-    if (detectedRef) {
-      const { data: orders } = await supabase
+    if (requestedOrderId || detectedRef) {
+      const orderQuery = supabase
         .from('orders')
         .select(`
           id, order_number, status, total_quantity, quoted_amount,
@@ -296,8 +326,11 @@ export async function POST(request: NextRequest) {
             device:device_catalog(make, model)
           )
         `)
-        .ilike('order_number', detectedRef)
         .limit(1)
+
+      const { data: orders } = requestedOrderId
+        ? await orderQuery.eq('id', requestedOrderId)
+        : await orderQuery.ilike('order_number', detectedRef!)
 
       if (orders?.[0]) {
         const raw = orders[0] as Record<string, unknown>
@@ -312,6 +345,7 @@ export async function POST(request: NextRequest) {
             device: Array.isArray(i.device) ? (i.device[0] ?? null) : (i.device ?? null),
           })),
         }
+        detectedRef = order.order_number
       }
     }
 
@@ -345,59 +379,99 @@ export async function POST(request: NextRequest) {
 
     // ── Match rows against order items ─────────────────────────────────────
     type RowResult = ParsedRow & {
-      match_status: 'matched' | 'condition_mismatch' | 'not_in_order'
+      match_status: 'matched' | 'condition_mismatch' | 'not_in_order' | 'catalog_matched' | 'not_in_catalog'
       matched_item?: OrderItem
       quoted_price?: number | null
       device_id?: string | null
     }
 
-    const results: RowResult[] = rows.map(row => {
-      const makeLower = (row.brand ?? '').toLowerCase()
-      const modelLower = (row.model ?? '').toLowerCase()
+    const matchedCounts = new Map<string, number>()
+
+    const results: RowResult[] = rows.map((row) => {
+      const makeLower = (row.brand ?? '').toLowerCase().trim()
+      const modelLower = (row.model ?? '').toLowerCase().trim()
       const deviceKey = `${makeLower}|${modelLower}`
       const device_id = deviceLookupMap.get(deviceKey) ?? null
 
-      // No order found — resolve device from catalog so user can still import
+      // No order found — keep catalog recognition separate from true order matches
       if (!order) {
         return {
           ...row,
           device_id,
-          match_status: device_id ? 'matched' as const : 'not_in_order' as const,
+          match_status: device_id ? 'catalog_matched' : 'not_in_catalog',
         }
       }
 
-      // Match order item by fuzzy make+model
-      let matched = order.items.find(i => {
-        const d = i.device
-        if (!d) return false
-        const dm = d.make.toLowerCase()
-        const dmod = d.model.toLowerCase()
-        const makeMatch = !makeLower || fuzzyContains(dm, makeLower) || fuzzyContains(makeLower, dm)
-        const modelMatch = !modelLower || fuzzyContains(dmod, modelLower) || fuzzyContains(modelLower, dmod)
-        return makeMatch && modelMatch
-      }) ?? null
+      const rowStorage = normalizeStorage(row.storage)
 
-      // If only one order item, assign to it regardless of make/model
-      if (!matched && order.items.length === 1) matched = order.items[0]
+      const candidates = order.items
+        .map((item) => {
+          const assignedCount = matchedCounts.get(item.id) ?? 0
+          const remainingQty = Math.max((item.quantity || 1) - assignedCount, 0)
+          const itemStorage = normalizeStorage(item.storage)
+          const itemDevice = item.device
+          const itemMake = itemDevice?.make?.toLowerCase().trim() ?? ''
+          const itemModel = itemDevice?.model?.toLowerCase().trim() ?? ''
+
+          const sameDeviceId = Boolean(device_id && item.device_id && device_id === item.device_id)
+          const makeMatch = !makeLower || fuzzyContains(itemMake, makeLower) || fuzzyContains(makeLower, itemMake)
+          const modelMatch = !modelLower || fuzzyContains(itemModel, modelLower) || fuzzyContains(modelLower, itemModel)
+          const modelNumberMatch = haveCompatibleModelNumbers(itemModel, modelLower)
+          const storageMatch = !rowStorage || !itemStorage || rowStorage === itemStorage || rowStorage.includes(itemStorage) || itemStorage.includes(rowStorage)
+
+          if (!sameDeviceId && (!makeMatch || !modelMatch || !modelNumberMatch || !storageMatch)) {
+            return { item, score: -1, remainingQty }
+          }
+
+          let score = 0
+          if (sameDeviceId) score += 10
+          if (makeMatch) score += 3
+          if (modelMatch) score += 5
+          if (storageMatch) score += 2
+          if (row.condition && item.claimed_condition && row.condition === item.claimed_condition) score += 1
+          if (remainingQty > 0) score += 1
+
+          return { item, score, remainingQty }
+        })
+        .filter((candidate) => candidate.score >= 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score
+          return b.remainingQty - a.remainingQty
+        })
+
+      const bestCandidate = candidates.find((candidate) => candidate.remainingQty > 0) ?? candidates[0] ?? null
+      const matched = bestCandidate?.item ?? null
 
       if (!matched) {
-        return { ...row, device_id, match_status: 'not_in_order' as const }
+        return { ...row, device_id, match_status: 'not_in_order' }
       }
 
-      // Resolve device_id from matched order item if not in catalog lookup
-      const resolvedDeviceId = device_id ?? matched.device_id
+      matchedCounts.set(matched.id, (matchedCounts.get(matched.id) ?? 0) + 1)
 
-      const conditionMismatch = row.condition && matched.claimed_condition &&
-        row.condition !== matched.claimed_condition
+      const resolvedDeviceId = device_id ?? matched.device_id
+      const conditionMismatch = Boolean(row.condition && matched.claimed_condition && row.condition !== matched.claimed_condition)
 
       return {
         ...row,
         device_id: resolvedDeviceId,
-        match_status: conditionMismatch ? 'condition_mismatch' as const : 'matched' as const,
+        match_status: conditionMismatch ? 'condition_mismatch' : 'matched',
         matched_item: matched,
         quoted_price: matched.quoted_price,
       }
     })
+
+    const matchedCount = results.filter((row) => row.match_status === 'matched').length
+    const conditionMismatchCount = results.filter((row) => row.match_status === 'condition_mismatch').length
+    const orderMatchedCount = matchedCount + conditionMismatchCount
+    const catalogMatchedCount = results.filter((row) => row.match_status === 'catalog_matched').length
+    const notInOrderCount = results.filter((row) => row.match_status === 'not_in_order').length
+    const notInCatalogCount = results.filter((row) => row.match_status === 'not_in_catalog').length
+    const readyToImportCount = results.filter((row) => {
+      if (!row.imei || !row.device_id) return false
+      return order
+        ? row.match_status === 'matched' || row.match_status === 'condition_mismatch'
+        : row.match_status === 'catalog_matched'
+    }).length
 
     return NextResponse.json({
       detected_ref: detectedRef,
@@ -410,9 +484,13 @@ export async function POST(request: NextRequest) {
       } : null,
       rows: results,
       total: results.length,
-      matched: results.filter(r => r.match_status === 'matched').length,
-      condition_mismatches: results.filter(r => r.match_status === 'condition_mismatch').length,
-      not_in_order: results.filter(r => r.match_status === 'not_in_order').length,
+      matched: matchedCount,
+      order_matched: orderMatchedCount,
+      catalog_matched: catalogMatchedCount,
+      ready_to_import: readyToImportCount,
+      condition_mismatches: conditionMismatchCount,
+      not_in_order: notInOrderCount,
+      not_in_catalog: notInCatalogCount,
       columns_detected: Object.keys(
         (() => {
           const idx: Record<string, number> = {}
