@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save } from 'lucide-react'
@@ -60,6 +61,7 @@ export default function DeviceDetailPage() {
   }, [params.id, router])
 
   useEffect(() => { fetchDevice() }, [fetchDevice])
+  useOnDbChange(fetchDevice)
 
   const handleSave = async () => {
     setIsSaving(true)

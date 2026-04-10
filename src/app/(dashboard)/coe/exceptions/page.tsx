@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import { AlertTriangle, CheckCircle2, XCircle, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -47,6 +48,7 @@ export default function COEExceptionsPage() {
   }, [])
 
   useEffect(() => { fetchExceptions() }, [fetchExceptions])
+  useOnDbChange(fetchExceptions)
 
   const handleDecision = async () => {
     if (!selected || !action) return

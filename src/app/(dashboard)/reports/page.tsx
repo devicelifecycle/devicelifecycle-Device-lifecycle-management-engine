@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
 import { BarChart3, ShoppingCart, DollarSign, Truck, AlertTriangle, TrendingUp, Clock, CheckCircle2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -74,6 +75,7 @@ export default function ReportsPage() {
   }, [])
 
   useEffect(() => { fetchStats() }, [fetchStats])
+  useOnDbChange(fetchStats)
 
   if (isLoading) {
     return (

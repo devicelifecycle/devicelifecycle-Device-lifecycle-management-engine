@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import { FileText, Download, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -66,6 +67,7 @@ export default function AdminAuditLogPage() {
   }, [page, filters])
 
   useEffect(() => { fetchLogs() }, [fetchLogs])
+  useOnDbChange(fetchLogs)
 
   const handleExportCSV = async () => {
     try {

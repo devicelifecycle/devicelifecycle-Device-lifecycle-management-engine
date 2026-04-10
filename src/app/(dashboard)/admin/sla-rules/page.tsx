@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import { Plus, Clock, AlertTriangle, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -65,6 +66,7 @@ export default function AdminSLARulesPage() {
   }, [])
 
   useEffect(() => { fetchRules() }, [fetchRules])
+  useOnDbChange(fetchRules)
 
   const handleCreate = async () => {
     setCreating(true)
