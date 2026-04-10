@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
         .from('shipments')
         .select('*, order:orders(order_number, type, status)')
         .order('created_at', { ascending: false })
+        .limit(500)
 
       if (error) throw error
       shipments = data
