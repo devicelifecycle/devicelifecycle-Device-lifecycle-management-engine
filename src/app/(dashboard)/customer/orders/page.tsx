@@ -24,19 +24,21 @@ export default function CustomerOrdersPage() {
     search: debouncedSearch,
     page,
     page_size: 20,
+    sort_by: 'updated_at',
+    sort_order: 'desc',
   })
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">My Orders</h1>
-        <p className="text-muted-foreground mt-1">Track orders and accept or reject quotes sent to you</p>
+        <p className="text-muted-foreground mt-1">Track quotes and order updates.</p>
       </div>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search by order number, IMEI, or serial number..."
+          placeholder="Search orders, IMEI, or serial..."
           className="pl-10 bg-background"
           value={search}
           onChange={(event) => {
@@ -48,7 +50,7 @@ export default function CustomerOrdersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Organization Orders</CardTitle>
+          <CardTitle className="text-base">Orders</CardTitle>
           <CardDescription>{total} total order{total === 1 ? '' : 's'}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -100,7 +102,7 @@ export default function CustomerOrdersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium whitespace-nowrap">
-                        {formatCurrency(order.total_amount || 0)}
+                        {formatCurrency(order.quoted_amount ?? order.total_amount ?? 0)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {formatRelativeTime(order.updated_at || order.created_at)}

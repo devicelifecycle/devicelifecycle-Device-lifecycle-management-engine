@@ -5,18 +5,17 @@
 // Apple / GoRecell / UniverCell-inspired multi-step flow
 // ============================================================================
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Smartphone, Tablet, Laptop, Package,
   ChevronRight, ChevronLeft, Check, Loader2,
-  Search, Sparkles, ShieldCheck, Banknote,
+  Search, ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { CONDITION_CONFIG, STORAGE_OPTIONS, DEVICE_BRANDS } from '@/lib/constants'
-import { formatCurrency } from '@/lib/utils'
+import { STORAGE_OPTIONS, DEVICE_BRANDS } from '@/lib/constants'
 import type { DeviceCondition } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -30,13 +29,6 @@ interface WizardDevice {
   model: string
   category: string
   storage_options?: string[]
-}
-
-interface QuoteResult {
-  unit_price: number
-  cpo_unit_price: number
-  source: string
-  competitor_count: number
 }
 
 interface WizardProps {
@@ -211,10 +203,6 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
   // Data
   const [allDevices, setAllDevices] = useState<WizardDevice[]>([])
   const [modelSearch, setModelSearch] = useState('')
-  const [quote, setQuote] = useState<QuoteResult | null>(null)
-  const [quoteLoading, setQuoteLoading] = useState(false)
-  const [quoteRevealed, setQuoteRevealed] = useState(false)
-  const latestQuoteRequestRef = useRef(0)
 
   // Load device catalog
   useEffect(() => {
@@ -226,50 +214,6 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
       })
       .catch(() => {})
   }, [])
-
-  // Fetch quote when condition + device are set
-  useEffect(() => {
-    if (!device || !condition || !storage) {
-      latestQuoteRequestRef.current += 1
-      setQuote(null)
-      setQuoteLoading(false)
-      return
-    }
-    setQuoteLoading(true)
-    setQuoteRevealed(false)
-    const requestId = latestQuoteRequestRef.current + 1
-    latestQuoteRequestRef.current = requestId
-
-    const mapped = condition === 'new' || condition === 'excellent'
-      ? 'excellent' : condition === 'fair' ? 'fair'
-      : condition === 'poor' ? 'broken' : 'good'
-
-    fetch('/api/pricing/calculate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id: device.id, condition: mapped, storage }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (latestQuoteRequestRef.current !== requestId) return
-        setQuote({
-          unit_price: data.unit_price ?? 0,
-          cpo_unit_price: data.cpo_unit_price ?? 0,
-          source: data.source ?? 'estimate',
-          competitor_count: data.competitor_count ?? 0,
-        })
-        // Small delay then reveal with animation
-        setTimeout(() => {
-          if (latestQuoteRequestRef.current === requestId) setQuoteRevealed(true)
-        }, 400)
-      })
-      .catch(() => {
-        if (latestQuoteRequestRef.current === requestId) setQuote(null)
-      })
-      .finally(() => {
-        if (latestQuoteRequestRef.current === requestId) setQuoteLoading(false)
-      })
-  }, [device, condition, storage])
 
   const go = useCallback((next: number) => {
     setDir(next > step ? 1 : -1)
@@ -292,8 +236,6 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
   const storageOptions = device?.storage_options?.length
     ? device.storage_options
     : STORAGE_OPTIONS
-
-  const totalValue = quote ? quote.unit_price * quantity : null
 
   async function handleSubmit() {
     if (!device || !condition || !storage || !customerId) return
@@ -321,7 +263,7 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400 mb-0.5">
                 Trade-In Request
               </p>
-              <h1 className="text-lg font-bold text-stone-900">Get an instant quote</h1>
+              <h1 className="text-lg font-bold text-stone-900">Create your trade-in request</h1>
             </div>
             <div className="flex items-center gap-2 text-xs text-stone-400">
               <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
@@ -510,9 +452,6 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {CONDITION_CARDS.map(card => {
                     const active = condition === card.id
-                    const baseEstimate = quote?.unit_price && condition === card.id
-                      ? null
-                      : null
                     return (
                       <button
                         key={card.id}
@@ -558,11 +497,11 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                 transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}>
                 <SectionTitle
                   eyebrow="Step 5 of 5"
-                  title="Your instant quote"
-                  subtitle="Review the details below and submit your trade-in request."
+                  title="Review your request"
+                  subtitle="Submit now and we'll review the device before sending your quote."
                 />
 
-                {/* Quote card */}
+                {/* Request summary */}
                 <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden mb-6 shadow-sm">
                   {/* Device summary */}
                   <div className="px-6 py-5 border-b border-stone-100">
@@ -589,70 +528,30 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
                     </div>
                   </div>
 
-                  {/* Quote reveal */}
                   <div className="px-6 py-6">
-                    {quoteLoading ? (
-                      <div className="flex items-center gap-3 text-stone-400">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span className="text-sm">Calculating your quote…</span>
-                      </div>
-                    ) : quote ? (
-                      <AnimatePresence>
-                        {quoteRevealed && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                          >
-                            <div className="flex items-end justify-between">
-                              <div>
-                                <p className="text-xs text-stone-400 uppercase tracking-wider font-semibold mb-1">
-                                  Estimated Trade-In Value
-                                </p>
-                                <div className="flex items-baseline gap-2">
-                                  <span className="text-4xl font-black text-stone-900 tracking-tight">
-                                    {formatCurrency(quote.unit_price * quantity)}
-                                  </span>
-                                  {quantity > 1 && (
-                                    <span className="text-sm text-stone-400">
-                                      ({formatCurrency(quote.unit_price)} each)
-                                    </span>
-                                  )}
-                                </div>
-                                {quote.competitor_count > 0 && (
-                                  <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
-                                    <Sparkles className="w-3 h-3" />
-                                    Based on {quote.competitor_count} competitor prices
-                                  </p>
-                                )}
-                              </div>
-                              <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                transition={{ delay: 0.2, type: 'spring', stiffness: 300, damping: 20 }}
-                                className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center"
-                              >
-                                <Check className="w-6 h-6 text-green-600" />
-                              </motion.div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    ) : (
-                      <p className="text-sm text-stone-400">Quote unavailable — our team will follow up with pricing.</p>
-                    )}
+                    <div className="rounded-2xl bg-stone-50 px-4 py-4">
+                      <p className="text-xs text-stone-400 uppercase tracking-wider font-semibold mb-1">
+                        Quote Timing
+                      </p>
+                      <p className="text-base font-semibold text-stone-900">
+                        Pricing is shared after review.
+                      </p>
+                      <p className="mt-1 text-sm text-stone-500">
+                        Our team will inspect the request and send the official quote in your order.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 {/* Trust signals */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
                   {[
-                    { icon: ShieldCheck, label: 'Data wiped before resale' },
-                    { icon: Banknote, label: 'Payment within 5 business days' },
+                    { icon: ShieldCheck, label: 'Secure device intake' },
+                    { icon: Loader2, label: 'Reviewed by our team' },
                     { icon: Package, label: 'Free prepaid shipping label' },
                   ].map(({ icon: Icon, label }) => (
                     <div key={label} className="flex flex-col items-center gap-1.5 rounded-xl bg-white border border-stone-200 p-4 text-center">
-                      <Icon className="w-5 h-5 text-[#b35a21]" />
+                      <Icon className={cn('w-5 h-5 text-[#b35a21]', label === 'Reviewed by our team' && 'animate-spin-slow')} />
                       <span className="text-[11px] text-stone-500 font-medium leading-tight">{label}</span>
                     </div>
                   ))}

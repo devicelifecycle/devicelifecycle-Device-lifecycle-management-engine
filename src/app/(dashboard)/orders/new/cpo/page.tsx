@@ -91,6 +91,7 @@ export default function NewCPOOrderPage() {
   const { user } = useAuth()
   const { create, isCreating } = useOrders()
   const { customers } = useCustomers()
+  const isCustomer = user?.role === 'customer'
   const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
   const [devices, setDevices] = useState<Device[]>([])
   const [customerId, setCustomerId] = useState('')
@@ -111,6 +112,12 @@ export default function NewCPOOrderPage() {
   useEffect(() => {
     fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (isCustomer) {
+      router.replace('/orders/new')
+    }
+  }, [isCustomer, router])
 
   const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, beatModeArg?: 'amount' | 'percent', beatValArg?: string) => {
     if (!isInternal) return
@@ -238,6 +245,14 @@ export default function NewCPOOrderPage() {
     if (!p) return 0
     if (p.manual_price !== '' && !Number.isNaN(parseFloat(p.manual_price))) return parseFloat(p.manual_price)
     return p.engine_cpo_price
+  }
+
+  if (isCustomer) {
+    return (
+      <div className="mx-auto max-w-2xl rounded-2xl border bg-background p-8 text-center">
+        <p className="text-sm text-muted-foreground">Opening the customer order form...</p>
+      </div>
+    )
   }
 
   const handleDownloadCpoTemplate = () => {

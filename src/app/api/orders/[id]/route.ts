@@ -68,9 +68,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // Vendor can only access orders for their organization and only gets fulfillment-safe data.
+    // Vendor can access:
+    // 1. Orders assigned to their organization
+    // 2. Open CPO sourcing orders that are broadcast to all vendors for bidding
+    // In both cases they only receive fulfillment-safe data.
     if (role === 'vendor') {
-      if (order.vendor?.organization_id === organization_id) {
+      const isAssignedVendorOrder = order.vendor?.organization_id === organization_id
+      const isOpenVendorBidOrder =
+        order.type === 'cpo' &&
+        !order.vendor_id &&
+        ['accepted', 'sourcing'].includes(order.status)
+
+      if (isAssignedVendorOrder || isOpenVendorBidOrder) {
         return NextResponse.json(sanitizeOrderForVendor(order))
       }
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })

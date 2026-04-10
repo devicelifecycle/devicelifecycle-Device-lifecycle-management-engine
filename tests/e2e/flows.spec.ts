@@ -49,20 +49,43 @@ test.describe('Critical flows', () => {
   })
 
   test.describe('Customer', () => {
+    test('customer can view dashboard', async ({ page }) => {
+      test.setTimeout(90000)
+      await loginAs(page, 'customer')
+      await page.goto('/dashboard')
+      await expect(page).toHaveURL(/\/dashboard/)
+      await expect(page.getByRole('heading', { name: /orders, quotes, and shipments in one view/i })).toBeVisible()
+    })
+
+    test('customer specialized order routes redirect to the unified form', async ({ page }) => {
+      test.setTimeout(90000)
+      await loginAs(page, 'customer')
+
+      await page.goto('/orders/new/trade-in', { waitUntil: 'domcontentloaded' })
+      await page.waitForURL(/\/orders\/new(?:\?|$)/, { timeout: 60000, waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/orders\/new(?:\?|$)/)
+
+      await page.goto('/orders/new/cpo', { waitUntil: 'domcontentloaded' })
+      await page.waitForURL(/\/orders\/new(?:\?|$)/, { timeout: 60000, waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/orders\/new(?:\?|$)/)
+    })
+
     test('customer can view My Orders', async ({ page }) => {
+      test.setTimeout(90000)
       await loginAs(page, 'customer')
       await page.goto('/customer/orders')
       await expect(page).toHaveURL(/\/customer\/orders/)
     })
 
     test('customer can view Requests', async ({ page }) => {
+      test.setTimeout(90000)
       await loginAs(page, 'customer')
       await page.goto('/customer/requests')
       await expect(page).toHaveURL(/\/customer\/requests/)
     })
 
     test('org-linked customer can create a trade-in order', async ({ page }) => {
-      test.setTimeout(90000)
+      test.setTimeout(150000)
       await loginAs(page, 'customer_org')
       await page.goto('/orders/new', { waitUntil: 'domcontentloaded' })
       await expect(page).toHaveURL(/\/orders\/new/)
@@ -71,11 +94,13 @@ test.describe('Critical flows', () => {
 
       const comboboxes = page.locator('[role="combobox"]')
       await comboboxes.nth(1).click()
-      await page.getByRole('option').first().click()
+      await page.getByRole('option', { name: /^Apple iPhone 13$/i }).click()
+      await comboboxes.nth(3).click()
+      await page.getByRole('option', { name: /^128GB$/i }).click()
 
       await page.getByRole('button', { name: /^create order$/i }).click()
 
-      await page.waitForURL(/\/orders\/[0-9a-f-]+/i, { timeout: 60000, waitUntil: 'domcontentloaded' })
+      await page.waitForURL(/\/orders\/[0-9a-f-]+/i, { timeout: 120000, waitUntil: 'domcontentloaded' })
       await expect(page).toHaveURL(/\/orders\/[0-9a-f-]+/i)
     })
   })

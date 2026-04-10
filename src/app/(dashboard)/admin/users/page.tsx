@@ -147,7 +147,12 @@ export default function AdminUsersPage() {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Failed to delete user')
       }
-      toast.success(`${deleteTarget.full_name} permanently deleted`)
+      const payload = await res.json().catch(() => ({}))
+      toast.success(
+        payload?.archived
+          ? `${deleteTarget.full_name} removed from active users`
+          : `${deleteTarget.full_name} permanently deleted`
+      )
       setDeleteTarget(null)
       fetchUsers()
     } catch (e) {

@@ -8,23 +8,25 @@ import { useOrders } from '@/hooks/useOrders'
 import { formatRelativeTime } from '@/lib/utils'
 
 export default function CustomerRequestsPage() {
-  const { orders, isLoading } = useOrders({ page: 1, page_size: 5, type: 'trade_in' })
+  const { orders, isLoading } = useOrders({
+    page: 1,
+    page_size: 5,
+    type: 'trade_in',
+    sort_by: 'updated_at',
+    sort_order: 'desc',
+  })
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Requests</h1>
-        <p className="text-muted-foreground mt-1">
-          Submit trade-in requests. We&apos;ll send you a quote — then accept or reject in My Orders.
-        </p>
+        <p className="text-muted-foreground mt-1">Create and review trade-in requests.</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Create New Order</CardTitle>
-          <CardDescription>
-            Submit devices for trade-in or CPO purchase. Once quoted, go to My Orders to accept or reject.
-          </CardDescription>
+          <CardDescription>Start a new request or open your orders.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
           <Link href="/orders/new">
@@ -45,7 +47,7 @@ export default function CustomerRequestsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Recent Requests</CardTitle>
-          <CardDescription>Your latest trade-in requests</CardDescription>
+          <CardDescription>Latest trade-in activity</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
