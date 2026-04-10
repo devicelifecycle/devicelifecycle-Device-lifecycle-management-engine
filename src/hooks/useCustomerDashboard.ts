@@ -28,6 +28,7 @@ export function useCustomerDashboard() {
     queryKey: ['customer-dashboard'],
     queryFn: fetchCustomerDashboard,
     refetchInterval: 30 * 1000,
+    retry: 1,
   })
 
   return {
