@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   ClipboardCheck, Search, AlertTriangle, CheckCircle2, Plus, Smartphone,
   Loader2, ShieldAlert, ShieldCheck, ShieldQuestion, Hash, FileText,
-  Upload, X, CheckCircle, XCircle, AlertCircle, PackageSearch, Trash2, Download,
+  Upload, X, CheckCircle, XCircle, AlertCircle, PackageSearch, Trash2, Download, FileSpreadsheet,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -24,11 +24,45 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Separator } from '@/components/ui/separator'
 import { useDebounce } from '@/hooks/useDebounce'
 import { TRIAGE_CHECKLIST_ITEMS, COMMON_DEVICE_ISSUES, CONDITION_CONFIG } from '@/lib/constants'
+import { buildCsvContent, buildXlsxTemplateBlob } from '@/lib/csv-templates'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import type { IMEIRecord, DeviceCondition, Device } from '@/types'
 
 const conditions: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
 const screenConditions = ['good', 'cracked', 'damaged', 'dead'] as const
+const TRIAGE_TEMPLATE_HEADERS = [
+  'order_number',
+  'imei',
+  'serial_number',
+  'make',
+  'model',
+  'storage',
+  'condition',
+  'color',
+  'battery_health',
+  'sim_lock',
+  'locked_carrier',
+  'device_cost',
+  'repair_cost',
+  'quantity',
+  'notes',
+] as const
+const TRIAGE_TEMPLATE_SAMPLE = [
+  ['PO-2026-0001', '359876543210001', 'SN-DEMO-001', 'Apple', 'iPhone 13', '128GB', 'good', 'Blue', '87', 'Unlocked', '', '0', '0', '1', 'Demo matched device'],
+  ['PO-2026-0001', '359876543210002', 'SN-DEMO-002', 'Apple', 'iPhone 14', '128GB', 'fair', 'Black', '79', 'Locked', 'Bell', '0', '89', '1', 'Condition review example'],
+  ['', '359876543210003', 'SN-DEMO-003', 'Samsung', 'Galaxy S24', '256GB', 'excellent', 'Onyx Black', '92', 'Unlocked', '', '0', '0', '1', 'Catalog-only sample row'],
+] as const
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 type ImeiLookupResult = {
   imei: string
@@ -355,6 +389,27 @@ export default function COETriagePage() {
     a.click()
     URL.revokeObjectURL(url)
     toast.success(`Exported ${pendingItems.length} items`)
+  }
+
+  const handleDownloadTriageTemplateCsv = () => {
+    const csvContent = buildCsvContent(TRIAGE_TEMPLATE_HEADERS, TRIAGE_TEMPLATE_SAMPLE.map((row) => [...row]))
+    downloadBlob(
+      new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }),
+      `triage-template-${new Date().toISOString().slice(0, 10)}.csv`,
+    )
+  }
+
+  const handleDownloadTriageTemplateExcel = async () => {
+    try {
+      const blob = await buildXlsxTemplateBlob(
+        'Triage Template',
+        TRIAGE_TEMPLATE_HEADERS,
+        TRIAGE_TEMPLATE_SAMPLE.map((row) => [...row]),
+      )
+      downloadBlob(blob, `triage-template-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to build Excel template')
+    }
   }
 
   // ── Add device dialog state ──────────────────────────────────────────────
@@ -1153,23 +1208,36 @@ export default function COETriagePage() {
       {/* ── Template File Upload ────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <CardTitle className="text-sm flex items-center gap-2">
                 <Upload className="h-4 w-4 text-muted-foreground" />
                 Upload Device List (CSV / Excel)
               </CardTitle>
               <CardDescription className="text-xs mt-1">
-                Upload CSV or Excel (.xlsx) with IMEI, make, model, condition. Order number auto-detected. Spelling mistakes auto-corrected.
+                Upload CSV or Excel (.xlsx) with IMEI, make, model, condition, and optionally `order_number` for auto-linking.
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={handleDownloadTriageData} className="flex items-center gap-1.5 text-xs shrink-0">
-              <Download className="h-3.5 w-3.5" />
-              Export Queue
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={handleDownloadTriageTemplateCsv} className="flex items-center gap-1.5 text-xs shrink-0">
+                <Download className="h-3.5 w-3.5" />
+                CSV Template
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDownloadTriageTemplateExcel} className="flex items-center gap-1.5 text-xs shrink-0">
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Excel Template
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDownloadTriageData} className="flex items-center gap-1.5 text-xs shrink-0">
+                <Download className="h-3.5 w-3.5" />
+                Export Queue
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Sample downloads include filled rows so you can demo order-linked matching and catalog-only imports immediately.
+          </p>
           <div className="flex items-center gap-3">
             <label className="cursor-pointer">
               <input

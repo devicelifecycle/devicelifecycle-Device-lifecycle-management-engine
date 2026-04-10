@@ -30,6 +30,8 @@ interface AuthContextValue extends AuthState {
 }
 
 const AUTH_CACHE_KEY = '__dlm_auth_user'
+const ROLE_COOKIE = 'dlm_role'
+const USER_ID_COOKIE = 'dlm_uid'
 
 // Module-level singleton — stable reference, never recreated
 const supabase = createBrowserSupabaseClient()
@@ -76,20 +78,43 @@ function writeCachedUser(user: User | null) {
   }
 }
 
-// Cookie name for the cached role — read by middleware to skip a DB round-trip
-const ROLE_COOKIE = 'dlm_role'
-
-function setRoleCookie(role: string) {
-  if (typeof document === 'undefined') return
-  // 8-hour session-scoped cookie; SameSite=Lax is safe since all routes are same-origin
-  document.cookie = `${ROLE_COOKIE}=${encodeURIComponent(role)}; path=/; max-age=28800; SameSite=Lax`
+function readCookieValue(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith(`${name}=`))
+  return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null
 }
 
-function clearRoleCookie() {
+function setRoutingCookies(role: string, userId: string) {
+  if (typeof document === 'undefined') return
+  const attrs = '; path=/; max-age=28800; SameSite=Lax'
+  // Short-lived routing cookies help middleware skip a DB read on navigation.
+  document.cookie = `${ROLE_COOKIE}=${encodeURIComponent(role)}${attrs}`
+  document.cookie = `${USER_ID_COOKIE}=${encodeURIComponent(userId)}${attrs}`
+}
+
+function clearRoutingCookies() {
   if (typeof document === 'undefined') return
   document.cookie = `${ROLE_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+  document.cookie = `${USER_ID_COOKIE}=; path=/; max-age=0; SameSite=Lax`
 }
 
+function readTrustedCachedUser(): User | null {
+  const cachedUser = readCachedUser()
+  const cachedRole = readCookieValue(ROLE_COOKIE)
+  const cachedUserId = readCookieValue(USER_ID_COOKIE)
+
+  if (!cachedUser || !cachedRole || !cachedUserId) {
+    return null
+  }
+
+  if (cachedUser.id !== cachedUserId || cachedUser.role !== cachedRole) {
+    return null
+  }
+
+  return cachedUser
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -116,7 +141,7 @@ function useProvideAuth(): AuthContextValue {
 
       if (!authUser) {
         writeCachedUser(null)
-        clearRoleCookie()
+        clearRoutingCookies()
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
@@ -133,7 +158,7 @@ function useProvideAuth(): AuthContextValue {
         // Auth session exists but no user profile row — treat as unauthenticated
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
-        clearRoleCookie()
+        clearRoutingCookies()
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
@@ -141,12 +166,12 @@ function useProvideAuth(): AuthContextValue {
       if (!profile.is_active) {
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
-        clearRoleCookie()
+        clearRoutingCookies()
         setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         return
       }
 
-      setRoleCookie(profile.role)
+      setRoutingCookies(profile.role, profile.id)
       writeCachedUser(profile as User)
       setState({
         user: profile as User,
@@ -158,7 +183,7 @@ function useProvideAuth(): AuthContextValue {
       if (isAbortError(error)) return
       console.error('Error fetching user:', error)
       if (mountedRef.current) {
-        const cachedUser = readCachedUser()
+        const cachedUser = readTrustedCachedUser()
         if (cachedUser) {
           setState({
             user: cachedUser,
@@ -178,7 +203,7 @@ function useProvideAuth(): AuthContextValue {
   useEffect(() => {
     mountedRef.current = true
 
-    const cachedUser = readCachedUser()
+    const cachedUser = readTrustedCachedUser()
     if (cachedUser) {
       setState((prev) => ({
         user: cachedUser,
@@ -204,12 +229,13 @@ function useProvideAuth(): AuthContextValue {
             await fetchUser()
           } else {
             writeCachedUser(null)
+            clearRoutingCookies()
             setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
             router.push('/login?reason=session_expired')
           }
         } else if (event === 'SIGNED_OUT') {
           writeCachedUser(null)
-          clearRoleCookie()
+          clearRoutingCookies()
           setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
         }
       }
@@ -222,6 +248,7 @@ function useProvideAuth(): AuthContextValue {
         if (!mountedRef.current) return
         if (!session) {
           writeCachedUser(null)
+          clearRoutingCookies()
           setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
           router.push('/login?reason=session_expired')
         }
@@ -281,31 +308,14 @@ function useProvideAuth(): AuthContextValue {
       void supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userId)
 
       // ── Navigate immediately using cached role ──────────────────────────
-      // If the user has logged in before on this browser, the role cookie is
-      // still set. Use it to navigate instantly — profile hydration follows
-      // in the background. First-time login falls through to the profile fetch.
-      const cachedRole = typeof document !== 'undefined'
-        ? decodeURIComponent(document.cookie.split('; ').find(r => r.startsWith('dlm_role='))?.split('=')[1] ?? '')
-        : ''
-
-      if (cachedRole) {
-        const cachedUser = readCachedUser()
-        const optimisticUser = cachedUser ?? {
-          id: userId,
-          email: authData.user.email || normalizedInput,
-          full_name: (authData.user.user_metadata?.full_name as string | undefined) || normalizedInput,
-          role: cachedRole as User['role'],
-          organization_id: undefined,
-          is_active: true,
-          created_at: authData.user.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          notification_email: null,
-          last_login_at: new Date().toISOString(),
-        }
-
-        writeCachedUser(optimisticUser)
-        setState({ user: optimisticUser, isLoading: false, isInitializing: false, isAuthenticated: true })
-        router.replace(getDefaultAppPathForRole(cachedRole as User['role']))
+      // Only trust the fast-path cache when both the cached role and user id
+      // match the freshly authenticated user. That keeps navigation snappy
+      // without accidentally reusing another account's route.
+      const cachedUser = readTrustedCachedUser()
+      if (cachedUser && cachedUser.id === userId) {
+        writeCachedUser(cachedUser)
+        setState({ user: cachedUser, isLoading: false, isInitializing: false, isAuthenticated: true })
+        router.replace(getDefaultAppPathForRole(cachedUser.role))
         // Hydrate full profile in background — updates state without blocking nav
         fetchUser().catch(() => {})
         return
@@ -335,7 +345,7 @@ function useProvideAuth(): AuthContextValue {
       const profile = profileResult.data as User | null
       if (profile?.is_active) {
         writeCachedUser(profile)
-        setRoleCookie(profile.role)
+        setRoutingCookies(profile.role, profile.id)
         setState({ user: profile, isLoading: false, isInitializing: false, isAuthenticated: true })
         router.replace(getDefaultAppPathForRole(profile.role))
         return
@@ -357,7 +367,7 @@ function useProvideAuth(): AuthContextValue {
   // the JWT server-side in the background. The user sees /login instantly.
   const logout = useCallback(() => {
     writeCachedUser(null)
-    clearRoleCookie()
+    clearRoutingCookies()
     setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
     router.replace('/login')
     // Fire-and-forget: revoke JWT after UI is already gone
@@ -400,6 +410,7 @@ function useProvideAuth(): AuthContextValue {
       const typedProfile = profile as User | null
       if (typedProfile?.is_active) {
         writeCachedUser(typedProfile)
+        setRoutingCookies(typedProfile.role, typedProfile.id)
         setState({ user: typedProfile, isLoading: false, isInitializing: false, isAuthenticated: true })
         router.replace(getDefaultAppPathForRole(typedProfile.role))
         return

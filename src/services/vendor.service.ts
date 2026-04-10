@@ -443,7 +443,10 @@ export class VendorService {
     warranty_days?: number
     notes?: string
   }): Promise<VendorBid & { auto_accepted?: boolean }> {
-    const supabase = await createServerSupabaseClient()
+    // Bid submission can originate from vendor-facing routes where the order is
+    // intentionally visible via a marketplace view, not direct RLS. Use the
+    // service role so inserts, order reads, and auto-accept updates stay in sync.
+    const supabase = createServiceRoleClient()
 
     const { data, error } = await supabase
       .from('vendor_bids')
@@ -505,7 +508,9 @@ export class VendorService {
     status: 'accepted' | 'rejected',
     cpoMarkupPercent?: number
   ): Promise<VendorBid> {
-    const supabase = await createServerSupabaseClient()
+    // Bid acceptance updates multiple tables (vendor_bids, order_items, orders).
+    // Use the service role so workflow automation is not blocked by caller RLS.
+    const supabase = createServiceRoleClient()
 
     // 1. Fetch the bid
     const { data: bid, error: bidError } = await supabase

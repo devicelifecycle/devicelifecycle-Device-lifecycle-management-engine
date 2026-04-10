@@ -56,6 +56,7 @@ export async function middleware(request: NextRequest) {
 
   // Cookie name must match the one set in useAuth.ts
   const ROLE_COOKIE = 'dlm_role'
+  const USER_ID_COOKIE = 'dlm_uid'
 
   try {
     const { supabase, response } = createMiddlewareSupabaseClient(request)
@@ -74,8 +75,11 @@ export async function middleware(request: NextRequest) {
     const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
       ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
       : null
+    const cachedUserId = request.cookies.get(USER_ID_COOKIE)?.value
+      ? decodeURIComponent(request.cookies.get(USER_ID_COOKIE)!.value)
+      : null
 
-    let role: string | null = cachedRole
+    let role: string | null = cachedRole && cachedUserId === authUser.id ? cachedRole : null
 
     if (!role) {
       // Cookie absent (first load, cookie cleared, or different browser) — fall back to DB

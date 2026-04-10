@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { VendorService } from '@/services/vendor.service'
 import { NotificationService } from '@/services/notification.service'
 import { submitVendorBidSchema } from '@/lib/validations'
@@ -157,6 +158,60 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const serviceRole = createServiceRoleClient()
+    const { data: order, error: orderError } = await serviceRole
+      .from('orders')
+      .select('id, order_number, type, status, total_quantity, vendor_id, parent_order_id')
+      .eq('id', parsed.data.order_id)
+      .single()
+
+    if (orderError || !order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    }
+
+    if (order.type !== 'cpo' || order.parent_order_id) {
+      return NextResponse.json(
+        { error: 'Vendor bidding is available only for open CPO orders' },
+        { status: 400 }
+      )
+    }
+
+    if (!['accepted', 'sourcing'].includes(order.status || '')) {
+      return NextResponse.json(
+        { error: 'This order is not open for vendor bidding' },
+        { status: 400 }
+      )
+    }
+
+    if (order.vendor_id) {
+      return NextResponse.json(
+        { error: 'This order has already been assigned to a vendor' },
+        { status: 409 }
+      )
+    }
+
+    if ((order.total_quantity || 0) > 0 && parsed.data.quantity > order.total_quantity) {
+      return NextResponse.json(
+        { error: 'Bid quantity cannot exceed the open order quantity' },
+        { status: 400 }
+      )
+    }
+
+    const { data: existingBid } = await serviceRole
+      .from('vendor_bids')
+      .select('id, status')
+      .eq('order_id', parsed.data.order_id)
+      .eq('vendor_id', vendor.id)
+      .in('status', ['pending', 'accepted'])
+      .maybeSingle()
+
+    if (existingBid) {
+      return NextResponse.json(
+        { error: 'You already have an active bid on this order' },
+        { status: 409 }
+      )
+    }
+
     // Submit the bid
     const bid = await VendorService.submitBid({
       order_id: parsed.data.order_id,
@@ -176,25 +231,17 @@ export async function POST(request: NextRequest) {
       .eq('is_active', true))
       .then(({ data: admins }) => {
         if (admins) {
-          // Look up order number for the notification title
-          supabase
-            .from('orders')
-            .select('order_number')
-            .eq('id', parsed.data.order_id)
-            .single()
-            .then(({ data: order }) => {
-              const orderLabel = order?.order_number || parsed.data.order_id.slice(0, 8)
-              for (const admin of admins) {
-                NotificationService.createNotification({
-                  user_id: admin.id,
-                  type: 'in_app',
-                  title: `New Vendor Bid — Order #${orderLabel}`,
-                  message: `A vendor submitted a bid for ${parsed.data.quantity} units at $${parsed.data.unit_price}/unit.`,
-                  link: `/orders/${parsed.data.order_id}`,
-                  metadata: { audience: 'admin', order_id: parsed.data.order_id },
-                }).catch((err) => console.error('Failed to notify admin:', err))
-              }
-            })
+          const orderLabel = order.order_number || parsed.data.order_id.slice(0, 8)
+          for (const admin of admins) {
+            NotificationService.createNotification({
+              user_id: admin.id,
+              type: 'in_app',
+              title: `New Vendor Bid — Order #${orderLabel}`,
+              message: `A vendor submitted a bid for ${parsed.data.quantity} units at $${parsed.data.unit_price}/unit.`,
+              link: `/orders/${parsed.data.order_id}`,
+              metadata: { audience: 'admin', order_id: parsed.data.order_id },
+            }).catch((err) => console.error('Failed to notify admin:', err))
+          }
         }
       })
       .catch((err: unknown) => console.error('Failed to notify admins about bid:', err))

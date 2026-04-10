@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { ensureCustomerProfileForOrganization } from '@/lib/customer-profile'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,7 @@ export async function GET() {
 
     const { data: profile, error: profileError } = await supabase
       .from('users')
-      .select('role, organization_id')
+      .select('role, organization_id, full_name, email, notification_email, phone')
       .eq('id', user.id)
       .single()
 
@@ -47,10 +48,13 @@ export async function GET() {
     }
 
     const serviceRole = createServiceRoleClient()
+    await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, profile)
+
     const { data: customers, error: customerError } = await serviceRole
       .from('customers')
       .select('id')
       .eq('organization_id', profile.organization_id)
+      .eq('is_active', true)
 
     if (customerError) {
       throw customerError
@@ -59,14 +63,7 @@ export async function GET() {
     const customerIds = (customers || []).map((customer) => customer.id).filter(Boolean)
 
     if (customerIds.length === 0) {
-      return NextResponse.json({
-        total_orders: 0,
-        active_orders: 0,
-        quotes_ready: 0,
-        completed_orders: 0,
-        visible_value: 0,
-        recent_orders: [],
-      })
+      throw new Error('No active customer profiles available for this organization')
     }
 
     const [totalResult, activeResult, quotedResult, completedResult, valueResult, recentResult] =
