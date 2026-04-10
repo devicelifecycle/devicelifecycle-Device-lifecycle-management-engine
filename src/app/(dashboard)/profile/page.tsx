@@ -10,6 +10,9 @@ import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+
+// Module-level singleton — prevents a new client being created on every render of MfaCard
+const supabase = createBrowserSupabaseClient()
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -34,7 +37,6 @@ function ChangePasswordCard({ authEmail }: { authEmail: string }) {
     }
     setIsChanging(true)
     try {
-      const supabase = createBrowserSupabaseClient()
       // Verify current password by re-signing in
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: authEmail,
@@ -117,7 +119,6 @@ function ChangePasswordCard({ authEmail }: { authEmail: string }) {
 
 function MfaCard() {
   const { enrollMfa, unenrollMfa, getMfaFactors } = useAuth()
-  const supabase = createBrowserSupabaseClient()
   type TotpFactor = { id: string; friendly_name?: string; status: string }
   const [factors, setFactors] = useState<TotpFactor[]>([])
   const [enrolling, setEnrolling] = useState(false)
