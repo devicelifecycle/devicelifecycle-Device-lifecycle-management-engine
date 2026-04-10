@@ -46,7 +46,9 @@ const statusColors: Record<string, string> = {
 
 export default function COEReceivingPage() {
   const [shipments, setShipments] = useState<Shipment[]>([])
+  const [outboundOrders, setOutboundOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isOutboundLoading, setIsOutboundLoading] = useState(true)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
@@ -96,8 +98,21 @@ export default function COEReceivingPage() {
     } catch {} finally { setIsLoading(false) }
   }, [])
 
+  const fetchOutboundOrders = useCallback(async () => {
+    setIsOutboundLoading(true)
+    try {
+      const res = await fetch('/api/orders?type=cpo&page=1&page_size=10&sort_by=created_at&sort_order=desc')
+      if (res.ok) {
+        const data = await res.json()
+        setOutboundOrders((data.data || []) as Order[])
+      }
+    } catch {} finally { setIsOutboundLoading(false) }
+  }, [])
+
   useEffect(() => { fetchShipments() }, [fetchShipments])
+  useEffect(() => { fetchOutboundOrders() }, [fetchOutboundOrders])
   useOnDbChange(fetchShipments)
+  useOnDbChange(fetchOutboundOrders)
 
   useEffect(() => {
     if (!debouncedOrderSearch.trim()) {
@@ -283,6 +298,57 @@ export default function COEReceivingPage() {
                         <Badge variant="default"><CheckCircle2 className="mr-1 h-3 w-3" />Received</Badge>
                       )}
                     </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Outbound Orders</CardTitle>
+          <CardDescription>
+            Customer-created outbound orders appear here automatically and can be used for shipping follow-up.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isOutboundLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />
+              ))}
+            </div>
+          ) : outboundOrders.length === 0 ? (
+            <div className="flex flex-col items-center py-16 text-muted-foreground">
+              <Truck className="h-10 w-10 mb-3 text-muted-foreground/40" />
+              <p className="text-sm font-medium">No outbound orders yet</p>
+              <p className="text-xs mt-1">New customer outbound orders will show up here automatically.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order #</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {outboundOrders.map(order => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-mono text-sm font-medium">{order.order_number}</TableCell>
+                    <TableCell className="text-sm">{order.customer?.company_name || order.customer?.contact_name || 'Customer'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {order.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{order.total_quantity || 0}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(order.created_at)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
