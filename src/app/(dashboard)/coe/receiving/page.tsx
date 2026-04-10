@@ -190,6 +190,8 @@ export default function COEReceivingPage() {
     )
   })
 
+  const receivableShipments = shipments.filter(s => s.status !== 'delivered')
+
   const pendingCount = shipments.filter(s => s.status !== 'delivered').length
 
   return (
@@ -298,10 +300,33 @@ export default function COEReceivingPage() {
           <DialogHeader>
             <DialogTitle>Confirm Receipt</DialogTitle>
             <DialogDescription>
-              Mark shipment <span className="font-mono font-medium">{selectedShipment?.tracking_number}</span> as received at COE.
+              Select the inbound order, enter the count received, and the system will flag any mismatch automatically.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Order</Label>
+              <Select
+                value={selectedShipment?.id || ''}
+                onValueChange={(shipmentId) => {
+                  const shipment = receivableShipments.find(item => item.id === shipmentId) || null
+                  setSelectedShipment(shipment)
+                  setQuantityReceived('')
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose an inbound order" />
+                </SelectTrigger>
+                <SelectContent>
+                  {receivableShipments.map(shipment => (
+                    <SelectItem key={shipment.id} value={shipment.id}>
+                      {(shipment.order as unknown as Record<string, string>)?.order_number || 'Unknown order'} · {shipment.tracking_number} · {shipment.carrier}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground">Carrier</p>
@@ -316,7 +341,7 @@ export default function COEReceivingPage() {
             {/* Device Count Verification */}
             <div className="space-y-2">
               <Label>
-                Devices Counted
+                Devices Received
                 {(selectedShipment?.order as unknown as Record<string, number>)?.total_quantity != null && (
                   <span className="ml-2 text-xs text-muted-foreground font-normal">
                     (expected {(selectedShipment?.order as unknown as Record<string, number>).total_quantity})
@@ -335,6 +360,7 @@ export default function COEReceivingPage() {
                 const expected = (selectedShipment?.order as unknown as Record<string, number>)?.total_quantity
                 const received = quantityReceived ? parseInt(quantityReceived, 10) : null
                 if (received == null || !expected) return null
+                const mismatch = Math.abs(expected - received)
                 if (received === expected) {
                   return (
                     <p className="text-xs text-green-600 flex items-center gap-1">
@@ -344,7 +370,7 @@ export default function COEReceivingPage() {
                 }
                 return (
                   <p className="text-xs text-amber-600 font-medium">
-                    ⚠ Count mismatch — received {received}, expected {expected}. Note will be flagged on the shipment.
+                    ⚠ Count mismatch — expected {expected}, received {received}. Mismatch found: {mismatch} device{mismatch !== 1 ? 's' : ''}.
                   </p>
                 )
               })()}
