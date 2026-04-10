@@ -8,6 +8,7 @@ import { readServerEnv } from '@/lib/server-env'
 import { ShippingProviderService } from '@/services/shipping-provider.service'
 import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
+import { EmailService } from '@/services/email.service'
 import type { Shipment } from '@/types'
 
 /** Check if the shipping label provider is configured */
@@ -461,7 +462,11 @@ export class ShipmentService {
   static async markAsReceived(
     id: string,
     receivedById: string,
-    notes?: string
+    notes?: string,
+    options?: {
+      receivedQuantity?: number | null
+      expectedQuantity?: number | null
+    }
   ): Promise<Shipment> {
     const supabase = await createServerSupabaseClient()
 
@@ -472,6 +477,17 @@ export class ShipmentService {
     const orderId = shipment.order_id as string
     if (!orderId) throw new Error('Shipment has no order')
 
+    const receivedQuantity = options?.receivedQuantity ?? null
+    const expectedQuantity = options?.expectedQuantity ?? null
+    const hasQuantityMismatch =
+      receivedQuantity != null &&
+      expectedQuantity != null &&
+      receivedQuantity !== expectedQuantity
+    const mismatchDetails = hasQuantityMismatch
+      ? `Quantity mismatch detected at receiving: expected ${expectedQuantity}, received ${receivedQuantity}.`
+      : ''
+    const combinedNotes = [notes, mismatchDetails].filter(Boolean).join(' ').trim() || undefined
+
     // Update shipment
     const { data: updatedShipment, error } = await supabase
       .from('shipments')
@@ -479,7 +495,8 @@ export class ShipmentService {
         status: 'delivered',
         delivered_at: new Date().toISOString(),
         received_by_id: receivedById,
-        receiving_notes: notes,
+        receiving_notes: combinedNotes,
+        exception_details: hasQuantityMismatch ? mismatchDetails : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -491,7 +508,7 @@ export class ShipmentService {
     // Load order and items
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, status')
+      .select('id, status, order_number, type, customer_id, customer:customers(contact_email, contact_phone, contact_name, company_name, organization_id)')
       .eq('id', orderId)
       .single()
 
@@ -538,6 +555,87 @@ export class ShipmentService {
           await OrderService.transitionOrder(orderId, 'received' as import('@/types').OrderStatus, receivedById, notes)
         } catch {
           // Non-fatal: order transition failed
+        }
+      }
+
+      if (hasQuantityMismatch) {
+        const orderNumber = order.order_number as string
+        const orderType = (order.type as string | undefined) ?? 'trade_in'
+        const title = `Quantity mismatch — Order ${orderNumber}`
+        const message = `Receiving count mismatch recorded for ${orderType === 'trade_in' ? 'trade-in' : 'order'} #${orderNumber}: expected ${expectedQuantity}, received ${receivedQuantity}.`
+
+        const { data: admins } = await supabase
+          .from('users')
+          .select('id')
+          .eq('role', 'admin')
+          .eq('is_active', true)
+
+        for (const admin of admins || []) {
+          await NotificationService.createNotification({
+            user_id: admin.id,
+            type: 'in_app',
+            title,
+            message,
+            link: `/orders/${orderId}`,
+            metadata: {
+              order_id: orderId,
+              order_number: orderNumber,
+              received_quantity: receivedQuantity,
+              expected_quantity: expectedQuantity,
+              audience: 'admin',
+            },
+          }).catch(() => {})
+        }
+
+        const customerRecord = order.customer as {
+          contact_email?: string | null
+          contact_phone?: string | null
+          contact_name?: string | null
+          company_name?: string | null
+          organization_id?: string | null
+        } | null
+
+        if (customerRecord?.organization_id) {
+          const { data: customerUsers } = await supabase
+            .from('users')
+            .select('id')
+            .eq('organization_id', customerRecord.organization_id)
+            .eq('role', 'customer')
+            .eq('is_active', true)
+
+          for (const customerUser of customerUsers || []) {
+            await NotificationService.createNotification({
+              user_id: customerUser.id,
+              type: 'in_app',
+              title,
+              message,
+              link: `/orders/${orderId}`,
+              metadata: {
+                order_id: orderId,
+                order_number: orderNumber,
+                received_quantity: receivedQuantity,
+                expected_quantity: expectedQuantity,
+                audience: 'customer',
+              },
+            }).catch(() => {})
+          }
+
+          const recipientLabel = customerRecord.contact_name || customerRecord.company_name || 'Customer'
+          const orderUrl = `/orders/${orderId}`
+          if (customerRecord.contact_email) {
+            await EmailService.sendEmail(
+              customerRecord.contact_email,
+              title,
+              `Hello ${recipientLabel},\n\n${message}\n\nView order: ${orderUrl}\n\nThank you.`
+            ).catch(() => {})
+          }
+
+          if (customerRecord.contact_phone && EmailService.isTwilioConfigured()) {
+            await EmailService.sendSMS(
+              customerRecord.contact_phone,
+              `[DLM] ${title}: expected ${expectedQuantity}, received ${receivedQuantity}. Review ${orderUrl}`.slice(0, 160)
+            ).catch(() => {})
+          }
         }
       }
     }

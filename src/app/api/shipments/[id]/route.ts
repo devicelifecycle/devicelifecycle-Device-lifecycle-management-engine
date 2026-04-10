@@ -108,7 +108,11 @@ export async function PATCH(
       const shipment = await ShipmentService.markAsReceived(
         (await params).id,
         user.id,
-        data.notes
+        data.notes,
+        {
+          receivedQuantity: data.received_quantity,
+          expectedQuantity: data.expected_quantity,
+        }
       )
       return NextResponse.json(shipment)
     }

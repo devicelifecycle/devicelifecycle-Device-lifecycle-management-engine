@@ -2080,6 +2080,8 @@ export default function OrderDetailPage() {
                       exception: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
                     }
                     const trackingUrl = getCarrierTrackingUrl(shipment.carrier, shipment.tracking_number)
+                    const receivingMismatchNote = shipment.exception_details || shipment.receiving_notes || ''
+                    const hasReceivingMismatch = /quantity mismatch|discrepancy/i.test(receivingMismatchNote)
                     return (
                       <div key={shipment.id} className="flex items-center justify-between rounded-lg border p-3">
                         <div className="flex items-center gap-3">
@@ -2090,6 +2092,14 @@ export default function OrderDetailPage() {
                               {shipment.carrier} · {shipment.direction}
                               {shipment.estimated_delivery && ` · ETA ${formatDateTime(shipment.estimated_delivery)}`}
                             </p>
+                            {hasReceivingMismatch && (
+                              <div className="mt-1 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
+                                <Badge variant="destructive" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                                  Quantity mismatch
+                                </Badge>
+                                <span>{receivingMismatchNote}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
