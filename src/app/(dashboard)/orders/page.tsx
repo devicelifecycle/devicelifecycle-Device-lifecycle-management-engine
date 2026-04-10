@@ -87,7 +87,7 @@ export default function OrdersPage() {
   const stats = useMemo(() => {
     const active = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
     const delivered = orders.filter((order) => ['delivered', 'closed'].includes(order.status)).length
-    const totalValue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
+    const totalValue = orders.reduce((sum, order) => sum + (order.quoted_amount ?? order.total_amount ?? 0), 0)
     return { active, delivered, totalValue }
   }, [orders])
 
