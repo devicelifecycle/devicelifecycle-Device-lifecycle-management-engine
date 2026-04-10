@@ -1436,7 +1436,20 @@ export default function COETriagePage() {
       </Tabs>
 
       {/* ── Triage Dialog ───────────────────────────────────────────────── */}
-      <Dialog open={triageDialogOpen} onOpenChange={setTriageDialogOpen}>
+      <Dialog open={triageDialogOpen} onOpenChange={(open) => {
+        setTriageDialogOpen(open)
+        if (!open) {
+          setSelectedItem(null)
+          setPhysicalCondition('good')
+          setScreenCondition('good')
+          setBatteryHealth('85')
+          setChecklist({})
+          setIssues([])
+          setNotes('')
+          setImeiLookup(null)
+          setTestpodData(null)
+        }
+      }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Device Triage</DialogTitle>
@@ -1656,7 +1669,10 @@ export default function COETriagePage() {
       </Dialog>
 
       {/* ── Add Device Dialog ───────────────────────────────────────────── */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+      <Dialog open={addDialogOpen} onOpenChange={(open) => {
+        setAddDialogOpen(open)
+        if (!open) setAddForm({ imei: '', claimed_condition: 'good', storage: '', color: '', notes: '' })
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Device to Triage</DialogTitle>

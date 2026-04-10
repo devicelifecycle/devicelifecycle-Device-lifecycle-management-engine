@@ -531,6 +531,7 @@ export async function POST(request: NextRequest) {
 
       if (itemsError) {
         console.error('Error creating order items:', itemsError)
+        return NextResponse.json({ error: 'Order created but failed to save line items. Please add them manually.' }, { status: 500 })
       }
     }
 

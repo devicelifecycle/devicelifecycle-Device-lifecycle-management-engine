@@ -285,7 +285,10 @@ export default function COEReceivingPage() {
       </Card>
 
       {/* Receive Dialog */}
-      <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
+      <Dialog open={receiveDialogOpen} onOpenChange={(open) => {
+        setReceiveDialogOpen(open)
+        if (!open) { setSelectedShipment(null); setReceiveNotes(''); setQuantityReceived('') }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirm Receipt</DialogTitle>
