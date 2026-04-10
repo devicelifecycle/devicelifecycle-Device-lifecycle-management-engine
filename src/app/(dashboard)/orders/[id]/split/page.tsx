@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, GitBranch, Plus, Trash2, AlertCircle, CheckCircle2, Wand2 } from 'lucide-react'
@@ -142,6 +143,7 @@ export default function OrderSplitPage() {
   }, [orderId])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useOnDbChange(fetchData)
 
   const addVendorAllocation = () => {
     setAllocations(prev => [

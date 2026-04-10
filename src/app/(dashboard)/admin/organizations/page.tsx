@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
 import { Plus, Building2, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -83,6 +84,7 @@ export default function AdminOrganizationsPage() {
   }, [search])
 
   useEffect(() => { fetchOrganizations() }, [fetchOrganizations])
+  useOnDbChange(fetchOrganizations)
 
   const resetForm = () => {
     setForm({ name: '', type: 'customer', email: '', phone: '', address: '', city: '', state: '', zip_code: '', country: 'USA' })

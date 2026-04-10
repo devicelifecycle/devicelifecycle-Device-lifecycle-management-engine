@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import { Package, CheckCircle2, Truck, Search, Clock, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -96,6 +97,7 @@ export default function COEReceivingPage() {
   }, [])
 
   useEffect(() => { fetchShipments() }, [fetchShipments])
+  useOnDbChange(fetchShipments)
 
   useEffect(() => {
     if (!debouncedOrderSearch.trim()) {

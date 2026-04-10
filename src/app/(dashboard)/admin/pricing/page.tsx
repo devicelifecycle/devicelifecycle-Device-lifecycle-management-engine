@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import { Search, Plus, Trash2, TrendingUp, Calculator, Settings, RefreshCw, FileDown, Activity, DollarSign, LayoutGrid, ChevronDown, ChevronRight, ShoppingBag, ArrowDownRight, Globe, Database, Upload, Zap, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -453,6 +454,8 @@ export default function AdminPricingPage() {
     } catch {} finally { setSettingsLoading(false) }
   }, [])
 
+  const refetchAll = useCallback(() => { fetchDevices(); fetchCompetitorPrices(); fetchSettings(); fetchCatalog() }, [fetchDevices, fetchCompetitorPrices, fetchSettings, fetchCatalog])
+  useOnDbChange(refetchAll)
   useEffect(() => { fetchDevices(); fetchCompetitorPrices(); fetchSettings(); fetchCatalog() }, [fetchDevices, fetchCompetitorPrices, fetchSettings, fetchCatalog])
 
   const deviceMap = useMemo(() => {

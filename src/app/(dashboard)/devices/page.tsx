@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
 import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch } from 'lucide-react'
 import { toast } from 'sonner'
@@ -70,6 +71,7 @@ export default function DevicesPage() {
   }, [debouncedSearch, page, makeFilter, categoryFilter])
 
   useEffect(() => { fetchDevices() }, [fetchDevices])
+  useOnDbChange(fetchDevices)
 
   const handleCreate = async () => {
     setCreating(true)
