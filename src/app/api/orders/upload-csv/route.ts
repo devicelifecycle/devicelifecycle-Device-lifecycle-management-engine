@@ -458,28 +458,49 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate order number
-    const { data: orderNumResult } = await supabase.rpc('generate_order_number')
-    const orderNumber = orderNumResult || `${effectiveOrderType === 'cpo' ? 'CPO' : 'TI'}-${Date.now()}`
-
+    const direction = effectiveOrderType === 'cpo' ? 'outbound' : 'inbound'
     const totalQuantity = normalizedRows.reduce((sum, row) => sum + row.quantity, 0)
 
-    // Create order
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        order_number: orderNumber,
-        type: effectiveOrderType,
-        status: 'draft',
-        customer_id,
-        created_by_id: user.id,
-        total_quantity: totalQuantity,
-        total_amount: 0,
-      })
-      .select()
-      .single()
+    // Create order with retry on duplicate order_number (race-condition guard)
+    const MAX_ATTEMPTS = 5
+    let order: Record<string, unknown> | null = null
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const { data: orderNumResult } = await supabase.rpc('generate_order_number', { direction })
+      const orderNumber = orderNumResult || `${effectiveOrderType === 'cpo' ? 'CPO' : 'TI'}-${Date.now()}`
 
-    if (orderError) throw orderError
+      const { data: createdOrder, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          order_number: orderNumber,
+          type: effectiveOrderType,
+          order_direction: direction,
+          status: 'draft',
+          customer_id,
+          created_by_id: user.id,
+          total_quantity: totalQuantity,
+          total_amount: 0,
+        })
+        .select()
+        .single()
+
+      if (!orderError && createdOrder) {
+        order = createdOrder as Record<string, unknown>
+        break
+      }
+
+      // Retry only on unique constraint violation for order_number
+      const isConflict =
+        orderError?.code === '23505' &&
+        [orderError.message, orderError.details, orderError.hint]
+          .filter(Boolean).join(' ').toLowerCase()
+          .includes('order_number')
+
+      if (!isConflict || attempt === MAX_ATTEMPTS) {
+        throw orderError || new Error('Failed to create order')
+      }
+    }
+
+    if (!order) throw new Error('Failed to create order')
 
     // Look up devices and create order items
     const orderItems = []
