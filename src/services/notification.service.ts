@@ -205,10 +205,15 @@ export class NotificationService {
     const { subject, message } = config
     const subjectText = subject(order.order_number)
     const messageText = message(order.order_number)
+    // customerMessage overrides messageText for customer recipients (e.g. 24hr shipping notice on accepted)
+    const customerMessageText = config.customerMessage
+      ? config.customerMessage(order.order_number)
+      : messageText
     const orderLink = `/orders/${order.id}`
 
     // Collect email recipients in parallel
-    const emailTargets: Array<{ email: string; name: string; userId?: string }> = []
+    // isCustomer drives which message body to use when the config defines customerMessage
+    const emailTargets: Array<{ email: string; name: string; userId?: string; isCustomer?: boolean }> = []
     const smsTargets: Array<{ phone: string; name: string }> = []
 
     const lookups: Promise<void>[] = []
@@ -225,7 +230,7 @@ export class NotificationService {
           .eq('id', order.customer_id!)
           .single()
         if (cust?.contact_email) {
-          emailTargets.push({ email: cust.contact_email, name: cust.contact_name || 'Customer' })
+          emailTargets.push({ email: cust.contact_email, name: cust.contact_name || 'Customer', isCustomer: true })
         }
         if (cust?.organization_id) {
           const { data: orgUsers } = await supabase
@@ -239,7 +244,7 @@ export class NotificationService {
               ? (u as { notification_email?: string | null }).notification_email
               : (u as { email?: string }).email
             if (effectiveEmail) {
-              emailTargets.push({ email: effectiveEmail, name: (u as { full_name?: string }).full_name || 'User', userId: (u as { id: string }).id })
+              emailTargets.push({ email: effectiveEmail, name: (u as { full_name?: string }).full_name || 'User', userId: (u as { id: string }).id, isCustomer: true })
             }
           })
         }
@@ -368,6 +373,7 @@ export class NotificationService {
     const sends: Promise<void>[] = []
 
     for (const target of uniqueTargets) {
+      const bodyText = target.isCustomer ? customerMessageText : messageText
       sends.push(
         EmailService.sendOrderStatusEmail({
           to: target.email,
@@ -377,7 +383,7 @@ export class NotificationService {
           fromStatus,
           toStatus,
           subject: subjectText,
-          message: messageText,
+          message: bodyText,
         }).then(() => {})
       )
     }
