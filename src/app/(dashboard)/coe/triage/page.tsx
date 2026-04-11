@@ -189,6 +189,9 @@ export default function COETriagePage() {
   const [intakeDraft, setIntakeDraft] = useState<Record<string, string>>({})
   const [intakeDraftCondition, setIntakeDraftCondition] = useState<Record<string, DeviceCondition>>({})
   const [intakeSubmitting, setIntakeSubmitting] = useState(false)
+  const [intakePriceOverride, setIntakePriceOverride] = useState<Record<string, string>>({})
+  const [isApplyingRepricing, setIsApplyingRepricing] = useState(false)
+  const [repricingApplied, setRepricingApplied] = useState(false)
   const intakeImeiInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   // ── Template file upload ─────────────────────────────────────────────────
@@ -605,6 +608,8 @@ export default function COETriagePage() {
       if (!detailRes.ok) throw new Error()
       const detail = await detailRes.json()
       const order: OrderRefResult = detail.data ?? detail
+      setRepricingApplied(false)
+      setIntakePriceOverride({})
       setIntakeOrder(order)
       // Seed default condition from each item's claimed_condition
       const condMap: Record<string, DeviceCondition> = {}
@@ -717,6 +722,35 @@ export default function COETriagePage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Registration failed')
     } finally { setIntakeSubmitting(false) }
+  }
+
+  const handleApplyRepricing = async () => {
+    if (!intakeOrder) return
+    const items: Array<{ order_item_id: string; actual_condition: string }> = []
+    for (const item of intakeOrder.items) {
+      const slots = intakeSlots[item.id] || []
+      const condMismatchSlots = slots.filter(s => !s.validating && (s.mismatch === 'condition' || s.mismatch === 'both'))
+      if (condMismatchSlots.length === 0) continue
+      const actualCondition = condMismatchSlots[0].actualCondition
+      items.push({ order_item_id: item.id, actual_condition: actualCondition })
+    }
+    if (items.length === 0) return
+    setIsApplyingRepricing(true)
+    try {
+      const res = await fetch(`/api/orders/${intakeOrder.id}/items/reprice-mismatches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, risk_mode: 'enterprise' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Repricing failed')
+      setRepricingApplied(true)
+      toast.success(`Repricing applied — ${data.recommendation_count} item${data.recommendation_count !== 1 ? 's' : ''} updated`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Repricing failed')
+    } finally {
+      setIsApplyingRepricing(false)
+    }
   }
 
   const openAddDialog = () => {
@@ -1037,6 +1071,69 @@ export default function COETriagePage() {
                 </div>
               )}
 
+              {/* Manifest Summary Table */}
+              <Card>
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+                    Manifest Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-0 pb-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-4">Device</TableHead>
+                        <TableHead>Storage</TableHead>
+                        <TableHead className="text-center">Expected</TableHead>
+                        <TableHead className="text-center">Scanned</TableHead>
+                        <TableHead>Claimed Condition</TableHead>
+                        <TableHead className="pr-4">Quoted / Unit</TableHead>
+                        <TableHead className="pr-4">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(intakeOrder.items || []).map(item => {
+                        const slots = intakeSlots[item.id] || []
+                        const scanned = slots.filter(s => !s.validating).length
+                        const expected = item.quantity || 1
+                        const hasCondMismatch = slots.some(s => !s.validating && (s.mismatch === 'condition' || s.mismatch === 'both'))
+                        const over = scanned > expected
+                        const done = scanned >= expected
+                        const statusColor = scanned === 0 ? 'text-muted-foreground'
+                          : over ? 'text-red-600'
+                          : done && !hasCondMismatch ? 'text-green-600'
+                          : 'text-amber-600'
+                        const statusLabel = scanned === 0 ? '—'
+                          : over ? 'Over-received'
+                          : done && !hasCondMismatch ? '✓ Complete'
+                          : done ? '⚠ Condition mismatch'
+                          : `${scanned} of ${expected}`
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell className="pl-4 font-medium text-sm">
+                              {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown'}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{item.storage || '—'}</TableCell>
+                            <TableCell className="text-center text-sm tabular-nums">{expected}</TableCell>
+                            <TableCell className="text-center text-sm tabular-nums font-semibold">{scanned}</TableCell>
+                            <TableCell>
+                              <span className={`text-xs ${CONDITION_CONFIG[item.claimed_condition as DeviceCondition]?.color || ''}`}>
+                                {CONDITION_CONFIG[item.claimed_condition as DeviceCondition]?.label || item.claimed_condition}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-sm tabular-nums text-muted-foreground">
+                              {item.quoted_price != null ? formatCurrency(item.quoted_price) : '—'}
+                            </TableCell>
+                            <TableCell className={`pr-4 text-xs font-medium ${statusColor}`}>{statusLabel}</TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
               {/* Per-item intake panels */}
               <div className="space-y-3">
                 {(intakeOrder.items || []).map(item => {
@@ -1160,6 +1257,105 @@ export default function COETriagePage() {
                   )
                 })}
               </div>
+
+              {/* Condition Mismatch Repricing Panel */}
+              {(() => {
+                const repricingItems = (intakeOrder.items || []).flatMap(item => {
+                  const slots = intakeSlots[item.id] || []
+                  const condMismatchSlots = slots.filter(s => !s.validating && (s.mismatch === 'condition' || s.mismatch === 'both'))
+                  if (condMismatchSlots.length === 0) return []
+                  const actualCondition = condMismatchSlots[0].actualCondition as DeviceCondition
+                  const claimedCondition = item.claimed_condition as DeviceCondition
+                  const claimedMult = CONDITION_CONFIG[claimedCondition]?.multiplier ?? 1
+                  const actualMult = CONDITION_CONFIG[actualCondition]?.multiplier ?? 1
+                  const suggestedPrice = item.quoted_price != null
+                    ? Math.round((item.quoted_price * (actualMult / claimedMult)) * 100) / 100
+                    : null
+                  return [{ item, actualCondition, claimedCondition, suggestedPrice, count: condMismatchSlots.length }]
+                })
+                if (repricingItems.length === 0) return null
+                return (
+                  <Card className="border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20">
+                    <CardHeader className="pb-2 pt-3 px-4">
+                      <CardTitle className="text-sm flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="h-4 w-4" />
+                        Condition Mismatches — Repricing
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        {repricingItems.length} SKU{repricingItems.length !== 1 ? 's' : ''} arrived in a different condition than quoted.
+                        Review the suggested prices based on actual condition and apply to update the order.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="px-0 pb-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="pl-4">Device</TableHead>
+                            <TableHead>Quoted Condition</TableHead>
+                            <TableHead>Actual Condition</TableHead>
+                            <TableHead className="text-right">Quoted / Unit</TableHead>
+                            <TableHead className="text-right">Suggested / Unit</TableHead>
+                            <TableHead className="pr-4">Custom Price</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {repricingItems.map(({ item, actualCondition, claimedCondition, suggestedPrice }) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="pl-4 text-sm font-medium">
+                                {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown'}
+                                {item.storage && <span className="ml-1 text-xs text-muted-foreground">({item.storage})</span>}
+                              </TableCell>
+                              <TableCell>
+                                <span className={`text-xs ${CONDITION_CONFIG[claimedCondition]?.color || ''}`}>
+                                  {CONDITION_CONFIG[claimedCondition]?.label}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <span className={`text-xs font-semibold ${CONDITION_CONFIG[actualCondition]?.color || ''}`}>
+                                  {CONDITION_CONFIG[actualCondition]?.label}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right text-sm tabular-nums text-muted-foreground line-through">
+                                {item.quoted_price != null ? formatCurrency(item.quoted_price) : '—'}
+                              </TableCell>
+                              <TableCell className="text-right text-sm tabular-nums font-semibold text-amber-700 dark:text-amber-400">
+                                {suggestedPrice != null ? formatCurrency(suggestedPrice) : '—'}
+                              </TableCell>
+                              <TableCell className="pr-4">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder={suggestedPrice != null ? String(suggestedPrice) : '0.00'}
+                                  value={intakePriceOverride[item.id] || ''}
+                                  onChange={e => setIntakePriceOverride(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  className="h-7 w-28 text-xs text-right"
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <div className="flex items-center justify-between px-4 py-3 border-t">
+                        <p className="text-xs text-muted-foreground">
+                          {repricingApplied
+                            ? '✓ Repricing applied — order item prices have been updated.'
+                            : 'Suggested prices are computed from condition multipliers. Apply to update the order items.'}
+                        </p>
+                        <Button
+                          size="sm"
+                          variant={repricingApplied ? 'outline' : 'default'}
+                          onClick={handleApplyRepricing}
+                          disabled={isApplyingRepricing || repricingApplied}
+                        >
+                          {isApplyingRepricing && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                          {repricingApplied ? '✓ Applied' : 'Apply Repricing'}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })()}
 
               {/* Submit footer */}
               <div className="flex items-center justify-between pt-2 border-t">
