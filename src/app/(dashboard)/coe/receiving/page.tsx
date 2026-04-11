@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
-import { Package, CheckCircle2, Truck, Search, Clock, Plus } from 'lucide-react'
+import { Package, CheckCircle2, Truck, Search, Clock, Plus, AlertTriangle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,8 +21,7 @@ import {
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatDateTime, formatRelativeTime } from '@/lib/utils'
-import type { Shipment } from '@/types'
-import type { Order } from '@/types'
+import type { Shipment, Order, OrderItem } from '@/types'
 
 const CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Other']
 
@@ -44,6 +43,29 @@ const statusColors: Record<string, string> = {
   exception: 'bg-red-100 text-red-700',
 }
 
+type ManifestRow = {
+  itemId: string
+  make: string
+  model: string
+  storage: string
+  expectedQty: number
+  receivedQty: number
+}
+
+function buildManifestRows(items: OrderItem[]): ManifestRow[] {
+  return items.map(item => {
+    const device = item.device as unknown as { make?: string; model?: string } | null
+    return {
+      itemId: item.id,
+      make: device?.make || 'Unknown',
+      model: device?.model || 'Unknown',
+      storage: item.storage || '—',
+      expectedQty: item.quantity || 1,
+      receivedQty: item.quantity || 1, // pre-fill with expected; staff adjusts if different
+    }
+  })
+}
+
 export default function COEReceivingPage() {
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [tradeInOrders, setTradeInOrders] = useState<Order[]>([])
@@ -54,8 +76,11 @@ export default function COEReceivingPage() {
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
   const [receiveNotes, setReceiveNotes] = useState('')
-  const [quantityReceived, setQuantityReceived] = useState('')
   const [isReceiving, setIsReceiving] = useState(false)
+
+  // Manifest state — per-SKU rows loaded from the order
+  const [manifest, setManifest] = useState<ManifestRow[]>([])
+  const [manifestLoading, setManifestLoading] = useState(false)
 
   // Record Inbound Shipment
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -133,6 +158,34 @@ export default function COEReceivingPage() {
       .finally(() => setOrderSearching(false))
   }, [debouncedOrderSearch])
 
+  // Load manifest when a shipment is selected for receiving
+  const loadManifest = useCallback(async (shipment: Shipment) => {
+    setManifest([])
+    if (!shipment.order_id) return
+    setManifestLoading(true)
+    try {
+      const res = await fetch(`/api/orders/${shipment.order_id}`)
+      if (!res.ok) return
+      const order: Order & { items?: OrderItem[] } = await res.json()
+      if (order.items && order.items.length > 0) {
+        setManifest(buildManifestRows(order.items))
+      }
+    } catch {} finally { setManifestLoading(false) }
+  }, [])
+
+  const openReceiveDialog = useCallback((shipment: Shipment) => {
+    setSelectedShipment(shipment)
+    setReceiveNotes('')
+    loadManifest(shipment)
+    setReceiveDialogOpen(true)
+  }, [loadManifest])
+
+  const updateManifestRow = (itemId: string, receivedQty: number) => {
+    setManifest(prev => prev.map(row =>
+      row.itemId === itemId ? { ...row, receivedQty: Math.max(0, receivedQty) } : row
+    ))
+  }
+
   const handleCreateInbound = async () => {
     if (!selectedOrder) return
     setIsCreating(true)
@@ -169,11 +222,40 @@ export default function COEReceivingPage() {
     setIsReceiving(true)
     try {
       const expectedQty = (selectedShipment.order as unknown as Record<string, number> | undefined)?.total_quantity
-      const receivedQty = quantityReceived ? parseInt(quantityReceived, 10) : null
-      const countNote = receivedQty != null
-        ? `Devices counted: ${receivedQty}${expectedQty && receivedQty !== expectedQty ? ` (expected ${expectedQty} — DISCREPANCY)` : ''}.`
+      const totalReceived = manifest.length > 0
+        ? manifest.reduce((sum, row) => sum + row.receivedQty, 0)
+        : null
+
+      // Build per-SKU discrepancy notes
+      const discrepancyLines: string[] = []
+      if (manifest.length > 0) {
+        manifest.forEach(row => {
+          const diff = row.receivedQty - row.expectedQty
+          const label = `${row.make} ${row.model}${row.storage !== '—' ? ` ${row.storage}` : ''}`
+          if (diff === 0) {
+            discrepancyLines.push(`${label}: received ${row.receivedQty} ✓`)
+          } else if (diff < 0) {
+            discrepancyLines.push(`${label}: received ${row.receivedQty}, expected ${row.expectedQty} — ${Math.abs(diff)} MISSING`)
+          } else {
+            discrepancyLines.push(`${label}: received ${row.receivedQty}, expected ${row.expectedQty} — ${diff} EXTRA`)
+          }
+        })
+      }
+
+      const hasMismatch = manifest.some(r => r.receivedQty !== r.expectedQty)
+      const totalExpected = manifest.length > 0
+        ? manifest.reduce((sum, r) => sum + r.expectedQty, 0)
+        : expectedQty
+
+      const summaryLine = totalReceived != null
+        ? `Devices counted: ${totalReceived}${totalExpected && totalReceived !== totalExpected ? ` (expected ${totalExpected} — DISCREPANCY)` : ' — count matches'}.`
         : ''
-      const combinedNotes = [countNote, receiveNotes].filter(Boolean).join(' ').trim()
+
+      const discrepancyBlock = discrepancyLines.length > 0
+        ? `\n\nItem breakdown:\n${discrepancyLines.join('\n')}`
+        : ''
+
+      const combinedNotes = [summaryLine + discrepancyBlock, receiveNotes].filter(Boolean).join('\n\n').trim()
 
       const res = await fetch(`/api/shipments/${selectedShipment.id}`, {
         method: 'PATCH',
@@ -181,17 +263,21 @@ export default function COEReceivingPage() {
         body: JSON.stringify({
           action: 'receive',
           notes: combinedNotes || undefined,
-          received_quantity: receivedQty ?? undefined,
-          expected_quantity: expectedQty ?? undefined,
+          received_quantity: totalReceived ?? undefined,
+          expected_quantity: totalExpected ?? undefined,
         }),
       })
       if (!res.ok) throw new Error()
-      const countSummary = receivedQty != null ? ` — ${receivedQty} device${receivedQty !== 1 ? 's' : ''} counted` : ''
-      toast.success(`Shipment received${countSummary}`)
+
+      if (hasMismatch) {
+        toast.warning(`Shipment received with discrepancies — ${manifest.filter(r => r.receivedQty !== r.expectedQty).length} SKU(s) don't match`)
+      } else {
+        toast.success(`Shipment received — ${totalReceived ?? 'all'} device${totalReceived !== 1 ? 's' : ''} counted`)
+      }
       setReceiveDialogOpen(false)
       setSelectedShipment(null)
       setReceiveNotes('')
-      setQuantityReceived('')
+      setManifest([])
       fetchShipments()
     } catch {
       toast.error('Failed to mark shipment as received')
@@ -209,8 +295,12 @@ export default function COEReceivingPage() {
   })
 
   const receivableShipments = shipments.filter(s => s.status !== 'delivered')
-
   const pendingCount = shipments.filter(s => s.status !== 'delivered').length
+
+  // Computed manifest totals for dialog
+  const manifestTotalExpected = manifest.reduce((sum, r) => sum + r.expectedQty, 0)
+  const manifestTotalReceived = manifest.reduce((sum, r) => sum + r.receivedQty, 0)
+  const manifestMismatches = manifest.filter(r => r.receivedQty !== r.expectedQty)
 
   return (
     <div className="space-y-6">
@@ -293,7 +383,7 @@ export default function COEReceivingPage() {
                       {s.status !== 'delivered' ? (
                         <Button
                           size="sm"
-                          onClick={() => { setSelectedShipment(s); setQuantityReceived(''); setReceiveNotes(''); setReceiveDialogOpen(true) }}
+                          onClick={() => openReceiveDialog(s)}
                         >
                           <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />Receive
                         </Button>
@@ -330,154 +420,207 @@ export default function COEReceivingPage() {
               <p className="text-xs mt-1">New customer trade-in orders will appear here automatically.</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order #</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Qty</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tradeInOrders.map(order => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-mono text-sm font-medium">{order.order_number}</TableCell>
-                    <TableCell className="text-sm">{order.customer?.company_name || order.customer?.contact_name || 'Customer'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {order.status.replace(/_/g, ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{order.total_quantity || 0}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(order.created_at)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedOrder(order)
-                          setCreateDialogOpen(true)
-                        }}
-                      >
-                        Record Inbound
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {tradeInOrders.map(order => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-mono text-sm font-medium">{order.order_number}</TableCell>
+                      <TableCell className="text-sm">{order.customer?.company_name || order.customer?.contact_name || 'Customer'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {order.status.replace(/_/g, ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{order.total_quantity || 0}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(order.created_at)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedOrder(order)
+                            setCreateDialogOpen(true)
+                          }}
+                        >
+                          Record Inbound
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Receive Dialog */}
+      {/* ── Receive Dialog — Per-SKU Manifest ─────────────────────────────── */}
       <Dialog open={receiveDialogOpen} onOpenChange={(open) => {
         setReceiveDialogOpen(open)
-        if (!open) { setSelectedShipment(null); setReceiveNotes(''); setQuantityReceived('') }
+        if (!open) { setSelectedShipment(null); setReceiveNotes(''); setManifest([]) }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Confirm Receipt</DialogTitle>
             <DialogDescription>
-              Select the inbound order, enter the count received, and the system will flag any mismatch automatically.
+              Verify quantities received against the order manifest. Adjust any row where the physical count differs.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Select Order</Label>
-              <Select
-                value={selectedShipment?.id || ''}
-                onValueChange={(shipmentId) => {
-                  const shipment = receivableShipments.find(item => item.id === shipmentId) || null
-                  setSelectedShipment(shipment)
-                  setQuantityReceived('')
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an inbound order" />
-                </SelectTrigger>
-                <SelectContent>
-                  {receivableShipments.map(shipment => (
-                    <SelectItem key={shipment.id} value={shipment.id}>
-                      {(shipment.order as unknown as Record<string, string>)?.order_number || 'Unknown order'} · {shipment.tracking_number} · {shipment.carrier}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="space-y-4 py-2">
+            {/* Order info bar */}
+            <div className="grid grid-cols-2 gap-4 text-sm rounded-lg bg-muted/40 px-4 py-3">
               <div>
-                <p className="text-muted-foreground">Carrier</p>
-                <p className="font-medium">{selectedShipment?.carrier}</p>
+                <p className="text-muted-foreground text-xs mb-0.5">Carrier</p>
+                <p className="font-medium">{selectedShipment?.carrier || '—'}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Order</p>
+                <p className="text-muted-foreground text-xs mb-0.5">Order</p>
                 <p className="font-medium">{(selectedShipment?.order as unknown as Record<string, string>)?.order_number || '—'}</p>
               </div>
+              <div>
+                <p className="text-muted-foreground text-xs mb-0.5">Tracking</p>
+                <p className="font-mono text-xs">{selectedShipment?.tracking_number || '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs mb-0.5">Expected Total</p>
+                <p className="font-medium">{manifestTotalExpected > 0 ? `${manifestTotalExpected} devices` : (selectedShipment?.order as unknown as Record<string, number>)?.total_quantity ?? '—'}</p>
+              </div>
             </div>
 
-            {/* Device Count Verification */}
-            <div className="space-y-2">
-              <Label>
-                Devices Received
-                {(selectedShipment?.order as unknown as Record<string, number>)?.total_quantity != null && (
-                  <span className="ml-2 text-xs text-muted-foreground font-normal">
-                    (expected {(selectedShipment?.order as unknown as Record<string, number>).total_quantity})
-                  </span>
-                )}
-              </Label>
-              <Input
-                type="number"
-                min={0}
-                step={1}
-                placeholder="Enter number of devices physically received"
-                value={quantityReceived}
-                onChange={e => setQuantityReceived(e.target.value)}
-              />
-              {(() => {
-                const expected = (selectedShipment?.order as unknown as Record<string, number>)?.total_quantity
-                const received = quantityReceived ? parseInt(quantityReceived, 10) : null
-                if (received == null || !expected) return null
-                const mismatch = Math.abs(expected - received)
-                if (received === expected) {
-                  return (
-                    <p className="text-xs text-green-600 flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5" />Count matches order — all {expected} devices accounted for
-                    </p>
-                  )
-                }
-                return (
-                  <p className="text-xs text-amber-600 font-medium">
-                    ⚠ Count mismatch — expected {expected}, received {received}. Mismatch found: {mismatch} device{mismatch !== 1 ? 's' : ''}.
-                  </p>
-                )
-              })()}
-            </div>
+            {/* Manifest table */}
+            {manifestLoading ? (
+              <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />Loading manifest…
+              </div>
+            ) : manifest.length > 0 ? (
+              <div>
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2 block">
+                  Receiving Manifest — adjust qty if physical count differs
+                </Label>
+                <div className="rounded-lg border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40">
+                        <TableHead className="text-xs">Make</TableHead>
+                        <TableHead className="text-xs">Model</TableHead>
+                        <TableHead className="text-xs">Storage</TableHead>
+                        <TableHead className="text-xs text-center">Expected</TableHead>
+                        <TableHead className="text-xs text-center">Received</TableHead>
+                        <TableHead className="text-xs text-center">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {manifest.map(row => {
+                        const diff = row.receivedQty - row.expectedQty
+                        const isMatch = diff === 0
+                        const isMissing = diff < 0
+                        return (
+                          <TableRow key={row.itemId}>
+                            <TableCell className="text-sm font-medium">{row.make}</TableCell>
+                            <TableCell className="text-sm">{row.model}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{row.storage}</TableCell>
+                            <TableCell className="text-center">
+                              <span className="text-sm tabular-nums font-medium">{row.expectedQty}</span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={row.receivedQty}
+                                onChange={e => updateManifestRow(row.itemId, parseInt(e.target.value, 10) || 0)}
+                                className="w-20 h-8 text-center text-sm tabular-nums mx-auto"
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {isMatch ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" />
+                              ) : isMissing ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
+                                  <AlertTriangle className="h-3.5 w-3.5" />{Math.abs(diff)} missing
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium">
+                                  +{diff} extra
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Totals + discrepancy summary */}
+                <div className={`mt-3 rounded-lg px-4 py-3 text-sm flex items-center justify-between gap-4 ${
+                  manifestMismatches.length === 0
+                    ? 'bg-green-50 border border-green-200 text-green-800'
+                    : 'bg-amber-50 border border-amber-200 text-amber-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {manifestMismatches.length === 0 ? (
+                      <><CheckCircle2 className="h-4 w-4" /><span>All {manifestTotalExpected} devices accounted for</span></>
+                    ) : (
+                      <><AlertTriangle className="h-4 w-4" />
+                      <span>
+                        {manifestMismatches.length} SKU{manifestMismatches.length !== 1 ? 's' : ''} with discrepancy —{' '}
+                        {manifestMismatches.filter(r => r.receivedQty < r.expectedQty).reduce((s, r) => s + (r.expectedQty - r.receivedQty), 0)} device{manifestMismatches.filter(r => r.receivedQty < r.expectedQty).reduce((s, r) => s + (r.expectedQty - r.receivedQty), 0) !== 1 ? 's' : ''} missing
+                      </span></>
+                    )}
+                  </div>
+                  <div className="tabular-nums font-semibold">
+                    {manifestTotalReceived} / {manifestTotalExpected}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // Fallback: no items loaded — let staff enter a manual total
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">No item manifest available for this order. Enter a total count manually.</p>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="Enter number of devices physically received"
+                  className="w-40"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Receiving Notes (optional)</Label>
               <Textarea
-                placeholder="Package condition, any damage, other observations..."
+                placeholder="Package condition, damage, other observations..."
                 value={receiveNotes}
                 onChange={e => setReceiveNotes(e.target.value)}
-                rows={3}
+                rows={2}
               />
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setReceiveDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleReceive} disabled={isReceiving}>
-              {isReceiving ? 'Receiving...' : 'Confirm Receipt'}
+            <Button onClick={handleReceive} disabled={isReceiving || manifestLoading}>
+              {isReceiving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Receiving…</> : 'Confirm Receipt'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Record Inbound Shipment Dialog */}
+      {/* ── Record Inbound Shipment Dialog ────────────────────────────────── */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => {
         setCreateDialogOpen(open)
         if (!open) { setSelectedOrder(null); setOrderSearch(''); setCreateForm({ carrier: 'FedEx', tracking_number: '' }) }

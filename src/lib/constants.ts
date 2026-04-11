@@ -644,6 +644,8 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
   assigned?: boolean
   subject: (orderNumber: string) => string
   message: (orderNumber: string) => string
+  // customerMessage overrides message when sending to customer recipients
+  customerMessage?: (orderNumber: string) => string
 }> = {
   submitted: {
     admin: true,
@@ -661,6 +663,10 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     assigned: true,
     subject: (n) => `Order #${n} Accepted`,
     message: (n) => `Order #${n} has been accepted by the customer and is ready for processing.`,
+    // Trade-in customers need shipping instructions; this customer-specific message
+    // replaces the generic one when sending to customer recipients.
+    customerMessage: (n) =>
+      `Thank you for accepting the quote for order #${n}.\n\nOur team will send you shipping instructions — including a prepaid label — within 24 hours. Please have your devices ready to pack.\n\nIf you have any questions in the meantime, reply to this email or contact your account manager.`,
   },
   rejected: {
     customer: true,
