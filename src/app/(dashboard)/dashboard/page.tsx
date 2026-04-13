@@ -81,10 +81,10 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   const recentOrders = orders.slice(0, 6)
 
   const stats = [
-    { label: 'Total Orders', value: total, icon: ShoppingCart, tone: 'text-amber-200' },
-    { label: 'Active Queue', value: pendingOrders, icon: Activity, tone: 'text-teal-200' },
-    { label: 'SLA Alerts', value: slaAlerts, icon: AlertTriangle, tone: 'text-rose-200' },
-    { label: 'Revenue', value: formatCurrency(recentRevenue), icon: DollarSign, tone: 'text-sky-200' },
+    { label: 'Total Orders', value: total, icon: ShoppingCart, tone: 'text-primary' },
+    { label: 'Active Queue', value: pendingOrders, icon: Activity, tone: 'text-amber-400' },
+    { label: 'SLA Alerts', value: slaAlerts, icon: AlertTriangle, tone: 'text-red-400' },
+    { label: 'Revenue', value: formatCurrency(recentRevenue), icon: DollarSign, tone: 'text-emerald-400' },
   ]
 
   const quickActions = [
@@ -239,7 +239,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
               <CardTitle className="text-2xl text-stone-100">Recent Activity</CardTitle>
               <CardDescription className="mt-2 text-stone-400">Latest orders and where they sit.</CardDescription>
             </div>
-            <Link href="/orders" className="text-sm text-primary hover:text-amber-200">
+            <Link href="/orders" className="text-sm text-primary hover:text-primary/70">
               View all
             </Link>
           </CardHeader>
@@ -321,10 +321,10 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   const visibleValue = summary?.visible_value || 0
 
   const stats = [
-    { label: 'Total Orders', value: totalOrders, icon: ShoppingCart, tone: 'text-amber-200' },
-    { label: 'Active Orders', value: activeOrders, icon: Activity, tone: 'text-teal-200' },
-    { label: 'Quotes Ready', value: quotesReady, icon: ClipboardCheck, tone: 'text-sky-200' },
-    { label: 'Completed', value: completedOrders, icon: Truck, tone: 'text-emerald-200' },
+    { label: 'Total Orders', value: totalOrders, icon: ShoppingCart, tone: 'text-primary' },
+    { label: 'Active Orders', value: activeOrders, icon: Activity, tone: 'text-amber-400' },
+    { label: 'Quotes Ready', value: quotesReady, icon: ClipboardCheck, tone: 'text-blue-400' },
+    { label: 'Completed', value: completedOrders, icon: Truck, tone: 'text-emerald-400' },
   ]
 
   const quickActions = [
@@ -411,7 +411,7 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
               <CardTitle className="text-2xl text-stone-100">Recent Orders</CardTitle>
               <CardDescription className="mt-2 text-stone-400">Latest updates.</CardDescription>
             </div>
-            <Link href="/customer/orders" className="text-sm text-primary hover:text-amber-200">
+            <Link href="/customer/orders" className="text-sm text-primary hover:text-primary/70">
               View all
             </Link>
           </CardHeader>

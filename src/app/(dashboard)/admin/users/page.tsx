@@ -199,7 +199,7 @@ export default function AdminUsersPage() {
           <p className="text-muted-foreground">Manage user accounts and roles</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />Add User</Button></DialogTrigger>
+          <DialogTrigger asChild><Button variant="success"><Plus className="mr-2 h-4 w-4" />Add User</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New User</DialogTitle>

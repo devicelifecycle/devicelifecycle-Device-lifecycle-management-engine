@@ -151,7 +151,7 @@ export default function COEExceptionsPage() {
                       </TableCell>
                       <TableCell>
                         {exc.price_adjustment != null && (
-                          <span className={exc.price_adjustment < 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
+                          <span className={exc.price_adjustment < 0 ? 'text-destructive font-medium' : 'text-emerald-600 dark:text-emerald-400 font-medium'}>
                             {exc.price_adjustment < 0 ? '−' : '+'}{formatCurrency(Math.abs(exc.price_adjustment))}
                           </span>
                         )}
@@ -169,17 +169,17 @@ export default function COEExceptionsPage() {
                         <div className="flex justify-end gap-1">
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="success"
                             onClick={() => { setSelected(exc); setAction('approve'); }}
                           >
-                            <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-green-600" />Approve
+                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />Approve
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="destructive"
                             onClick={() => { setSelected(exc); setAction('reject'); }}
                           >
-                            <XCircle className="mr-1 h-3.5 w-3.5 text-red-600" />Reject
+                            <XCircle className="mr-1 h-3.5 w-3.5" />Reject
                           </Button>
                         </div>
                       </TableCell>

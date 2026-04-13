@@ -158,7 +158,7 @@ export default function CustomerRequestsPage() {
 
           {/* Parse error */}
           {parseError && (
-            <p className="flex items-center gap-2 text-sm text-red-600">
+            <p className="flex items-center gap-2 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />{parseError}
             </p>
           )}
@@ -187,7 +187,7 @@ export default function CustomerRequestsPage() {
                       <span className="text-xs tabular-nums">{formatCurrency(row.unit_price)}/unit</span>
                     )}
                     {row.device_id ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                     ) : (
                       <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
                     )}

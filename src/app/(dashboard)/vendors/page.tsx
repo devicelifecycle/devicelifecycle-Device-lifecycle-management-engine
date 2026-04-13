@@ -73,7 +73,7 @@ export default function VendorsPage() {
         />
         <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
           <CardContent className="py-16 text-center">
-            <p className="text-lg font-semibold text-rose-200">Failed to load vendors</p>
+            <p className="text-lg font-semibold text-red-400">Failed to load vendors</p>
             <p className="mt-2 text-sm text-stone-500">
               You may not have permission to view this page, or the connection to the backend failed.
             </p>
