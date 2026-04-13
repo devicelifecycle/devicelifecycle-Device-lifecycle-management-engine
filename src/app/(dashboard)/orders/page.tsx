@@ -650,7 +650,7 @@ export default function OrdersPage() {
               </div>
 
               {importParseError && (
-                <p className="text-sm text-red-600 flex items-center gap-1.5">
+                <p className="text-sm text-destructive flex items-center gap-1.5">
                   <AlertCircle className="h-4 w-4 shrink-0" />{importParseError}
                 </p>
               )}
@@ -716,7 +716,7 @@ export default function OrdersPage() {
                         </TableCell>
                         <TableCell>
                           {isMatched ? (
-                            <span className="flex items-center gap-1 text-xs text-green-600">
+                            <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
                               <CheckCircle2 className="h-3.5 w-3.5" />Matched
                             </span>
                           ) : (
@@ -776,7 +776,7 @@ function organizationIdBanner({
         <span className="text-stone-500">Scoped view active.</span>
         {customerIdFromUrl ? <span>Showing orders for a selected customer.</span> : null}
         {vendorIdFromUrl ? <span>Showing orders for a selected vendor.</span> : null}
-        <button className="ml-auto text-primary hover:text-amber-200" onClick={clearFilters}>
+        <button className="ml-auto text-primary hover:text-primary/70" onClick={clearFilters}>
           Clear scope
         </button>
       </div>

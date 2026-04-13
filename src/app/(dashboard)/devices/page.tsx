@@ -106,11 +106,11 @@ export default function DevicesPage() {
   const MAKE_ORDER = ['Apple', 'Samsung', 'Google'] as const
 
   const categoryColors: Record<string, { bg: string; text: string }> = {
-    phone: { bg: 'bg-blue-500/10', text: 'text-blue-700' },
-    tablet: { bg: 'bg-purple-500/10', text: 'text-purple-700' },
-    laptop: { bg: 'bg-green-500/10', text: 'text-green-700' },
-    watch: { bg: 'bg-orange-500/10', text: 'text-orange-700' },
-    other: { bg: 'bg-gray-500/10', text: 'text-gray-700' },
+    phone: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400' },
+    tablet: { bg: 'bg-violet-500/10', text: 'text-violet-600 dark:text-violet-400' },
+    laptop: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400' },
+    watch: { bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400' },
+    other: { bg: 'bg-muted', text: 'text-muted-foreground' },
   }
 
   const specs = (d: Device) => (d.specifications || {}) as { storage_options?: string[]; colors?: string[] }
@@ -124,7 +124,7 @@ export default function DevicesPage() {
         </div>
         {canCreate && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="shadow-md shadow-primary/20"><Plus className="mr-2 h-4 w-4" />Add Device</Button>
+            <Button variant="success"><Plus className="mr-2 h-4 w-4" />Add Device</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>

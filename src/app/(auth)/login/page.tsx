@@ -211,9 +211,9 @@ export default function LoginPage() {
                 className="surface-panel rounded-[1.5rem] px-5 py-4"
               >
                 <div className="flex items-center gap-3">
-                  {index === 0 && <ShieldCheck className="h-5 w-5 text-amber-200" />}
-                  {index === 1 && <Truck className="h-5 w-5 text-teal-200" />}
-                  {index === 2 && <Package className="h-5 w-5 text-sky-200" />}
+                  {index === 0 && <ShieldCheck className="h-5 w-5 text-primary" />}
+                  {index === 1 && <Truck className="h-5 w-5 text-primary/80" />}
+                  {index === 2 && <Package className="h-5 w-5 text-primary/60" />}
                   <p className="text-sm font-medium text-stone-200">{item}</p>
                 </div>
               </motion.div>

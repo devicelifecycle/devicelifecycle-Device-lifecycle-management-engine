@@ -1988,8 +1988,7 @@ export default function OrderDetailPage() {
                                   </Button>
                                   <Button
                                     size="sm"
-                                    variant="outline"
-                                    className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
+                                    variant="destructive"
                                     onClick={() => {
                                       setSelectedBid(bid)
                                       setRejectBidDialogOpen(true)

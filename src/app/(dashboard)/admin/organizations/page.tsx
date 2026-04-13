@@ -190,7 +190,7 @@ export default function AdminOrganizationsPage() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Add Organization</Button>
+            <Button variant="success"><Plus className="mr-2 h-4 w-4" />Add Organization</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
@@ -247,6 +247,7 @@ export default function AdminOrganizationsPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Cancel</Button>
               <Button
+                variant="success"
                 onClick={editingOrg ? handleUpdate : handleCreate}
                 disabled={creating || !form.name || (!editingOrg && form.type !== 'internal' && !form.email)}
               >

@@ -134,7 +134,7 @@ export default function AdminSLARulesPage() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Add Rule</Button>
+            <Button variant="success"><Plus className="mr-2 h-4 w-4" />Add Rule</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Add SLA Rule</DialogTitle></DialogHeader>
@@ -184,7 +184,7 @@ export default function AdminSLARulesPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreate} disabled={creating || !form.name || !form.warning_hours || !form.breach_hours}>
+              <Button variant="success" onClick={handleCreate} disabled={creating || !form.name || !form.warning_hours || !form.breach_hours}>
                 {creating ? 'Creating...' : 'Create Rule'}
               </Button>
             </DialogFooter>
