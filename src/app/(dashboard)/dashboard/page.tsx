@@ -436,7 +436,7 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   <Link href="/orders/new">
-                    <Button>
+                    <Button variant="success">
                       <Plus className="mr-2 h-4 w-4" />
                       Create Order
                     </Button>

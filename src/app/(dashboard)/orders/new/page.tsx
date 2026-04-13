@@ -1186,6 +1186,7 @@ export default function NewOrderPage() {
         <div className="flex flex-wrap gap-2">
           <Button
             type="submit"
+            variant="success"
             disabled={isCreating || (isCustomer && (myCustomerLoading || !myCustomer || !!myCustomerError))}
           >
             {isCreating ? 'Creating...' : 'Create Order'}
