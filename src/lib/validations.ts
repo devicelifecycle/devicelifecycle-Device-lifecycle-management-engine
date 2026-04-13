@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { z } from 'zod'
+import { normalizeConditionRaw, normalizePricingCondition, normalizeCompetitorCondition } from '@/lib/condition'
 
 // ============================================================================
 // TYPE VALUES AS ARRAYS (for use with z.enum())
@@ -25,59 +26,22 @@ export const TRIAGE_DECISION_VALUES = ['accept', 'reject', 'recondition', 'excep
 export const NOTIFICATION_TYPE_VALUES = ['in_app', 'email', 'sms'] as const
 export const AUDIT_ACTION_VALUES = ['create', 'update', 'delete', 'status_change', 'login', 'logout', 'price_change', 'assignment'] as const
 
-function normalizeConditionToken(input: unknown): string {
-  return String(input ?? '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z]/g, '')
-}
-
-function normalizeConditionBase(input: unknown): 'new' | 'excellent' | 'good' | 'fair' | 'poor' | 'broken' | undefined {
-  const token = normalizeConditionToken(input)
-  if (!token) return undefined
-
-  if (token === 'new' || token.startsWith('brandnew')) return 'new'
-  if (
-    token === 'excellent' ||
-    token === 'excellant' ||
-    token === 'exacellent' ||
-    token === 'exacellen' ||
-    token === 'exellent' ||
-    token === 'excelent' ||
-    token === 'like' ||
-    token.startsWith('likenew') ||
-    token.startsWith('excel') ||
-    token.startsWith('excell')
-  ) return 'excellent'
-  if (token === 'good' || token === 'gud' || token === 'gd') return 'good'
-  if (token === 'fair' || token === 'fr' || token === 'average') return 'fair'
-  if (
-    token === 'poor' ||
-    token === 'broken' ||
-    token === 'brokn' ||
-    token === 'broke' ||
-    token.startsWith('damag') ||
-    token.startsWith('crack') ||
-    token.startsWith('defect')
-  ) return token === 'poor' ? 'poor' : 'broken'
-
-  return undefined
-}
+// Condition normalisation delegates to the shared lib (src/lib/condition.ts)
+// so that CSV parsing and API validation always apply identical rules.
 
 export function normalizePricingConditionInput(input: unknown): 'new' | 'excellent' | 'good' | 'fair' | 'poor' {
-  const normalized = normalizeConditionBase(input)
-  if (!normalized) return 'good'
-  if (normalized === 'broken') return 'poor'
-  return normalized
+  return normalizePricingCondition(input)
 }
 
 export function normalizeCompetitorConditionInput(input: unknown): 'excellent' | 'good' | 'fair' | 'broken' {
-  const normalized = normalizeConditionBase(input)
-  if (!normalized) return 'good'
-  if (normalized === 'new') return 'excellent'
-  if (normalized === 'poor') return 'broken'
-  return normalized
+  const c = normalizeCompetitorCondition(input)
+  // normalizeCompetitorCondition can also return 'poor'; map it to 'broken' for competitor schema
+  if (c === 'poor') return 'broken'
+  return c
 }
+
+// Re-export for any call site that imports normalizeConditionRaw from validations
+export { normalizeConditionRaw }
 
 // ============================================================================
 // COMMON SCHEMAS
