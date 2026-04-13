@@ -86,7 +86,7 @@ const storyChapters = [
     stageLabel: "Operations surface",
     stageHeadline: "From intake to ship, the product keeps one continuous frame.",
     stageFootnote:
-      "The welcome page mirrors the actual workflow: fewer jumps, more continuity, better recall.",
+      "Fewer jumps, more continuity, better recall across every team boundary.",
     icon: Truck,
     accent: "from-[#d4f4ea]/55 via-[#f5fbf8] to-white",
     glow: "bg-emerald-300/30",
@@ -97,21 +97,21 @@ const storyChapters = [
 const principles = [
   {
     icon: Workflow,
-    title: "Show one idea at a time",
+    title: "One system for the whole journey",
     description:
-      "The page now introduces the platform in a sequence instead of dropping every workflow on screen at once.",
+      "From intake quote to certified resale, the entire device lifecycle moves inside a single platform — no tool-switching, no context loss, no duplicated effort.",
   },
   {
     icon: ShieldCheck,
-    title: "Let the product feel expensive",
+    title: "Pricing that adapts to the market",
     description:
-      "Bigger typography, cleaner spacing, and calmer surfaces make the homepage feel deliberate instead of overfilled.",
+      "Benchmark data, competitor signals, and trained baselines keep quotes accurate without manual research at every step. Confidence built in.",
   },
   {
     icon: Package,
-    title: "Keep detail behind the scroll",
+    title: "Roles that match the work",
     description:
-      "The first screen sells the system. The next screens explain it only when visitors are ready for more.",
+      "Admin, sales, COE technician, customer, and vendor each see exactly the operations surface they need — nothing more, nothing hidden.",
   },
 ] as const;
 
@@ -247,17 +247,17 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="welcome-header sticky top-0 z-50 mt-4 flex items-center justify-between rounded-full px-4 py-3 sm:px-6"
+          className="welcome-header sticky top-4 z-50 flex items-center justify-between rounded-full px-4 py-3 sm:px-6"
         >
-          <div className="flex items-center gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#17120f] text-[#f8f2ea] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.45)]">
-              <Package className="h-5 w-5" />
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#17120f] text-[#f8f2ea] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.45)] sm:h-11 sm:w-11">
+              <Package className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div>
-              <p className="editorial-title text-[1.7rem] leading-none text-[#17120f]">
+              <p className="editorial-title text-[1.4rem] leading-none text-[#17120f] sm:text-[1.7rem]">
                 DLM Engine
               </p>
-              <p className="text-[10px] uppercase tracking-[0.28em] text-[#7f766f]">
+              <p className="hidden text-[10px] uppercase tracking-[0.28em] text-[#7f766f] sm:block">
                 Device Lifecycle Management
               </p>
             </div>
@@ -284,42 +284,45 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/login">
               <Button
                 variant="outline"
-                className="border-black/10 bg-white/60 text-[#17120f] hover:bg-white"
+                size="sm"
+                className="border-black/10 bg-white/60 text-[#17120f] hover:bg-white sm:h-10 sm:px-4 sm:text-sm"
               >
                 Sign In
               </Button>
             </Link>
             <Link href="/register">
-              <Button className="animate-shine">Request Access</Button>
+              <Button size="sm" className="animate-shine sm:h-10 sm:px-4 sm:text-sm">
+                Request Access
+              </Button>
             </Link>
           </div>
         </motion.header>
 
-        <main className="pb-16">
+        <main className="pb-16 pt-6">
           <section ref={heroRef} className="relative" id="top">
-            <div className="grid min-h-[calc(100svh-6rem)] items-center gap-12 py-10 sm:py-12 lg:grid-cols-[0.92fr_1.08fr] lg:gap-16 lg:py-20">
+            <div className="grid min-h-[calc(100svh-5rem)] items-center gap-8 py-8 sm:gap-12 sm:py-12 lg:grid-cols-[0.92fr_1.08fr] lg:gap-16 lg:py-20">
               <motion.div
                 style={
                   shouldReduceMotion
                     ? undefined
                     : { y: heroCopyY, opacity: heroCopyOpacity }
                 }
-                className="relative z-10 space-y-8"
+                className="relative z-10 space-y-7 sm:space-y-8"
               >
                 <span className="eyebrow-label text-[#8a6c45]">
-                  Premium Welcome Experience
+                  Device Lifecycle Platform
                 </span>
 
-                <div className="space-y-6">
+                <div className="space-y-5 sm:space-y-6">
                   <motion.h1
                     initial={{ opacity: 0, y: 22 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.08 }}
-                    className="editorial-title max-w-5xl text-[clamp(3.3rem,7.7vw,7.6rem)] text-[#17120f]"
+                    className="editorial-title max-w-5xl text-[clamp(2.8rem,7.7vw,7.6rem)] leading-[1.06] text-[#17120f]"
                   >
                     Devices move through the business
                     <span className="block brand-gradient">
@@ -331,11 +334,11 @@ export default function LandingPage() {
                     initial={{ opacity: 0, y: 22 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.16 }}
-                    className="max-w-2xl text-lg leading-8 text-[#5f5751] sm:text-[1.18rem]"
+                    className="max-w-2xl text-base leading-8 text-[#5f5751] sm:text-[1.18rem]"
                   >
-                    Real hardware, cleaner composition, and a calmer scroll
-                    story make the first impression feel closer to a product
-                    reveal than a feature dump.
+                    One platform manages every device from trade-in intake to
+                    certified resale — with pricing intelligence, COE operations,
+                    and customer visibility built in.
                   </motion.p>
                 </div>
 
@@ -421,7 +424,7 @@ export default function LandingPage() {
           <section
             ref={experienceRef}
             id="experience"
-            className="relative py-20 sm:py-24"
+            className="relative py-16 sm:py-24"
           >
             <motion.div
               initial={{ opacity: 0, y: 24 }}
@@ -431,15 +434,15 @@ export default function LandingPage() {
               className="mx-auto max-w-3xl text-center"
             >
               <span className="eyebrow-label text-[#8a6c45]">
-                Scroll The Product
+                Platform Story
               </span>
-              <h2 className="editorial-title mt-6 text-5xl text-[#17120f] sm:text-6xl">
-                Scroll the system, not a pile of widgets.
+              <h2 className="editorial-title mt-6 text-4xl text-[#17120f] sm:text-5xl lg:text-6xl">
+                Three surfaces. One continuous device journey.
               </h2>
-              <p className="mt-5 text-lg leading-8 text-[#625a54]">
-                The welcome page now leans on stronger visuals and fewer words,
-                so the platform feels expensive before visitors ever read a long
-                paragraph.
+              <p className="mt-5 text-base leading-8 text-[#625a54] sm:text-lg">
+                Every handoff from arrival to outbound stays traceable because
+                the platform carries the device context forward — not broken at
+                each team boundary.
               </p>
             </motion.div>
 
@@ -464,7 +467,7 @@ export default function LandingPage() {
               })}
             </div>
 
-            <div className="mt-16 grid gap-10 lg:grid-cols-[0.95fr_1.05fr] xl:gap-16">
+            <div className="mt-12 grid gap-8 lg:mt-16 lg:grid-cols-[0.95fr_1.05fr] xl:gap-16">
               <motion.div
                 style={
                   shouldReduceMotion
@@ -474,10 +477,10 @@ export default function LandingPage() {
                         scale: stageShellScale,
                       }
                 }
-                className="lg:sticky lg:top-28 lg:h-[calc(100vh-8rem)]"
+                className="lg:sticky lg:top-24 lg:h-[calc(100vh-7rem)]"
               >
                 <div className="flex h-full items-start">
-                  <div className="chapter-stage grain-overlay relative w-full overflow-hidden rounded-[2.8rem] p-6 sm:p-8">
+                  <div className="chapter-stage grain-overlay relative h-full w-full overflow-hidden rounded-[2.8rem] p-6 sm:p-8">
                     <AnimatePresence mode="wait">
                       <motion.div
                         key={`${activeChapter.id}-wash`}
@@ -492,8 +495,8 @@ export default function LandingPage() {
                       className={`absolute left-10 top-8 h-32 w-32 rounded-full blur-3xl ${activeChapter.glow}`}
                       style={{ opacity: stageGlowOpacity }}
                     />
-                    <div className="relative">
-                      <div className="mb-8 flex items-center justify-between gap-4">
+                    <div className="relative h-full">
+                      <div className="mb-6 flex items-center justify-between gap-4">
                         <span className="eyebrow-label text-[#ebc88d]">
                           Chapter {activeChapter.step}
                         </span>
@@ -507,7 +510,7 @@ export default function LandingPage() {
                 </div>
               </motion.div>
 
-              <div className="space-y-6">
+              <div className="space-y-6 lg:space-y-8">
                 {storyChapters.map((chapter, index) => {
                   const isActive = activeChapter.id === chapter.id;
 
@@ -523,7 +526,7 @@ export default function LandingPage() {
                       viewport={{ once: true, amount: 0.22 }}
                       transition={{ duration: 0.7, delay: index * 0.06 }}
                       whileHover={shouldReduceMotion ? undefined : { y: -5 }}
-                      className={`chapter-card relative min-h-[44rem] overflow-hidden rounded-[2.5rem] p-6 sm:min-h-[48rem] sm:p-8 lg:min-h-[54rem] ${
+                      className={`chapter-card relative min-h-[30rem] overflow-hidden rounded-[2.5rem] p-6 sm:min-h-[40rem] sm:p-8 lg:min-h-[52rem] ${
                         isActive
                           ? "border-[#d07a48]/28 shadow-[0_42px_120px_-70px_rgba(186,104,48,0.46)]"
                           : "border-black/8"
@@ -532,11 +535,11 @@ export default function LandingPage() {
                       <div
                         className={`absolute inset-0 bg-gradient-to-br ${chapter.accent} opacity-95`}
                       />
-                      <div className="pointer-events-none absolute right-6 top-4 text-[7rem] font-semibold leading-none text-black/[0.05] sm:right-8 sm:text-[8.5rem]">
+                      <div className="pointer-events-none absolute right-6 top-4 text-[6rem] font-semibold leading-none text-black/[0.05] sm:right-8 sm:text-[8.5rem]">
                         {chapter.step}
                       </div>
 
-                      <div className="relative flex h-full flex-col justify-between gap-10">
+                      <div className="relative flex h-full flex-col justify-between gap-8">
                         <div>
                           <div className="flex items-center justify-between gap-4">
                             <p className="text-xs uppercase tracking-[0.28em] text-[#7b726b]">
@@ -547,16 +550,16 @@ export default function LandingPage() {
                             </div>
                           </div>
 
-                          <div className="mt-10 flex flex-col gap-6">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-[1.7rem] border border-black/8 bg-white/75 text-[#17120f] shadow-[0_20px_40px_-28px_rgba(0,0,0,0.22)]">
-                              <chapter.icon className="h-6 w-6" />
+                          <div className="mt-8 flex flex-col gap-5 sm:mt-10 sm:gap-6">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-[1.7rem] border border-black/8 bg-white/75 text-[#17120f] shadow-[0_20px_40px_-28px_rgba(0,0,0,0.22)] sm:h-16 sm:w-16">
+                              <chapter.icon className="h-5 w-5 sm:h-6 sm:w-6" />
                             </div>
 
                             <div className="max-w-2xl">
-                              <h3 className="editorial-title text-4xl text-[#17120f] sm:text-5xl">
+                              <h3 className="editorial-title text-3xl text-[#17120f] sm:text-4xl lg:text-5xl">
                                 {chapter.title}
                               </h3>
-                              <p className="mt-5 text-base leading-8 text-[#5f5751]">
+                              <p className="mt-4 text-base leading-8 text-[#5f5751]">
                                 {chapter.description}
                               </p>
                             </div>
@@ -566,9 +569,9 @@ export default function LandingPage() {
                         <div className="space-y-4">
                           <div className="chapter-highlight rounded-[2rem] p-5 sm:p-6">
                             <p className="text-xs uppercase tracking-[0.24em] text-[#8a6d4b]">
-                              Why it lands better
+                              Why it matters
                             </p>
-                            <p className="mt-4 text-lg leading-8 text-[#1d1815]">
+                            <p className="mt-3 text-base leading-8 text-[#1d1815] sm:mt-4 sm:text-lg">
                               {chapter.focus}
                             </p>
                           </div>
@@ -604,31 +607,33 @@ export default function LandingPage() {
               <p className="text-xs uppercase tracking-[0.28em] text-[#8c7050]">
                 Built For Clarity
               </p>
-              <p className="editorial-title mt-5 text-4xl text-[#17120f] sm:text-6xl">
+              <p className="editorial-title mt-5 text-3xl text-[#17120f] sm:text-5xl lg:text-6xl">
                 Designed to stay calm while the work gets complicated.
               </p>
               <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-[#645c56] sm:text-lg">
-                The goal is not to show more. It is to make the system feel
-                obvious, intentional, and memorable.
+                The goal is not more features. It is one clear path from device
+                arrival to successful delivery — for every role, every order,
+                every time.
               </p>
             </motion.div>
           </section>
 
-          <section id="principles" className="py-16 sm:py-24">
+          <section id="principles" className="py-14 sm:py-20 lg:py-24">
             <div className="mx-auto max-w-3xl text-center">
               <span className="eyebrow-label text-[#8a6c45]">
                 Design Principles
               </span>
-              <h2 className="editorial-title mt-6 text-5xl text-[#17120f] sm:text-6xl">
+              <h2 className="editorial-title mt-6 text-4xl text-[#17120f] sm:text-5xl lg:text-6xl">
                 Clean on first glance. Deep when you keep going.
               </h2>
-              <p className="mt-5 text-lg leading-8 text-[#625a54]">
-                The first screen now sets the tone quickly. The next screens
-                reveal the product with more control and less clutter.
+              <p className="mt-5 text-base leading-8 text-[#625a54] sm:text-lg">
+                Every layer of the platform is shaped by the same thinking —
+                make the right action obvious, hide the noise, let the team
+                focus on what matters.
               </p>
             </div>
 
-            <div className="mt-10 grid gap-4 lg:grid-cols-3">
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {principles.map((principle, index) => (
                 <motion.div
                   key={principle.title}
@@ -641,7 +646,7 @@ export default function LandingPage() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-[#17120f] text-[#f7efe5]">
                     <principle.icon className="h-5 w-5" />
                   </div>
-                  <p className="mt-6 text-2xl font-semibold text-[#17120f]">
+                  <p className="mt-6 text-xl font-semibold text-[#17120f] sm:text-2xl">
                     {principle.title}
                   </p>
                   <p className="mt-3 text-sm leading-7 text-[#605953]">
@@ -652,7 +657,7 @@ export default function LandingPage() {
             </div>
           </section>
 
-          <section id="launch" className="pb-8 pt-8 sm:pt-12">
+          <section id="launch" className="pb-10 pt-6 sm:pt-10">
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -685,17 +690,17 @@ export default function LandingPage() {
                   <span className="eyebrow-label text-[#f0cca0]">
                     Ready To Launch
                   </span>
-                  <h2 className="editorial-title mt-6 text-5xl text-white sm:text-6xl">
-                    A cleaner welcome page for a serious operations platform.
+                  <h2 className="editorial-title mt-6 text-4xl text-white sm:text-5xl lg:text-6xl">
+                    A serious operations platform for every device lifecycle.
                   </h2>
-                  <p className="mt-5 text-lg leading-8 text-white/68">
-                    The homepage now feels closer to a premium product reveal:
-                    less clutter, more confidence, and a clearer story from the
-                    first screen onward.
+                  <p className="mt-5 text-base leading-8 text-white/70 sm:text-lg">
+                    Trade-ins, CPO resale, pricing intelligence, COE operations,
+                    and customer-facing workflows — all in one composed,
+                    role-aware system.
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-shrink-0 flex-wrap gap-3">
                   <Link href="/login">
                     <Button size="lg">
                       Open the platform
@@ -706,7 +711,7 @@ export default function LandingPage() {
                     <Button
                       size="lg"
                       variant="outline"
-                      className="border-white/16 bg-white/8 text-white hover:bg-white/12"
+                      className="border-white/16 bg-white/[0.08] text-white hover:bg-white/[0.14]"
                     >
                       Request access
                     </Button>

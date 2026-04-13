@@ -169,23 +169,47 @@ export function PremiumDeviceHero() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.52),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.78)_0%,rgba(245,239,232,0.96)_38%,rgba(232,224,214,0.92)_100%)]" />
       <div className="absolute inset-x-8 bottom-10 h-24 rounded-full bg-[radial-gradient(circle,rgba(23,18,15,0.18)_0%,rgba(23,18,15,0.02)_68%,transparent_76%)] blur-2xl" />
 
-      <div className="relative flex min-h-[34rem] flex-col justify-between gap-8 sm:min-h-[38rem]">
-        <div className="flex items-center justify-between gap-4">
-          <div>
+      <div className="relative flex min-h-[28rem] flex-col justify-between gap-6 sm:min-h-[34rem] sm:gap-8 lg:min-h-[38rem]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-[0.28em] text-[#8a7665]">
-              Cinematic Device Runway
+              Device Runway
             </p>
-            <p className="mt-3 max-w-lg text-2xl font-semibold tracking-tight text-[#17120f] sm:text-[2rem]">
-              Real hardware, arranged like a product reveal instead of a dashboard.
+            <p className="mt-2 max-w-md text-xl font-semibold tracking-tight text-[#17120f] sm:mt-3 sm:text-2xl lg:text-[2rem]">
+              Real hardware, every step of the device lifecycle.
             </p>
           </div>
-          <div className="hidden rounded-full border border-black/8 bg-white/72 px-3 py-1 text-xs text-[#514a44] sm:block">
-            Scroll-reactive composition
+          <div className="hidden shrink-0 rounded-full border border-black/8 bg-white/70 px-3 py-1 text-xs text-[#514a44] sm:block">
+            Scroll-reactive
           </div>
         </div>
 
+        {/* Mobile: show only center device */}
+        <div className="relative overflow-hidden md:hidden">
+          <div className={`premium-device-card`}>
+            <div className={`premium-device-frame overflow-hidden rounded-[1.8rem] aspect-[7/5]`}>
+              <Image
+                src={heroDevices[1].src}
+                alt={heroDevices[1].alt}
+                width={heroDevices[1].width}
+                height={heroDevices[1].height}
+                sizes="90vw"
+                priority
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
+            </div>
+            <div className="premium-device-meta mt-3 rounded-[1.5rem] px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.26em] text-[#8a7665]">{heroDevices[1].label}</p>
+              <p className="mt-1 text-lg font-semibold tracking-tight text-[#17120f]">{heroDevices[1].title}</p>
+              <p className="mt-1 text-sm leading-5 text-[#5a534d]">{heroDevices[1].detail}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop: three-device grid */}
         <motion.div
-          className="premium-runway-grid relative grid items-end gap-4 md:grid-cols-[0.8fr_1.18fr_0.82fr] md:gap-5"
+          className="premium-runway-grid relative hidden items-end gap-4 md:grid md:grid-cols-[0.8fr_1.18fr_0.82fr] md:gap-5"
           style={{ x: runwayX }}
         >
           {heroDevices.map((device, index) => (
