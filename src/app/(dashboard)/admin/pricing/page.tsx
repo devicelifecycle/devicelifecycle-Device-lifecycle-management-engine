@@ -430,7 +430,9 @@ export default function AdminPricingPage() {
   // Fetch data
   const fetchDevices = useCallback(async () => {
     try {
-      const res = await fetch('/api/devices?page_size=5000')
+      // 200 devices covers all active catalog models without a 5000-row payload.
+      // Device search boxes use client-side filter over this set.
+      const res = await fetch('/api/devices?page_size=200&sort_by=make&sort_order=asc')
       if (res.ok) { const d = await res.json(); setDevices(d.data || []) }
     } catch {}
   }, [])
@@ -454,9 +456,18 @@ export default function AdminPricingPage() {
     } catch {} finally { setSettingsLoading(false) }
   }, [])
 
-  const refetchAll = useCallback(() => { fetchDevices(); fetchCompetitorPrices(); fetchSettings(); fetchCatalog() }, [fetchDevices, fetchCompetitorPrices, fetchSettings, fetchCatalog])
+  // Active tab — controls deferred fetches. Catalog is heavy and only needed on "training" tab.
+  const [activeTab, setActiveTab] = useState('trade-in')
+
+  const refetchAll = useCallback(() => { fetchDevices(); fetchCompetitorPrices(); fetchSettings() }, [fetchDevices, fetchCompetitorPrices, fetchSettings])
   useOnDbChange(refetchAll)
-  useEffect(() => { fetchDevices(); fetchCompetitorPrices(); fetchSettings(); fetchCatalog() }, [fetchDevices, fetchCompetitorPrices, fetchSettings, fetchCatalog])
+  // Mount: fetch only what the default tab needs. Catalog loads on first visit to "training" tab.
+  useEffect(() => { fetchDevices(); fetchCompetitorPrices(); fetchSettings() }, [fetchDevices, fetchCompetitorPrices, fetchSettings])
+
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab)
+    if (tab === 'training' && !catalogData && !catalogLoading) fetchCatalog()
+  }, [catalogData, catalogLoading, fetchCatalog])
 
   const deviceMap = useMemo(() => {
     const map = new Map(devices.map(d => [d.id, d]))
@@ -1386,24 +1397,20 @@ export default function AdminPricingPage() {
     return { competitorMatrixRows: rows, emptyRowKeys: allMatrixRowKeys }
   })()
 
-  const emptyRowKeysStr = emptyRowKeys.map(e => e.key).join('|')
-  // Fetch backend-computed prices for all matrix rows so "Our Quote" is always backend-authoritative
-  useEffect(() => {
+  // "Our Quote" batch calculation — opt-in only. Previously auto-fired on every load
+  // which blocked the main thread for 5–7 seconds after competitor prices arrived.
+  // Now triggered explicitly via the "Load Our Quotes" button in the matrix toolbar.
+  const handleLoadFormulaPrices = useCallback(() => {
     if (emptyRowKeys.length === 0 || cpLoading) return
     const toFetch = emptyRowKeys.filter(item => !formulaPrices.has(item.key))
-    if (toFetch.length === 0) return
-    const controller = new AbortController()
+    if (toFetch.length === 0) { toast.info('All quotes already loaded.'); return }
     setFormulaLoading(true)
     fetch('/api/pricing/calculate-batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: toFetch, price_mode: priceMode }),
-      signal: controller.signal,
     })
-      .then(r => {
-        if (!r.ok) throw new Error('Failed')
-        return r.json()
-      })
+      .then(r => { if (!r.ok) throw new Error('Failed'); return r.json() })
       .then(data => {
         const results = data.data || []
         const added = results.filter((item: { trade_price?: number; cpo_price?: number; error?: string }) => item.trade_price != null && item.cpo_price != null && !item.error).length
@@ -1416,13 +1423,13 @@ export default function AdminPricingPage() {
           }
           return next
         })
-        if (added > 0) toast.success(`${added} formula prices loaded for empty cells`)
+        if (added > 0) toast.success(`${added} formula prices loaded`)
+        else toast.info('No new quotes to load.')
       })
-      .catch((err) => { if (err?.name !== 'AbortError') toast.error('Could not load formula prices for empty cells. Check that devices have market or competitor data.') })
+      .catch(() => toast.error('Could not load formula prices. Check that devices have market or competitor data.'))
       .finally(() => setFormulaLoading(false))
-    return () => controller.abort()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- formulaPrices intentionally omitted (functional setState)
-  }, [emptyRowKeysStr, priceMode, cpLoading, formulaRefreshTrigger])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emptyRowKeys, formulaPrices, priceMode, cpLoading])
 
   return (
     <div className="space-y-6">
@@ -1431,9 +1438,9 @@ export default function AdminPricingPage() {
         title="A pricing studio that feels operational, not spreadsheet-bound."
         description="Manage trade-in logic, CPO markup, international uploads, training data, and system-wide pricing behavior from one control layer."
         stats={[
-          { label: 'Catalog devices', value: catalogLoading ? 'Loading...' : (catalogData?.summary.total_devices ?? devices.length) },
-          { label: 'Competitor rows', value: catalogLoading ? 'Loading...' : (catalogData?.summary.total_competitor_entries ?? compPrices.length) },
-          { label: 'Training mode', value: settingsLoading ? 'Loading...' : (settingsForm.prefer_data_driven === 'true' ? 'Data-driven' : 'Formula-first') },
+          { label: 'Catalog devices', value: catalogData?.summary.total_devices ?? devices.length },
+          { label: 'Competitor rows', value: catalogData?.summary.total_competitor_entries ?? compPrices.length },
+          { label: 'Training mode', value: settingsLoading ? '…' : (settingsForm.prefer_data_driven === 'true' ? 'Data-driven' : 'Formula-first') },
           { label: 'Scraper status', value: cpScraping ? 'Running' : 'Ready' },
         ]}
       />
@@ -1453,7 +1460,7 @@ export default function AdminPricingPage() {
         </div>
       )}
 
-      <Tabs defaultValue="trade-in">
+      <Tabs defaultValue="trade-in" value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="flex h-auto w-full flex-wrap items-center justify-start gap-1 bg-white/[0.035]">
           <TabsTrigger value="trade-in"><TrendingUp className="mr-1.5 h-3.5 w-3.5" />Trade-In Pricing</TabsTrigger>
           <TabsTrigger value="cpo"><ShoppingBag className="mr-1.5 h-3.5 w-3.5" />CPO Pricing</TabsTrigger>
@@ -1591,6 +1598,10 @@ export default function AdminPricingPage() {
                 <RefreshCw className={`mr-2 h-4 w-4 ${cpScraping ? 'animate-spin' : ''}`} />
                 {cpScraping ? 'Scraping...' : 'Run Scraper'}
               </Button>
+              <Button variant="outline" onClick={handleLoadFormulaPrices} disabled={formulaLoading || cpLoading} title="Calculate Our Quote for all matrix rows">
+                {formulaLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
+                {formulaLoading ? 'Calculating…' : 'Load Our Quotes'}
+              </Button>
               <Button variant="outline" onClick={handleDownloadPriceChanges}>
                 <FileDown className="mr-2 h-4 w-4" />Price Changes
               </Button>
@@ -1665,7 +1676,7 @@ export default function AdminPricingPage() {
             </CardHeader>
             <CardContent>
               {cpLoading ? (
-                <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted/50 animate-pulse" />)}</div>
+                <div className="min-h-[320px] space-y-3">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted/50 animate-pulse" />)}</div>
               ) : competitorMatrixRows.length === 0 ? (
                 <div className="flex flex-col items-center py-16 text-muted-foreground">
                   <TrendingUp className="h-10 w-10 mb-3 text-muted-foreground/40" />
