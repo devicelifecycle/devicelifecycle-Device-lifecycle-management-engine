@@ -1,12 +1,12 @@
 {
   "buildCommand": "npm run build",
   "crons": [
-    {"path": "/api/cron/sla-check", "schedule": "0 */4 * * *"},
-    {"path": "/api/cron/competitor-sync", "schedule": "30 */4 * * *"},
-    {"path": "/api/cron/price-scraper", "schedule": "0 6 * * *"},
-    {"path": "/api/cron/pricing-staleness", "schedule": "15 */4 * * *"},
+    {"path": "/api/cron/sla-check", "schedule": "0 6 * * *"},
+    {"path": "/api/cron/competitor-sync", "schedule": "0 7 * * *"},
+    {"path": "/api/cron/price-scraper", "schedule": "0 8 * * *"},
+    {"path": "/api/cron/pricing-staleness", "schedule": "0 9 * * *"},
     {"path": "/api/cron/pricing-training", "schedule": "0 4 * * 0"},
-    {"path": "/api/cron/shipping-tracking", "schedule": "0 */4 * * *"},
-    {"path": "/api/cron/quote-price-check", "schedule": "0 7 * * *"}
+    {"path": "/api/cron/shipping-tracking", "schedule": "0 10 * * *"},
+    {"path": "/api/cron/quote-price-check", "schedule": "0 11 * * *"}
   ]
 }
