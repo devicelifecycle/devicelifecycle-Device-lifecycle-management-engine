@@ -119,7 +119,7 @@ export default function NewTradeInPage() {
   const [beatOverride, setBeatOverride] = useState<string>('')
 
   useEffect(() => {
-    fetch('/api/devices?page_size=500&for_order_creation=1').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    fetch('/api/devices?page_size=150&sort_by=make&sort_order=asc').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
 
   useEffect(() => {
