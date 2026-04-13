@@ -1402,7 +1402,7 @@ export default function OrderDetailPage() {
                   <div className="flex gap-2 shrink-0">
                     <Button
                       size="sm"
-                      variant="default"
+                      variant="success"
                       disabled={isProcessing}
                       onClick={() => handleExceptionDecision(exc.id, true)}
                     >
@@ -1521,6 +1521,7 @@ export default function OrderDetailPage() {
                   </div>
                   <Button
                     size="sm"
+                    variant="success"
                     onClick={handleGeneratePostTriageQuote}
                     disabled={isGeneratingPostTriageQuote}
                   >
@@ -1548,7 +1549,7 @@ export default function OrderDetailPage() {
                         <Button variant="outline" size="sm" onClick={() => setIsInlineEditing(false)} disabled={isSavingPrices || isSendingQuote}>
                           Cancel
                         </Button>
-                        <Button size="sm" onClick={handleSaveAndSendQuote} disabled={isSavingPrices || isSendingQuote}>
+                        <Button size="sm" variant="success" onClick={handleSaveAndSendQuote} disabled={isSavingPrices || isSendingQuote}>
                           {(isSavingPrices || isSendingQuote) ? (
                             <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                           ) : (
@@ -1975,8 +1976,7 @@ export default function OrderDetailPage() {
                                 <>
                                   <Button
                                     size="sm"
-                                    variant="outline"
-                                    className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
+                                    variant="success"
                                     onClick={() => {
                                       setSelectedBid(bid)
                                       setBidMarkupPercent('15')
@@ -2527,7 +2527,8 @@ export default function OrderDetailPage() {
               {canSendQuote && (order.status === 'draft' || order.status === 'submitted') && (
                 <Button
                   size="lg"
-                  className="w-full justify-between bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25 hover:shadow-emerald-500/30 transition-all text-base font-semibold"
+                  variant="success"
+                  className="w-full justify-between text-base font-semibold"
                   disabled={!hasPricesForQuote || isSendingQuote || isTransitioning}
                   title={!hasPricesForQuote ? 'Set pricing first to send quote' : undefined}
                   onClick={handleSendQuote}
@@ -2608,6 +2609,7 @@ export default function OrderDetailPage() {
                   {availableTransitions.map(nextStatus => {
                     const nextConfig = ORDER_STATUS_CONFIG[nextStatus]
                     const isDestructive = nextStatus === 'cancelled' || nextStatus === 'rejected'
+                    const isApproval = isCustomer && ['accepted', 'submitted'].includes(nextStatus)
                     const label = isCustomer
                       ? (['accepted', 'submitted'].includes(nextStatus) ? 'Approve' : ['rejected', 'cancelled'].includes(nextStatus) ? 'Disapprove' : nextConfig?.label || snakeToTitle(nextStatus))
                       : isVendor
@@ -2616,7 +2618,7 @@ export default function OrderDetailPage() {
                     return (
                       <Button
                         key={nextStatus}
-                        variant={isDestructive ? 'destructive' : 'outline'}
+                        variant={isDestructive ? 'destructive' : isApproval ? 'success' : 'outline'}
                         className="w-full justify-between"
                         disabled={isTransitioning}
                         onClick={() => setTransitionTarget(nextStatus)}
@@ -3048,7 +3050,7 @@ export default function OrderDetailPage() {
             <Button variant="outline" onClick={() => { setAcceptBidDialogOpen(false); setSelectedBid(null) }} disabled={isBidActionLoading}>
               Cancel
             </Button>
-            <Button onClick={handleAcceptBid} disabled={isBidActionLoading} className="bg-green-600 hover:bg-green-500 text-white">
+            <Button onClick={handleAcceptBid} disabled={isBidActionLoading} variant="success">
               {isBidActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ThumbsUp className="h-4 w-4 mr-1" />}
               Accept Bid
             </Button>

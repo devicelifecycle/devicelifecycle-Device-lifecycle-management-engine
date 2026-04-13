@@ -196,7 +196,7 @@ export default function CustomerRequestsPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={handleSubmit} disabled={submitting || matchedCount === 0}>
+                <Button variant="success" onClick={handleSubmit} disabled={submitting || matchedCount === 0}>
                   {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                   {submitting ? 'Submitting…' : `Submit Trade-In Request (${matchedCount} device${matchedCount !== 1 ? 's' : ''})`}
                 </Button>

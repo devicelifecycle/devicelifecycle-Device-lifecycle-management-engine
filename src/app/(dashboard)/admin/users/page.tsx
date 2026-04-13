@@ -268,6 +268,7 @@ export default function AdminUsersPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button
+                variant="success"
                 onClick={handleCreate}
                 disabled={
                   creating ||
@@ -420,7 +421,7 @@ export default function AdminUsersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveEdit} disabled={saving || !editForm.full_name}>
+            <Button variant="success" onClick={handleSaveEdit} disabled={saving || !editForm.full_name}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>

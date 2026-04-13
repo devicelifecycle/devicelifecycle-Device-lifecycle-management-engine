@@ -200,7 +200,7 @@ export default function CustomerDetailPage() {
                 <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
               </div>
               <div className="flex gap-2 pt-2">
-                <Button onClick={handleSave} disabled={isUpdating}><Save className="mr-2 h-3 w-3" />{isUpdating ? 'Saving...' : 'Save'}</Button>
+                <Button variant="success" onClick={handleSave} disabled={isUpdating}><Save className="mr-2 h-3 w-3" />{isUpdating ? 'Saving...' : 'Save'}</Button>
                 <Button variant="outline" onClick={() => setEditing(false)}><X className="mr-2 h-3 w-3" />Cancel</Button>
               </div>
             </>
