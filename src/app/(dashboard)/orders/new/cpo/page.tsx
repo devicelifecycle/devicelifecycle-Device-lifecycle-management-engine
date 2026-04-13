@@ -288,14 +288,26 @@ export default function NewCPOOrderPage() {
     try {
       const { rows: rawRows } = await parseTabularUpload(file)
       const errors: string[] = []
+      const aliasKeys = Object.keys(CSV_COLUMN_ALIASES)
+      const fuzzyMap = (header: string): string | null => {
+        const key = header.toLowerCase().trim().replace(/\s+/g, '_')
+        if (CSV_COLUMN_ALIASES[key]) return CSV_COLUMN_ALIASES[key]
+        let best: string | null = null, bestDist = 3
+        for (const ak of aliasKeys) {
+          if (Math.abs(ak.length - key.length) > 3) continue
+          const m = key.length, n = ak.length
+          const dp = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (__, j) => i === 0 ? j : j === 0 ? i : 0))
+          for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) dp[i][j] = key[i-1]===ak[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1])
+          if (dp[m][n] < bestDist) { bestDist = dp[m][n]; best = CSV_COLUMN_ALIASES[ak] }
+        }
+        return best
+      }
+
       const normalizeRow = (r: Record<string, string>): CSVRow => {
         const out: Partial<CSVRow> = {}
         for (const [k, v] of Object.entries(r)) {
-          const key = k.toLowerCase().trim().replace(/\s+/g, '_')
-          const mapped = CSV_COLUMN_ALIASES[key] ?? (key === 'device_make' || key === 'device_model' ? key : null)
-          if (mapped) {
-            out[mapped as keyof CSVRow] = String(v ?? '').trim()
-          }
+          const mapped = fuzzyMap(k)
+          if (mapped) out[mapped as keyof CSVRow] = String(v ?? '').trim()
         }
         return {
           device_make: out.device_make ?? '',
@@ -309,7 +321,7 @@ export default function NewCPOOrderPage() {
       rows.forEach((row, i) => {
         if (!row.device_make) errors.push(`Row ${i + 1}: Missing device_make`)
         if (!row.device_model) errors.push(`Row ${i + 1}: Missing device_model`)
-        if (!row.quantity || isNaN(Number(row.quantity))) errors.push(`Row ${i + 1}: Invalid quantity`)
+        if (!row.quantity || isNaN(Number(row.quantity))) errors.push(`Row ${i + 1}: Quantity is required for CPO orders`)
       })
       setCsvErrors(errors)
       setCsvData(rows)

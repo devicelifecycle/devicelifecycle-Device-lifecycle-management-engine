@@ -48,27 +48,71 @@ export const CPO_CSV_SAMPLE: string[][] = [
 
 /** Alternate column names accepted during CSV parse (Make→device_make, etc.) */
 export const CSV_COLUMN_ALIASES: Record<string, string> = {
+  // Make / brand (many customer spreadsheets use different names)
   make: 'device_make',
   brand: 'device_make',
   manufacturer: 'device_make',
+  oem: 'device_make',
+  mfr: 'device_make',
+  company: 'device_make',
+  phone_brand: 'device_make',
+  phone_make: 'device_make',
+  device_make: 'device_make',   // explicit self-map — no reliance on fallback
+
+  // Model (many customer spreadsheets use different names)
   model: 'device_model',
   device: 'device_model',
   product: 'device_model',
+  phone_model: 'device_model',
+  device_name: 'device_model',
+  model_name: 'device_model',
+  device_model: 'device_model', // explicit self-map
+  'existing phone': 'device_model',
+
+  // Storage
   storage: 'storage',
   'storage/gb': 'storage',
   capacity: 'storage',
+  gb: 'storage',
+  size: 'storage',
+  memory: 'storage',
+
+  // Condition
   condition: 'condition',
   condtion: 'condition',
+  condiiton: 'condition',
+  grade: 'condition',
+  state: 'condition',
+  'device condition': 'condition',
+
+  // Quantity
   quantity: 'quantity',
   qty: 'quantity',
+  count: 'quantity',
+  num: 'quantity',
+  '#': 'quantity',
+  device_count: 'quantity',
+  count_of_mobile: 'quantity',
+  total: 'quantity',
+
+  // Notes / faults
   notes: 'notes',
   faults: 'notes',
   'faults/notes': 'notes',
+  comments: 'notes',
+
+  // Serial / IMEI
   serial_number: 'serial_number',
   serial: 'serial_number',
   imei: 'serial_number',
+  's/n': 'serial_number',
+  sn: 'serial_number',
+
+  // Color
   color: 'color',
   colour: 'color',
+
+  // Type
   order_type: 'order_type',
   type: 'order_type',
 }
