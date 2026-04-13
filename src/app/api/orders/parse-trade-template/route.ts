@@ -466,7 +466,7 @@ export async function POST(request: NextRequest) {
         serials: entry.serials,
         imeis: entry.imeis,
         device_id: device?.id ?? null,
-        match_status: (device ? 'matched' : 'not_in_catalog') as 'matched' | 'not_in_catalog',
+        match_status: (device ? 'matched' : 'not_in_catalog') as 'matched' | 'catalog_matched' | 'not_in_catalog',
       })
     }
 
