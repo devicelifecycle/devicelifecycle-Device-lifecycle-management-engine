@@ -76,7 +76,7 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (['customer', 'vendor', 'sales'].includes(form.role)) {
       const typeParam = form.role === 'customer' ? '&type=customer' : form.role === 'vendor' ? '&type=vendor' : ''
-      fetch(`/api/organizations?page_size=500${typeParam}`)
+      fetch(`/api/organizations?page_size=200${typeParam}`)
         .then(r => r.json())
         .then(d => setOrganizations(d.data || []))
         .catch(() => setOrganizations([]))

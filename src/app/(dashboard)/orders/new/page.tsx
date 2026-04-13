@@ -189,7 +189,7 @@ export default function NewOrderPage() {
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
 
   useEffect(() => {
-    fetch('/api/devices?page_size=500').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    fetch('/api/devices?page_size=150&sort_by=make&sort_order=asc').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
 
   // For customer role: auto-set their org's customer (no selection needed)

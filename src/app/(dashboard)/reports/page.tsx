@@ -41,7 +41,7 @@ export default function ReportsPage() {
     setIsLoading(true)
     try {
       const [ordersRes, shippingRes] = await Promise.all([
-        fetch('/api/orders?page_size=500'),
+        fetch('/api/orders?page_size=200'),
         fetch('/api/shipments/stats'),
       ])
 
