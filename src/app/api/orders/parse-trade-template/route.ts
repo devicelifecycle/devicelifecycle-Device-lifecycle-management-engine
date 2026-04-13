@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { matchDeviceFromCsv } from '@/lib/device-match'
+import { normalizeTradeCondition } from '@/lib/condition'
 import type { Device } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -76,31 +77,9 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
   'battery': 'battery', 'battery health': 'battery', 'battery %': 'battery',
 }
 
-// Condition normalisation — covers every variant seen in both files
-const CONDITION_MAP: Record<string, string> = {
-  // Standard
-  new: 'new', sealed: 'new', unopened: 'new',
-  excellent: 'excellent', 'like new': 'excellent', likenew: 'excellent',
-  good: 'good', working: 'good', functional: 'good',
-  'good working': 'good', 'good working condition': 'good',
-  'used – working condition': 'good', 'used working condition': 'good',
-  'normal': 'good',
-  fair: 'fair', average: 'fair', 'visible wear': 'fair',
-  poor: 'poor', broken: 'poor', damaged: 'poor', cracked: 'poor',
-  defective: 'poor', 'broken screen': 'poor', 'dead': 'poor',
-  // Grades
-  a: 'excellent', 'a+': 'excellent', 'a-': 'excellent', 'grade a': 'excellent',
-  b: 'good', 'b+': 'good', 'b-': 'good', 'grade b': 'good',
-  c: 'fair', 'c+': 'fair', 'c-': 'fair', 'grade c': 'fair',
-  d: 'poor', 'grade d': 'poor',
-  // Not buyable
-  recycle: 'recycle',
-}
-
+// Condition normalisation — delegates to src/lib/condition.ts (shared with validations)
 function normalizeCondition(raw: string): string {
-  if (!raw) return 'good'
-  const s = raw.toLowerCase().trim()
-  return CONDITION_MAP[s] ?? 'good'
+  return normalizeTradeCondition(raw)
 }
 
 function normalizeStorage(value: string | undefined | null): string {
@@ -314,17 +293,41 @@ export async function POST(request: NextRequest) {
     let llmAssisted = false
     const hasEssentials = ('model' in colIndex || 'brand' in colIndex)
     if (!hasEssentials || mappedCount < Math.ceil(headers.length * 0.3)) {
+      console.info('[parse-trade-template] llm_fallback_triggered', {
+        file: file.name,
+        file_size_kb: Math.round(file.size / 1024),
+        headers,
+        mapped_count: mappedCount,
+        total_headers: headers.length,
+        has_essentials: hasEssentials,
+        trigger_reason: !hasEssentials ? 'no_model_or_brand' : 'low_column_coverage',
+      })
+
       const llmMap = await inferColumnsWithLLM(headers, dataRows.slice(0, 3))
       if (llmMap) {
         llmAssisted = true
+        let llmResolvedCount = 0
         for (const [rawHeader, canonical] of Object.entries(llmMap)) {
           if (!canonical || canonical === 'ignore') continue
           const idx = headers.findIndex(h => h.toLowerCase().trim() === rawHeader.toLowerCase().trim())
           if (idx >= 0 && !(canonical in colIndex)) {
             colIndex[canonical] = idx
             detectedColumns[rawHeader] = canonical
+            llmResolvedCount++
           }
         }
+        console.info('[parse-trade-template] llm_fallback_resolved', {
+          file: file.name,
+          llm_resolved_columns: llmResolvedCount,
+          final_mapped: Object.keys(colIndex).length,
+          llm_mapping: llmMap,
+        })
+      } else {
+        console.warn('[parse-trade-template] llm_fallback_failed', {
+          file: file.name,
+          headers,
+          groq_api_key_set: !!process.env.GROQ_API_KEY,
+        })
       }
     }
 
