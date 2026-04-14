@@ -30,20 +30,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (isInitializing) {
     return (
       <div className="app-shell-bg grain-overlay flex min-h-screen items-center justify-center px-6 text-foreground">
-        <div className="surface-panel relative flex w-full max-w-md flex-col items-center gap-6 rounded-[2rem] px-10 py-14 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary text-primary-foreground shadow-[0_25px_50px_-25px_rgba(182,93,47,0.9)]">
-            <Package className="h-7 w-7" />
+        <div className="surface-panel relative flex w-full max-w-sm flex-col items-center gap-6 rounded-[2rem] px-10 py-14 text-center">
+          <div className="liquid-glass-strong flex h-14 w-14 items-center justify-center rounded-2xl">
+            <Package className="h-6 w-6 text-primary" />
           </div>
           <div className="space-y-2">
-            <p className="eyebrow-label">Preparing Workspace</p>
+            <p className="font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">
+              Preparing Workspace
+            </p>
             <h1 className="editorial-title text-4xl text-foreground">Loading DLM Engine</h1>
-            <p className="text-sm text-muted-foreground">Checking session, roles, and the operational canvas.</p>
+            <p className="font-body text-sm font-light text-muted-foreground">
+              Checking session, roles, and the operational canvas.
+            </p>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+          <div className="h-px w-full overflow-hidden bg-white/[0.08] rounded-full">
             <motion.div
-              className="h-full w-1/3 rounded-full bg-gradient-to-r from-amber-200 via-primary to-amber-100"
-              animate={{ x: ['-100%', '320%'] }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+              className="h-full rounded-full bg-gradient-to-r from-transparent via-primary/60 to-transparent"
+              animate={{ x: ['-100%', '200%'] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
             />
           </div>
         </div>
