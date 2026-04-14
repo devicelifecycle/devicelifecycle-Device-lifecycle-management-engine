@@ -19,7 +19,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const { isAuthenticated, isInitializing } = useAuth()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Desktop: collapsible sidebar (starts open)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Mobile: drawer
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (!isInitializing && !isAuthenticated) {
@@ -59,35 +63,53 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="app-shell-bg grain-overlay flex h-screen overflow-hidden text-foreground">
-      <div className="hidden h-full lg:block">
-        <Sidebar />
-      </div>
 
-      <AnimatePresence>
+      {/* ── Desktop sidebar — slides in/out ─────────────────────────────── */}
+      <AnimatePresence initial={false}>
         {sidebarOpen && (
+          <motion.div
+            className="hidden lg:block h-full shrink-0 overflow-hidden"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 260, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+          >
+            <Sidebar />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Mobile sidebar — full-screen drawer ─────────────────────────── */}
+      <AnimatePresence>
+        {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
             <motion.div
               className="absolute inset-0 bg-black/65 backdrop-blur-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)}
+              onClick={() => setMobileSidebarOpen(false)}
             />
             <motion.div
               className="absolute left-0 top-0 h-full"
               initial={{ x: -320 }}
               animate={{ x: 0 }}
               exit={{ x: -320 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 32 }}
             >
-              <Sidebar onNavigate={() => setSidebarOpen(false)} />
+              <Sidebar onNavigate={() => setMobileSidebarOpen(false)} />
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
+      {/* ── Main content ─────────────────────────────────────────────────── */}
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <Header onMenuClick={() => setSidebarOpen(true)} />
+        <Header
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((v) => !v)}
+          onMobileMenuClick={() => setMobileSidebarOpen(true)}
+        />
         <main className="dashboard-canvas relative flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
           <div className="relative mx-auto w-full max-w-[1500px]">
             <PageTransition key={pathname} className="space-y-8">
