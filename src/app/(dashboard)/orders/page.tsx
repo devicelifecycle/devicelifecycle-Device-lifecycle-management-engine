@@ -58,9 +58,11 @@ export default function OrdersPage() {
   const [importParsing, setImportParsing] = useState(false)
   const [importParseError, setImportParseError] = useState('')
   type ImportRow = { make: string; model: string; storage: string; condition: string; quantity: number; unit_price: number | null; serials: string[]; imeis: string[]; device_id: string | null; match_status: string }
-  type ImportSummary = { total_devices: number; matched: number; unmatched: number; total_value: number | null; format_type: string; llm_assisted: boolean }
+  type ImportSummary = { total_devices: number; matched: number; unmatched: number; total_value: number | null; format_type: string; llm_assisted: boolean; sheet_parsed?: string }
   const [importRows, setImportRows] = useState<ImportRow[]>([])
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
+  const [importAvailableSheets, setImportAvailableSheets] = useState<string[]>([])
+  const [importSelectedSheet, setImportSelectedSheet] = useState<string>('')
   const [importRowEdits, setImportRowEdits] = useState<Record<number, { condition?: string; quantity?: string; unit_price?: string }>>({})
   const [importCreating, setImportCreating] = useState(false)
   const debouncedCustomerSearch = useDebounce(importCustomerSearch, 300)
@@ -139,18 +141,27 @@ export default function OrdersPage() {
     setImportRows([])
     setImportSummary(null)
     setImportRowEdits({})
+    setImportAvailableSheets([])
+    setImportSelectedSheet('')
   }
 
-  async function handleParseImportFile() {
+  async function handleParseImportFile(sheetOverride?: string) {
     if (!importFile) return
     setImportParsing(true)
     setImportParseError('')
     try {
       const form = new FormData()
       form.append('file', importFile)
-      const res = await fetch('/api/orders/parse-trade-template', { method: 'POST', body: form })
+      const sheet = sheetOverride ?? importSelectedSheet
+      const url = sheet ? `/api/orders/parse-trade-template?sheet=${encodeURIComponent(sheet)}` : '/api/orders/parse-trade-template'
+      const res = await fetch(url, { method: 'POST', body: form })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Parse failed')
+      // Capture available sheets on first parse so user can switch
+      if (data.available_sheets?.length > 1) {
+        setImportAvailableSheets(data.available_sheets)
+        if (!importSelectedSheet) setImportSelectedSheet(data.summary?.sheet_parsed || data.available_sheets[0])
+      }
       setImportRows(data.rows || [])
       setImportSummary(data.summary || null)
       setImportRowEdits({})
@@ -571,7 +582,7 @@ export default function OrdersPage() {
               {importStep === 1
                 ? 'Upload any customer trade-in spreadsheet — Excel or CSV. We\'ll normalise columns and match devices to the catalog automatically.'
                 : importSummary
-                  ? `${importSummary.total_devices} devices detected · ${importSummary.matched} matched · Format: ${importSummary.format_type}${importSummary.llm_assisted ? ' · AI-assisted' : ''}${importSummary.total_value != null ? ` · Total: ${formatCurrency(importSummary.total_value)}` : ''}`
+                  ? `${importSummary.total_devices} devices · ${importSummary.matched} matched · ${importSummary.format_type}${importSummary.sheet_parsed ? ` · Sheet: ${importSummary.sheet_parsed}` : ''}${importSummary.llm_assisted ? ' · AI-assisted' : ''}${importSummary.total_value != null ? ` · Total: ${formatCurrency(importSummary.total_value)}` : ''}`
                   : ''}
             </DialogDescription>
           </DialogHeader>
@@ -659,6 +670,29 @@ export default function OrdersPage() {
 
           {importStep === 2 && (
             <div className="space-y-3 py-2">
+              {/* Sheet picker — shown when workbook has multiple sheets */}
+              {importAvailableSheets.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <Label className="shrink-0 text-xs text-muted-foreground">Sheet:</Label>
+                  <Select
+                    value={importSelectedSheet}
+                    onValueChange={async (sheet) => {
+                      setImportSelectedSheet(sheet)
+                      await handleParseImportFile(sheet)
+                    }}
+                  >
+                    <SelectTrigger className="h-7 w-48 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {importAvailableSheets.map(s => (
+                        <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {importParsing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                </div>
+              )}
               {importSummary && importSummary.unmatched > 0 && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/40 dark:border-amber-800 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                   <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
@@ -737,7 +771,7 @@ export default function OrdersPage() {
             {importStep === 1 && (
               <>
                 <Button variant="ghost" onClick={() => { setImportOpen(false); resetImportDialog() }}>Cancel</Button>
-                <Button onClick={handleParseImportFile} disabled={!importFile || importParsing}>
+                <Button onClick={() => handleParseImportFile()} disabled={!importFile || importParsing}>
                   {importParsing && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                   {importParsing ? 'Parsing…' : 'Parse File'}
                 </Button>

@@ -98,7 +98,8 @@ function fuzzyConditionToken(token: string): CanonicalCondition | undefined {
  */
 export function normalizeConditionRaw(input: unknown): CanonicalCondition | undefined {
   if (input == null) return undefined
-  const s = String(input).toLowerCase().trim()
+  // Strip trailing punctuation (e.g. "Reset and cleaned." → "reset and cleaned")
+  const s = String(input).toLowerCase().trim().replace(/[.!?,;]+$/, '')
   if (!s) return undefined
 
   // 1. Exact / phrase lookup (handles multi-word aliases and grades)
@@ -107,7 +108,18 @@ export function normalizeConditionRaw(input: unknown): CanonicalCondition | unde
 
   // 2. Token-based fuzzy (strip punctuation/spaces to catch typos)
   const token = s.replace(/[^a-z]/g, '')
-  return fuzzyConditionToken(token)
+  const fuzzy = fuzzyConditionToken(token)
+  if (fuzzy) return fuzzy
+
+  // 3. Prose fallback — for free-text condition notes from ITAD customer sheets
+  //    Order: check worst damage first, then battery issues, then fair cosmetics
+  if (s.includes('swollen') || (s.includes('battery') && (s.includes("can't hold") || s.includes('dead') || s.includes('not hold')))) return 'fair'
+  if (s.includes('minor dent') || s.includes('minor scratch') || s.includes('minor crack')) return 'fair'
+  if ((s.includes('dent') || s.includes('scratch') || s.includes('ding')) && !s.includes('no dent') && !s.includes('no scratch')) return 'fair'
+  if (s.includes('reset and cleaned') || s.includes('good') || s.includes('normal') || s.includes('clean') || s.includes('working')) return 'good'
+  if (s.includes('unknown') || s.includes('used')) return 'good'
+
+  return undefined
 }
 
 /**

@@ -1,9 +1,18 @@
 // ============================================================================
 // TRADE TEMPLATE PARSER API
-// POST /api/orders/parse-trade-template
+// POST /api/orders/parse-trade-template?sheet=<name|index>
+//
 // Accepts customer trade quote files in any format (Excel/CSV).
-// Auto-detects columns, normalises conditions, matches devices against catalog,
-// and aggregates per-device rows into order items.
+// Handles 8 real-world layout patterns found in COE and SCC ITAD files:
+//   1. Simple batch (Model, Qty, Price)
+//   2. Multi-row merged headers (30 Days → Good / Fair sub-columns)
+//   3. Combined make+model+storage+color in one cell
+//   4. Missing Make column — brand inferred from model string
+//   5. Pivot / transposed tables (models as columns, conditions as rows)
+//   6. Storage-as-column-header (32 GB / 128 GB price columns)
+//   7. Header row not at row 0 — auto-detected by keyword scoring
+//   8. Per-device manifest with IMEI/Serial
+//
 // Does NOT write to DB — the client submits matched rows separately.
 // ============================================================================
 
@@ -15,6 +24,11 @@ import type { Device } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
+// ── Known device brands (for combined-field splitting and brand inference) ───
+const KNOWN_BRANDS = ['apple', 'samsung', 'google', 'motorola', 'lg', 'sony',
+  'oneplus', 'sonim', 'kyocera', 'blackberry', 'netgear', 'novatel',
+  'inseego', 'microsoft', 'lenovo', 'dell', 'hp', 'asus']
+
 // ── Column aliases covering all trade quote formats seen in the wild ─────────
 const TRADE_COLUMN_MAP: Record<string, string> = {
   // Device identification
@@ -22,7 +36,7 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
   'mfr': 'brand', 'vendor': 'brand',
   'model': 'model', 'device': 'model', 'device model': 'model', 'device_model': 'model',
   'model name': 'model', 'phone model': 'model', 'product': 'model',
-  'description': 'model', 'existing phone': 'model',
+  'description': 'model', 'existing phone': 'model', 'models': 'model',
 
   // Storage
   'storage': 'storage', 'capacity': 'storage', 'gb': 'storage',
@@ -36,12 +50,13 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
   // Quantity
   'quantity': 'quantity', 'qty': 'quantity', 'count': 'quantity',
   'count of mobile': 'quantity', 'total': 'quantity', 'num': 'quantity',
-  '#': 'quantity', 'device count': 'quantity',
+  '#': 'quantity', 'device count': 'quantity', 'volume': 'quantity',
 
   // Pricing — customer net is the canonical price
   'customer': 'customer_net', 'net customer': 'customer_net',
   'customer net': 'customer_net', 'net': 'customer_net',
   'customer quote': 'customer_net', 'bridge': 'customer_net',
+  'net bridge/': 'customer_net', 'eg price': 'customer_net',
 
   // Gross / market price
   'gross': 'gross_price', 'value': 'gross_price', 'gross price': 'gross_price',
@@ -49,11 +64,11 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
   '30d good': 'gross_price', 'good working (gross)': 'gross_price',
   'price': 'gross_price', 'unit price': 'gross_price', 'per unit': 'gross_price',
   'est value': 'gross_price', 'suggested': 'gross_price', 'quote': 'gross_price',
-  'tdsynnex offer per unit': 'gross_price',
+  'tdsynnex offer per unit': 'gross_price', 'gr good': 'gross_price',
 
-  // Fair-condition pricing (batch summary sheets)
+  // Fair-condition pricing
   'fair': 'fair_price', '30 fair': 'fair_price', '30d fair': 'fair_price',
-  'total fair': 'fair_price',
+  'total fair': 'fair_price', 'gr fair': 'fair_price',
 
   // Carrier / spiff deductions
   'bell': 'carrier_deduction', 'spiff': 'carrier_deduction',
@@ -66,7 +81,7 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
   // Per-device identifiers
   'imei': 'imei', 'imei/serial': 'imei', 'imei / serial': 'imei',
   'serial': 'serial', 'serial number': 'serial', 'serial_number': 'serial',
-  's/n': 'serial', 'sn': 'serial', 'sample s/n': 'serial',
+  'sample s/n': 'serial', 's/n': 'serial', 'sn': 'serial',
 
   // Extras
   'color': 'color', 'colour': 'color',
@@ -77,31 +92,7 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
   'battery': 'battery', 'battery health': 'battery', 'battery %': 'battery',
 }
 
-// Condition normalisation — delegates to src/lib/condition.ts (shared with validations)
-function normalizeCondition(raw: string): string {
-  return normalizeTradeCondition(raw)
-}
-
-function normalizeStorage(value: string | undefined | null): string {
-  if (!value) return ''
-  return value
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/gigabytes?/g, 'gb')
-    .replace(/terabytes?/g, 'tb')
-    .trim()
-    .toUpperCase()
-    .replace(/^(\d+)(GB|TB)$/, '$1$2')
-}
-
-function parsePriceCell(value: string | undefined | null): number | null {
-  if (!value) return null
-  const cleaned = String(value).replace(/[$,\s]/g, '').trim()
-  const n = parseFloat(cleaned)
-  return Number.isFinite(n) && n > 0 ? n : null
-}
-
-// Levenshtein edit distance — same as triage upload
+// Levenshtein edit distance (with early exit for long strings)
 function levenshtein(a: string, b: string): number {
   if (Math.abs(a.length - b.length) > 3) return 99
   if (a.length > 20 || b.length > 20) return 99
@@ -128,6 +119,229 @@ function mapColumn(header: string): string | undefined {
     if (dist < bestDist) { bestDist = dist; best = TRADE_COLUMN_MAP[key] }
   }
   return best
+}
+
+// ── Header row detection ──────────────────────────────────────────────────────
+// Score each row by how many cells match known column keywords.
+// The highest-scoring row is the header row — handles files where row 0 is a
+// date/title and real headers are in row 1, 2, or even row 10 (Lambton sheet).
+
+const HEADER_KEYWORDS = new Set([
+  'model', 'make', 'brand', 'manufacturer', 'serial', 'imei', 'condition',
+  'storage', 'quantity', 'qty', 'count', 'price', 'value', 'gross', 'net',
+  'customer', 'grade', 'product', 'year', 'cpu', 'ram', 'memory', 'device',
+  'accessories', 'capacity', 'colour', 'color', 'notes', 'faults',
+])
+
+function scoreHeaderRow(row: unknown[]): number {
+  let score = 0
+  for (const cell of row) {
+    const s = String(cell ?? '').toLowerCase().trim()
+    if (!s) continue
+    if (HEADER_KEYWORDS.has(s)) { score += 3; continue }
+    for (const kw of HEADER_KEYWORDS) {
+      if (s.includes(kw)) { score += 1; break }
+    }
+  }
+  return score
+}
+
+function findHeaderRow(rawRows: unknown[][]): { headerIdx: number; groupIdx: number | null } {
+  let bestScore = 0
+  let headerIdx = 0
+  const limit = Math.min(rawRows.length, 15)
+  for (let i = 0; i < limit; i++) {
+    const score = scoreHeaderRow(rawRows[i])
+    if (score > bestScore) { bestScore = score; headerIdx = i }
+  }
+  // If there is a row above the header with ≥2 non-empty cells → it's a group label row
+  const groupIdx = (headerIdx > 0 && rawRows[headerIdx - 1].filter(c => String(c ?? '').trim()).length >= 2)
+    ? headerIdx - 1
+    : null
+  return { headerIdx, groupIdx }
+}
+
+// ── Multi-row header merging ──────────────────────────────────────────────────
+// When groupIdx exists, prepend the group label to each sub-header.
+// E.g. "30 Days" (group) + "Good" (sub) → "30 Good"
+// E.g. "Good Condition" (group) + "Total" (sub) → "Good Condition Total"
+
+function buildHeaders(rawRows: unknown[][], headerIdx: number, groupIdx: number | null): string[] {
+  const subRow = rawRows[headerIdx]
+  if (!groupIdx) {
+    return subRow.map(c => String(c ?? '').trim())
+  }
+  const groupRow = rawRows[groupIdx]
+  // Walk left to find the group label for each column (merged cells repeat their value leftward)
+  let lastGroup = ''
+  const headers: string[] = []
+  for (let i = 0; i < subRow.length; i++) {
+    const group = String(groupRow[i] ?? '').trim()
+    if (group) lastGroup = group
+    const sub = String(subRow[i] ?? '').trim()
+    if (lastGroup && sub && !sub.toLowerCase().includes(lastGroup.toLowerCase().split(' ')[0])) {
+      // Shorten group prefix: "30 Days" → "30", "Good Condition" → "Good"
+      const prefix = lastGroup.split(' ')[0]
+      headers.push(`${prefix} ${sub}`)
+    } else {
+      headers.push(sub)
+    }
+  }
+  return headers
+}
+
+// ── Combined make+model+storage+color splitting ───────────────────────────────
+// Handles cells like "Apple iPhone 12 64GB Black" or "Apple iPhone 14 128GB Blue"
+// that some customers put everything in a single column.
+
+function splitCombinedField(cell: string): { brand: string; model: string; storage: string; color: string } {
+  const s = cell.trim()
+  const lower = s.toLowerCase()
+
+  // Extract storage token (e.g. "64GB", "128 GB", "1TB")
+  const storageMatch = s.match(/\b(\d+)\s*(GB|TB)\b/i)
+  const storage = storageMatch ? `${storageMatch[1]}${storageMatch[2].toUpperCase()}` : ''
+
+  // Remove storage token to find brand/model/color
+  const withoutStorage = s.replace(/\b\d+\s*(GB|TB)\b/i, '').replace(/\s+/g, ' ').trim()
+  const parts = withoutStorage.split(/\s+/)
+
+  // Find brand (first word if it's a known brand)
+  const firstLower = (parts[0] ?? '').toLowerCase()
+  const brand = KNOWN_BRANDS.includes(firstLower) ? parts[0] : ''
+
+  const remaining = brand ? parts.slice(1) : parts
+
+  // Find color (last word if it's all-alpha and not a model keyword)
+  const lastWord = remaining[remaining.length - 1] ?? ''
+  const looksLikeColor = /^[A-Za-z]+$/.test(lastWord) && !['pro', 'max', 'plus', 'ultra', 'mini', 'lite'].includes(lastWord.toLowerCase())
+  const color = (remaining.length > 1 && looksLikeColor) ? lastWord : ''
+
+  const modelParts = color ? remaining.slice(0, -1) : remaining
+  const model = modelParts.join(' ')
+
+  // If no brand found but cell starts with a known Apple model prefix, infer Apple
+  const finalBrand = brand || (lower.match(/\b(iphone|ipad|macbook|imac|airpods)/) ? 'Apple' : '')
+
+  return { brand: finalBrand, model, storage, color }
+}
+
+// ── Brand inference from model string ────────────────────────────────────────
+// Used when no brand/make column exists in the template.
+
+function inferBrand(modelStr: string): string {
+  const lower = modelStr.toLowerCase()
+  if (lower.match(/\b(iphone|ipad|macbook|imac|airpods|apple)\b/)) return 'Apple'
+  if (lower.match(/\b(galaxy|samsung)\b/)) return 'Samsung'
+  if (lower.match(/\b(pixel|google)\b/)) return 'Google'
+  if (lower.match(/\b(moto[a-z]*|motorola)\b/)) return 'Motorola'
+  if (lower.match(/\bsonim\b/)) return 'Sonim'
+  if (lower.match(/\b(surface|microsoft)\b/)) return 'Microsoft'
+  if (lower.match(/\b(thinkpad|lenovo)\b/)) return 'Lenovo'
+  // Fallback: first word that isn't a number
+  const firstWord = modelStr.trim().split(/\s+/)[0]
+  return /^\d+$/.test(firstWord) ? '' : firstWord
+}
+
+// ── Pivot table detection + transposition ─────────────────────────────────────
+// Handles PAL Aero / AMA RFQ format where models are COLUMN HEADERS and
+// pricing categories (Gross, Bell, EG, Customer Quote) are ROW LABELS.
+
+const PIVOT_ROW_KEYWORDS = ['gross', 'bell', 'eg', 'customer', 'working', 'spiff', 'deduction', 'fee']
+const MODEL_KEYWORDS = ['iphone', 'ipad', 'galaxy', 'pixel', 'se', 'pro', 'max', 'ultra', 'air', 'plus']
+
+function detectPivot(headers: string[], dataRows: string[][]): boolean {
+  // Col-0 of first 6 data rows should contain ≥2 pricing keywords
+  const col0Values = dataRows.slice(0, 6).map(r => String(r[0] ?? '').toLowerCase())
+  const pricingMatches = col0Values.filter(v => PIVOT_ROW_KEYWORDS.some(kw => v.includes(kw))).length
+  if (pricingMatches < 2) return false
+  // headers[1..] should contain ≥1 model-looking token
+  const modelHeaders = headers.slice(1).filter(h => {
+    const lower = h.toLowerCase()
+    return MODEL_KEYWORDS.some(kw => lower.includes(kw)) || /^\d+$/.test(h.trim())
+  })
+  return modelHeaders.length >= 1
+}
+
+function parsePivot(headers: string[], dataRows: string[][]): ParsedRow[] {
+  const results: ParsedRow[] = []
+  // Each column (index 1..n) is a model; each matching row gives us a price field
+  for (let col = 1; col < headers.length; col++) {
+    const modelRaw = headers[col]
+    if (!modelRaw) continue
+    const { brand, model, storage } = splitCombinedField(modelRaw)
+    const finalBrand = brand || inferBrand(modelRaw)
+    const finalModel = model || modelRaw
+
+    let gross_price: number | null = null
+    let customer_net: number | null = null
+    let carrier_deduction: number | null = null
+    let eg_deduction: number | null = null
+
+    for (const row of dataRows) {
+      const rowLabel = String(row[0] ?? '').toLowerCase()
+      const rawVal = String(row[col] ?? '').trim()
+      const val = parsePriceCell(rawVal)
+      if (!val) continue
+      if (rowLabel.includes('gross') || rowLabel.includes('working')) gross_price = val
+      else if (rowLabel.includes('customer') || rowLabel.includes('net')) customer_net = val
+      else if (rowLabel.includes('bell') || rowLabel.includes('rogers') || rowLabel.includes('spiff')) carrier_deduction = val
+      else if (rowLabel.includes('eg') || rowLabel.includes('evergreen') || rowLabel.includes('fee')) eg_deduction = val
+    }
+
+    if (!finalModel) continue
+    results.push({
+      brand: finalBrand,
+      model: finalModel,
+      storage: storage || '',
+      condition: 'good',
+      quantity: 1,
+      gross_price,
+      fair_price: null,
+      customer_net,
+      carrier_deduction,
+      eg_deduction,
+      imei: '',
+      serial: '',
+      year: '',
+      notes: '',
+    })
+  }
+  return results
+}
+
+// ── Storage-as-column detection ───────────────────────────────────────────────
+// Handles "Isl key" format: "32 GB" / "128 GB" are column headers where
+// the non-empty price value tells you the storage for that device row.
+
+function detectStorageColumns(headers: string[]): Record<number, string> {
+  const map: Record<number, string> = {}
+  for (let i = 0; i < headers.length; i++) {
+    const m = headers[i].match(/^(\d+)\s*(GB|TB)$/i)
+    if (m) map[i] = `${m[1]}${m[2].toUpperCase()}`
+  }
+  return map
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function normalizeStorage(value: string | undefined | null): string {
+  if (!value) return ''
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/gigabytes?/g, 'gb')
+    .replace(/terabytes?/g, 'tb')
+    .trim()
+    .toUpperCase()
+    .replace(/^(\d+)(GB|TB)$/, '$1$2')
+}
+
+function parsePriceCell(value: string | undefined | null): number | null {
+  if (!value) return null
+  const cleaned = String(value).replace(/[$,\s]/g, '').trim()
+  const n = parseFloat(cleaned)
+  return Number.isFinite(n) && n > 0 ? n : null
 }
 
 // LLM fallback — ask Groq to infer columns when confidence is low
@@ -219,6 +433,7 @@ export type TradeTemplateSummary = {
   format_type: 'batch' | 'per_device' | 'unknown'
   detected_columns: Record<string, string>
   llm_assisted: boolean
+  sheet_parsed: string
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────
@@ -247,20 +462,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File too large (max 10 MB)' }, { status: 400 })
     }
 
-    // ── Parse file ────────────────────────────────────────────────────────────
+    // ── Sheet selection ───────────────────────────────────────────────────────
+    const sheetParam = request.nextUrl.searchParams.get('sheet') ?? ''
+
     let headers: string[] = []
     let dataRows: string[][] = []
+    let sheetParsed = 'Sheet1'
+    let availableSheets: string[] = []
 
     if (ext === 'xlsx' || ext === 'xls') {
       const XLSX = await import('xlsx')
       const arrayBuffer = await file.arrayBuffer()
       const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-      const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      if (!sheet) return NextResponse.json({ error: 'Excel file has no worksheet' }, { status: 400 })
+      availableSheets = workbook.SheetNames
+      sheetParsed = sheetParam || workbook.SheetNames[0]
+
+      // Resolve sheet by name or numeric index
+      let resolvedSheet = sheetParsed
+      if (!workbook.Sheets[resolvedSheet]) {
+        const idx = parseInt(sheetParam, 10)
+        resolvedSheet = Number.isFinite(idx) ? (workbook.SheetNames[idx] ?? workbook.SheetNames[0]) : workbook.SheetNames[0]
+        sheetParsed = resolvedSheet
+      }
+
+      const sheet = workbook.Sheets[resolvedSheet]
+      if (!sheet) return NextResponse.json({ error: 'Sheet not found' }, { status: 400 })
       const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][]
-      if (!raw || raw.length < 2) return NextResponse.json({ error: 'File needs a header row and at least one data row' }, { status: 400 })
-      headers = (raw[0] as unknown[]).map(h => String(h ?? '').trim()).filter(h => h)
-      dataRows = raw.slice(1)
+      if (!raw || raw.length < 2) return NextResponse.json({ error: 'Sheet needs a header row and at least one data row', available_sheets: availableSheets }, { status: 400 })
+
+      // Auto-detect the header row (not always row 0)
+      const { headerIdx, groupIdx } = findHeaderRow(raw)
+      headers = buildHeaders(raw, headerIdx, groupIdx).filter((_, i) => i < (raw[headerIdx] as unknown[]).length)
+      dataRows = raw
+        .slice(headerIdx + 1)
         .filter(row => (row as unknown[]).some(c => String(c ?? '').trim()))
         .map(row => (row as unknown[]).map(c => String(c ?? '').trim()))
     } else {
@@ -269,11 +503,57 @@ export async function POST(request: NextRequest) {
       const result = Papa.parse(text, { skipEmptyLines: true })
       const allRows = result.data as string[][]
       if (allRows.length < 2) return NextResponse.json({ error: 'File needs a header row and at least one data row' }, { status: 400 })
-      headers = allRows[0].map(h => String(h ?? '').trim())
-      dataRows = allRows.slice(1)
+      availableSheets = ['Sheet1']
+      sheetParsed = 'Sheet1'
+
+      // Auto-detect header row in CSV too
+      const { headerIdx, groupIdx } = findHeaderRow(allRows)
+      headers = buildHeaders(allRows, headerIdx, groupIdx)
+      dataRows = allRows.slice(headerIdx + 1).filter(row => row.some(c => c.trim()))
     }
 
-    // ── Column mapping ────────────────────────────────────────────────────────
+    // ── Pivot detection ───────────────────────────────────────────────────────
+    if (detectPivot(headers, dataRows)) {
+      const pivotRows = parsePivot(headers, dataRows)
+      if (pivotRows.length > 0) {
+        // Go straight to aggregation with the transposed rows
+        const { data: devices } = await supabase.from('devices').select('id, make, model, storage_options, category').order('make')
+        const catalog = (devices ?? []) as unknown as Device[]
+        const outputRows: TradeTemplateRow[] = pivotRows.map(row => {
+          const device = matchDeviceFromCsv(catalog, row.brand, row.model)
+          return {
+            make: row.brand || row.model,
+            model: row.model,
+            storage: row.storage,
+            condition: row.condition,
+            quantity: row.quantity,
+            unit_price: row.customer_net ?? row.gross_price,
+            serials: [],
+            imeis: [],
+            device_id: device?.id ?? null,
+            match_status: (device ? 'matched' : 'not_in_catalog') as 'matched' | 'catalog_matched' | 'not_in_catalog',
+          }
+        })
+        const matched = outputRows.filter(r => r.match_status === 'matched').length
+        const totalDevices = outputRows.reduce((s, r) => s + r.quantity, 0)
+        return NextResponse.json({
+          rows: outputRows,
+          summary: {
+            total_devices: totalDevices,
+            matched,
+            unmatched: outputRows.length - matched,
+            total_value: null,
+            format_type: 'batch',
+            detected_columns: { 'pivot': 'transposed' },
+            llm_assisted: false,
+            sheet_parsed: sheetParsed,
+          },
+          available_sheets: availableSheets,
+        })
+      }
+    }
+
+    // ── Column mapping (standard flat table path) ─────────────────────────────
     const detectedColumns: Record<string, string> = {}
     const colIndex: Record<string, number> = {}
     let mappedCount = 0
@@ -289,45 +569,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Detect storage-as-column headers (e.g. "32 GB", "128 GB")
+    const storageColMap = detectStorageColumns(headers)
+
     // LLM fallback when less than 30% of columns mapped OR no model/brand found
     let llmAssisted = false
     const hasEssentials = ('model' in colIndex || 'brand' in colIndex)
     if (!hasEssentials || mappedCount < Math.ceil(headers.length * 0.3)) {
-      console.info('[parse-trade-template] llm_fallback_triggered', {
-        file: file.name,
-        file_size_kb: Math.round(file.size / 1024),
-        headers,
-        mapped_count: mappedCount,
-        total_headers: headers.length,
-        has_essentials: hasEssentials,
-        trigger_reason: !hasEssentials ? 'no_model_or_brand' : 'low_column_coverage',
-      })
-
       const llmMap = await inferColumnsWithLLM(headers, dataRows.slice(0, 3))
       if (llmMap) {
         llmAssisted = true
-        let llmResolvedCount = 0
         for (const [rawHeader, canonical] of Object.entries(llmMap)) {
           if (!canonical || canonical === 'ignore') continue
           const idx = headers.findIndex(h => h.toLowerCase().trim() === rawHeader.toLowerCase().trim())
           if (idx >= 0 && !(canonical in colIndex)) {
             colIndex[canonical] = idx
             detectedColumns[rawHeader] = canonical
-            llmResolvedCount++
           }
         }
-        console.info('[parse-trade-template] llm_fallback_resolved', {
-          file: file.name,
-          llm_resolved_columns: llmResolvedCount,
-          final_mapped: Object.keys(colIndex).length,
-          llm_mapping: llmMap,
-        })
-      } else {
-        console.warn('[parse-trade-template] llm_fallback_failed', {
-          file: file.name,
-          headers,
-          groq_api_key_set: !!process.env.GROQ_API_KEY,
-        })
       }
     }
 
@@ -344,17 +603,39 @@ export async function POST(request: NextRequest) {
 
       let brand = get(cells, 'brand')
       let model = get(cells, 'model')
+      let storage = get(cells, 'storage')
 
-      // Handle "Apple iPhone 14 128GB Black" in a single column
-      if (!model && brand) {
-        const combinedParts = brand.split(/\s+/)
-        if (combinedParts.length > 2) {
-          const known = ['apple', 'samsung', 'google', 'motorola', 'lg', 'sony', 'oneplus', 'sonim', 'kyocera', 'blackberry', 'netgear', 'novatel', 'inseego']
-          const lowerBrand = combinedParts[0].toLowerCase()
-          if (known.includes(lowerBrand)) {
-            brand = combinedParts[0]
-            model = combinedParts.slice(1).join(' ')
+      // Handle storage-as-column: find which storage col has a non-empty price
+      if (!storage && Object.keys(storageColMap).length > 0) {
+        for (const [colIdxStr, storageTier] of Object.entries(storageColMap)) {
+          const val = (cells[parseInt(colIdxStr)] ?? '').trim()
+          if (val && parsePriceCell(val) !== null) {
+            storage = storageTier
+            break
           }
+        }
+      }
+
+      // Handle combined make+model+storage+color in one column
+      if (model && !brand) {
+        const lower = model.toLowerCase()
+        const looksLikeCombined = KNOWN_BRANDS.some(b => lower.startsWith(b))
+          || lower.match(/\b(iphone|ipad|macbook|galaxy|pixel)\b/) !== null
+          || (model.match(/\b\d+(GB|TB)\b/i) !== null && model.split(/\s+/).length >= 3)
+        if (looksLikeCombined) {
+          const split = splitCombinedField(model)
+          if (split.brand) brand = split.brand
+          if (split.storage && !storage) storage = split.storage
+          model = split.model || model
+        }
+      }
+
+      // Infer brand from model when no brand column exists
+      if (!brand && model) {
+        brand = inferBrand(model)
+        // If brand was inferred from a model-name prefix, strip it from the model string
+        if (brand && model.toLowerCase().startsWith(brand.toLowerCase())) {
+          model = model.slice(brand.length).trim()
         }
       }
 
@@ -365,8 +646,8 @@ export async function POST(request: NextRequest) {
       parsedRows.push({
         brand: brand || '',
         model: model || '',
-        storage: normalizeStorage(get(cells, 'storage')) || '',
-        condition: normalizeCondition(condRaw),
+        storage: normalizeStorage(storage) || '',
+        condition: normalizeTradeCondition(condRaw),
         quantity: qty,
         gross_price: parsePriceCell(get(cells, 'gross_price')),
         fair_price: parsePriceCell(get(cells, 'fair_price')),
@@ -383,7 +664,10 @@ export async function POST(request: NextRequest) {
     // Filter out rows with no device info
     const validRows = parsedRows.filter(r => r.brand || r.model)
     if (validRows.length === 0) {
-      return NextResponse.json({ error: 'No device rows found. Check that your file has Make/Model/Brand columns.' }, { status: 400 })
+      return NextResponse.json({
+        error: 'No device rows found. Check that your file has Make/Model/Brand columns.',
+        available_sheets: availableSheets,
+      }, { status: 400 })
     }
 
     // ── Detect format type ────────────────────────────────────────────────────
@@ -400,9 +684,6 @@ export async function POST(request: NextRequest) {
     const catalog = (devices ?? []) as unknown as Device[]
 
     // ── Aggregate + match ─────────────────────────────────────────────────────
-    // For per-device format: group by make+model+storage+condition, collect serials/IMEIs
-    // For batch format: each row is already aggregated
-
     type AggKey = string
     type AggEntry = {
       make: string; model: string; storage: string; condition: string
@@ -415,7 +696,6 @@ export async function POST(request: NextRequest) {
     for (const row of validRows) {
       if (row.condition === 'recycle') continue // Skip recycle rows
 
-      // Determine the best price: customer_net > gross_price (fair if condition is fair)
       const isFair = row.condition === 'fair' || row.condition === 'poor'
       let unitPrice: number | null = row.customer_net
       if (!unitPrice) unitPrice = isFair ? (row.fair_price ?? row.gross_price) : row.gross_price
@@ -423,7 +703,6 @@ export async function POST(request: NextRequest) {
       const key: AggKey = `${row.brand}|${row.model}|${row.storage}|${row.condition}`
 
       if (formatType === 'per_device') {
-        // Aggregate per-device rows
         const existing = agg.get(key)
         if (existing) {
           existing.quantity += 1
@@ -440,7 +719,6 @@ export async function POST(request: NextRequest) {
           })
         }
       } else {
-        // Batch: use explicit quantity
         const existing = agg.get(key)
         if (existing) {
           existing.quantity += row.quantity
@@ -487,9 +765,10 @@ export async function POST(request: NextRequest) {
       format_type: formatType,
       detected_columns: detectedColumns,
       llm_assisted: llmAssisted,
+      sheet_parsed: sheetParsed,
     }
 
-    return NextResponse.json({ rows: outputRows, summary })
+    return NextResponse.json({ rows: outputRows, summary, available_sheets: availableSheets })
   } catch (err) {
     console.error('[parse-trade-template]', err)
     return NextResponse.json({ error: 'Failed to parse file' }, { status: 500 })
