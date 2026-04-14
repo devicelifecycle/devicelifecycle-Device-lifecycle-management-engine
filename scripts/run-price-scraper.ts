@@ -5,6 +5,8 @@
  *
  * Usage:
  *   npm run scrape:prices
+ *   npx tsx scripts/run-price-scraper.ts --discovery                         # create new catalog devices
+ *   npx tsx scripts/run-price-scraper.ts --discovery --providers=gorecell    # GoRecell full catalog only
  */
 
 import { config } from 'dotenv'
@@ -45,9 +47,13 @@ async function main() {
     console.log(`Providers: ${providers.join(', ')}\n`)
   }
 
+  const discovery = process.argv.includes('--discovery')
+  if (discovery) {
+    console.log('Discovery mode ON — new catalog devices will be created.\n')
+  }
+
   const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-  // Use non-discovery mode by default to avoid accidental catalog growth.
-  const result = await runScraperPipeline(undefined, supabase, false, providers)
+  const result = await runScraperPipeline(undefined, supabase, discovery, providers)
 
   console.log('Scraper complete.')
   console.log(`  Total scraped: ${result.total_scraped}`)

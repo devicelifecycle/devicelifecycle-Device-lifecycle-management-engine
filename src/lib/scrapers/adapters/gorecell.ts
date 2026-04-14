@@ -329,14 +329,21 @@ const DISCOVERY_CONDITIONS: Array<{ key: 'excellent' | 'good' | 'fair' | 'broken
 
 // Regex to detect a plausible storage size anywhere in a rule title
 const STORAGE_SIZE_RE = /\b(\d+)\s*(GB|TB)\b/i
-// Regex to detect RAM-only labels ("16GB RAM", "8 GB Memory", "32GB DDR5")
-const RAM_LABEL_RE = /\b\d+\s*GB\s*(RAM|Memory|DDR\d*|LPDDR\d*)\b/i
-// Regex to detect chip/processor-only labels ("M1", "M2 Pro", "i7-13th", "Ryzen 7")
-const CHIP_RE = /\b(M[1-9](\s*(Pro|Max|Ultra|Nano))?|A\d{2}[A-Z]?|i[3579][- ]\d|Core\s*Ultra|Ryzen\s*\d|Snapdragon|Exynos|Dimensity)\b/i
 
-/** Extract all storage + price pairs from query_data for a given condition */
+/** Extract all storage + price pairs from query_data for a given condition.
+ *
+ * Rules:
+ *  1. Rule title must contain a GB/TB number (e.g. "256GB", "1TB").
+ *  2. Skip if the matched GB/TB value is *immediately* followed by a RAM/memory
+ *     keyword — e.g. "16GB RAM", "32GB DDR5". This prevents treating RAM labels
+ *     as storage, while still keeping compound rules like "256GB (8GB RAM)" or
+ *     "M1 256GB" where the first GB/TB token IS the storage capacity.
+ *  3. Extract ONLY the numeric+unit portion (e.g. "256GB"), never the full title.
+ *     This prevents garbage strings like "1TBNANO-TEXTUREGLASS" reaching the DB.
+ *  4. When two rules map to the same storage key (e.g. "256GB WiFi" and
+ *     "256GB WiFi+Cellular"), keep the lower price — the base/WiFi-only tier.
+ */
 function extractAllStoragePrices(queryData: QueryData, condition: string): Array<{ storage: string; price: number }> {
-  const results: Array<{ storage: string; price: number }> = []
   let conditionMultiplier = 1
 
   for (const step of Object.values(queryData)) {
@@ -351,6 +358,9 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
     }
   }
 
+  // Collect storage→price pairs (lower price wins on duplicate storage keys)
+  const storageMap = new Map<string, number>()
+
   for (const step of Object.values(queryData)) {
     if (!step.rules) continue
     for (const rule of Object.values(step.rules)) {
@@ -360,29 +370,41 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
 
       const ruleTitle = rule.title?.trim() || ''
 
-      // Skip rules that have no storage size (GB/TB) — catches chip labels, colors, etc.
+      // Must contain a GB/TB value — skips chip names, colors, case sizes, etc.
       const storageSizeMatch = STORAGE_SIZE_RE.exec(ruleTitle)
       if (!storageSizeMatch) continue
-      // Skip RAM-only labels ("16GB RAM", "32GB DDR5") — not a storage variant
-      if (RAM_LABEL_RE.test(ruleTitle)) continue
-      // Skip chip/processor variants ("M2 Pro", "i7-13th") — not a storage variant
-      if (CHIP_RE.test(ruleTitle)) continue
 
-      // Extract ONLY the size portion — prevents garbage strings like "1TBNANO-TEXTUREGLASS"
-      // when GoRecell rule titles include extra text (e.g. "1TB Nano-texture glass")
+      // Skip if the matched value is immediately followed by a RAM/memory keyword.
+      // e.g. "16GB RAM" → skip. "32GB DDR5" → skip.
+      // BUT "256GB (8GB RAM)" → "256GB" is NOT followed by RAM → keep.
+      // AND "M1 256GB" → "256GB" is not followed by RAM → keep.
+      const afterMatch = ruleTitle.slice(storageSizeMatch.index + storageSizeMatch[0].length).trim()
+      if (/^(RAM|Memory|DDR\d*|LPDDR\d*)\b/i.test(afterMatch)) continue
+
+      // Extract ONLY the size portion to avoid compound garbage keys
       const storage = storageSizeMatch[1] + storageSizeMatch[2].toUpperCase()
       const final = Math.round(price * conditionMultiplier * 100) / 100
-      results.push({ storage, price: final })
+
+      // Keep lower price for same storage (WiFi < WiFi+Cellular; 8GB RAM < 16GB RAM config)
+      const existing = storageMap.get(storage)
+      if (existing === undefined || final < existing) {
+        storageMap.set(storage, final)
+      }
     }
   }
-  return results
+
+  return Array.from(storageMap.entries()).map(([storage, price]) => ({ storage, price }))
 }
 
 // Keyword searches run AFTER main pagination to capture non-phone categories that
 // WooCommerce might rank low in its default product order.
 const SUPPLEMENTARY_SEARCH_TERMS = [
   'ipad', 'macbook', 'imac', 'mac mini', 'mac pro',
-  'galaxy tab', 'galaxy book', 'surface',
+  'apple watch',
+  'galaxy s', 'galaxy a', 'galaxy z', 'galaxy fold', 'galaxy flip',
+  'galaxy tab', 'galaxy book', 'galaxy watch',
+  'pixel', 'pixel watch',
+  'surface',
   'thinkpad', 'ideapad', 'zenbook', 'elitebook', 'spectre',
 ]
 
