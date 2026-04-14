@@ -234,10 +234,20 @@ function modelTokenMatch(scraped: string, catalog: string): boolean {
  *  e.g. 'MacBook Air 13" (2024)' and 'MacBook Air 13-inch (M3)' both become 'macbook air 13'
  *  e.g. 'iPad Pro 11 (2nd Gen) (2020)' and 'iPad Pro 11-inch (M2)' both become 'ipad pro 11'
  *  e.g. 'Galaxy Watch6 Classic' stays 'galaxy watch6 classic' */
+const KNOWN_BRANDS = ['apple', 'samsung', 'google', 'microsoft', 'lenovo', 'dell', 'hp', 'asus', 'acer', 'motorola', 'oneplus', 'sony', 'lg', 'razer']
+
 function coreModelName(model: string): string {
   let m = model.toLowerCase().trim()
   // Normalize unicode quotes
   m = m.replace(/[\u2033\u201c\u201d\u2019"']/g, '')
+  // Strip known brand prefixes — scrapers sometimes include brand in model name
+  // e.g., "Apple iPhone 15 Pro Max" → "iPhone 15 Pro Max" to match catalog convention
+  for (const brand of KNOWN_BRANDS) {
+    if (m.startsWith(brand + ' ')) {
+      m = m.slice(brand.length + 1)
+      break
+    }
+  }
   // Remove parenthesized suffixes: (2024), (M3), (2nd Gen), (M2 Pro), (Nov 2023), (A1822 | A1823)
   m = m.replace(/\s*\([^)]*\)/g, '')
   // Remove -inch suffix
@@ -300,7 +310,27 @@ async function resolveDeviceId(
     }
   }
 
-  // Pass 2: Core model name match (strips year/chip/generation suffixes)
+  // Pass 1.5: Retry Pass 1 with make prefix stripped from scraped model.
+  // Handles scrapers that include the brand in the model name
+  // e.g., "Apple iPhone 15 Pro Max" → try "iPhone 15 Pro Max" against catalog "iPhone 15 Pro Max"
+  const makeNorm = normalize(make)
+  if (modelNorm.startsWith(makeNorm + ' ')) {
+    const modelNormNoBrand = modelNorm.slice(makeNorm.length + 1)
+    if (modelNormNoBrand) {
+      for (const d of devices) {
+        const dm = normalize((d as { model?: string }).model ?? '')
+        const exactMatch = dm === modelNormNoBrand
+        const scrapedExtendsCatalog = modelTokenMatch(modelNormNoBrand, dm) && modelNormNoBrand !== dm
+        const catalogExtendsScraped = modelTokenMatch(dm, modelNormNoBrand) && dm !== modelNormNoBrand
+        const modelMatches = exactMatch || (scrapedExtendsCatalog && !catalogExtendsScraped)
+        if (modelMatches && checkStorage(d)) {
+          return resolveComparablePricingDeviceId(supabase, d.id)
+        }
+      }
+    }
+  }
+
+  // Pass 2: Core model name match (strips year/chip/generation suffixes + brand prefix)
   // This catches "MacBook Air 13" (2024)" matching "MacBook Air 13-inch (M3)"
   const scrapedCore = coreModelName(model)
   if (scrapedCore.length >= 5) { // Avoid matching very short cores

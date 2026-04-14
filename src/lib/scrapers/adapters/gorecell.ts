@@ -395,7 +395,16 @@ async function processDiscoveryProduct(
   if (!queryData) return []
 
   const make = inferMake(p.name)
-  const model = p.name.trim()
+  // Strip make prefix from model — GoRecell often names products "Apple iPhone 15 Pro Max"
+  // but device_catalog stores "iPhone 15 Pro Max" (no brand prefix).
+  // Without this, resolveDeviceId fails and ensureDevice creates duplicate catalog entries.
+  let model = p.name.trim()
+  if (make !== 'Other') {
+    const makePrefix = make.toLowerCase() + ' '
+    if (model.toLowerCase().startsWith(makePrefix)) {
+      model = model.slice(make.length + 1)
+    }
+  }
   const out: ScrapedPrice[] = []
 
   for (const condition of DISCOVERY_CONDITIONS) {
