@@ -5,7 +5,7 @@
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
-import { Outfit, Syne, Instrument_Serif, Barlow } from 'next/font/google'
+import { Outfit, Syne, Instrument_Serif, Barlow, Poppins, Source_Serif_4 } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from '@/components/ui/toaster'
@@ -23,6 +23,17 @@ const barlow = Barlow({
   weight: ['300', '400', '500', '600'],
   variable: '--font-barlow',
 })
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-poppins',
+})
+const sourceSerif = Source_Serif_4({
+  subsets: ['latin'],
+  weight: ['400'],
+  style: ['normal', 'italic'],
+  variable: '--font-source-serif',
+})
 
 export const metadata: Metadata = {
   title: 'DLM Engine — Device Lifecycle Management',
@@ -35,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${syne.variable} ${instrumentSerif.variable} ${barlow.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${syne.variable} ${instrumentSerif.variable} ${barlow.variable} ${poppins.variable} ${sourceSerif.variable}`}>
       <head>
         <script
           dangerouslySetInnerHTML={{

@@ -1,36 +1,29 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
-import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, Eye, EyeOff, KeyRound, Loader2, Package, RadioTower, ShieldCheck, Sparkles, Truck } from 'lucide-react'
+import { motion } from 'framer-motion'
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Menu,
+  Package,
+  Sparkles,
+} from 'lucide-react'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
-// Lazy-load the animated background so the login form is interactive
-// immediately without waiting for 18+ Framer Motion animations to init.
-const OrbitingDeviceField = dynamic(
-  () => import('@/components/landing/OrbitingDeviceField').then(m => ({ default: m.OrbitingDeviceField })),
-  { ssr: false, loading: () => null }
-)
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+const HERO_VIDEO =
+  'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260315_073750_51473149-4350-4920-ae24-c8214286f323.mp4'
 
-const highlights = [
-  'Market-led pricing intelligence',
-  'COE receiving, triage, and shipping',
-  'Role-aware operations for teams and partners',
-]
-
-const loginSignals = [
-  { icon: ShieldCheck, label: 'Secure session lane' },
-  { icon: RadioTower, label: 'Operational visibility' },
-  { icon: Sparkles, label: 'Pricing signal ready' },
-]
+const FEATURE_PILLS = ['Trade-In Processing', 'AI Pricing Engine', 'COE Operations']
 
 export default function LoginPage() {
   const router = useRouter()
@@ -45,14 +38,10 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState('')
   const { login, isLoading, isAuthenticated, isInitializing, user, verifyMfa } = useAuth()
   const [isNavigating, setIsNavigating] = useState(false)
-  // Tracks whether login/verifyMfa already called router.replace() — prevents double-navigation
   const loginHandledNavRef = useRef(false)
-  const shouldReduceMotion = useReducedMotion()
 
   useEffect(() => {
-    if (searchParams.get('reason') === 'session_expired') {
-      setSessionExpired(true)
-    }
+    if (searchParams.get('reason') === 'session_expired') setSessionExpired(true)
   }, [searchParams])
 
   useEffect(() => {
@@ -65,28 +54,21 @@ export default function LoginPage() {
     if (!isInitializing && isAuthenticated) {
       setIsNavigating(true)
       if (loginHandledNavRef.current) {
-        // login() / verifyMfa() already navigated — just keep the overlay up
         loginHandledNavRef.current = false
         return
       }
-      // User visited /login while already authenticated — navigate them away
       const redirect = searchParams.get('redirect')
       const dest =
-        redirect && redirect.startsWith('/')
-          ? redirect
-          : user
-            ? getDefaultAppPathForRole(user.role)
-            : '/'
+        redirect && redirect.startsWith('/') ? redirect : user ? getDefaultAppPathForRole(user.role) : '/'
       router.replace(dest)
     }
   }, [isAuthenticated, isInitializing, user, searchParams, router])
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
     setError('')
     try {
       await login(email, password)
-      // login() already called router.replace() — tell the useEffect not to double-navigate
       loginHandledNavRef.current = true
     } catch (err: unknown) {
       const e = err as { type?: string; factorId?: string } & Error
@@ -95,295 +77,343 @@ export default function LoginPage() {
         setMfaStep(true)
         return
       }
-      const message = e instanceof Error ? e.message : 'Failed to sign in'
-      if (message.toLowerCase().includes('invalid login credentials') || message.toLowerCase().includes('invalid email or password')) {
-        setError('Invalid Login ID or password.')
-        return
-      }
-      setError(message)
+      const msg = e instanceof Error ? e.message : 'Failed to sign in'
+      setError(
+        msg.toLowerCase().includes('invalid login') || msg.toLowerCase().includes('invalid email')
+          ? 'Invalid Login ID or password.'
+          : msg
+      )
     }
   }
 
-  async function handleMfaSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  async function handleMfaSubmit(e: React.FormEvent) {
+    e.preventDefault()
     setError('')
     try {
       await verifyMfa(mfaFactorId, mfaCode)
-      // verifyMfa() already called router.replace() — tell the useEffect not to double-navigate
       loginHandledNavRef.current = true
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Invalid code'
-      if (message.toLowerCase().includes('invalid') || message.toLowerCase().includes('expired')) {
-        setError('Invalid or expired code. Please try again.')
-        return
-      }
-      setError(message)
+      const msg = err instanceof Error ? err.message : 'Invalid code'
+      setError(
+        msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expired')
+          ? 'Invalid or expired code. Please try again.'
+          : msg
+      )
     }
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#120f0d] text-stone-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(209,124,67,0.16),transparent_26%),radial-gradient(circle_at_80%_18%,rgba(235,199,135,0.1),transparent_18%),linear-gradient(180deg,#120f0d_0%,#090706_100%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:52px_52px] opacity-30" />
+    // Force dark glass treatment over the video background
+    <div className="dark relative min-h-screen overflow-hidden bg-black font-display">
+
+      {/* ── Video background ───────────────────────────────────────────────── */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 h-full w-full object-cover z-0"
+        src={HERO_VIDEO}
+      />
+      {/* Subtle darkening overlay */}
+      <div className="absolute inset-0 z-0 bg-black/35" />
+
+      {/* Loading overlay */}
       {(isLoading || isNavigating) && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#120f0d]/90 backdrop-blur-sm">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-stone-400">Signing in…</p>
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm">
+          <Loader2 className="h-8 w-8 animate-spin text-white" />
+          <p className="font-display text-sm text-white/60">Signing in…</p>
         </div>
       )}
-      <OrbitingDeviceField className="opacity-55 sm:opacity-70" compact />
-      {/* Static ambient glows — no animation, GPU-cheap, desktop-only */}
-      <div className="pointer-events-none absolute -left-20 top-20 hidden h-64 w-64 rounded-full bg-primary/10 blur-3xl lg:block" />
-      <div className="pointer-events-none absolute right-8 top-24 hidden h-72 w-72 rounded-full bg-amber-100/8 blur-3xl lg:block" />
 
-      <div className="relative mx-auto grid min-h-screen max-w-[1500px] items-center gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-10">
-        <section className="relative hidden space-y-8 lg:block">
-          <motion.div
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7 }}
-            className="flex items-center gap-4"
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-primary text-primary-foreground shadow-[0_20px_45px_-24px_rgba(182,93,47,0.9)]">
-              <Package className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="editorial-title text-3xl leading-none brand-gradient">DLM Engine</p>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-500">Operational access portal</p>
-            </div>
-          </motion.div>
+      {/* ── Two-panel layout ──────────────────────────────────────────────── */}
+      <div className="relative z-10 flex min-h-screen">
 
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.08 }}
-            className="space-y-5"
-          >
-            <span className="eyebrow-label">Secure workspace</span>
-            <h1 className="editorial-title max-w-3xl text-6xl text-stone-100">
-              Sign in to the device operations layer.
-            </h1>
-            <p className="max-w-xl text-lg leading-8 text-stone-400">
-              One login opens the full platform for pricing, order flow, fulfillment, and role-based visibility across the
-              lifecycle.
-            </p>
-          </motion.div>
+        {/* ── LEFT PANEL — branding (desktop only) ──────────────────────── */}
+        <div className="relative hidden w-[52%] flex-col p-6 lg:flex">
+          {/* Glass overlay panel */}
+          <div className="liquid-glass-strong pointer-events-none absolute inset-6 rounded-3xl" />
 
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.16 }}
-            className="grid gap-3 sm:grid-cols-3"
-          >
-            {loginSignals.map((item, index) => (
-              <motion.div
-                key={item.label}
-                animate={shouldReduceMotion ? undefined : { y: [0, -4, 0] }}
-                transition={{ duration: 4.2, repeat: Infinity, delay: index * 0.5, ease: 'easeInOut' }}
-                className="rounded-[1.35rem] border border-white/8 bg-white/[0.035] px-4 py-4"
-              >
-                <item.icon className="h-4 w-4 text-primary" />
-                <p className="mt-3 text-sm font-medium text-stone-200">{item.label}</p>
-              </motion.div>
-            ))}
-          </motion.div>
+          {/* Content sits above the glass */}
+          <div className="relative z-10 flex h-full flex-col">
 
-          <div className="grid gap-4">
-            {highlights.map((item, index) => (
-              <motion.div
-                key={item}
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 + 0.1 * index }}
-                whileHover={shouldReduceMotion ? undefined : { x: 8, y: -4 }}
-                className="surface-panel rounded-[1.5rem] px-5 py-4"
-              >
-                <div className="flex items-center gap-3">
-                  {index === 0 && <ShieldCheck className="h-5 w-5 text-primary" />}
-                  {index === 1 && <Truck className="h-5 w-5 text-primary/80" />}
-                  {index === 2 && <Package className="h-5 w-5 text-primary/60" />}
-                  <p className="text-sm font-medium text-stone-200">{item}</p>
+            {/* Nav */}
+            <nav className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10">
+                  <Package className="h-4 w-4 text-white" />
                 </div>
-              </motion.div>
-            ))}
-          </div>
-        </section>
+                <span className="font-display text-xl font-semibold tracking-tighter text-white">
+                  DLM Engine
+                </span>
+              </div>
+              <button className="liquid-glass flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-medium text-white/80 transition-transform hover:scale-105">
+                <Menu className="h-3.5 w-3.5" />
+                Menu
+              </button>
+            </nav>
 
-        <section className="mx-auto w-full max-w-xl">
-          <div className="mb-6 flex items-center justify-between lg:hidden">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] bg-primary text-primary-foreground">
-                <Package className="h-4 w-4" />
+            {/* Hero — vertically centered */}
+            <div className="flex flex-1 flex-col items-center justify-center gap-8 py-12">
+              {/* Icon */}
+              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10">
+                <Package className="h-10 w-10 text-white" />
               </div>
-              <span className="font-semibold text-stone-100">DLM Engine</span>
-            </Link>
-            <Link href="/" className="text-sm text-stone-500 hover:text-stone-200">
-              <ArrowLeft className="mr-1 inline h-4 w-4" />
-              Back
-            </Link>
-          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.12 }}
-            whileHover={shouldReduceMotion ? undefined : { y: -6, rotateY: -2, rotateX: 2 }}
-            style={{ transformPerspective: 1400 }}
-          >
-            <Card className="surface-panel relative overflow-hidden border-white/8 bg-transparent text-stone-100">
-              <motion.div
-                className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-primary/80 to-transparent"
-                animate={shouldReduceMotion ? undefined : { opacity: [0.25, 1, 0.25], scaleX: [0.7, 1, 0.7] }}
-                transition={{ duration: 3.8, repeat: Infinity, ease: 'easeInOut' }}
-              />
-              <motion.div
-                className="pointer-events-none absolute -right-12 top-10 h-32 w-32 rounded-full bg-primary/12 blur-3xl"
-                animate={shouldReduceMotion ? undefined : { x: [0, -14, 0], y: [0, 14, 0] }}
-                transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            <CardHeader className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="eyebrow-label">{mfaStep ? 'Two-Factor Auth' : 'Sign In'}</span>
-                {!mfaStep && (
-                  <Link href="/" className="hidden text-sm text-stone-500 hover:text-stone-200 lg:inline">
-                    <ArrowLeft className="mr-1 inline h-4 w-4" />
-                    Back
-                  </Link>
-                )}
+              {/* Headline */}
+              <div className="text-center">
+                <h1 className="font-display text-6xl font-medium leading-[0.95] tracking-[-0.05em] text-white lg:text-7xl">
+                  Operational Command<br />
+                  <span className="font-serif italic text-white/75">
+                    for Device Lifecycle
+                  </span>
+                </h1>
               </div>
-              <div className="space-y-2">
-                <CardTitle className="text-3xl text-stone-100">
-                  {mfaStep ? 'Verify your identity' : 'Welcome back'}
-                </CardTitle>
-                <CardDescription className="text-base text-stone-400">
-                  {mfaStep
-                    ? 'Enter the 6-digit code from your authenticator app to continue.'
-                    : 'Use your login ID or email to enter the platform.'}
-                </CardDescription>
-              </div>
-              {!mfaStep && (
-              <div className="grid gap-2 sm:grid-cols-3">
-                {['Role-aware entry', 'Pricing control', 'Operational handoff'].map((item, index) => (
-                  <motion.div
-                    key={item}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.28 + index * 0.08 }}
-                    className="rounded-[1rem] border border-white/8 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-[0.16em] text-stone-400"
+
+              {/* CTA pill */}
+              <button className="liquid-glass-strong flex items-center gap-3 rounded-full px-5 py-3 text-sm font-medium text-white transition-transform hover:scale-105 active:scale-95">
+                Enterprise ITAD Platform
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15">
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </span>
+              </button>
+
+              {/* Feature pills */}
+              <div className="flex flex-wrap justify-center gap-2">
+                {FEATURE_PILLS.map((pill) => (
+                  <span
+                    key={pill}
+                    className="liquid-glass rounded-full px-4 py-1.5 text-xs font-medium text-white/80 transition-transform hover:scale-105"
                   >
-                    {item}
-                  </motion.div>
+                    {pill}
+                  </span>
                 ))}
               </div>
-              )}
-            </CardHeader>
+            </div>
 
-            <CardContent className="space-y-5">
-              {sessionExpired && (
-                <div className="rounded-[1.25rem] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                  Your session expired. Please sign in again.
-                </div>
-              )}
+            {/* Bottom quote */}
+            <div className="flex flex-col items-center gap-3 pb-4 text-center">
+              <p className="font-display text-[10px] font-medium uppercase tracking-[0.2em] text-white/40">
+                Lifecycle Management
+              </p>
+              <p className="font-display text-sm font-medium text-white/70">
+                &ldquo;Built for the complexity of{' '}
+                <span className="font-serif italic text-white/50">real operations.</span>&rdquo;
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="h-px w-12 bg-white/20" />
+                <span className="font-display text-[10px] uppercase tracking-widest text-white/40">
+                  DLM Engine Platform
+                </span>
+                <div className="h-px w-12 bg-white/20" />
+              </div>
+            </div>
+          </div>
+        </div>
 
-              {error && (
-                <div className="rounded-[1.25rem] border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                  {error}
-                </div>
-              )}
+        {/* ── RIGHT PANEL — login form (always visible) ─────────────────── */}
+        <div className="flex flex-1 flex-col items-center justify-center p-5 lg:w-[48%] lg:p-8">
 
-              {mfaStep ? (
-                <form onSubmit={handleMfaSubmit} className="space-y-5">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <KeyRound className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium text-stone-300">Authenticator Code</span>
-                    </div>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                      value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="000000"
-                      autoComplete="one-time-code"
-                      required
-                      className="text-center text-xl tracking-[0.4em]"
-                    />
-                    <p className="text-xs text-stone-500">Enter the 6-digit code from your authenticator app</p>
-                  </div>
-                  <Button type="submit" className="w-full" size="lg" disabled={isLoading || mfaCode.length !== 6}>
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {isLoading ? 'Verifying...' : 'Verify Code'}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => { setMfaStep(false); setMfaCode(''); setError('') }}
-                    className="w-full text-center text-sm text-stone-500 hover:text-stone-200"
-                  >
-                    ← Back to sign in
-                  </button>
-                </form>
-              ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Right panel top bar (desktop) */}
+          <div className="mb-6 hidden w-full max-w-sm items-center justify-between lg:flex">
+            <div className="liquid-glass flex items-center gap-2 rounded-full px-3 py-1.5">
+              <Link href="#" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition-colors hover:text-white">
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.74l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              </Link>
+              <Link href="#" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition-colors hover:text-white">
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+              </Link>
+              <ArrowRight className="ml-1 h-3.5 w-3.5 text-white/40" />
+            </div>
+            <button className="liquid-glass flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition-transform hover:scale-105 hover:text-white">
+              <Sparkles className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Mobile logo */}
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10">
+              <Package className="h-5 w-5 text-white" />
+            </div>
+            <span className="font-display text-xl font-semibold tracking-tighter text-white">DLM Engine</span>
+          </div>
+
+          {/* ── Form card ────────────────────────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="liquid-glass-strong w-full max-w-sm rounded-3xl p-8"
+          >
+            {/* Card header */}
+            <div className="mb-6 space-y-1">
+              <p className="font-display text-[10px] font-medium uppercase tracking-[0.2em] text-white/40">
+                {mfaStep ? 'Two-Factor Auth' : 'Secure Access'}
+              </p>
+              <h2 className="font-display text-2xl font-medium text-white">
+                {mfaStep ? (
+                  'Verify your identity'
+                ) : (
+                  <>Welcome <span className="font-serif italic text-white/60">back</span></>
+                )}
+              </h2>
+              <p className="font-display text-sm text-white/50">
+                {mfaStep
+                  ? 'Enter the 6-digit code from your authenticator app.'
+                  : 'Use your login ID or email to enter the platform.'}
+              </p>
+            </div>
+
+            {/* Alerts */}
+            {sessionExpired && (
+              <div className="liquid-glass mb-5 rounded-2xl px-4 py-3 text-sm text-white/80">
+                Your session expired. Please sign in again.
+              </div>
+            )}
+            {error && (
+              <div className="liquid-glass mb-5 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-white/80">
+                {error}
+              </div>
+            )}
+
+            {/* MFA form */}
+            {mfaStep ? (
+              <form onSubmit={handleMfaSubmit} className="space-y-5">
                 <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium text-stone-300">Login ID or Email</label>
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="h-3.5 w-3.5 text-white/40" />
+                    <label className="font-display text-xs font-medium text-white/60">
+                      Authenticator Code
+                    </label>
+                  </div>
                   <Input
-                    id="email"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="000000"
+                    autoComplete="one-time-code"
+                    required
+                    className="border-white/10 bg-white/5 text-center font-display text-xl tracking-[0.4em] text-white placeholder:text-white/20 focus:border-white/25 focus:ring-white/10"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading || mfaCode.length !== 6}
+                  className="liquid-glass-strong flex w-full items-center justify-center gap-2 rounded-full py-3 font-display text-sm font-medium text-white transition-transform hover:scale-105 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
+                >
+                  {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {isLoading ? 'Verifying…' : 'Verify Code'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMfaStep(false); setMfaCode(''); setError('') }}
+                  className="w-full font-display text-xs text-white/40 transition-colors hover:text-white/70"
+                >
+                  ← Back to sign in
+                </button>
+              </form>
+            ) : (
+              /* Login form */
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="font-display text-xs font-medium text-white/50">
+                    Login ID or Email
+                  </label>
+                  <Input
                     value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your login ID"
                     autoComplete="username"
                     required
+                    className="border-white/10 bg-white/5 font-display text-white placeholder:text-white/20 focus:border-white/25 focus:ring-white/10"
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label htmlFor="password" className="text-sm font-medium text-stone-300">Password</label>
-                    <Link href="/forgot-password" className="text-xs font-medium text-primary/80 hover:text-primary transition-colors">
+                    <label className="font-display text-xs font-medium text-white/50">Password</label>
+                    <Link
+                      href="/forgot-password"
+                      className="font-display text-xs text-white/40 transition-colors hover:text-white/70"
+                    >
                       Forgot password?
                     </Link>
                   </div>
                   <div className="relative">
                     <Input
-                      id="password"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
-                      onChange={(event) => setPassword(event.target.value)}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
                       autoComplete="current-password"
                       required
-                      className="pr-12"
+                      className="border-white/10 bg-white/5 font-display text-white placeholder:text-white/20 focus:border-white/25 focus:ring-white/10 pr-10"
                     />
                     <button
                       type="button"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-200"
+                      onClick={() => setShowPassword((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {isLoading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </form>
-              )}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="liquid-glass-strong mt-2 flex w-full items-center justify-center gap-2 rounded-full py-3 font-display text-sm font-medium text-white transition-transform hover:scale-105 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
+                >
+                  {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {isLoading ? 'Signing in…' : 'Sign In'}
+                  {!isLoading && (
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
+                      <ArrowRight className="h-3 w-3" />
+                    </span>
+                  )}
+                </button>
 
-              <p className="text-sm text-stone-500">
-                Need an account?{' '}
-                <Link href="/register" className="text-stone-200 underline-offset-4 hover:underline">
-                  Request access
-                </Link>
-              </p>
-            </CardContent>
-            </Card>
+                <p className="pt-1 text-center font-display text-xs text-white/40">
+                  Need an account?{' '}
+                  <Link href="/register" className="text-white/70 underline-offset-4 hover:underline hover:text-white transition-colors">
+                    Request access
+                  </Link>
+                </p>
+              </form>
+            )}
           </motion.div>
-        </section>
+
+          {/* Bottom feature cards (desktop) */}
+          <div className="mt-6 hidden w-full max-w-sm lg:block">
+            <div className="liquid-glass rounded-[2rem] p-3">
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {[
+                  { label: 'Triage & Grading', icon: '⚙' },
+                  { label: 'Market Pricing', icon: '📈' },
+                ].map((item) => (
+                  <div key={item.label} className="liquid-glass rounded-2xl px-4 py-3 transition-transform hover:scale-105">
+                    <span className="text-lg">{item.icon}</span>
+                    <p className="mt-1.5 font-display text-xs font-medium text-white/70">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="liquid-glass flex items-center gap-3 rounded-2xl px-4 py-3 transition-transform hover:scale-105">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-lg">📦</div>
+                <div className="min-w-0">
+                  <p className="font-display text-xs font-semibold text-white/80">Device Lifecycle OS</p>
+                  <p className="font-display text-[10px] text-white/40">End-to-end ITAD operations platform</p>
+                </div>
+                <button className="liquid-glass ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/60 transition-transform hover:scale-110">
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   )

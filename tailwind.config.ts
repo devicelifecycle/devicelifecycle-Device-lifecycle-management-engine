@@ -13,6 +13,8 @@ const config: Config = {
         sans: ['var(--font-outfit)', 'system-ui', 'sans-serif'],
         heading: ['var(--font-instrument-serif)', 'var(--font-syne)', 'serif'],
         body: ['var(--font-barlow)', 'var(--font-outfit)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-poppins)', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-source-serif)', 'Georgia', 'serif'],
       },
       colors: {
         border: 'hsl(var(--border))',
