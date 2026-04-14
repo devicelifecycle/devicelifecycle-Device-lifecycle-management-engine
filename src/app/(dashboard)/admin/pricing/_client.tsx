@@ -231,6 +231,7 @@ export default function AdminPricingClient() {
   const [formulaLoading, setFormulaLoading] = useState(false)
   const [formulaRefreshTrigger, setFormulaRefreshTrigger] = useState(0)
   const [cleanupUnknownLoading, setCleanupUnknownLoading] = useState(false)
+  const [cleanupPhantomLoading, setCleanupPhantomLoading] = useState(false)
   const [cpForm, setCpForm] = useState({
     device_id: '', storage: '', competitor_name: '', condition: 'good' as 'excellent' | 'good' | 'fair' | 'broken', trade_in_price: '', sell_price: '',
   })
@@ -666,6 +667,21 @@ export default function AdminPricingClient() {
       toast.success('Price change report downloaded')
     } catch {
       toast.error('Failed to download price change report')
+    }
+  }
+
+  const handleCleanupPhantomDevices = async () => {
+    setCleanupPhantomLoading(true)
+    try {
+      const res = await fetch('/api/pricing/competitors/cleanup-phantom-devices', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Cleanup failed')
+      toast.success(data.message || `Cleaned up ${data.devices_deactivated ?? 0} phantom devices, migrated ${data.price_rows_migrated ?? 0} price rows`)
+      fetchCompetitorPrices()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Phantom cleanup failed')
+    } finally {
+      setCleanupPhantomLoading(false)
     }
   }
 
@@ -1614,6 +1630,10 @@ export default function AdminPricingClient() {
               <Button variant="outline" onClick={handleCleanupUnknownStorage} disabled={cleanupUnknownLoading} title="Remove UNKNOWN storage entries">
                 <Trash2 className="mr-2 h-4 w-4" />
                 {cleanupUnknownLoading ? 'Cleaning...' : 'Remove UNKNOWN'}
+              </Button>
+              <Button variant="destructive" onClick={handleCleanupPhantomDevices} disabled={cleanupPhantomLoading} title="Fix prices stored against phantom brand-prefixed devices (e.g. 'Apple iPhone 13' → 'iPhone 13')">
+                <Trash2 className="mr-2 h-4 w-4" />
+                {cleanupPhantomLoading ? 'Fixing...' : 'Fix Phantom Devices'}
               </Button>
             </div>
           </div>
