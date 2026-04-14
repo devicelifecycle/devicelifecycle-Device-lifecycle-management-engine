@@ -28,10 +28,8 @@ import { formatCurrency } from '@/lib/utils'
 import {
   CPO_CSV_HEADERS,
   CPO_CSV_SAMPLE,
-  CSV_COLUMN_ALIASES,
   buildCsvContent,
   buildXlsxTemplateBlob,
-  parseTabularUpload,
 } from '@/lib/csv-templates'
 import type { Device, DeviceCondition } from '@/types'
 
@@ -285,50 +283,38 @@ export default function NewCPOOrderPage() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    try {
-      const { rows: rawRows } = await parseTabularUpload(file)
-      const errors: string[] = []
-      const aliasKeys = Object.keys(CSV_COLUMN_ALIASES)
-      const fuzzyMap = (header: string): string | null => {
-        const key = header.toLowerCase().trim().replace(/\s+/g, '_')
-        if (CSV_COLUMN_ALIASES[key]) return CSV_COLUMN_ALIASES[key]
-        let best: string | null = null, bestDist = 3
-        for (const ak of aliasKeys) {
-          if (Math.abs(ak.length - key.length) > 3) continue
-          const m = key.length, n = ak.length
-          const dp = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (__, j) => i === 0 ? j : j === 0 ? i : 0))
-          for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) dp[i][j] = key[i-1]===ak[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1])
-          if (dp[m][n] < bestDist) { bestDist = dp[m][n]; best = CSV_COLUMN_ALIASES[ak] }
-        }
-        return best
-      }
+    if (fileRef.current) fileRef.current.value = ''
 
-      const normalizeRow = (r: Record<string, string>): CSVRow => {
-        const out: Partial<CSVRow> = {}
-        for (const [k, v] of Object.entries(r)) {
-          const mapped = fuzzyMap(k)
-          if (mapped) out[mapped as keyof CSVRow] = String(v ?? '').trim()
-        }
-        return {
-          device_make: out.device_make ?? '',
-          device_model: out.device_model ?? '',
-          quantity: out.quantity ?? '',
-          storage: out.storage ?? '',
-          notes: out.notes ?? '',
-        }
-      }
-      const rows = rawRows.map(normalizeRow)
+    try {
+      setCsvErrors([])
+      setCsvData([])
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/orders/parse-trade-template', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to parse file')
+
+      type ApiRow = { make: string; model: string; storage: string; condition: string; quantity: number; serials: string[] }
+      const rows: CSVRow[] = (data.rows as ApiRow[] || []).map(r => ({
+        device_make: r.make || '',
+        device_model: r.model || '',
+        quantity: String(r.quantity || 1),
+        storage: r.storage || '',
+        notes: r.serials?.length ? `Serials: ${r.serials.slice(0, 5).join(', ')}${r.serials.length > 5 ? '…' : ''}` : '',
+      }))
+
+      const errors: string[] = []
       rows.forEach((row, i) => {
-        if (!row.device_make) errors.push(`Row ${i + 1}: Missing device_make`)
-        if (!row.device_model) errors.push(`Row ${i + 1}: Missing device_model`)
-        if (!row.quantity || isNaN(Number(row.quantity))) errors.push(`Row ${i + 1}: Quantity is required for CPO orders`)
+        if (!row.device_make && !row.device_model) errors.push(`Row ${i + 1}: No device identified`)
+        if (!row.quantity || isNaN(Number(row.quantity)) || Number(row.quantity) < 1) errors.push(`Row ${i + 1}: Quantity is required for CPO orders`)
       })
+
       setCsvErrors(errors)
       setCsvData(rows)
-      if (errors.length === 0) toast.success(`${rows.length} rows parsed successfully`)
-      if (fileRef.current) fileRef.current.value = ''
-    } catch {
-      toast.error('Failed to parse file. Use CSV or Excel (.xlsx/.xls).')
+      const total = data.summary?.total_devices ?? rows.length
+      toast.success(`${total} device${total !== 1 ? 's' : ''} parsed — ${data.summary?.matched ?? 0} matched to catalog`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to parse file. Use CSV or Excel (.xlsx/.xls).')
     }
   }
 
