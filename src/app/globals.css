@@ -110,18 +110,47 @@
   }
 
   /* ── Liquid Glass (from luxury editorial design system) ─────────────────── */
-  /* Subtle glass — use on cards, nav pills, badges                            */
+  /* Light mode: use subtle muted card treatment (glass effect requires dark bg) */
   .liquid-glass {
+    background: hsl(var(--muted) / 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid hsl(var(--border));
+    position: relative;
+    overflow: hidden;
+  }
+  .liquid-glass-strong {
+    background: hsl(var(--muted));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border));
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Dark mode overrides — full liquid glass treatment */
+  .dark .liquid-glass {
     background: rgba(255, 255, 255, 0.01);
     background-blend-mode: luminosity;
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     border: none;
     box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
-    position: relative;
-    overflow: hidden;
   }
-  .liquid-glass::before {
+  .dark .liquid-glass-strong {
+    background: rgba(255, 255, 255, 0.01);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(50px);
+    -webkit-backdrop-filter: blur(50px);
+    border: none;
+    box-shadow:
+      4px 4px 4px rgba(0, 0, 0, 0.05),
+      inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  }
+
+  /* Gradient border (::before) only meaningful on dark backgrounds */
+  .dark .liquid-glass::before,
+  .dark .liquid-glass-strong::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -141,26 +170,7 @@
     mask-composite: exclude;
     pointer-events: none;
   }
-
-  /* Strong glass — use on CTA buttons, primary interactive elements           */
-  .liquid-glass-strong {
-    background: rgba(255, 255, 255, 0.01);
-    background-blend-mode: luminosity;
-    backdrop-filter: blur(50px);
-    -webkit-backdrop-filter: blur(50px);
-    border: none;
-    box-shadow:
-      4px 4px 4px rgba(0, 0, 0, 0.05),
-      inset 0 1px 1px rgba(255, 255, 255, 0.15);
-    position: relative;
-    overflow: hidden;
-  }
-  .liquid-glass-strong::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1.4px;
+  .dark .liquid-glass-strong::before {
     background: linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.5) 0%,
@@ -170,10 +180,27 @@
       rgba(255, 255, 255, 0.2) 80%,
       rgba(255, 255, 255, 0.5) 100%
     );
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
+  }
+
+  /* Sidebar always has a dark background — force dark glass treatment even in light mode */
+  .sidebar-surface .liquid-glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .sidebar-surface .liquid-glass-strong {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  /* No gradient-border ::before inside sidebar (not needed on dark bg variant) */
+  .sidebar-surface .liquid-glass::before,
+  .sidebar-surface .liquid-glass-strong::before {
+    display: none;
   }
 }
 
@@ -1486,6 +1513,38 @@ textarea {
 }
 .dark .dashboard-canvas {
   background: #080809;
+}
+
+/* Topbar sub-elements — adaptive light/dark */
+.topbar-breadcrumb {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+}
+.dark .topbar-breadcrumb {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.topbar-actions {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+}
+.dark .topbar-actions {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.topbar-avatar {
+  background: hsl(var(--primary) / 0.12);
+}
+.topbar-avatar:hover {
+  background: hsl(var(--primary) / 0.2);
+}
+.dark .topbar-avatar {
+  background: rgba(255, 255, 255, 0.06);
+}
+.dark .topbar-avatar:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .grain-overlay::after {
