@@ -108,6 +108,10 @@ export default function NewTradeInPage() {
   const latestLookupRequestRef = useRef<Record<number, number>>({})
   const nextLookupRequestIdRef = useRef(1)
 
+  // Device search state — one entry per line item
+  const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
+  const [deviceDropdownOpen, setDeviceDropdownOpen] = useState<Record<number, boolean>>({})
+
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
   // marginOverride: empty string = use engine default, number = override margin %
@@ -117,7 +121,7 @@ export default function NewTradeInPage() {
   const [beatOverride, setBeatOverride] = useState<string>('')
 
   useEffect(() => {
-    fetch('/api/devices?page_size=150&sort_by=make&sort_order=asc').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    fetch('/api/devices?page_size=500&sort_by=make&sort_order=asc').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -197,6 +201,16 @@ export default function NewTradeInPage() {
   const removeItem = (i: number) => {
     setItems(items.filter((_, idx) => idx !== i))
     latestLookupRequestRef.current = {}
+    setDeviceSearches(prev => {
+      const next = { ...prev }
+      delete next[i]
+      const reindexed: Record<number, string> = {}
+      Object.keys(next).forEach(key => {
+        const k = parseInt(key)
+        reindexed[k > i ? k - 1 : k] = next[k]
+      })
+      return reindexed
+    })
     setItemPrices(prev => {
       const next = { ...prev }
       delete next[i]
@@ -453,12 +467,44 @@ export default function NewTradeInPage() {
                         {index > 0 && <Separator className="mb-3" />}
                         <div className="flex items-start gap-3">
                           <div className={`flex-1 grid gap-2 ${isInternal ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
-                            <Select value={item.device_id} onValueChange={v => updateItem(index, 'device_id', v)}>
-                              <SelectTrigger><SelectValue placeholder="Device" /></SelectTrigger>
-                              <SelectContent>
-                                {devices.map(d => <SelectItem key={d.id} value={d.id}>{d.make} {d.model}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            {/* Searchable device combobox */}
+                            <div className="relative">
+                              <Input
+                                placeholder="Search device..."
+                                value={deviceSearches[index] !== undefined ? deviceSearches[index] : item.device_label}
+                                onChange={e => {
+                                  setDeviceSearches(prev => ({ ...prev, [index]: e.target.value }))
+                                  setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
+                                }}
+                                onFocus={() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))}
+                                onBlur={() => setTimeout(() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: false })), 150)}
+                                autoComplete="off"
+                              />
+                              {deviceDropdownOpen[index] && (
+                                <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow-md">
+                                  {(() => {
+                                    const q = (deviceSearches[index] || '').toLowerCase()
+                                    const filtered = devices.filter(d => !q || `${d.make} ${d.model}`.toLowerCase().includes(q)).slice(0, 60)
+                                    if (filtered.length === 0) return <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
+                                    return filtered.map(d => (
+                                      <button
+                                        key={d.id}
+                                        type="button"
+                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-accent ${d.id === item.device_id ? 'bg-accent font-medium' : ''}`}
+                                        onMouseDown={e => {
+                                          e.preventDefault()
+                                          updateItem(index, 'device_id', d.id)
+                                          setDeviceSearches(prev => ({ ...prev, [index]: `${d.make} ${d.model}` }))
+                                          setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+                                        }}
+                                      >
+                                        {d.make} {d.model}
+                                      </button>
+                                    ))
+                                  })()}
+                                </div>
+                              )}
+                            </div>
                             <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
                             <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>
                               <SelectTrigger><SelectValue /></SelectTrigger>

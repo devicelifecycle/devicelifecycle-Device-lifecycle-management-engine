@@ -152,7 +152,7 @@ export default function LandingPage() {
   const heroCopyOpacity = useTransform(
     heroScrollProgress,
     [0, 0.75, 1],
-    [1, 1, shouldReduceMotion ? 1 : 0.16],
+    [1, 1, shouldReduceMotion ? 1 : 0.72],
   );
   const heroStageY = useTransform(
     heroScrollProgress,
