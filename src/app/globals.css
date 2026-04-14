@@ -108,6 +108,73 @@
   .wizard-page {
     @apply min-h-screen bg-stone-50 text-stone-900;
   }
+
+  /* ── Liquid Glass (from luxury editorial design system) ─────────────────── */
+  /* Subtle glass — use on cards, nav pills, badges                            */
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.01);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: none;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .liquid-glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0.15) 20%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.15) 80%,
+      rgba(255, 255, 255, 0.45) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Strong glass — use on CTA buttons, primary interactive elements           */
+  .liquid-glass-strong {
+    background: rgba(255, 255, 255, 0.01);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(50px);
+    -webkit-backdrop-filter: blur(50px);
+    border: none;
+    box-shadow:
+      4px 4px 4px rgba(0, 0, 0, 0.05),
+      inset 0 1px 1px rgba(255, 255, 255, 0.15);
+    position: relative;
+    overflow: hidden;
+  }
+  .liquid-glass-strong::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.5) 0%,
+      rgba(255, 255, 255, 0.2) 20%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.2) 80%,
+      rgba(255, 255, 255, 0.5) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
 }
 
 @layer base {
@@ -1310,7 +1377,10 @@ textarea {
   background: hsl(var(--background));
 }
 .dark .app-shell-bg {
-  background: #0f0f11;
+  background: #080809;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 15% 0%, rgba(182, 93, 47, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 85% 0%, rgba(255, 255, 255, 0.025) 0%, transparent 45%);
 }
 
 .surface-panel {
@@ -1319,9 +1389,13 @@ textarea {
   box-shadow: 0 24px 64px -20px rgba(0, 0, 0, 0.12);
 }
 .dark .surface-panel {
-  background: #1a1a1d;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 24px 64px -20px rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(40px) saturate(150%);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 24px 64px -20px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .surface-panel-light {
@@ -1346,9 +1420,10 @@ textarea {
 }
 
 .editorial-title {
-  font-family: var(--font-syne), sans-serif;
-  letter-spacing: -0.04em;
-  line-height: 0.95;
+  font-family: var(--font-instrument-serif), var(--font-syne), serif;
+  font-style: italic;
+  letter-spacing: -0.03em;
+  line-height: 0.92;
 }
 
 .eyebrow-label {
@@ -1385,8 +1460,11 @@ textarea {
   border-right: 1px solid hsl(var(--border) / 0.6);
 }
 .dark .sidebar-surface {
-  background: #0c0c0e;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(8, 8, 10, 0.96);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 4px 0 32px -8px rgba(0, 0, 0, 0.6);
 }
 
 .topbar-surface {
@@ -1396,15 +1474,18 @@ textarea {
   border-bottom: 1px solid hsl(var(--border));
 }
 .dark .topbar-surface {
-  background: rgba(15, 15, 17, 0.88);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(8, 8, 10, 0.7);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .dashboard-canvas {
   background: hsl(var(--background));
 }
 .dark .dashboard-canvas {
-  background: #0f0f11;
+  background: #080809;
 }
 
 .grain-overlay::after {

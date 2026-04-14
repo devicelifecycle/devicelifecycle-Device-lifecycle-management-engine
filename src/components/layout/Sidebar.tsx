@@ -100,21 +100,24 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <aside className="sidebar-surface flex h-full w-[260px] flex-col overflow-hidden">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Package className="h-4 w-4" />
+      <div className="flex items-center gap-3 px-5 py-[18px]">
+        <div className="liquid-glass-strong flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white">
+          <Package className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-stone-100 leading-none">DLM Engine</p>
-          <p className="text-[10px] text-stone-500 mt-0.5">Device Lifecycle OS</p>
+          <p className="font-heading italic text-[15px] text-white leading-none tracking-tight">DLM Engine</p>
+          <p className="font-body text-[10px] text-white/35 mt-0.5 font-light tracking-wide">Device Lifecycle OS</p>
         </div>
       </div>
 
+      {/* Divider */}
+      <div className="mx-4 h-px bg-white/[0.06]" />
+
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-5">
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {filteredSections.map((section) => (
           <div key={section.title}>
-            <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-600">
+            <p className="mb-1.5 px-2 font-body text-[9px] font-semibold uppercase tracking-[0.2em] text-white/25">
               {section.title}
             </p>
             <div className="space-y-0.5">
@@ -126,15 +129,25 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   <Link key={item.title} href={item.href} onClick={onNavigate} prefetch={false}>
                     <div
                       className={cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                        'group relative flex items-center gap-3 rounded-xl px-3 py-2 font-body text-sm transition-all duration-200',
                         isActive
-                          ? 'bg-white/[0.07] text-stone-100'
-                          : 'text-stone-500 hover:bg-white/[0.04] hover:text-stone-300'
+                          ? 'liquid-glass text-white'
+                          : 'text-white/40 hover:text-white/75'
                       )}
                     >
-                      <item.icon className={cn('h-[15px] w-[15px] shrink-0', isActive ? 'text-primary' : '')} />
-                      <span className="flex-1 truncate font-medium">{item.title}</span>
-                      {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                      {/* Active left accent */}
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-0.5 rounded-full bg-primary" />
+                      )}
+                      <item.icon
+                        className={cn(
+                          'h-[14px] w-[14px] shrink-0 transition-colors',
+                          isActive ? 'text-primary' : 'text-white/30 group-hover:text-white/60'
+                        )}
+                      />
+                      <span className={cn('flex-1 truncate text-[13px]', isActive ? 'font-medium' : 'font-light')}>
+                        {item.title}
+                      </span>
                     </div>
                   </Link>
                 )
@@ -145,20 +158,23 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* User profile */}
-      <div className="border-t border-white/[0.07] p-3">
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
+      <div className="mx-4 h-px bg-white/[0.06]" />
+      <div className="p-3">
+        <div className="liquid-glass rounded-xl px-3 py-2.5 flex items-center gap-3">
           <Link href="/profile" onClick={onNavigate} className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-xs font-bold text-primary">
+            <div className="liquid-glass-strong flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-primary">
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-stone-200 leading-none">{user?.full_name || 'User'}</p>
-              <p className="truncate text-[10px] text-stone-500 mt-0.5 capitalize">{user?.role?.replace('_', ' ') || 'Role'}</p>
+              <p className="truncate font-body text-xs font-medium text-white/80 leading-none">{user?.full_name || 'User'}</p>
+              <p className="truncate font-body text-[10px] text-white/30 mt-0.5 font-light capitalize">
+                {user?.role?.replace(/_/g, ' ') || 'Role'}
+              </p>
             </div>
           </Link>
           <button
             onClick={logout}
-            className="shrink-0 rounded-md p-1.5 text-stone-600 hover:bg-white/[0.06] hover:text-stone-300 transition-colors"
+            className="shrink-0 rounded-lg p-1.5 text-white/25 hover:text-white/60 hover:bg-white/[0.06] transition-all"
             title="Sign out"
           >
             <LogOut className="h-3.5 w-3.5" />
