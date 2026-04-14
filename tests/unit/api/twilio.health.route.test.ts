@@ -36,16 +36,19 @@ function makeSupabase(user: { id: string } | null, role?: string | null) {
 
 describe('GET /api/twilio/health', () => {
   const originalSid = process.env.TWILIO_ACCOUNT_SID
+  const originalToken = process.env.TWILIO_AUTH_TOKEN
   const originalPhone = process.env.TWILIO_PHONE_NUMBER
 
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.TWILIO_ACCOUNT_SID = 'AC1234567890abcdef1234567890abcd'
+    process.env.TWILIO_AUTH_TOKEN = 'twilio-test-auth-token'
     process.env.TWILIO_PHONE_NUMBER = '+14165551234'
   })
 
   afterAll(() => {
     process.env.TWILIO_ACCOUNT_SID = originalSid
+    process.env.TWILIO_AUTH_TOKEN = originalToken
     process.env.TWILIO_PHONE_NUMBER = originalPhone
   })
 

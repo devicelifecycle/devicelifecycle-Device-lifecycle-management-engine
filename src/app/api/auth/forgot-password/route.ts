@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getAppPath } from '@/lib/app-url'
+import { resolveTrustedAppRedirect } from '@/lib/app-url'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { EmailService } from '@/services/email.service'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
@@ -29,13 +29,12 @@ export async function POST(request: NextRequest) {
     // Support Login ID: acme -> acme@login.local
     const email = emailRaw.includes('@') ? emailRaw : `${emailRaw}@login.local`
 
-    // Prefer the redirectTo the browser passed in — it always has the correct
-    // production origin (window.location.origin). Fall back to server-side
-    // detection only when the client didn't supply one (e.g. direct API calls).
-    const clientRedirectTo = typeof body.redirectTo === 'string' && body.redirectTo.startsWith('http')
-      ? body.redirectTo
-      : null
-    const redirectTo = clientRedirectTo || getAppPath('/reset-password', request)
+    // Only allow reset links to return to this app's own origin(s).
+    const redirectTo = resolveTrustedAppRedirect(
+      typeof body.redirectTo === 'string' ? body.redirectTo : null,
+      request,
+      '/reset-password',
+    )
 
     const supabase = createServiceRoleClient()
     const { data, error } = await supabase.auth.admin.generateLink({

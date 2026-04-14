@@ -111,7 +111,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const customer = await CustomerService.createCustomer(customerInput, orgId)
+    const { data: existingCustomers, error: existingCustomerError } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+
+    if (existingCustomerError) {
+      throw new Error(existingCustomerError.message)
+    }
+
+    const existingCustomerId = existingCustomers?.[0]?.id
+    const customer = existingCustomerId
+      ? await CustomerService.updateCustomer(existingCustomerId, customerInput)
+      : await CustomerService.createCustomer(customerInput, orgId)
     const provisioned = await UserProvisioningService.provisionUser({
       fullName: customerInput.contact_name,
       email: customerInput.contact_email,
@@ -127,8 +142,9 @@ export async function POST(request: NextRequest) {
         welcome_email_sent_to: provisioned.emailSentTo ?? null,
         welcome_email_sent: provisioned.emailSent ?? false,
         portal_account_skipped_reason: provisioned.skippedReason ?? null,
+        customer_profile_reused: Boolean(existingCustomerId),
       },
-      { status: 201 }
+      { status: existingCustomerId ? 200 : 201 }
     )
   } catch (error) {
     console.error('Error creating customer:', error)
