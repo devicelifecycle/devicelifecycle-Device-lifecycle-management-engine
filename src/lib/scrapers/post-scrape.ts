@@ -86,7 +86,6 @@ export async function runPostScrapeCleanup(
                 sell_price: entry.sell_price,
                 source: 'benchmark_seed',
                 scraped_at: scrapedAt,
-                retrieved_at: scrapedAt,
               }, {
                 onConflict: 'device_id,storage,competitor_name,condition',
                 ignoreDuplicates: false,
