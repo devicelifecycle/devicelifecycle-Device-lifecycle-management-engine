@@ -4,9 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const runScraperPipelineMock = vi.fn()
 const createServiceRoleClientMock = vi.fn()
 const sendPriceUpdateNotificationMock = vi.fn().mockResolvedValue(undefined)
+const runPostScrapeCleanupMock = vi.fn()
+const auditCompetitorPricesHealthMock = vi.fn()
 
 vi.mock('@/lib/scrapers', () => ({
   runScraperPipeline: runScraperPipelineMock,
+}))
+
+vi.mock('@/lib/scrapers/post-scrape', () => ({
+  runPostScrapeCleanup: runPostScrapeCleanupMock,
+}))
+
+vi.mock('@/lib/scrapers/health-audit', () => ({
+  auditCompetitorPricesHealth: auditCompetitorPricesHealthMock,
 }))
 
 vi.mock('@/lib/supabase/service-role', () => ({
@@ -36,6 +46,21 @@ describe('GET /api/cron/price-scraper', () => {
     const upsertMock = vi.fn().mockResolvedValue({ error: null })
     createServiceRoleClientMock.mockReturnValue({
       from: vi.fn().mockReturnValue({ upsert: upsertMock }),
+    })
+
+    runPostScrapeCleanupMock.mockResolvedValue({
+      deleted: 0,
+      seeded: 0,
+      errors: [],
+    })
+
+    auditCompetitorPricesHealthMock.mockResolvedValue({
+      checked_at: '2026-04-14T00:00:00.000Z',
+      total_rows: 7493,
+      distinct_conflict_keys: 7493,
+      duplicate_key_groups: 0,
+      duplicate_extra_rows: 0,
+      stale_non_manual_rows_older_than_14_days: 0,
     })
 
     runScraperPipelineMock.mockResolvedValue({
@@ -88,6 +113,17 @@ describe('GET /api/cron/price-scraper', () => {
     expect(json.total_upserted).toBe(10)
     expect(json.partial_failure).toBe(false)
     expect(json.failed_scrapers).toEqual([])
+    expect(json.data_health).toMatchObject({
+      duplicate_extra_rows: 0,
+      duplicate_key_groups: 0,
+      stale_non_manual_rows_older_than_14_days: 0,
+    })
+    expect(runScraperPipelineMock).toHaveBeenCalledWith(
+      undefined,
+      expect.any(Object),
+      false,
+      undefined
+    )
 
     const supabase = createServiceRoleClientMock.mock.results[0].value as {
       from: ReturnType<typeof vi.fn>

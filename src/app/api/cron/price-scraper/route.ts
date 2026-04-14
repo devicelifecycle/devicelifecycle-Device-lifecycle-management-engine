@@ -7,9 +7,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { runScraperPipeline } from '@/lib/scrapers'
+import type { ScraperProviderId } from '@/lib/scrapers'
 import { SCRAPER_PROVIDERS, getPersistedScraperImplementation } from '@/lib/scrapers/rollout-metadata'
 import { runPostScrapeCleanup } from '@/lib/scrapers/post-scrape'
+import { auditCompetitorPricesHealth } from '@/lib/scrapers/health-audit'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+
+const VALID_PROVIDERS: ScraperProviderId[] = ['gorecell', 'telus', 'bell', 'universal', 'apple']
+
+function parseProviders(request: NextRequest): ScraperProviderId[] | undefined {
+  const providers = request.nextUrl.searchParams
+    .get('providers')
+    ?.split(',')
+    .map((provider) => provider.trim().toLowerCase())
+    .filter((provider): provider is ScraperProviderId => VALID_PROVIDERS.includes(provider as ScraperProviderId))
+
+  return providers && providers.length > 0 ? providers : undefined
+}
+
+function shouldRunPostProcessing(request: NextRequest, providers?: ScraperProviderId[]): boolean {
+  const explicit = request.nextUrl.searchParams.get('post')
+  if (explicit === '1' || explicit === 'true') return true
+  if (explicit === '0' || explicit === 'false') return false
+  return !providers || providers.length === 0
+}
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -49,7 +70,8 @@ async function persistUniversalSourceHealth(
 
 async function persistScraperRolloutHealth(
   supabase: ReturnType<typeof createServiceRoleClient>,
-  result: Awaited<ReturnType<typeof runScraperPipeline>>
+  result: Awaited<ReturnType<typeof runScraperPipeline>>,
+  providers?: ScraperProviderId[]
 ) {
   const now = new Date().toISOString()
   const settingsPayload = [
@@ -65,7 +87,10 @@ async function persistScraperRolloutHealth(
     },
   ]
 
-  for (const provider of SCRAPER_PROVIDERS) {
+  const providerFilter = providers && providers.length > 0 ? new Set<string>(providers) : null
+  const providerScope = SCRAPER_PROVIDERS.filter((provider) => !providerFilter || providerFilter.has(provider.id))
+
+  for (const provider of providerScope) {
     const providerResult = result.results.find((item) => item.competitor_name.toLowerCase() === provider.name.toLowerCase())
     const configuredImpl = provider.getConfiguredImpl()
     const persistedImpl = getPersistedScraperImplementation(provider.id)
@@ -136,20 +161,32 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createServiceRoleClient()
+    const providers = parseProviders(request)
+    const runPost = shouldRunPostProcessing(request, providers)
     const scrapeStartedAt = new Date().toISOString()
-    const result = await runScraperPipeline(undefined, supabase)
+    // Scrape against our existing catalog instead of discovery mode so
+    // competitor rows stay pinned to the correct catalog device.
+    const result = await runScraperPipeline(undefined, supabase, false, providers)
     await persistUniversalSourceHealth(supabase, result)
-    await persistScraperRolloutHealth(supabase, result)
+    await persistScraperRolloutHealth(supabase, result, providers)
 
-    // Clean up stale rows and seed benchmark prices for known devices
-    const postScrape = await runPostScrapeCleanup(supabase, scrapeStartedAt)
-    if (postScrape.errors.length > 0) {
-      console.warn('[PostScrape] Errors:', postScrape.errors)
+    let postScrape: Awaited<ReturnType<typeof runPostScrapeCleanup>> | null = null
+    let healthAudit: Awaited<ReturnType<typeof auditCompetitorPricesHealth>> | null = null
+
+    if (runPost) {
+      // Clean up stale rows after the scrape completes.
+      postScrape = await runPostScrapeCleanup(supabase, scrapeStartedAt)
+      if (postScrape.errors.length > 0) {
+        console.warn('[PostScrape] Errors:', postScrape.errors)
+      }
+
+      // Always audit row uniqueness/staleness after scrape+cleanup to surface drift early.
+      healthAudit = await auditCompetitorPricesHealth(supabase)
     }
 
     // Optional auto-train after scraping so scraped data feeds into the AI model
     let trainingResult = null
-    if (autoTrainingEnabled) {
+    if (autoTrainingEnabled && runPost) {
       try {
         const { PricingTrainingService } = await import('@/services/pricing-training.service')
         trainingResult = await PricingTrainingService.train()
@@ -159,8 +196,10 @@ export async function GET(request: NextRequest) {
     }
 
     const failedScrapers = result.results.filter(r => !r.success).map(r => r.competitor_name)
-    void postScrape // already logged above
-    const partialFailure = failedScrapers.length > 0 || result.errors.length > 0
+    const partialFailure =
+      failedScrapers.length > 0 ||
+      result.errors.length > 0 ||
+      (healthAudit?.duplicate_extra_rows ?? 0) > 0
 
     // Notify admins about price update (never fail cron response)
     try {
@@ -179,6 +218,8 @@ export async function GET(request: NextRequest) {
       success: true,
       partial_failure: partialFailure,
       failed_scrapers: failedScrapers,
+      providers,
+      post_processing_ran: runPost,
       total_scraped: result.total_scraped,
       total_upserted: result.total_upserted,
       devices_created: result.devices_created ?? 0,
@@ -189,10 +230,11 @@ export async function GET(request: NextRequest) {
         duration_ms: r.duration_ms,
       })),
       cleanup: {
-        stale_rows_deleted: postScrape.deleted,
-        benchmark_rows_seeded: postScrape.seeded,
-        errors: postScrape.errors,
+        stale_rows_deleted: postScrape?.deleted ?? 0,
+        benchmark_rows_seeded: postScrape?.seeded ?? 0,
+        errors: postScrape?.errors ?? [],
       },
+      data_health: healthAudit,
       training: trainingResult ? {
         baselines_upserted: trainingResult.baselines_upserted,
         sample_counts: trainingResult.sample_counts,

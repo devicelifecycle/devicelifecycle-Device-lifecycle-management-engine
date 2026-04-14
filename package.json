@@ -33,6 +33,7 @@
     "agent:telus-live": "npx tsx scripts/agents/telus-live-gate.ts",
     "agent:health": "npx tsx scripts/agents/integrator.ts",
     "scrape:prices": "npx tsx scripts/run-price-scraper.ts",
+    "scrape:prices:safe-check": "npx tsx --env-file=.env.local scripts/run-safe-scrape-check.ts",
     "check:launch": "npx tsx scripts/check-launch-readiness.ts",
     "bootstrap:pricing": "npx tsx scripts/bootstrap-pricing-model.ts",
     "seed:pricing:training": "npx tsx scripts/seed-pricing-training-data.ts",
@@ -48,6 +49,7 @@
     "refresh:device-prices": "npx tsx scripts/refresh-device-competitor-prices.ts",
     "audit:pricing:catalog": "npx tsx scripts/run-full-catalog-pricing-audit.ts",
     "reconcile:market-trade": "npx tsx scripts/reconcile-market-trade-prices.ts",
+    "audit:competitor-prices": "npx tsx --env-file=.env.local scripts/audit-competitor-prices.ts",
     "send-test-email": "npx tsx --env-file=.env.local scripts/send-test-email.ts"
   },
   "dependencies": {

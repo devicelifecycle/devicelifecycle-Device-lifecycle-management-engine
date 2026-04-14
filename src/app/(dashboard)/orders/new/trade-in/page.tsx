@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
@@ -111,6 +112,8 @@ export default function NewTradeInPage() {
   // Device search state — one entry per line item
   const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState<Record<number, boolean>>({})
+  const [dropdownRects, setDropdownRects] = useState<Record<number, DOMRect>>({})
+  const deviceInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
@@ -467,21 +470,37 @@ export default function NewTradeInPage() {
                         {index > 0 && <Separator className="mb-3" />}
                         <div className="flex items-start gap-3">
                           <div className={`flex-1 grid gap-2 ${isInternal ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
-                            {/* Searchable device combobox */}
+                            {/* Searchable device combobox — dropdown rendered via portal so it floats above all cards */}
                             <div className="relative">
                               <Input
+                                ref={el => { deviceInputRefs.current[index] = el }}
                                 placeholder="Search device..."
                                 value={deviceSearches[index] !== undefined ? deviceSearches[index] : item.device_label}
                                 onChange={e => {
                                   setDeviceSearches(prev => ({ ...prev, [index]: e.target.value }))
+                                  const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
+                                  if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
                                   setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
                                 }}
-                                onFocus={() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))}
+                                onFocus={() => {
+                                  const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
+                                  if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
+                                  setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
+                                }}
                                 onBlur={() => setTimeout(() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: false })), 150)}
                                 autoComplete="off"
                               />
-                              {deviceDropdownOpen[index] && (
-                                <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow-md">
+                              {deviceDropdownOpen[index] && dropdownRects[index] && createPortal(
+                                <div
+                                  style={{
+                                    position: 'fixed',
+                                    top: dropdownRects[index].bottom + 4,
+                                    left: dropdownRects[index].left,
+                                    width: dropdownRects[index].width,
+                                    zIndex: 9999,
+                                  }}
+                                  className="max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg"
+                                >
                                   {(() => {
                                     const q = (deviceSearches[index] || '').toLowerCase()
                                     const filtered = devices.filter(d => !q || `${d.make} ${d.model}`.toLowerCase().includes(q)).slice(0, 60)
@@ -502,7 +521,8 @@ export default function NewTradeInPage() {
                                       </button>
                                     ))
                                   })()}
-                                </div>
+                                </div>,
+                                document.body
                               )}
                             </div>
                             <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
@@ -809,10 +829,16 @@ export default function NewTradeInPage() {
                                       <span className="font-mono font-semibold text-amber-700">{formatCurrency(goRecell.price)}</span>
                                     </div>
                                   )}
+                                  {/* Bell/Telus N/A note for non-Apple devices */}
+                                  {carriers.length === 0 && goRecell && (
+                                    <div className="text-[10px] text-muted-foreground italic">
+                                      Bell/Telus: Apple only
+                                    </div>
+                                  )}
                                   {/* Final formula result */}
                                   <div className="flex items-center justify-between gap-2 border-t border-amber-300/60 pt-0.5 mt-0.5">
                                     <span className="text-slate-800 dark:text-slate-200 font-semibold">
-                                      {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'Quote'}
+                                      {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
                                     </span>
                                     <span className="font-mono font-bold text-amber-900">{formatCurrency(price.engine_price)}</span>
                                   </div>
