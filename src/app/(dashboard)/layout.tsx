@@ -35,7 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Package className="h-6 w-6 text-primary" />
           </div>
           <div className="space-y-2">
-            <p className="font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40">
+            <p className="font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Preparing Workspace
             </p>
             <h1 className="editorial-title text-4xl text-foreground">Loading DLM Engine</h1>

@@ -40,7 +40,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden h-8 w-8 text-white/40 hover:text-white/80 hover:bg-white/[0.06]"
+            className="lg:hidden h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={onMenuClick}
           >
             <Menu className="h-4 w-4" />
@@ -52,23 +52,23 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className="liquid-glass hidden sm:flex min-w-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs"
+            className="topbar-breadcrumb hidden sm:flex min-w-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-xs"
           >
             <Link
               href="/dashboard"
-              className="font-body font-light text-white/40 hover:text-white/70 transition-colors"
+              className="font-body font-light text-muted-foreground hover:text-foreground transition-colors"
             >
               Home
             </Link>
             {breadcrumbs.map((crumb) => (
               <span key={crumb.href} className="flex min-w-0 items-center gap-1">
-                <ChevronRight className="h-3 w-3 shrink-0 text-white/20" />
+                <ChevronRight className="h-3 w-3 shrink-0 text-border" />
                 {crumb.isLast ? (
-                  <span className="font-body font-medium text-white/80 truncate">{crumb.label}</span>
+                  <span className="font-body font-medium text-foreground truncate">{crumb.label}</span>
                 ) : (
                   <Link
                     href={crumb.href}
-                    className="font-body font-light text-white/40 hover:text-white/70 transition-colors truncate"
+                    className="font-body font-light text-muted-foreground hover:text-foreground transition-colors truncate"
                   >
                     {crumb.label}
                   </Link>
@@ -78,16 +78,16 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
           </motion.nav>
 
           {/* Mobile: just current page name */}
-          <span className="sm:hidden font-heading italic text-base text-white/80">
+          <span className="sm:hidden font-heading italic text-base text-foreground">
             {breadcrumbs[breadcrumbs.length - 1]?.label || 'Dashboard'}
           </span>
         </div>
 
         {/* Right: actions pill */}
-        <div className="liquid-glass flex items-center gap-0.5 rounded-full px-1 py-1">
+        <div className="topbar-actions flex items-center gap-0.5 rounded-full px-1 py-1">
           {/* Theme toggle */}
           <button
-            className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 hover:text-white/80 hover:bg-white/[0.08] transition-all"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
             aria-label="Toggle theme"
           >
@@ -106,10 +106,10 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
           {/* Notifications */}
           <Link href={notificationsHref}>
-            <button className="relative flex h-7 w-7 items-center justify-center rounded-full text-white/40 hover:text-white/80 hover:bg-white/[0.08] transition-all">
+            <button className="relative flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
               <Bell className="h-3.5 w-3.5" />
               {unreadCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
+                <span className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -118,7 +118,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
           {/* Avatar */}
           <Link href="/profile">
-            <div className="liquid-glass-strong ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-primary hover:text-white transition-colors cursor-pointer">
+            <div className="topbar-avatar ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-primary cursor-pointer transition-colors">
               {initials}
             </div>
           </Link>
