@@ -72,20 +72,24 @@ function normalizeStorageForDb(storage?: string): string {
   if (/^(GOOD|FAIR|EXCELLENT|LIKENEW|BROKEN|POOR|NEW)$/i.test(sNoSpaces)) return 'DEFAULT'
 
   // Strip compound specs: "8TBSSD|48GBRAM|M5MAX18-CORE|40-COREGPU" -> extract SSD or first GB/TB value
-  // Also handles: "INTELCOREULTRA9,32GBRAM,1TBSSD", "256GB 8GB RAM", "GPS+CELLULAR|ALUMINUM"
-  if (/RAM|SSD|CPU|GPU|CORE|INTEL|NVIDIA|ALUMINUM|CELLULAR|GPS/i.test(s)) {
-    // Try to find SSD capacity first (most specific for laptops)
-    const ssdMatch = s.match(/(\d+)\s*TB\s*SSD/i)
-    if (ssdMatch) return `${ssdMatch[1]}TB`
-    const ssdGbMatch = s.match(/(\d+)\s*GB\s*SSD/i)
+  // Also handles: "INTELCOREULTRA9,32GBRAM,1TBSSD", "256GB 8GB RAM", "GPS+CELLULAR|ALUMINUM",
+  //               "512GB NVMe", "1TB M.2", "2TB SSD+16GB RAM"
+  if (/RAM|SSD|CPU|GPU|CORE|INTEL|NVIDIA|ALUMINUM|CELLULAR|GPS|NVME|M\.2|EMMC/i.test(s)) {
+    // Try to find SSD/NVMe capacity first (most specific for laptops)
+    const ssdTbMatch = s.match(/(\d+)\s*TB\s*(SSD|NVMe|M\.2|HDD|eMMC)/i)
+    if (ssdTbMatch) return `${ssdTbMatch[1]}TB`
+    const ssdGbMatch = s.match(/(\d+)\s*GB\s*(SSD|NVMe|M\.2|HDD|eMMC)/i)
     if (ssdGbMatch) {
       const gb = parseInt(ssdGbMatch[1], 10)
       if (gb === 1024) return '1TB'
       if (gb === 2048) return '2TB'
       return `${gb}GB`
     }
+    // Bare NVMe/SSD reference with TB before keyword ("1TB NVMe")
+    const tbFirst = s.match(/(\d+)\s*TB(?!\s*RAM)/i)
+    if (tbFirst) return `${tbFirst[1]}TB`
     // For watches/tablets with GPS/CELLULAR, try to find a GB value
-    const gbMatch = s.match(/(\d+)\s*GB(?!RAM|SSD)/i)
+    const gbMatch = s.match(/(\d+)\s*GB(?!RAM|SSD|NVME|DDR|LPDDR)/i)
     if (gbMatch) return `${gbMatch[1]}GB`
     // If no storage capacity found in compound string, return DEFAULT
     return 'DEFAULT'
