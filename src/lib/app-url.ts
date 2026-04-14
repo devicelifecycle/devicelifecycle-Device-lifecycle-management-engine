@@ -79,3 +79,39 @@ export function getAppPath(path: string, request?: RequestLike | null): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${getAppUrl(request)}${normalizedPath}`
 }
+
+export function resolveTrustedAppRedirect(
+  candidate: string | null | undefined,
+  request?: RequestLike | null,
+  fallbackPath = '/reset-password',
+): string {
+  const fallback = getAppPath(fallbackPath, request)
+  const trimmed = candidate?.trim()
+  if (!trimmed) return fallback
+
+  let redirectUrl: URL
+  try {
+    redirectUrl = new URL(trimmed)
+  } catch {
+    return fallback
+  }
+
+  if (!['http:', 'https:'].includes(redirectUrl.protocol)) {
+    return fallback
+  }
+
+  const allowedOrigins = new Set<string>([
+    trimTrailingSlash(new URL(getAppUrl(request)).origin),
+  ])
+
+  const requestOrigin = getRequestOrigin(request)
+  if (requestOrigin) {
+    allowedOrigins.add(trimTrailingSlash(requestOrigin))
+  }
+
+  if (!allowedOrigins.has(trimTrailingSlash(redirectUrl.origin))) {
+    return fallback
+  }
+
+  return redirectUrl.toString()
+}

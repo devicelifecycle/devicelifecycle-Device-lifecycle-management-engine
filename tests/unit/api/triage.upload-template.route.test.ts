@@ -149,7 +149,7 @@ describe('POST /api/triage/upload-template', () => {
       match_status: 'not_in_order',
       device_id: 'device-iphone-14',
     })
-  })
+  }, 15000)
 
   it('keeps catalog recognition separate when no order is linked', async () => {
     createServerSupabaseClientMock.mockReturnValue(

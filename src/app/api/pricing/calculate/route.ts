@@ -54,14 +54,13 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    const isCustomer = profile?.role === 'customer'
-    const isVendor = profile?.role === 'vendor'
-    if (isVendor) {
+    const requesterRole = profile?.role
+    if (!requesterRole || ['customer', 'vendor'].includes(requesterRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
-    const version = isCustomer ? 'v2' : (body.version || 'v2')
+    const version = body.version || 'v2'
     // If model_id is explicitly provided, use that pricing model.
     // Otherwise, route through PricingService adaptive selection so saved
     // prefer_data_driven settings are honored everywhere.
@@ -170,15 +169,6 @@ export async function POST(request: NextRequest) {
         validation.data,
         pricingSupabase
       )
-      // Customers only get the headline numbers — no competitor breakdown
-      if (isCustomer) {
-        return NextResponse.json({
-          unit_price: result.trade_price,
-          cpo_unit_price: result.cpo_price ?? 0,
-          source: 'market',
-          competitor_count: result.competitors?.length ?? 0,
-        })
-      }
       return NextResponse.json(result)
     }
 

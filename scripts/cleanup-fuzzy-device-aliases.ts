@@ -63,6 +63,56 @@ const MERGE_PLAN: AliasMerge[] = [
     aliasId: 'd0040000-0000-0000-0000-000000000001',
     canonicalId: '534b1e35-4cf9-4f54-826c-acb62832208d',
   },
+  {
+    label: 'Apple iPad (10th Gen) -> iPad 10th Gen',
+    aliasId: 'd0040000-0000-0000-0000-000000000004',
+    canonicalId: '100559d5-e3e8-49b1-a46b-20a0033e2293',
+  },
+  {
+    label: 'Apple MacBook Air 13" (2019) -> MacBook Air 13-inch (2019)',
+    aliasId: 'd7af3e92-7725-498a-93b9-5d4c16acf8da',
+    canonicalId: '7106a295-a439-4945-8268-899a97dc9268',
+  },
+  {
+    label: 'Apple MacBook Pro 13" (2019) -> MacBook Pro 13-inch (2019)',
+    aliasId: '79e0ad94-a634-486c-b088-de8626a58268',
+    canonicalId: 'e75197f1-4cdc-4fe6-a190-81ee8aa6fd20',
+  },
+  {
+    label: 'Samsung Galaxy Note 10 Plus -> Galaxy Note 10+',
+    aliasId: '349c4441-5968-4040-ae17-b331d68ed9b2',
+    canonicalId: '0436f8d8-87dc-472c-96e3-d0336e6e48a8',
+  },
+  {
+    label: 'Samsung Galaxy S10 Plus -> Galaxy S10+',
+    aliasId: '6477c31a-8275-4d88-9fbb-bf1ec8c4b350',
+    canonicalId: '3165f942-bbb1-44f8-9678-0d5bd78846fb',
+  },
+  {
+    label: 'Samsung Galaxy S20 Plus -> Galaxy S20+',
+    aliasId: 'edf03134-498a-4528-aa31-2368efac29f8',
+    canonicalId: 'eaf787d2-b563-44b7-8e60-ad6b97d8664b',
+  },
+  {
+    label: 'Samsung Galaxy S24 Plus -> Galaxy S24+',
+    aliasId: '47997839-94d0-4bbc-a669-e54436793ad7',
+    canonicalId: 'ef0fc670-6936-49be-ac78-367f33ab0b2a',
+  },
+  {
+    label: 'Samsung Galaxy S25 Plus -> Galaxy S25+',
+    aliasId: '6e657e90-7035-424e-a417-c34c106c05b6',
+    canonicalId: 'eb48d914-864e-4b01-9cab-cfb1cf9411ea',
+  },
+  {
+    label: 'Samsung Galaxy Tab S10 Plus -> Galaxy Tab S10+',
+    aliasId: 'e7de4be7-7d81-40ac-919e-0000e4e43cf7',
+    canonicalId: '7e64dc71-13fc-4332-8e23-79ff8da6c102',
+  },
+  {
+    label: 'Samsung Galaxy Tab S9 Plus -> Galaxy Tab S9+',
+    aliasId: 'dba1cd36-4d7e-415e-88f4-28f7b82bd324',
+    canonicalId: 'af4aeddc-477d-42f9-8d95-b32f725e6dc2',
+  },
 ]
 
 const STRAIGHT_MOVE_TABLES = [

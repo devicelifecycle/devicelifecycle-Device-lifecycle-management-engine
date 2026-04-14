@@ -1,4 +1,4 @@
-import { getAppPath, getAppUrl } from '@/lib/app-url'
+import { getAppPath, getAppUrl, resolveTrustedAppRedirect } from '@/lib/app-url'
 
 const trackedEnvKeys = [
   'NEXT_PUBLIC_APP_URL',
@@ -80,5 +80,25 @@ describe('app url helpers', () => {
     delete process.env.VERCEL_PROJECT_PRODUCTION_URL
     process.env.VERCEL_URL = 'ephemeral.example.vercel.app'
     expect(getAppUrl()).toBe('https://ephemeral.example.vercel.app')
+  })
+
+  it('accepts redirect urls that stay on the app origin', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://prod.example.com'
+
+    const request = new Request('https://prod.example.com/api/auth/forgot-password')
+
+    expect(
+      resolveTrustedAppRedirect('https://prod.example.com/auth/callback?next=/reset-password', request),
+    ).toBe('https://prod.example.com/auth/callback?next=/reset-password')
+  })
+
+  it('rejects redirect urls that point to a different origin', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://prod.example.com'
+
+    const request = new Request('https://prod.example.com/api/auth/forgot-password')
+
+    expect(
+      resolveTrustedAppRedirect('https://evil.example.com/reset-password', request),
+    ).toBe('https://prod.example.com/reset-password')
   })
 })

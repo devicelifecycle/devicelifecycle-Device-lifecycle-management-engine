@@ -80,7 +80,7 @@ describe('POST /api/pricing/calculate', () => {
     expect(calculateAdaptivePriceMock).not.toHaveBeenCalled()
   })
 
-  it('returns reduced headline pricing for customer role', async () => {
+  it('blocks customer role from direct pricing access', async () => {
     createServerSupabaseClientMock.mockReturnValue(createMockSupabase({ id: 'u1' }, { role: 'customer' }))
 
     const { POST } = await import('@/app/api/pricing/calculate/route')
@@ -96,12 +96,10 @@ describe('POST /api/pricing/calculate', () => {
     }))
 
     const json = await res.json()
-    expect(res.status).toBe(200)
-    expect(json.unit_price).toBe(350)
-    expect(json.cpo_unit_price).toBe(450)
-    expect(json.source).toBe('market')
-    expect(calculateAdaptivePriceMock).toHaveBeenCalledTimes(1)
-    expect(createServiceRoleClientMock).toHaveBeenCalledTimes(1)
+    expect(res.status).toBe(403)
+    expect(json.error).toBe('Forbidden')
+    expect(calculateAdaptivePriceMock).not.toHaveBeenCalled()
+    expect(createServiceRoleClientMock).not.toHaveBeenCalled()
   })
 
   it('calls PricingService.calculateAdaptivePrice for v2 and returns result', async () => {
