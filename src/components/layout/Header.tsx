@@ -3,14 +3,23 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bell, ChevronRight, Menu, Moon, Sun } from 'lucide-react'
+import { Bell, ChevronRight, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { Button } from '@/components/ui/button'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
 import { snakeToTitle } from '@/lib/utils'
 
-export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
+interface HeaderProps {
+  /** Desktop: toggle the collapsible sidebar open/closed */
+  onToggleSidebar?: () => void
+  sidebarOpen?: boolean
+  /** Mobile: open the mobile drawer */
+  onMobileMenuClick?: () => void
+  /** Legacy compat — same as onMobileMenuClick */
+  onMenuClick?: () => void
+}
+
+export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick, onMenuClick }: HeaderProps) {
   const pathname = usePathname()
   const { unreadCount } = useNotifications()
   const { user } = useAuth()
@@ -32,19 +41,42 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const initials = user?.full_name?.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() || 'U'
 
   return (
-    <header className="topbar-surface sticky top-0 z-40 px-4 py-2.5 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
+    <header className="topbar-surface sticky top-0 z-40 px-4 py-2.5 sm:px-5 lg:px-6">
+      <div className="flex items-center justify-between gap-4">
 
-        {/* Left: mobile menu + breadcrumb */}
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={onMenuClick}
+        {/* Left: toggle + breadcrumb */}
+        <div className="flex min-w-0 items-center gap-2">
+
+          {/* Desktop toggle — slides sidebar in/out */}
+          <button
+            onClick={onToggleSidebar}
+            className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={sidebarOpen ? 'close' : 'open'}
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.15 }}
+              >
+                {sidebarOpen
+                  ? <PanelLeftClose className="h-4 w-4" />
+                  : <PanelLeftOpen className="h-4 w-4" />
+                }
+              </motion.span>
+            </AnimatePresence>
+          </button>
+
+          {/* Mobile menu */}
+          <button
+            onClick={onMobileMenuClick ?? onMenuClick}
+            className="lg:hidden flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            aria-label="Open menu"
           >
             <Menu className="h-4 w-4" />
-          </Button>
+          </button>
 
           {/* Breadcrumb pill */}
           <motion.nav
@@ -77,7 +109,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             ))}
           </motion.nav>
 
-          {/* Mobile: just current page name */}
+          {/* Mobile: page name only */}
           <span className="sm:hidden font-heading italic text-base text-foreground">
             {breadcrumbs[breadcrumbs.length - 1]?.label || 'Dashboard'}
           </span>
