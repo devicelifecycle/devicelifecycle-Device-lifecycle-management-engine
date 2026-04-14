@@ -517,7 +517,7 @@ export async function POST(request: NextRequest) {
       const pivotRows = parsePivot(headers, dataRows)
       if (pivotRows.length > 0) {
         // Go straight to aggregation with the transposed rows
-        const { data: devices } = await supabase.from('devices').select('id, make, model, storage_options, category').order('make')
+        const { data: devices } = await supabase.from('device_catalog').select('id, make, model, specifications, category').eq('is_active', true).order('make')
         const catalog = (devices ?? []) as unknown as Device[]
         const outputRows: TradeTemplateRow[] = pivotRows.map(row => {
           const device = matchDeviceFromCsv(catalog, row.brand, row.model)
@@ -677,8 +677,9 @@ export async function POST(request: NextRequest) {
 
     // ── Fetch device catalog ──────────────────────────────────────────────────
     const { data: devices } = await supabase
-      .from('devices')
-      .select('id, make, model, storage_options, category')
+      .from('device_catalog')
+      .select('id, make, model, specifications, category')
+      .eq('is_active', true)
       .order('make')
 
     const catalog = (devices ?? []) as unknown as Device[]
