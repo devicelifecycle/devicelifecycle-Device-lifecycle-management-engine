@@ -4,6 +4,8 @@ import { NextRequest } from 'next/server'
 const createServerSupabaseClientMock = vi.fn()
 const createServiceRoleClientMock = vi.fn()
 const runScraperPipelineMock = vi.fn()
+const runPostScrapeCleanupMock = vi.fn()
+const auditCompetitorPricesHealthMock = vi.fn()
 const trainMock = vi.fn()
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -16,6 +18,14 @@ vi.mock('@/lib/supabase/service-role', () => ({
 
 vi.mock('@/lib/scrapers', () => ({
   runScraperPipeline: runScraperPipelineMock,
+}))
+
+vi.mock('@/lib/scrapers/post-scrape', () => ({
+  runPostScrapeCleanup: runPostScrapeCleanupMock,
+}))
+
+vi.mock('@/lib/scrapers/health-audit', () => ({
+  auditCompetitorPricesHealth: auditCompetitorPricesHealthMock,
 }))
 
 vi.mock('@/services/pricing-training.service', () => ({
@@ -48,6 +58,15 @@ function makeSupabase({ user, role }: { user: { id: string } | null; role?: stri
 describe('POST /api/pricing/scrape', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    runPostScrapeCleanupMock.mockResolvedValue({ deleted: 0, seeded: 0, errors: [] })
+    auditCompetitorPricesHealthMock.mockResolvedValue({
+      checked_at: '2026-04-14T00:00:00.000Z',
+      total_rows: 7493,
+      distinct_conflict_keys: 7493,
+      duplicate_key_groups: 0,
+      duplicate_extra_rows: 0,
+      stale_non_manual_rows_older_than_14_days: 0,
+    })
   })
 
   it('returns 401 for unauthenticated users', async () => {
@@ -96,6 +115,10 @@ describe('POST /api/pricing/scrape', () => {
     expect(json.scrapers).toEqual([
       { name: 'Bell', success: true, count: 2, duration_ms: 1234 },
     ])
+    expect(json.data_health).toMatchObject({
+      duplicate_extra_rows: 0,
+      duplicate_key_groups: 0,
+    })
     expect(json.training).toEqual({
       skipped: true,
       reason: 'Manual scrape skips synchronous training. Run training from the Training Data tab or POST /api/pricing/train.',
@@ -162,7 +185,7 @@ describe('POST /api/pricing/scrape', () => {
     expect(runScraperPipelineMock).toHaveBeenCalledWith(
       undefined,
       { kind: 'service' },
-      true,
+      false,
       ['universal', 'gorecell']
     )
   })

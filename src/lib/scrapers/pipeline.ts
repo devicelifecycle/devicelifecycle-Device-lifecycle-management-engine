@@ -216,6 +216,49 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
+const MODEL_VARIANT_KEYWORDS = [
+  'pro',
+  'max',
+  'plus',
+  'ultra',
+  'mini',
+  'fe',
+  'fold',
+  'flip',
+  'classic',
+  'edge',
+  'note',
+] as const
+
+function collectModelVariantKeywords(model: string): string[] {
+  const normalized = normalize(model)
+  return MODEL_VARIANT_KEYWORDS.filter((keyword) => new RegExp(`\\b${keyword}\\b`, 'i').test(normalized))
+}
+
+function hasCompatibleVariantProfile(scrapedModel: string, catalogModel: string): boolean {
+  const scrapedVariants = collectModelVariantKeywords(scrapedModel)
+  const catalogVariants = collectModelVariantKeywords(catalogModel)
+
+  if (scrapedVariants.length !== catalogVariants.length) {
+    return false
+  }
+
+  return scrapedVariants.every((keyword) => catalogVariants.includes(keyword))
+}
+
+export function isSafeCatalogModelMatch(scrapedModel: string, catalogModel: string): boolean {
+  if (scrapedModel === catalogModel) return true
+
+  const scrapedExtendsCatalog = modelTokenMatch(scrapedModel, catalogModel) && scrapedModel !== catalogModel
+  const catalogExtendsScraped = modelTokenMatch(catalogModel, scrapedModel) && catalogModel !== scrapedModel
+
+  if (!scrapedExtendsCatalog || catalogExtendsScraped) {
+    return false
+  }
+
+  return hasCompatibleVariantProfile(scrapedModel, catalogModel)
+}
+
 // ============================================================================
 // DEVICE ID RESOLUTION WITH CACHE
 // ============================================================================
@@ -302,9 +345,7 @@ async function resolveDeviceId(
   for (const d of devices) {
     const dm = normalize((d as { model?: string }).model ?? '')
     const exactMatch = dm === modelNorm
-    const scrapedExtendsCatalog = modelTokenMatch(modelNorm, dm) && modelNorm !== dm
-    const catalogExtendsScraped = modelTokenMatch(dm, modelNorm) && dm !== modelNorm
-    const modelMatches = exactMatch || (scrapedExtendsCatalog && !catalogExtendsScraped)
+    const modelMatches = exactMatch || isSafeCatalogModelMatch(modelNorm, dm)
     if (modelMatches && checkStorage(d)) {
       return resolveComparablePricingDeviceId(supabase, d.id)
     }
@@ -320,9 +361,7 @@ async function resolveDeviceId(
       for (const d of devices) {
         const dm = normalize((d as { model?: string }).model ?? '')
         const exactMatch = dm === modelNormNoBrand
-        const scrapedExtendsCatalog = modelTokenMatch(modelNormNoBrand, dm) && modelNormNoBrand !== dm
-        const catalogExtendsScraped = modelTokenMatch(dm, modelNormNoBrand) && dm !== modelNormNoBrand
-        const modelMatches = exactMatch || (scrapedExtendsCatalog && !catalogExtendsScraped)
+        const modelMatches = exactMatch || isSafeCatalogModelMatch(modelNormNoBrand, dm)
         if (modelMatches && checkStorage(d)) {
           return resolveComparablePricingDeviceId(supabase, d.id)
         }
@@ -585,16 +624,6 @@ export async function runScraperPipeline(
         }
       }
     }
-  }
-
-  // Clean up stale prices older than 30 days
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const { error: cleanupError } = await supabase
-    .from('competitor_prices')
-    .delete()
-    .lt('scraped_at', thirtyDaysAgo)
-  if (cleanupError) {
-    errors.push(`Stale cleanup failed: ${cleanupError.message}`)
   }
 
   // Dedupe and prepare rows for batch upsert

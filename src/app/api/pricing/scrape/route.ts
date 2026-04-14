@@ -12,6 +12,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { runScraperPipeline } from '@/lib/scrapers'
 import type { ScraperProviderId } from '@/lib/scrapers'
 import { runPostScrapeCleanup } from '@/lib/scrapers/post-scrape'
+import { auditCompetitorPricesHealth } from '@/lib/scrapers/health-audit'
 export const dynamic = 'force-dynamic'
 
 const VALID_PROVIDERS: ScraperProviderId[] = ['gorecell', 'telus', 'bell', 'universal', 'apple']
@@ -43,10 +44,13 @@ export async function POST(request: NextRequest) {
       .map((provider) => provider.trim().toLowerCase())
       .filter((provider): provider is ScraperProviderId => VALID_PROVIDERS.includes(provider as ScraperProviderId))
 
-    const result = await runScraperPipeline(undefined, serviceSupabase, true, providers?.length ? providers : undefined)
+    // Scrape against our existing catalog instead of discovery mode so
+    // competitor rows stay pinned to the correct catalog device.
+    const result = await runScraperPipeline(undefined, serviceSupabase, false, providers?.length ? providers : undefined)
 
-    // Clean up stale rows and seed benchmark prices
+    // Clean up stale rows after the scrape completes.
     const postScrape = await runPostScrapeCleanup(serviceSupabase, scrapeStartedAt)
+    const healthAudit = await auditCompetitorPricesHealth(serviceSupabase)
 
     let trainingResult = null
     const shouldTrainInline =
@@ -82,6 +86,7 @@ export async function POST(request: NextRequest) {
         stale_rows_deleted: postScrape.deleted,
         benchmark_rows_seeded: postScrape.seeded,
       },
+      data_health: healthAudit,
       training: trainingResult ? {
         ...(trainingResult && 'baselines_upserted' in trainingResult
           ? {

@@ -46,7 +46,8 @@ async function main() {
   }
 
   const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-  const result = await runScraperPipeline(undefined, supabase, true, providers)
+  // Use non-discovery mode by default to avoid accidental catalog growth.
+  const result = await runScraperPipeline(undefined, supabase, false, providers)
 
   console.log('Scraper complete.')
   console.log(`  Total scraped: ${result.total_scraped}`)
