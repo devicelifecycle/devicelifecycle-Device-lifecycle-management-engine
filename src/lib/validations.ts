@@ -244,7 +244,7 @@ export const orderItemSchema = z.object({
   quantity: z.coerce.number().min(1, 'Quantity must be at least 1').max(100000, 'Quantity too large'),
   storage: z.string().min(1, 'Storage is required'),
   color: z.string().optional(),
-  condition: z.enum(DEVICE_CONDITION_VALUES),
+  condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)),
   notes: z.string().optional(),
 })
 
@@ -255,7 +255,7 @@ export const addOrderItemSchema = z.object({
   storage: z.string().min(1, 'Storage is required').max(100),
   color: z.string().max(50).optional(),
   colour: z.string().max(50).optional(),
-  condition: z.enum(DEVICE_CONDITION_VALUES).optional().default('good'),
+  condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)).optional().default('good'),
   notes: z.string().max(2000).optional(),
 })
 
@@ -396,7 +396,7 @@ export const createIMEIRecordSchema = z.object({
   device_id: z.string().uuid(),
   storage: z.string().min(1),
   color: z.string().optional(),
-  condition: z.enum(DEVICE_CONDITION_VALUES),
+  condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)),
   source_vendor_id: z.string().uuid().optional(),
   purchase_date: z.string().optional(),
   warranty_start_date: z.string().optional(),
@@ -509,7 +509,7 @@ export const triageSubmitSchema = z.object({
 export const createPricingTableSchema = z.object({
   device_id: z.string().uuid(),
   storage: z.string().min(1),
-  condition: z.enum(DEVICE_CONDITION_VALUES),
+  condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)),
   carrier: z.string().default('Unlocked'),
   base_price: z.coerce.number().min(0),
   effective_date: z.string(),

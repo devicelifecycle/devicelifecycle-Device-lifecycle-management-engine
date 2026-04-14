@@ -10,6 +10,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { safeErrorMessage } from '@/lib/utils'
 import { PricingModelRegistry } from '@/models/pricing'
 import { z } from 'zod'
+import { normalizePricingConditionInput } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
 
 
@@ -18,7 +19,7 @@ const modelCalculateSchema = z.object({
   device_id: z.string().uuid(),
   storage: z.string().optional().default('128GB'),
   carrier: z.string().optional().default('Unlocked'),
-  condition: z.enum(['new', 'excellent', 'good', 'fair', 'poor']),
+  condition: z.preprocess(normalizePricingConditionInput, z.enum(['new', 'excellent', 'good', 'fair', 'poor'])),
   issues: z.array(z.string()).optional().default([]),
   quantity: z.number().min(1).optional().default(1),
   base_price: z.number().positive().optional(),
