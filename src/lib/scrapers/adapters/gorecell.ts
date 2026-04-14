@@ -461,7 +461,7 @@ async function scrapeGoRecellFullCatalogTypeScript(limitProducts?: number): Prom
   try {
     // ── Phase 1: paginate full WooCommerce catalog ───────────────────────────
     let page = 1
-    const perPage = 30
+    const perPage = 100 // WooCommerce Store API max; 3× fewer round-trips vs 30
     let fetched = 0
 
     while (limitProducts == null || fetched < limitProducts) {
@@ -491,27 +491,34 @@ async function scrapeGoRecellFullCatalogTypeScript(limitProducts?: number): Prom
     }
 
     // ── Phase 2: keyword searches for non-phone categories ───────────────────
-    // GoRecell's WooCommerce default ordering may bury iPads/MacBooks; explicit
-    // keyword searches guarantee we capture every laptop, tablet, and desktop.
+    // Paginate every search term (not just 1 page) so we never miss models if
+    // a category has >100 products on GoRecell (e.g. Galaxy A lineup).
     for (const term of SUPPLEMENTARY_SEARCH_TERMS) {
       try {
-        const searchUrl = `${STORE_API}?search=${encodeURIComponent(term)}&per_page=100`
-        const res = await fetchWithRetry(searchUrl, { method: 'GET', headers: { Accept: 'application/json' } })
-        const raw = res.ok ? await res.json() : []
-        const products: WooProduct[] = Array.isArray(raw) ? raw : []
+        let searchPage = 1
+        for (;;) {
+          const searchUrl = `${STORE_API}?search=${encodeURIComponent(term)}&per_page=100&page=${searchPage}`
+          const res = await fetchWithRetry(searchUrl, { method: 'GET', headers: { Accept: 'application/json' } })
+          const raw = res.ok ? await res.json() : []
+          const products: WooProduct[] = Array.isArray(raw) ? raw : []
+          if (products.length === 0) break
 
-        for (const p of products) {
-          if (!p?.name || !p?.slug) continue
-          if (seenSlugs.has(p.slug)) continue // already processed in phase 1
-          seenSlugs.add(p.slug)
+          for (const p of products) {
+            if (!p?.name || !p?.slug) continue
+            if (seenSlugs.has(p.slug)) continue // already processed in phase 1
+            seenSlugs.add(p.slug)
 
-          try {
-            const scraped = await processDiscoveryProduct(p, now)
-            prices.push(...scraped)
-            await throttle(150)
-          } catch (e) {
-            console.warn(`[gorecell-discovery] Skip supplementary ${p.name}:`, e)
+            try {
+              const scraped = await processDiscoveryProduct(p, now)
+              prices.push(...scraped)
+              await throttle(150)
+            } catch (e) {
+              console.warn(`[gorecell-discovery] Skip supplementary ${p.name}:`, e)
+            }
           }
+
+          if (products.length < 100) break
+          searchPage++
         }
       } catch (e) {
         console.warn(`[gorecell-discovery] Supplementary search "${term}" failed:`, e)
