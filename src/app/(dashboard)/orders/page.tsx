@@ -145,19 +145,19 @@ export default function OrdersPage() {
     setImportSelectedSheet('')
   }
 
-  async function handleParseImportFile(sheetOverride?: string) {
-    if (!importFile) return
+  async function handleParseImportFile(fileToUse?: File, sheetOverride?: string) {
+    const file = fileToUse ?? importFile
+    if (!file) return
     setImportParsing(true)
     setImportParseError('')
     try {
       const form = new FormData()
-      form.append('file', importFile)
+      form.append('file', file)
       const sheet = sheetOverride ?? importSelectedSheet
       const url = sheet ? `/api/orders/parse-trade-template?sheet=${encodeURIComponent(sheet)}` : '/api/orders/parse-trade-template'
       const res = await fetch(url, { method: 'POST', body: form })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Parse failed')
-      // Capture available sheets on first parse so user can switch
       if (data.available_sheets?.length > 1) {
         setImportAvailableSheets(data.available_sheets)
         if (!importSelectedSheet) setImportSelectedSheet(data.summary?.sheet_parsed || data.available_sheets[0])
@@ -593,20 +593,29 @@ export default function OrdersPage() {
               <div className="space-y-1.5">
                 <Label>Customer spreadsheet</Label>
                 <div
-                  className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-muted px-6 py-8 cursor-pointer hover:border-primary/60 transition-colors"
-                  onClick={() => document.getElementById('import-file-input')?.click()}
+                  className="relative flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-muted px-6 py-8 cursor-pointer hover:border-primary/60 transition-colors"
+                  onClick={() => !importParsing && document.getElementById('import-file-input')?.click()}
                 >
-                  <FileUp className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    {importFile ? importFile.name : 'Click to browse or drop an Excel / CSV file'}
-                  </p>
-                  {importFile && <p className="text-xs text-muted-foreground">{(importFile.size / 1024).toFixed(1)} KB</p>}
+                  {importParsing ? (
+                    <>
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <p className="text-sm text-muted-foreground">Parsing {importFile?.name}…</p>
+                    </>
+                  ) : (
+                    <>
+                      <FileUp className="h-8 w-8 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
+                        {importFile ? importFile.name : 'Click to browse or drop an Excel / CSV file'}
+                      </p>
+                      {importFile && <p className="text-xs text-muted-foreground">{(importFile.size / 1024).toFixed(1)} KB</p>}
+                    </>
+                  )}
                   <input
                     id="import-file-input"
                     type="file"
                     accept=".xlsx,.xls,.csv"
                     className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) setImportFile(f); e.target.value = '' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) { setImportFile(f); handleParseImportFile(f) } e.target.value = '' }}
                   />
                 </div>
               </div>
@@ -678,7 +687,7 @@ export default function OrdersPage() {
                     value={importSelectedSheet}
                     onValueChange={async (sheet) => {
                       setImportSelectedSheet(sheet)
-                      await handleParseImportFile(sheet)
+                      await handleParseImportFile(undefined, sheet)
                     }}
                   >
                     <SelectTrigger className="h-7 w-48 text-xs">
@@ -769,13 +778,7 @@ export default function OrdersPage() {
 
           <DialogFooter className="gap-2">
             {importStep === 1 && (
-              <>
-                <Button variant="ghost" onClick={() => { setImportOpen(false); resetImportDialog() }}>Cancel</Button>
-                <Button onClick={() => handleParseImportFile()} disabled={!importFile || importParsing}>
-                  {importParsing && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                  {importParsing ? 'Parsing…' : 'Parse File'}
-                </Button>
-              </>
+              <Button variant="ghost" onClick={() => { setImportOpen(false); resetImportDialog() }}>Cancel</Button>
             )}
             {importStep === 2 && (
               <>
