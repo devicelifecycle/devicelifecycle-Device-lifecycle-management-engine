@@ -361,13 +361,16 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
       const ruleTitle = rule.title?.trim() || ''
 
       // Skip rules that have no storage size (GB/TB) — catches chip labels, colors, etc.
-      if (!STORAGE_SIZE_RE.test(ruleTitle)) continue
+      const storageSizeMatch = STORAGE_SIZE_RE.exec(ruleTitle)
+      if (!storageSizeMatch) continue
       // Skip RAM-only labels ("16GB RAM", "32GB DDR5") — not a storage variant
       if (RAM_LABEL_RE.test(ruleTitle)) continue
       // Skip chip/processor variants ("M2 Pro", "i7-13th") — not a storage variant
       if (CHIP_RE.test(ruleTitle)) continue
 
-      const storage = ruleTitle || 'Unknown'
+      // Extract ONLY the size portion — prevents garbage strings like "1TBNANO-TEXTUREGLASS"
+      // when GoRecell rule titles include extra text (e.g. "1TB Nano-texture glass")
+      const storage = storageSizeMatch[1] + storageSizeMatch[2].toUpperCase()
       const final = Math.round(price * conditionMultiplier * 100) / 100
       results.push({ storage, price: final })
     }
