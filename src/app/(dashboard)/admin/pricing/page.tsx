@@ -1,8 +1,10 @@
 // ============================================================================
-// ADMIN PRICING — thin server shell
+// ADMIN PRICING — thin client shell
 // The heavy client bundle is code-split into a separate lazy chunk so it
 // doesn't block the initial page parse/hydration (was score 3–24 on mobile).
 // ============================================================================
+
+'use client'
 
 import dynamic from 'next/dynamic'
 import { Loader2 } from 'lucide-react'
