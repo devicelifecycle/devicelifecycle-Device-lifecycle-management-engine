@@ -29,15 +29,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isInitializing) {
     return (
-      <div className="app-shell-bg grain-overlay flex min-h-screen items-center justify-center px-6 text-stone-100">
+      <div className="app-shell-bg grain-overlay flex min-h-screen items-center justify-center px-6 text-foreground">
         <div className="surface-panel relative flex w-full max-w-md flex-col items-center gap-6 rounded-[2rem] px-10 py-14 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-primary text-primary-foreground shadow-[0_25px_50px_-25px_rgba(182,93,47,0.9)]">
             <Package className="h-7 w-7" />
           </div>
           <div className="space-y-2">
             <p className="eyebrow-label">Preparing Workspace</p>
-            <h1 className="editorial-title text-4xl text-stone-100">Loading DLM Engine</h1>
-            <p className="text-sm text-stone-400">Checking session, roles, and the operational canvas.</p>
+            <h1 className="editorial-title text-4xl text-foreground">Loading DLM Engine</h1>
+            <p className="text-sm text-muted-foreground">Checking session, roles, and the operational canvas.</p>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
             <motion.div
@@ -54,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!isAuthenticated) return null
 
   return (
-    <div className="app-shell-bg grain-overlay flex h-screen overflow-hidden text-stone-100">
+    <div className="app-shell-bg grain-overlay flex h-screen overflow-hidden text-foreground">
       <div className="hidden h-full lg:block">
         <Sidebar />
       </div>
