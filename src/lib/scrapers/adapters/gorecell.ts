@@ -294,9 +294,12 @@ function inferMake(name: string): string {
   if (n.includes('pixel')) return 'Google'
   if (n.includes('surface')) return 'Microsoft'
   if (n.includes('oneplus')) return 'OnePlus'
-  if (n.includes('legion')) return 'Lenovo'
+  if (n.includes('legion') || n.includes('thinkpad') || n.includes('ideapad') || n.includes('yoga')) return 'Lenovo'
   if (n.includes('razer')) return 'Razer'
-  if (n.includes('alienware') || n.includes('xps') || n.includes('dell')) return 'Dell'
+  if (n.includes('alienware') || n.includes('xps') || n.includes('inspiron') || n.includes('dell')) return 'Dell'
+  if (n.includes('elitebook') || n.includes('spectre') || n.includes('envy') || n.includes('pavilion') || /\bhp\b/.test(n)) return 'HP'
+  if (n.includes('zenbook') || n.includes('vivobook') || n.includes('rog ') || n.includes('asus')) return 'Asus'
+  if (n.includes('aspire') || n.includes('swift') || n.includes('predator') || n.includes('acer')) return 'Acer'
   if (n.includes('ray-ban')) return 'Ray-Ban'
   return 'Other'
 }
@@ -304,9 +307,16 @@ function inferMake(name: string): string {
 /** Infer category from product name */
 function inferCategory(name: string): string {
   const n = name.toLowerCase()
-  if (n.includes('watch')) return 'watch'
-  if (n.includes('ipad') || n.includes('tab') || n.includes('tablet')) return 'tablet'
-  if (n.includes('macbook') || n.includes('laptop') || n.includes('razer') || n.includes('alienware') || n.includes('xps') || n.includes('surface') || n.includes('legion')) return 'laptop'
+  if (n.includes('watch') || n.includes('band')) return 'watch'
+  if (n.includes('ipad') || n.includes('galaxy tab') || n.includes('galaxy book') || n.includes('tab s') || n.includes('tablet')) return 'tablet'
+  if (
+    n.includes('macbook') || n.includes('imac') || n.includes('mac mini') || n.includes('mac pro') || n.includes('mac studio') ||
+    n.includes('laptop') || n.includes('notebook') || n.includes('surface') ||
+    n.includes('razer') || n.includes('alienware') || n.includes('xps') || n.includes('legion') ||
+    n.includes('thinkpad') || n.includes('ideapad') || n.includes('zenbook') || n.includes('vivobook') ||
+    n.includes('elitebook') || n.includes('spectre') || n.includes('pavilion') ||
+    n.includes('aspire') || n.includes('swift') || n.includes('predator')
+  ) return 'laptop'
   return 'phone'
 }
 
@@ -317,7 +327,14 @@ const DISCOVERY_CONDITIONS: Array<{ key: 'excellent' | 'good' | 'fair' | 'broken
   { key: 'broken', sourceLabel: 'Defective' },
 ]
 
-/** Extract all storage + price pairs from query_data (good condition) */
+// Regex to detect a plausible storage size anywhere in a rule title
+const STORAGE_SIZE_RE = /\b(\d+)\s*(GB|TB)\b/i
+// Regex to detect RAM-only labels ("16GB RAM", "8 GB Memory", "32GB DDR5")
+const RAM_LABEL_RE = /\b\d+\s*GB\s*(RAM|Memory|DDR\d*|LPDDR\d*)\b/i
+// Regex to detect chip/processor-only labels ("M1", "M2 Pro", "i7-13th", "Ryzen 7")
+const CHIP_RE = /\b(M[1-9](\s*(Pro|Max|Ultra|Nano))?|A\d{2}[A-Z]?|i[3579][- ]\d|Core\s*Ultra|Ryzen\s*\d|Snapdragon|Exynos|Dimensity)\b/i
+
+/** Extract all storage + price pairs from query_data for a given condition */
 function extractAllStoragePrices(queryData: QueryData, condition: string): Array<{ storage: string; price: number }> {
   const results: Array<{ storage: string; price: number }> = []
   let conditionMultiplier = 1
@@ -340,7 +357,17 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
       if (getPriceFormat(rule) !== 'fixed') continue
       const price = parseFloat(rule.price)
       if (Number.isNaN(price) || price <= 0) continue
-      const storage = rule.title?.trim() || 'Unknown'
+
+      const ruleTitle = rule.title?.trim() || ''
+
+      // Skip rules that have no storage size (GB/TB) — catches chip labels, colors, etc.
+      if (!STORAGE_SIZE_RE.test(ruleTitle)) continue
+      // Skip RAM-only labels ("16GB RAM", "32GB DDR5") — not a storage variant
+      if (RAM_LABEL_RE.test(ruleTitle)) continue
+      // Skip chip/processor variants ("M2 Pro", "i7-13th") — not a storage variant
+      if (CHIP_RE.test(ruleTitle)) continue
+
+      const storage = ruleTitle || 'Unknown'
       const final = Math.round(price * conditionMultiplier * 100) / 100
       results.push({ storage, price: final })
     }
@@ -348,13 +375,57 @@ function extractAllStoragePrices(queryData: QueryData, condition: string): Array
   return results
 }
 
+// Keyword searches run AFTER main pagination to capture non-phone categories that
+// WooCommerce might rank low in its default product order.
+const SUPPLEMENTARY_SEARCH_TERMS = [
+  'ipad', 'macbook', 'imac', 'mac mini', 'mac pro',
+  'galaxy tab', 'galaxy book', 'surface',
+  'thinkpad', 'ideapad', 'zenbook', 'elitebook', 'spectre',
+]
+
+/** Process a single WooProduct into ScrapedPrice[] across all conditions */
+async function processDiscoveryProduct(
+  p: WooProduct,
+  now: string,
+): Promise<ScrapedPrice[]> {
+  const productUrl = `${PRODUCT_BASE}${p.slug}/`
+  const pageRes = await fetchWithRetry(productUrl, { method: 'GET' })
+  const html = pageRes.ok ? await pageRes.text() : ''
+  const queryData = extractQueryData(html)
+  if (!queryData) return []
+
+  const make = inferMake(p.name)
+  const model = p.name.trim()
+  const out: ScrapedPrice[] = []
+
+  for (const condition of DISCOVERY_CONDITIONS) {
+    const storagePrices = extractAllStoragePrices(queryData, condition.sourceLabel)
+    for (const { storage, price } of storagePrices) {
+      out.push({
+        competitor_name: 'GoRecell',
+        make,
+        model,
+        storage,
+        trade_in_price: price,
+        sell_price: null,
+        condition: condition.key,
+        scraped_at: now,
+        raw: { source: 'discovery' },
+      })
+    }
+  }
+  return out
+}
+
 /** Discovery mode: scrape full GoRecell catalog, return all devices + prices (no input devices needed) */
 async function scrapeGoRecellFullCatalogTypeScript(limitProducts?: number): Promise<ScraperResult> {
   const start = Date.now()
   const prices: ScrapedPrice[] = []
+  const seenSlugs = new Set<string>()
   const now = new Date().toISOString()
 
   try {
+    // ── Phase 1: paginate full WooCommerce catalog ───────────────────────────
     let page = 1
     const perPage = 30
     let fetched = 0
@@ -369,37 +440,12 @@ async function scrapeGoRecellFullCatalogTypeScript(limitProducts?: number): Prom
       for (const p of products) {
         if (limitProducts != null && fetched >= limitProducts) break
         if (!p?.name || !p?.slug) continue
+        if (seenSlugs.has(p.slug)) continue
+        seenSlugs.add(p.slug)
 
         try {
-          const productUrl = `${PRODUCT_BASE}${p.slug}/`
-          const pageRes = await fetchWithRetry(productUrl, { method: 'GET' })
-          const html = pageRes.ok ? await pageRes.text() : ''
-          const queryData = extractQueryData(html)
-
-          if (!queryData) {
-            await throttle(150)
-            continue
-          }
-
-          const make = inferMake(p.name)
-          const model = p.name.trim()
-          for (const condition of DISCOVERY_CONDITIONS) {
-            const storagePrices = extractAllStoragePrices(queryData, condition.sourceLabel)
-
-            for (const { storage, price } of storagePrices) {
-              prices.push({
-                competitor_name: 'GoRecell',
-                make,
-                model,
-                storage,
-                trade_in_price: price,
-                sell_price: null,
-                condition: condition.key,
-                scraped_at: now,
-                raw: { source: 'discovery' },
-              })
-            }
-          }
+          const scraped = await processDiscoveryProduct(p, now)
+          prices.push(...scraped)
           fetched++
           await throttle(150)
         } catch (e) {
@@ -408,6 +454,34 @@ async function scrapeGoRecellFullCatalogTypeScript(limitProducts?: number): Prom
       }
       page++
       if (products.length < perPage) break
+    }
+
+    // ── Phase 2: keyword searches for non-phone categories ───────────────────
+    // GoRecell's WooCommerce default ordering may bury iPads/MacBooks; explicit
+    // keyword searches guarantee we capture every laptop, tablet, and desktop.
+    for (const term of SUPPLEMENTARY_SEARCH_TERMS) {
+      try {
+        const searchUrl = `${STORE_API}?search=${encodeURIComponent(term)}&per_page=100`
+        const res = await fetchWithRetry(searchUrl, { method: 'GET', headers: { Accept: 'application/json' } })
+        const raw = res.ok ? await res.json() : []
+        const products: WooProduct[] = Array.isArray(raw) ? raw : []
+
+        for (const p of products) {
+          if (!p?.name || !p?.slug) continue
+          if (seenSlugs.has(p.slug)) continue // already processed in phase 1
+          seenSlugs.add(p.slug)
+
+          try {
+            const scraped = await processDiscoveryProduct(p, now)
+            prices.push(...scraped)
+            await throttle(150)
+          } catch (e) {
+            console.warn(`[gorecell-discovery] Skip supplementary ${p.name}:`, e)
+          }
+        }
+      } catch (e) {
+        console.warn(`[gorecell-discovery] Supplementary search "${term}" failed:`, e)
+      }
     }
 
     return { competitor_name: 'GoRecell', prices, success: true, duration_ms: Date.now() - start }
