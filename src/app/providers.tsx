@@ -41,7 +41,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <RealtimeSyncProvider>
-          <ThemeProvider attribute="class" forcedTheme="dark" disableTransitionOnChange>
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
             {children}
           </ThemeProvider>
         </RealtimeSyncProvider>

@@ -65,6 +65,7 @@ export default function OrdersPage() {
   const [importSelectedSheet, setImportSelectedSheet] = useState<string>('')
   const [importRowEdits, setImportRowEdits] = useState<Record<number, { condition?: string; quantity?: string; unit_price?: string }>>({})
   const [importCreating, setImportCreating] = useState(false)
+  const [importParseSuccess, setImportParseSuccess] = useState(false)
   const debouncedCustomerSearch = useDebounce(importCustomerSearch, 300)
 
   const customerIdFromUrl = searchParams.get('customer_id') || undefined
@@ -143,6 +144,7 @@ export default function OrdersPage() {
     setImportRowEdits({})
     setImportAvailableSheets([])
     setImportSelectedSheet('')
+    setImportParseSuccess(false)
   }
 
   async function handleParseImportFile(fileToUse?: File, sheetOverride?: string) {
@@ -165,9 +167,12 @@ export default function OrdersPage() {
       setImportRows(data.rows || [])
       setImportSummary(data.summary || null)
       setImportRowEdits({})
-      setImportStep(2)
+      setImportParseSuccess(true)
+      // If called from the sheet picker (already on step 2), stay on step 2
+      // Otherwise stay on step 1 so the user can fill in customer/order-type
     } catch (err) {
       setImportParseError(err instanceof Error ? err.message : 'Failed to parse file')
+      setImportParseSuccess(false)
     } finally {
       setImportParsing(false)
     }
@@ -669,6 +674,18 @@ export default function OrdersPage() {
                 )}
               </div>
 
+              {/* Parse success banner */}
+              {importParseSuccess && importSummary && (
+                <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/20 px-3 py-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="text-sm text-emerald-700 dark:text-emerald-300">
+                    {importSummary.total_devices} device{importSummary.total_devices !== 1 ? 's' : ''} parsed
+                    {importSummary.matched > 0 ? ` · ${importSummary.matched} matched to catalog` : ' · 0 catalog matches'}
+                    {importSummary.sheet_parsed ? ` · ${importSummary.sheet_parsed}` : ''}
+                  </span>
+                </div>
+              )}
+
               {importParseError && (
                 <p className="text-sm text-destructive flex items-center gap-1.5">
                   <AlertCircle className="h-4 w-4 shrink-0" />{importParseError}
@@ -679,6 +696,59 @@ export default function OrdersPage() {
 
           {importStep === 2 && (
             <div className="space-y-3 py-2">
+              {/* Customer + order type bar — always visible on step 2 */}
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground shrink-0">Customer:</span>
+                  {importCustomerId ? (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm font-medium truncate">{importCustomerName}</span>
+                      <button onClick={() => { setImportCustomerId(null); setImportCustomerName(''); setImportCustomerSearch('') }}>
+                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative flex-1 min-w-[160px]">
+                      <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        className="h-7 text-xs pl-7"
+                        placeholder="Search customer…"
+                        value={importCustomerSearch}
+                        onChange={e => setImportCustomerSearch(e.target.value)}
+                      />
+                      {importCustomerLoading && <Loader2 className="absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin text-muted-foreground" />}
+                      {importCustomerResults.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
+                          {importCustomerResults.map(c => (
+                            <button key={c.id} className="w-full px-3 py-1.5 text-left text-xs hover:bg-accent"
+                              onClick={() => { setImportCustomerId(c.id); setImportCustomerName(c.company_name); setImportCustomerResults([]) }}>
+                              {c.company_name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-muted-foreground">Type:</span>
+                  <Select value={importOrderType} onValueChange={v => setImportOrderType(v as 'trade_in' | 'cpo')}>
+                    <SelectTrigger className="h-7 w-28 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="trade_in">Trade-In</SelectItem>
+                      <SelectItem value="cpo">CPO</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {!importCustomerId && (
+                  <p className="w-full text-xs text-amber-600 dark:text-amber-400">
+                    Select a customer to enable order creation.
+                  </p>
+                )}
+              </div>
+
               {/* Sheet picker — shown when workbook has multiple sheets */}
               {importAvailableSheets.length > 1 && (
                 <div className="flex items-center gap-2">
@@ -778,7 +848,14 @@ export default function OrdersPage() {
 
           <DialogFooter className="gap-2">
             {importStep === 1 && (
-              <Button variant="ghost" onClick={() => { setImportOpen(false); resetImportDialog() }}>Cancel</Button>
+              <>
+                <Button variant="ghost" onClick={() => { setImportOpen(false); resetImportDialog() }}>Cancel</Button>
+                {importParseSuccess && (
+                  <Button onClick={() => setImportStep(2)} disabled={importParsing}>
+                    Review Devices →
+                  </Button>
+                )}
+              </>
             )}
             {importStep === 2 && (
               <>
