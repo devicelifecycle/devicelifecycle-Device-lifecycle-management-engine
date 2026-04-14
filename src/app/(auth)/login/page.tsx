@@ -132,21 +132,9 @@ export default function LoginPage() {
         </div>
       )}
       <OrbitingDeviceField className="opacity-55 sm:opacity-70" compact />
-      <motion.div
-        className="absolute -left-20 top-20 h-64 w-64 rounded-full bg-primary/18 blur-3xl"
-        animate={shouldReduceMotion ? undefined : { x: [0, 42, -18, 0], y: [0, 34, 8, 0], opacity: [0.24, 0.4, 0.24] }}
-        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute right-8 top-24 h-72 w-72 rounded-full bg-amber-100/10 blur-3xl"
-        animate={shouldReduceMotion ? undefined : { x: [0, -36, 18, 0], y: [0, -24, 16, 0], scale: [1, 1.08, 0.96, 1] }}
-        transition={{ duration: 17, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute bottom-12 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-cyan-300/8 blur-3xl"
-        animate={shouldReduceMotion ? undefined : { y: [0, -22, 0], opacity: [0.16, 0.28, 0.16] }}
-        transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
-      />
+      {/* Static ambient glows — no animation, GPU-cheap, desktop-only */}
+      <div className="pointer-events-none absolute -left-20 top-20 hidden h-64 w-64 rounded-full bg-primary/10 blur-3xl lg:block" />
+      <div className="pointer-events-none absolute right-8 top-24 hidden h-72 w-72 rounded-full bg-amber-100/8 blur-3xl lg:block" />
 
       <div className="relative mx-auto grid min-h-screen max-w-[1500px] items-center gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-10">
         <section className="relative hidden space-y-8 lg:block">
