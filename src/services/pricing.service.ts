@@ -328,6 +328,8 @@ const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
   margin_mode: 'auto',
   custom_margin_percent: 0,
   custom_margin_amount: 0,
+  prefer_data_driven: false,
+  demand_adjustment_enabled: false,
 }
 
 type QueryErrorLike = {
