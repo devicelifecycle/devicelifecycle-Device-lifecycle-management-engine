@@ -525,24 +525,50 @@ async function ensureDevice(supabase: SupabaseClient, make: string, model: strin
 // PARALLEL SCRAPER HELPERS
 // ============================================================================
 
+const RETRY_DELAY_MS = 4000
+
 async function runScraperSafe(
   id: string,
   fn: () => Promise<ScraperResult>
 ): Promise<{ id: string; result: ScraperResult }> {
-  try {
-    const result = await fn()
-    return { id, result }
-  } catch (e) {
-    return {
-      id,
-      result: {
-        competitor_name: id,
-        prices: [],
-        success: false,
-        error: e instanceof Error ? e.message : 'Unknown error',
-        duration_ms: 0,
-      },
+  let lastError: string | undefined
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    if (attempt > 1) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
     }
+    try {
+      const result = await fn()
+      if (result.success || attempt === 2) {
+        if (!result.success && lastError) {
+          // Annotate retry context in the error string
+          result.error = `[retry] ${result.error || lastError}`
+        }
+        return { id, result }
+      }
+      // First attempt failed with a result (not an exception) — retry
+      lastError = result.error || 'Scraper returned failure'
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : 'Unknown error'
+      if (attempt === 2) {
+        return {
+          id,
+          result: {
+            competitor_name: id,
+            prices: [],
+            success: false,
+            error: `[retry] ${lastError}`,
+            duration_ms: 0,
+          },
+        }
+      }
+    }
+  }
+
+  // TypeScript exhaustiveness — never reached
+  return {
+    id,
+    result: { competitor_name: id, prices: [], success: false, error: lastError, duration_ms: 0 },
   }
 }
 
