@@ -17,7 +17,6 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Switch } from '@/components/ui/switch'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Shipment } from '@/types'
@@ -63,11 +62,6 @@ export default function COEShippingPage() {
     carrier: 'FedEx',
     custom_carrier: '',
     tracking_number: '',
-    stallion_purchase: false,
-    weight: '2',
-    length: '12',
-    width: '8',
-    height: '4',
   })
 
   // Update status dialog
@@ -135,8 +129,8 @@ export default function COEShippingPage() {
       toast.error('Carrier or shipping platform is required')
       return
     }
-    if (!form.stallion_purchase && !form.tracking_number.trim()) {
-      toast.error('Tracking number is required for manual shipment entry')
+    if (!form.tracking_number.trim()) {
+      toast.error('Tracking number is required')
       return
     }
     setIsCreating(true)
@@ -149,27 +143,18 @@ export default function COEShippingPage() {
           direction: 'outbound',
           carrier: form.carrier,
           custom_carrier: form.carrier === 'Other' ? resolvedCarrier : undefined,
-          tracking_number: form.stallion_purchase ? undefined : form.tracking_number.trim(),
-          from_address: COE_ADDRESS,
-          to_address: buildCustomerAddress(selectedOrder),
-          stallion_purchase: form.stallion_purchase,
-          weight: Number.parseFloat(form.weight) || 2,
-          dimensions: {
-            length: Number.parseFloat(form.length) || 12,
-            width: Number.parseFloat(form.width) || 8,
-            height: Number.parseFloat(form.height) || 4,
-          },
+          tracking_number: form.tracking_number.trim(),
         }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Failed to create shipment')
       }
-      toast.success(form.stallion_purchase ? 'Shipment created and label purchased' : 'Shipment tracking saved')
+      toast.success('Shipment tracking saved')
       setCreateDialogOpen(false)
       setSelectedOrder(null)
       setOrderSearch('')
-      setForm({ carrier: 'FedEx', custom_carrier: '', tracking_number: '', stallion_purchase: false, weight: '2', length: '12', width: '8', height: '4' })
+      setForm({ carrier: 'FedEx', custom_carrier: '', tracking_number: '' })
       fetchShipments()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create shipment')
@@ -354,7 +339,7 @@ export default function COEShippingPage() {
       {/* Create Shipment Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => {
         setCreateDialogOpen(open)
-        if (!open) { setSelectedOrder(null); setOrderSearch(''); setForm({ carrier: 'FedEx', custom_carrier: '', tracking_number: '', stallion_purchase: false, weight: '2', length: '12', width: '8', height: '4' }) }
+        if (!open) { setSelectedOrder(null); setOrderSearch(''); setForm({ carrier: 'FedEx', custom_carrier: '', tracking_number: '' }) }
       }}>
         <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
@@ -417,52 +402,22 @@ export default function COEShippingPage() {
                 />
               </div>
             )}
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <p className="text-sm font-medium">Use in-app label purchase</p>
-                <p className="text-xs text-muted-foreground">Optional. Leave this off if you already have a tracking number from another platform.</p>
-              </div>
-              <Switch checked={form.stallion_purchase} onCheckedChange={(checked) => setForm(f => ({ ...f, stallion_purchase: checked }))} />
-            </div>
-            {form.stallion_purchase && form.carrier === 'Other' && (
-              <p className="text-xs text-amber-600">
-                Choose a listed carrier for in-app label purchase, or turn label purchase off and paste manual tracking from your platform.
-              </p>
-            )}
             <div className="space-y-2">
               <Label>Tracking Number</Label>
               <Input
                 value={form.tracking_number}
                 onChange={e => setForm(f => ({ ...f, tracking_number: e.target.value }))}
-                placeholder={form.stallion_purchase ? 'Auto-generated after label purchase' : 'Enter tracking number from any carrier or platform'}
-                disabled={form.stallion_purchase}
+                placeholder="Enter tracking number from carrier or platform"
               />
             </div>
-            {form.stallion_purchase && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Weight (lb)</Label>
-                  <Input value={form.weight} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} placeholder="2" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Length (in)</Label>
-                  <Input value={form.length} onChange={e => setForm(f => ({ ...f, length: e.target.value }))} placeholder="12" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Width (in)</Label>
-                  <Input value={form.width} onChange={e => setForm(f => ({ ...f, width: e.target.value }))} placeholder="8" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Height (in)</Label>
-                  <Input value={form.height} onChange={e => setForm(f => ({ ...f, height: e.target.value }))} placeholder="4" />
-                </div>
-              </div>
-            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateShipment} disabled={isCreating || !selectedOrder || !((form.carrier === 'Other' ? form.custom_carrier.trim() : form.carrier.trim())) || (form.stallion_purchase && form.carrier === 'Other') || (!form.stallion_purchase && !form.tracking_number.trim())}>
-              {isCreating ? 'Saving...' : form.stallion_purchase ? 'Create Shipment' : 'Save Tracking'}
+            <Button
+              onClick={handleCreateShipment}
+              disabled={isCreating || !selectedOrder || !(form.carrier === 'Other' ? form.custom_carrier.trim() : form.carrier.trim()) || !form.tracking_number.trim()}
+            >
+              {isCreating ? 'Saving...' : 'Save Tracking'}
             </Button>
           </DialogFooter>
         </DialogContent>
