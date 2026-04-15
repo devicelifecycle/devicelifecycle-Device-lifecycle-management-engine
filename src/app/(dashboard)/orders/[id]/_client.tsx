@@ -199,9 +199,6 @@ export default function OrderDetailClient() {
   const [shipmentCustomCarrier, setShipmentCustomCarrier] = useState('')
   const [shipmentTrackingNumber, setShipmentTrackingNumber] = useState('')
   const [shipmentNotes, setShipmentNotes] = useState('')
-  const [shipmentStallionPurchase, setShipmentStallionPurchase] = useState(false)
-  const [shipmentWeight, setShipmentWeight] = useState('2')
-  const [shipmentDimensions, setShipmentDimensions] = useState({ length: '12', width: '8', height: '4' })
 
   // Customer ship-to-us form
   const [customerShipCarrier, setCustomerShipCarrier] = useState('FedEx')
@@ -951,33 +948,23 @@ export default function OrderDetailClient() {
       toast.error('Carrier or shipping platform is required')
       return
     }
-    const useStallion = isVendor ? false : shipmentStallionPurchase
-    if (!useStallion && !shipmentTrackingNumber.trim()) {
-      toast.error('Tracking number is required for manual shipment entry')
+    if (!shipmentTrackingNumber.trim()) {
+      toast.error('Tracking number is required')
       return
     }
     setIsCreatingShipment(true)
     try {
       const direction = isVendor ? 'inbound' : shipmentDirection
+      const isInboundToCoe = direction === 'inbound'
       const payload: Record<string, unknown> = {
         order_id: params.id,
         direction,
         carrier: shipmentCarrier.trim(),
         custom_carrier: shipmentCarrier === 'Other' ? resolvedCarrier : undefined,
-        tracking_number: useStallion ? undefined : shipmentTrackingNumber.trim(),
+        tracking_number: shipmentTrackingNumber.trim(),
         notes: shipmentNotes.trim() || undefined,
-      }
-      const isInboundToCoe = direction === 'inbound'
-      payload.from_address = isInboundToCoe ? buildShipToAddress(order) : COE_ADDRESS
-      payload.to_address = isInboundToCoe ? COE_ADDRESS : buildShipToAddress(order)
-      if (useStallion) {
-        payload.stallion_purchase = true
-        payload.weight = Number.parseFloat(shipmentWeight) || 2
-        payload.dimensions = {
-          length: Number.parseFloat(shipmentDimensions.length) || 12,
-          width: Number.parseFloat(shipmentDimensions.width) || 8,
-          height: Number.parseFloat(shipmentDimensions.height) || 4,
-        }
+        from_address: isInboundToCoe ? buildShipToAddress(order) : COE_ADDRESS,
+        to_address: isInboundToCoe ? COE_ADDRESS : buildShipToAddress(order),
       }
       const res = await fetch('/api/shipments', {
         method: 'POST',
@@ -986,21 +973,12 @@ export default function OrderDetailClient() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Failed to create shipment')
-      toast.success(
-        useStallion
-          ? 'Shipment created and label purchased'
-          : isVendor
-            ? 'Shipment created and tracking uploaded'
-            : 'Shipment created successfully'
-      )
+      toast.success(isVendor ? 'Tracking uploaded' : 'Shipment tracking saved')
       setShipmentDialogOpen(false)
       setShipmentCarrier('FedEx')
       setShipmentCustomCarrier('')
       setShipmentTrackingNumber('')
       setShipmentNotes('')
-      setShipmentStallionPurchase(false)
-      setShipmentWeight('2')
-      setShipmentDimensions({ length: '12', width: '8', height: '4' })
       refetch()
       refetchShipments()
     } catch (e) {
@@ -1012,13 +990,10 @@ export default function OrderDetailClient() {
 
   const openShipmentDialog = () => {
     setShipmentDirection(isVendor ? 'inbound' : order?.type === 'trade_in' ? 'inbound' : 'outbound')
-    setShipmentStallionPurchase(false)
     setShipmentCarrier('FedEx')
     setShipmentCustomCarrier('')
     setShipmentTrackingNumber('')
     setShipmentNotes('')
-    setShipmentWeight('2')
-    setShipmentDimensions({ length: '12', width: '8', height: '4' })
     setShipmentDialogOpen(true)
   }
 
@@ -2186,56 +2161,21 @@ export default function OrderDetailClient() {
                     />
                   </div>
                 )}
-                {isVendor ? (
+                {isVendor && (
                   <div className="rounded-lg border p-3">
                     <p className="text-sm font-medium">Manual tracking upload</p>
-                    <p className="text-xs text-muted-foreground">Enter the tracking number from any carrier or platform. Vendors do not purchase labels in the app.</p>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <p className="text-sm font-medium">Use in-app label purchase</p>
-                      <p className="text-xs text-muted-foreground">Optional. Leave this off if you already have tracking from another platform.</p>
-                    </div>
-                    <Switch checked={shipmentStallionPurchase} onCheckedChange={setShipmentStallionPurchase} />
+                    <p className="text-xs text-muted-foreground">Enter the tracking number from any carrier or platform.</p>
                   </div>
                 )}
-                {shipmentStallionPurchase && shipmentCarrier === 'Other' && (
-                  <p className="text-xs text-amber-600">
-                    Choose a listed carrier for in-app label purchase, or turn it off and paste tracking from your platform.
-                  </p>
-                )}
-                {!shipmentStallionPurchase && (
-                  <div className="space-y-2">
-                    <Label htmlFor="shipment-tracking">Tracking Number</Label>
-                    <Input
-                      id="shipment-tracking"
-                      placeholder="Enter tracking number from any carrier or platform"
-                      value={shipmentTrackingNumber}
-                      onChange={(e) => setShipmentTrackingNumber(e.target.value)}
-                    />
-                  </div>
-                )}
-                {shipmentStallionPurchase && !isVendor && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Weight (lb)</Label>
-                      <Input value={shipmentWeight} onChange={(e) => setShipmentWeight(e.target.value)} placeholder="2" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Length (in)</Label>
-                      <Input value={shipmentDimensions.length} onChange={(e) => setShipmentDimensions(d => ({ ...d, length: e.target.value }))} placeholder="12" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Width (in)</Label>
-                      <Input value={shipmentDimensions.width} onChange={(e) => setShipmentDimensions(d => ({ ...d, width: e.target.value }))} placeholder="8" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Height (in)</Label>
-                      <Input value={shipmentDimensions.height} onChange={(e) => setShipmentDimensions(d => ({ ...d, height: e.target.value }))} placeholder="4" />
-                    </div>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="shipment-tracking">Tracking Number</Label>
+                  <Input
+                    id="shipment-tracking"
+                    placeholder="Enter tracking number from any carrier or platform"
+                    value={shipmentTrackingNumber}
+                    onChange={(e) => setShipmentTrackingNumber(e.target.value)}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="shipment-notes">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
                   <Textarea
@@ -2256,12 +2196,11 @@ export default function OrderDetailClient() {
                   disabled={
                     isCreatingShipment ||
                     !(shipmentCarrier === 'Other' ? shipmentCustomCarrier.trim() : shipmentCarrier.trim()) ||
-                    (shipmentStallionPurchase && shipmentCarrier === 'Other') ||
-                    (shipmentStallionPurchase ? false : !shipmentTrackingNumber.trim())
+                    !shipmentTrackingNumber.trim()
                   }
                 >
                   {isCreatingShipment ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Truck className="h-4 w-4 mr-1" />}
-                  {isVendor ? 'Upload Tracking' : shipmentStallionPurchase ? 'Create Shipment' : 'Save Tracking'}
+                  {isVendor ? 'Upload Tracking' : 'Save Tracking'}
                 </Button>
               </DialogFooter>
             </DialogContent>

@@ -5,8 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { ShipmentService, isShippingConfigured } from '@/services/shipment.service'
-import { ShippingProviderService } from '@/services/shipping-provider.service'
+import { ShipmentService } from '@/services/shipment.service'
 import { NotificationService } from '@/services/notification.service'
 import { OrderService } from '@/services/order.service'
 import type { Shipment } from '@/types'
@@ -178,15 +177,9 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
-      if (body.stallion_purchase === true) {
-        return NextResponse.json(
-          { error: 'Vendors must upload carrier tracking manually' },
-          { status: 400 }
-        )
-      }
       if (!normalizedTrackingNumber) {
         return NextResponse.json(
-          { error: 'tracking_number is required when vendors upload tracking' },
+          { error: 'tracking_number is required' },
           { status: 400 }
         )
       }
@@ -194,23 +187,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const stallionPurchase = body.stallion_purchase === true
-    if (!stallionPurchase && !normalizedTrackingNumber) {
-      return NextResponse.json({ error: 'tracking_number is required when stallion_purchase is false' }, { status: 400 })
-    }
-
-    if (stallionPurchase && rawCarrier === 'Other') {
-      return NextResponse.json(
-        { error: 'Choose a supported carrier for label purchase, or enter tracking manually for a custom platform' },
-        { status: 400 }
-      )
-    }
-
-    if (stallionPurchase && !isShippingConfigured()) {
-      return NextResponse.json(
-        { error: 'Label purchase service is not configured. Enter tracking manually or set STALLION_API_TOKEN.' },
-        { status: 503 }
-      )
+    if (!normalizedTrackingNumber) {
+      return NextResponse.json({ error: 'tracking_number is required' }, { status: 400 })
     }
 
     const advanceTradeInToInboundTransit = async () => {
@@ -231,55 +209,11 @@ export async function POST(request: NextRequest) {
     const shipment = await ShipmentService.createShipment({
       ...body,
       carrier: resolvedCarrier,
-      tracking_number: normalizedTrackingNumber || (stallionPurchase ? `STALLION-PENDING-${Date.now()}` : normalizedTrackingNumber),
+      tracking_number: normalizedTrackingNumber,
       created_by_id: user.id,
     })
 
-    let responsePayload: Shipment | (Shipment & { provider: string }) = shipment
-
-    if (stallionPurchase) {
-      try {
-        const purchased = await ShippingProviderService.purchaseLabel({
-          fromAddress: body.from_address,
-          toAddress: body.to_address,
-          preferredCarrier: body.carrier,
-          preferredServiceLevelToken: body.preferred_service_level_token,
-          parcel: {
-            length: body.dimensions?.length || 12,
-            width: body.dimensions?.width || 8,
-            height: body.dimensions?.height || 4,
-            distanceUnit: 'in',
-            weight: body.weight || 2,
-            massUnit: 'lb',
-          },
-        })
-
-        const updatedShipment = await ShipmentService.attachLabelPurchase(shipment.id, {
-          stallion_shipment_id: purchased.stallion_shipment_id,
-          tracking_number: purchased.tracking_number,
-          carrier: purchased.carrier,
-          tracking_status: purchased.tracking_status,
-          label_url: purchased.label_url,
-          label_pdf_url: purchased.label_pdf_url,
-          rate_amount: purchased.rate_amount,
-          rate_currency: purchased.rate_currency,
-          estimated_delivery: purchased.estimated_delivery,
-          raw_response: purchased.stallion_raw,
-          purchased_by_id: user.id,
-        })
-
-        responsePayload = { ...updatedShipment, provider: 'shipping_provider' }
-      } catch (error) {
-        // Label purchase failed — delete the pending shipment record
-        const svcClient = createServiceRoleClient()
-        await svcClient.from('shipments').delete().eq('id', shipment.id)
-        const msg = error instanceof Error ? error.message : 'Label purchase failed'
-        return NextResponse.json(
-          { error: `Label purchase failed: ${msg}. Turn off label purchase and enter a tracking number manually.` },
-          { status: 400 }
-        )
-      }
-    }
+    const responsePayload: Shipment = shipment
 
     await advanceTradeInToInboundTransit()
 
