@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
-import { PricingHealthService } from '@/services/pricing-health.service'
+import { PricingHealthService, type StaleCleanupResult } from '@/services/pricing-health.service'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -36,9 +36,19 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await PricingHealthService.checkCompetitorPriceStaleness()
+
+    // Also purge rows that are beyond 2× the staleness threshold — these are
+    // so old they will never be useful regardless of scraper schedule.
+    const cleanupDays = result.threshold_days * 2
+    let cleanup: StaleCleanupResult | null = null
+    if (cleanupDays > 0) {
+      cleanup = await PricingHealthService.cleanupStaleRows(cleanupDays)
+    }
+
     return NextResponse.json({
       success: true,
       ...result,
+      cleanup: cleanup ?? { deleted: 0, cutoff_days: cleanupDays },
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

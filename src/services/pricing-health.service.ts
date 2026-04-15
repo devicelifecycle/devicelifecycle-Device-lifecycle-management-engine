@@ -38,7 +38,33 @@ function normalizeCondition(input?: string | null): 'excellent' | 'good' | 'fair
   return 'good'
 }
 
+export interface StaleCleanupResult {
+  deleted: number
+  cutoff_days: number
+  error?: string
+}
+
 export class PricingHealthService {
+  /**
+   * Delete auto-scraped competitor_prices rows whose scraped_at is older
+   * than `olderThanDays`. Manual entries (source='manual') are never deleted.
+   */
+  static async cleanupStaleRows(olderThanDays: number): Promise<StaleCleanupResult> {
+    const supabase = createServiceRoleClient()
+    const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString()
+    try {
+      const { count, error } = await supabase
+        .from('competitor_prices')
+        .delete({ count: 'exact' })
+        .not('source', 'eq', 'manual')
+        .lt('scraped_at', cutoff)
+      if (error) return { deleted: 0, cutoff_days: olderThanDays, error: error.message }
+      return { deleted: count ?? 0, cutoff_days: olderThanDays }
+    } catch (e) {
+      return { deleted: 0, cutoff_days: olderThanDays, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
   static async checkCompetitorPriceStaleness(): Promise<PricingStalenessResult> {
     const supabase = createServiceRoleClient()
     const now = new Date()
