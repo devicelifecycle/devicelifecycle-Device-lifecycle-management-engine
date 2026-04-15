@@ -305,6 +305,8 @@ export interface PricingSettingsOverrides {
   custom_margin_amount: number
   /** Use our trained data-driven model when true (reduces third-party dependency) */
   prefer_data_driven?: boolean
+  /** Shift margin target based on device order velocity (P4 #18) */
+  demand_adjustment_enabled?: boolean
 }
 
 const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
@@ -504,7 +506,7 @@ export class PricingService {
       for (const row of data) {
         const key = row.setting_key as keyof PricingSettingsOverrides
         if (key in overrides) {
-          if (key === 'prefer_data_driven') {
+          if (key === 'prefer_data_driven' || key === 'demand_adjustment_enabled') {
             ;(overrides as Record<string, unknown>)[key] = row.setting_value === 'true' || row.setting_value === '1'
           } else if (key === 'margin_mode') {
             ;(overrides as Record<string, unknown>)[key] = row.setting_value === 'custom' ? 'custom' : 'auto'
@@ -559,6 +561,60 @@ export class PricingService {
     }
     const carrier = normalizedInput.carrier || 'Unlocked'
     const settings = await this.getPricingSettings(supabase)
+
+    // ── P4 #16: Per-brand margin override ────────────────────────────────────
+    // Apply admin-configured brand-specific margin only when the caller has NOT
+    // passed an explicit margin override — caller overrides always win.
+    const callerHasMarginOverride =
+      input.trade_in_profit_percent != null || input.enterprise_margin_percent != null
+    let brandOverrideApplied: { make: string; margin_percent: number } | undefined
+    let _deviceMake = ''
+    try {
+      const { data: deviceRow } = await supabase
+        .from('device_catalog').select('make').eq('id', normalizedInput.device_id).maybeSingle()
+      _deviceMake = (deviceRow as { make?: string } | null)?.make ?? ''
+      if (_deviceMake && !callerHasMarginOverride) {
+        const { data: bo } = await supabase
+          .from('brand_pricing_overrides')
+          .select('make, margin_percent')
+          .ilike('make', _deviceMake)
+          .eq('enabled', true)
+          .maybeSingle()
+        if (bo?.margin_percent != null) {
+          settings.trade_in_profit_percent = bo.margin_percent as number
+          settings.enterprise_margin_percent = bo.margin_percent as number
+          brandOverrideApplied = { make: bo.make as string, margin_percent: bo.margin_percent as number }
+        }
+      }
+    } catch { /* non-fatal — continue with global settings */ }
+
+    // ── P4 #18: Demand-based margin adjustment ───────────────────────────────
+    // When demand_adjustment_enabled is true, shift margin target ±2-3% based
+    // on how many orders this device received in the last 30 days.
+    let demandScore: 'high' | 'normal' | 'low' = 'normal'
+    let demandMarginAdjustment = 0
+    if (settings.demand_adjustment_enabled && !callerHasMarginOverride) {
+      try {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        const { count } = await supabase
+          .from('order_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('device_id', normalizedInput.device_id)
+          .gte('created_at', thirtyDaysAgo)
+        const cnt = count ?? 0
+        if (cnt > 15) {
+          demandScore = 'high'
+          demandMarginAdjustment = -2 // In demand → more competitive price
+        } else if (cnt < 3) {
+          demandScore = 'low'
+          demandMarginAdjustment = 3  // Slow mover → higher margin target
+        }
+        if (demandMarginAdjustment !== 0) {
+          settings.trade_in_profit_percent = Math.max(0, settings.trade_in_profit_percent + demandMarginAdjustment)
+          settings.enterprise_margin_percent = Math.max(0, settings.enterprise_margin_percent + demandMarginAdjustment)
+        }
+      } catch { /* non-fatal */ }
+    }
 
     try {
       // Step 1: Get market reference prices
@@ -1312,6 +1368,9 @@ export class PricingService {
         outlier_flag: outlierFlag || undefined,
         outlier_reason: outlierReason,
         price_source: priceSource,
+        brand_override: brandOverrideApplied,
+        demand_score: demandScore !== 'normal' ? demandScore : undefined,
+        demand_margin_adjustment: demandMarginAdjustment !== 0 ? demandMarginAdjustment : undefined,
         confidence,
         price_date: new Date().toISOString(),
         valid_for_hours: validForHours,

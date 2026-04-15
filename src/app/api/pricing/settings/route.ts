@@ -15,7 +15,7 @@ const SETTING_KEYS: (keyof PricingSettingsOverrides | 'cpo_depreciation_rate' | 
   'outlier_deviation_threshold', 'trade_in_profit_percent', 'enterprise_margin_percent',
   'cpo_markup_percent', 'cpo_enterprise_markup_percent', 'price_staleness_days',
   'margin_mode', 'custom_margin_percent', 'custom_margin_amount',
-  'prefer_data_driven',
+  'prefer_data_driven', 'demand_adjustment_enabled',
   'cpo_depreciation_rate', 'cpo_buyback_years',
 ]
 
@@ -87,7 +87,7 @@ export async function PATCH(request: NextRequest) {
 
     for (const [key, value] of updates) {
       let strVal: string
-      if (key === 'prefer_data_driven') {
+      if (key === 'prefer_data_driven' || key === 'demand_adjustment_enabled') {
         strVal = value === true || value === 'true' || value === '1' ? 'true' : 'false'
       } else if (key === 'margin_mode') {
         strVal = value === 'custom' ? 'custom' : 'auto'
