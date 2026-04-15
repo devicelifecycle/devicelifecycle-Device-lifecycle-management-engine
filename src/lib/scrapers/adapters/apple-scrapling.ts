@@ -124,8 +124,7 @@ function getWorkerScriptPath(): string {
 }
 
 function getPythonBin(): string {
-  if (process.env.SCRAPLING_PYTHON_BIN) return process.env.SCRAPLING_PYTHON_BIN
-  return path.join(process.cwd(), '.venv-scrapling', 'bin', 'python')
+  return process.env.SCRAPLING_PYTHON_BIN ?? 'python3'
 }
 
 function getWorkerTimeoutMs(): number {
