@@ -114,6 +114,9 @@ export default function NewTradeInPage() {
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState<Record<number, boolean>>({})
   const [dropdownRects, setDropdownRects] = useState<Record<number, DOMRect>>({})
   const deviceInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  // Server-side search results per line item (populated when user types)
+  const [deviceSearchResults, setDeviceSearchResults] = useState<Record<number, Device[]>>({})
+  const deviceSearchTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
@@ -123,8 +126,26 @@ export default function NewTradeInPage() {
   const [beatMode, setBeatMode] = useState<'amount' | 'percent'>('amount')
   const [beatOverride, setBeatOverride] = useState<string>('')
 
+  // Paginate through the full device catalog so CSV matching and dropdowns have
+  // all devices regardless of catalog size (avoids Samsung/Google cut-off at 500).
   useEffect(() => {
-    fetch('/api/devices?page_size=500&sort_by=make&sort_order=asc').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    let cancelled = false
+    async function loadAll() {
+      const all: Device[] = []
+      let page = 1
+      for (;;) {
+        const res = await fetch(`/api/devices?page_size=500&sort_by=make&sort_order=asc&page=${page}`)
+        if (!res.ok || cancelled) break
+        const d = await res.json()
+        const rows: Device[] = d.data || []
+        all.push(...rows)
+        if (rows.length < 500) break
+        page++
+      }
+      if (!cancelled) setDevices(all)
+    }
+    loadAll().catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -196,6 +217,24 @@ export default function NewTradeInPage() {
       }))
     }
   }, [isInternal, beatMode, beatOverride])
+
+  // Server-side device search — fires when user types in the device search box.
+  // Results are stored per line-item index in deviceSearchResults.
+  const searchDevices = useCallback((index: number, query: string) => {
+    clearTimeout(deviceSearchTimers.current[index])
+    if (!query) {
+      setDeviceSearchResults(prev => { const n = { ...prev }; delete n[index]; return n })
+      return
+    }
+    deviceSearchTimers.current[index] = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/devices?search=${encodeURIComponent(query)}&page_size=60&sort_by=make&sort_order=asc`)
+        if (!res.ok) return
+        const d = await res.json()
+        setDeviceSearchResults(prev => ({ ...prev, [index]: d.data || [] }))
+      } catch { /* silently ignore */ }
+    }, 200)
+  }, [])
 
   // Manual entry helpers
   const addItem = () => {
@@ -478,6 +517,7 @@ export default function NewTradeInPage() {
                                 value={deviceSearches[index] !== undefined ? deviceSearches[index] : item.device_label}
                                 onChange={e => {
                                   setDeviceSearches(prev => ({ ...prev, [index]: e.target.value }))
+                                  searchDevices(index, e.target.value)
                                   const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
                                   if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
                                   setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
@@ -503,7 +543,13 @@ export default function NewTradeInPage() {
                                 >
                                   {(() => {
                                     const q = (deviceSearches[index] || '').toLowerCase()
-                                    const filtered = devices.filter(d => !q || `${d.make} ${d.model}`.toLowerCase().includes(q)).slice(0, 60)
+                                    // Prefer server-side search results when available (accurate for any catalog size);
+                                    // fall back to local filtering of the pre-loaded device list.
+                                    const serverResults = deviceSearchResults[index]
+                                    const filtered = (serverResults !== undefined
+                                      ? serverResults
+                                      : devices.filter(d => !q || `${d.make} ${d.model}`.toLowerCase().includes(q))
+                                    ).slice(0, 60)
                                     if (filtered.length === 0) return <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
                                     return filtered.map(d => (
                                       <button
