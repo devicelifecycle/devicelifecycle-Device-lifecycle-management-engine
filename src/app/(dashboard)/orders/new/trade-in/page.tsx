@@ -544,14 +544,13 @@ export default function NewTradeInPage() {
                                   {(() => {
                                     const q = (deviceSearches[index] || '').toLowerCase()
                                     const serverResults = deviceSearchResults[index]
-                                    // No search typed yet — prompt the user instead of showing 60 Apple devices
-                                    if (!q && serverResults === undefined) {
-                                      return <p className="px-3 py-2 text-sm text-muted-foreground">Type to search (e.g. "S26", "iPhone 16", "Pixel 10")</p>
-                                    }
+                                    // Show server search results if typing, else show full catalog (sorted, capped at 50)
                                     const filtered = (serverResults !== undefined
                                       ? serverResults
-                                      : devices.filter(d => `${d.make} ${d.model}`.toLowerCase().includes(q))
-                                    ).slice(0, 60)
+                                      : q
+                                        ? devices.filter(d => `${d.make} ${d.model}`.toLowerCase().includes(q))
+                                        : devices
+                                    ).slice(0, 50)
                                     if (filtered.length === 0) return <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
                                     return filtered.map(d => (
                                       <button

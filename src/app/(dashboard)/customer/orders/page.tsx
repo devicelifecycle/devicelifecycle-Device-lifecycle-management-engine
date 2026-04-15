@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Search, ShoppingCart } from 'lucide-react'
+import { Search, ShoppingCart, CheckCircle, XCircle } from 'lucide-react'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Input } from '@/components/ui/input'
@@ -18,15 +18,30 @@ import type { OrderStatus } from '@/types'
 export default function CustomerOrdersPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [transitioning, setTransitioning] = useState<Record<string, boolean>>({})
   const debouncedSearch = useDebounce(search)
 
-  const { orders, total, totalPages, isLoading } = useOrders({
+  const { orders, total, totalPages, isLoading, refetch } = useOrders({
     search: debouncedSearch,
     page,
     page_size: 20,
     sort_by: 'updated_at',
     sort_order: 'desc',
   })
+
+  async function handleQuoteAction(orderId: string, action: 'accepted' | 'rejected') {
+    setTransitioning(prev => ({ ...prev, [orderId]: true }))
+    try {
+      await fetch(`/api/orders/${orderId}/transition`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: action }),
+      })
+      refetch?.()
+    } finally {
+      setTransitioning(prev => ({ ...prev, [orderId]: false }))
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -79,13 +94,16 @@ export default function CustomerOrdersPage() {
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Updated</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orders.map((order) => {
                   const status = CUSTOMER_STATUS_CONFIG[order.status as OrderStatus] ?? ORDER_STATUS_CONFIG[order.status as OrderStatus]
+                  const isQuoted = order.status === 'quoted'
+                  const isBusy = transitioning[order.id]
                   return (
-                    <TableRow key={order.id}>
+                    <TableRow key={order.id} className={isQuoted ? 'bg-purple-50/40 dark:bg-purple-950/20' : ''}>
                       <TableCell className="whitespace-nowrap">
                         <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
                           {order.order_number}
@@ -106,6 +124,32 @@ export default function CustomerOrdersPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {formatRelativeTime(order.updated_at || order.created_at)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {isQuoted && (
+                          <div className="flex items-center gap-2 justify-end">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700"
+                              disabled={isBusy}
+                              onClick={() => handleQuoteAction(order.id, 'accepted')}
+                            >
+                              <CheckCircle className="mr-1 h-3 w-3" />
+                              Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50"
+                              disabled={isBusy}
+                              onClick={() => handleQuoteAction(order.id, 'rejected')}
+                            >
+                              <XCircle className="mr-1 h-3 w-3" />
+                              Decline
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   )
