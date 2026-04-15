@@ -6,6 +6,7 @@ const checkCompetitorPriceStalenessMock = vi.fn()
 vi.mock('@/services/pricing-health.service', () => ({
   PricingHealthService: {
     checkCompetitorPriceStaleness: checkCompetitorPriceStalenessMock,
+    cleanupStaleRows: vi.fn().mockResolvedValue({ deleted: 0, cutoff_days: 14 }),
   },
 }))
 
