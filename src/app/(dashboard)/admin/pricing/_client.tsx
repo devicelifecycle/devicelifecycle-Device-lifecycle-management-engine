@@ -602,6 +602,22 @@ export default function AdminPricingClient() {
     timestamp: string
   } | null>(null)
 
+  type ScraperHealthProvider = {
+    id: string; name: string; status: string; count: number
+    duration_ms: number; checked_at: string | null; error: string | null
+  }
+  const [scraperHealth, setScraperHealth] = useState<{
+    checked_at: string | null; partial_failure: boolean
+    providers: ScraperHealthProvider[]
+  } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/health/scrapers')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.providers) setScraperHealth(d) })
+      .catch(() => {})
+  }, [])
+
   const handleRunScraper = async () => {
     setCpScraping(true)
     setLastScrapeResult(null)
@@ -1638,7 +1654,34 @@ export default function AdminPricingClient() {
             </div>
           </div>
 
-          {/* Last Scrape Results */}
+          {/* Cron scraper health (persisted from last scheduled run) */}
+          {scraperHealth && (
+            <Card className={scraperHealth.partial_failure ? 'border-amber-500/30 bg-amber-500/5' : 'border-border/40'}>
+              <CardContent className="py-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="text-xs text-muted-foreground shrink-0">
+                    <span className="font-medium text-foreground">Last cron run: </span>
+                    {scraperHealth.checked_at ? formatDateTime(scraperHealth.checked_at) : 'Never'}
+                    {scraperHealth.partial_failure && <span className="ml-1 text-amber-600 font-medium">(partial failure)</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {scraperHealth.providers.map(p => (
+                      <Badge
+                        key={p.id}
+                        variant={p.status === 'success' ? 'secondary' : p.status === 'unknown' ? 'outline' : 'destructive'}
+                        className="text-[10px]"
+                        title={p.error || `${p.count} rows in ${p.duration_ms}ms`}
+                      >
+                        {p.name}{p.status === 'success' ? `: ${p.count}` : p.status === 'unknown' ? '' : ' ✕'}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Last Scrape Results (manual run) */}
           {lastScrapeResult && (
             <Card className="border-green-500/30 bg-green-500/5">
               <CardContent className="py-4">
