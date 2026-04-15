@@ -99,6 +99,9 @@ export class SLAService {
     // Handle breach
     if (isBreach && !order.is_sla_breached) {
       await this.handleBreach(order, slaRule)
+    } else if (isBreach && order.is_sla_breached) {
+      // Order is ALREADY breached but still active — re-escalate once per 24 h
+      await this.handleEscalation(order, slaRule)
     }
 
     // Handle warning
@@ -163,6 +166,80 @@ export class SLAService {
         order.order_number,
         'breach'
       )
+    }
+  }
+
+  /**
+   * Re-escalate an order that is already breached and still active.
+   * Fires at most once per 24 hours to avoid notification spam.
+   */
+  private static async handleEscalation(order: Order, slaRule: SLARule): Promise<void> {
+    const supabase = createServiceRoleClient()
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+    // Check if we already sent an escalation in the last 24 h
+    const { data: recent } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('metadata->>order_id', order.id)
+      .eq('metadata->>type', 'sla_escalation')
+      .gte('created_at', since)
+      .limit(1)
+      .maybeSingle()
+
+    if (recent?.id) return // Already escalated within 24 h
+
+    const hoursBreached = Math.round(
+      (Date.now() - new Date(order.updated_at || order.created_at).getTime()) / (1000 * 60 * 60)
+    )
+    const message = `Order #${order.order_number} has been in SLA breach for ${hoursBreached}h and is still unresolved.`
+    const metadata = {
+      order_id: order.id,
+      order_number: order.order_number,
+      type: 'sla_escalation',
+    }
+
+    // Notify escalation contacts
+    for (const userId of (slaRule.escalation_user_ids || [])) {
+      await NotificationService.createNotification({
+        user_id: userId,
+        type: 'in_app',
+        title: 'SLA Breach — Escalation Reminder',
+        message,
+        link: `/orders/${order.id}`,
+        metadata,
+      })
+    }
+
+    // If no escalation contacts defined, fall back to all admins + coe_managers
+    if (!slaRule.escalation_user_ids?.length) {
+      const { data: managers } = await supabase
+        .from('users')
+        .select('id')
+        .in('role', ['admin', 'coe_manager'])
+        .eq('is_active', true)
+      for (const u of (managers || []) as Array<{ id: string }>) {
+        await NotificationService.createNotification({
+          user_id: u.id,
+          type: 'in_app',
+          title: 'SLA Breach — Escalation Reminder',
+          message,
+          link: `/orders/${order.id}`,
+          metadata,
+        })
+      }
+    }
+
+    // Also ping the assigned user
+    if (order.assigned_to_id) {
+      await NotificationService.createNotification({
+        user_id: order.assigned_to_id,
+        type: 'in_app',
+        title: 'SLA Breach — Your Order Is Overdue',
+        message,
+        link: `/orders/${order.id}`,
+        metadata,
+      })
     }
   }
 
