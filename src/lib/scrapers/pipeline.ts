@@ -15,6 +15,11 @@ import { scrapeTelus, scrapeTelusFullCatalog } from './adapters/telus'
 import { scrapeBell, scrapeBellFullCatalog } from './adapters/bell'
 import { scrapeApple } from './adapters/apple'
 import { scrapeUniversal, scrapeUniversalFullCatalog } from './adapters/universal'
+import { runGoRecellScraperPilot } from './adapters/gorecell-scrapling'
+import { runBellScraperPilot } from './adapters/bell-scrapling'
+import { runTelusScraperPilot } from './adapters/telus-scrapling'
+import { runAppleScraperPilot } from './adapters/apple-scrapling'
+import { runUniverCellScraperPilot } from './adapters/universal-scrapling'
 
 const SCRAPERS = [
   { id: 'gorecell', fn: scrapeGoRecell },
@@ -24,12 +29,6 @@ const SCRAPERS = [
   { id: 'apple', fn: scrapeApple },
 ] as const
 
-const DISCOVERY_SCRAPERS = [
-  { id: 'gorecell', fn: scrapeGoRecellFullCatalog },
-  { id: 'bell', fn: scrapeBellFullCatalog },
-  { id: 'telus', fn: scrapeTelusFullCatalog },
-  { id: 'universal', fn: scrapeUniversalFullCatalog },
-] as const
 
 export type ScraperProviderId = typeof SCRAPERS[number]['id']
 
@@ -605,14 +604,21 @@ export async function runScraperPipeline(
     const expandedDevices = expandDevicesByCondition(devicesToScrape)
 
     const scraperPromises = [
-      ...DISCOVERY_SCRAPERS
-        .filter(({ id }) => !selectedProviders || selectedProviders.has(id))
-        .map(({ id, fn }) =>
-        runScraperSafe(id, () => (fn as () => Promise<ScraperResult>)())
-        ),
-      // Apple doesn't have a discovery mode — run with expanded devices
+      ...(!selectedProviders || selectedProviders.has('gorecell')
+        ? [runScraperSafe('gorecell', () => runGoRecellScraperPilot({ devices: [], discovery: true, runTypeScript: scrapeGoRecellFullCatalog }))]
+        : []),
+      ...(!selectedProviders || selectedProviders.has('bell')
+        ? [runScraperSafe('bell', () => runBellScraperPilot({ devices: [], discovery: true, runTypeScript: scrapeBellFullCatalog }))]
+        : []),
+      ...(!selectedProviders || selectedProviders.has('telus')
+        ? [runScraperSafe('telus', () => runTelusScraperPilot({ devices: [], discovery: true, runTypeScript: scrapeTelusFullCatalog }))]
+        : []),
+      ...(!selectedProviders || selectedProviders.has('universal')
+        ? [runScraperSafe('universal', () => runUniverCellScraperPilot({ devices: [], discovery: true, runTypeScript: scrapeUniversalFullCatalog }))]
+        : []),
+      // Apple has no discovery mode — run with expanded devices
       ...(!selectedProviders || selectedProviders.has('apple')
-        ? [runScraperSafe('apple', () => scrapeApple(expandedDevices))]
+        ? [runScraperSafe('apple', () => runAppleScraperPilot({ devices: expandedDevices, runTypeScript: () => scrapeApple(expandedDevices) }))]
         : []),
     ]
 
@@ -635,9 +641,23 @@ export async function runScraperPipeline(
     }
     const expandedDevices = expandDevicesByCondition(devicesToScrape!)
 
-    const scraperPromises = SCRAPERS
-      .filter(({ id }) => !selectedProviders || selectedProviders.has(id))
-      .map(({ id, fn }) => runScraperSafe(id, () => fn(expandedDevices)))
+    const scraperPromises = [
+      ...(!selectedProviders || selectedProviders.has('gorecell')
+        ? [runScraperSafe('gorecell', () => runGoRecellScraperPilot({ devices: expandedDevices, runTypeScript: () => scrapeGoRecell(expandedDevices) }))]
+        : []),
+      ...(!selectedProviders || selectedProviders.has('telus')
+        ? [runScraperSafe('telus', () => runTelusScraperPilot({ devices: expandedDevices, runTypeScript: () => scrapeTelus(expandedDevices) }))]
+        : []),
+      ...(!selectedProviders || selectedProviders.has('bell')
+        ? [runScraperSafe('bell', () => runBellScraperPilot({ devices: expandedDevices, runTypeScript: () => scrapeBell(expandedDevices) }))]
+        : []),
+      ...(!selectedProviders || selectedProviders.has('universal')
+        ? [runScraperSafe('universal', () => runUniverCellScraperPilot({ devices: expandedDevices, runTypeScript: () => scrapeUniversal(expandedDevices) }))]
+        : []),
+      ...(!selectedProviders || selectedProviders.has('apple')
+        ? [runScraperSafe('apple', () => runAppleScraperPilot({ devices: expandedDevices, runTypeScript: () => scrapeApple(expandedDevices) }))]
+        : []),
+    ]
 
     const settled = await Promise.allSettled(scraperPromises)
     for (const outcome of settled) {
