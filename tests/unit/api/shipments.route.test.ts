@@ -147,7 +147,6 @@ describe('POST /api/shipments', () => {
         order_id: 'order-1',
         direction: 'outbound',
         carrier: 'FedEx',
-        stallion_purchase: false,
         from_address: { name: 'A', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
         to_address: { name: 'B', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
       }),
@@ -157,7 +156,7 @@ describe('POST /api/shipments', () => {
     const response = await POST(request)
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'tracking_number is required when stallion_purchase is false',
+      error: 'tracking_number is required',
     })
     expect(createShipmentMock).not.toHaveBeenCalled()
   })
@@ -220,17 +219,8 @@ describe('POST /api/shipments', () => {
     )
   })
 
-  it('rolls back local shipment when label purchase fails', async () => {
+  it('ignores stallion_purchase flag and creates shipment with provided tracking number', async () => {
     createServerSupabaseClientMock.mockReturnValue(makeSupabase({ user: { id: 'user-1' } }))
-
-    const serviceRoleEqMock = vi.fn().mockResolvedValue({ error: null })
-    const serviceRoleDeleteMock = vi.fn().mockReturnValue({ eq: serviceRoleEqMock })
-    createServiceRoleClientMock.mockReturnValue({
-      from: vi.fn().mockReturnValue({ delete: serviceRoleDeleteMock }),
-    })
-
-    createShipmentMock.mockResolvedValue({ id: 'shipment-rollback' })
-    purchaseLabelMock.mockRejectedValue(new Error('Provider outage'))
 
     const { POST } = await import('@/app/api/shipments/route')
     const request = new NextRequest('http://localhost:3000/api/shipments', {
@@ -240,6 +230,7 @@ describe('POST /api/shipments', () => {
         direction: 'outbound',
         carrier: 'FedEx',
         stallion_purchase: true,
+        tracking_number: 'TRACK-MANUAL-1',
         from_address: { name: 'A', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
         to_address: { name: 'B', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
       }),
@@ -247,17 +238,13 @@ describe('POST /api/shipments', () => {
     })
 
     const response = await POST(request)
-    // Route returns 400 with descriptive message (not 500) when Stallion purchase fails
-    expect(response.status).toBe(400)
-    const json = await response.json()
-    expect(json.error).toContain('Label purchase failed')
-    expect(json.error).toContain('Provider outage')
-
-    expect(createServiceRoleClientMock).toHaveBeenCalled()
+    expect(response.status).toBe(201)
+    expect(createShipmentMock).toHaveBeenCalledTimes(1)
+    expect(purchaseLabelMock).not.toHaveBeenCalled()
     expect(attachLabelPurchaseMock).not.toHaveBeenCalled()
   })
 
-  it('creates and attaches a purchased label successfully', async () => {
+  it('creates shipment with tracking number and does not call label purchase', async () => {
     createServerSupabaseClientMock.mockReturnValue(makeSupabase({ user: { id: 'user-1' } }))
 
     const { POST } = await import('@/app/api/shipments/route')
@@ -267,9 +254,7 @@ describe('POST /api/shipments', () => {
         order_id: 'order-1',
         direction: 'outbound',
         carrier: 'FedEx',
-        stallion_purchase: true,
-        weight: 3,
-        dimensions: { length: 10, width: 5, height: 4 },
+        tracking_number: 'TRACK-456',
         from_address: { name: 'A', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
         to_address: { name: 'B', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
       }),
@@ -280,8 +265,8 @@ describe('POST /api/shipments', () => {
 
     expect(response.status).toBe(201)
     expect(createShipmentMock).toHaveBeenCalledTimes(1)
-    expect(purchaseLabelMock).toHaveBeenCalledTimes(1)
-    expect(attachLabelPurchaseMock).toHaveBeenCalledTimes(1)
+    expect(purchaseLabelMock).not.toHaveBeenCalled()
+    expect(attachLabelPurchaseMock).not.toHaveBeenCalled()
   })
 
   it('auto-transitions accepted trade-in orders when a customer submits an inbound shipment', async () => {
@@ -365,7 +350,7 @@ describe('POST /api/shipments', () => {
     expect(transitionOrderMock).not.toHaveBeenCalled()
   })
 
-  it('blocks vendors from creating outbound shipments or buying labels', async () => {
+  it('blocks vendors from creating outbound shipments', async () => {
     createServerSupabaseClientMock.mockReturnValue(
       makeSupabase({
         user: { id: 'vendor-user-1' },
@@ -396,27 +381,6 @@ describe('POST /api/shipments', () => {
     expect(outboundResponse.status).toBe(400)
     await expect(outboundResponse.json()).resolves.toEqual({
       error: 'Vendor shipments must be inbound to COE',
-    })
-
-    const stallionResponse = await POST(
-      new NextRequest('http://localhost:3000/api/shipments', {
-        method: 'POST',
-        body: JSON.stringify({
-          order_id: 'order-5',
-          carrier: 'FedEx',
-          tracking_number: 'TRACK-VENDOR-3',
-          direction: 'inbound',
-          stallion_purchase: true,
-          from_address: { name: 'Vendor', street1: '1', city: 'A', state: 'TX', postal_code: '73301', country: 'US' },
-          to_address: { name: 'COE', street1: '2', city: 'B', state: 'TX', postal_code: '75001', country: 'US' },
-        }),
-        headers: { 'content-type': 'application/json' },
-      }),
-    )
-
-    expect(stallionResponse.status).toBe(400)
-    await expect(stallionResponse.json()).resolves.toEqual({
-      error: 'Vendors must upload carrier tracking manually',
     })
     expect(createShipmentMock).not.toHaveBeenCalled()
   })
