@@ -4,9 +4,9 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
-import { AlertTriangle, CheckCircle2, XCircle, Search } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, XCircle, Search, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,65 @@ import { CONDITION_CONFIG } from '@/lib/constants'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import type { TriageResult } from '@/types'
 
+// ── Rule-based exception resolution suggestion ───────────────────────────────
+type Recommendation = 'approve' | 'review' | 'reject'
+
+const CONDITION_SCORE: Record<string, number> = {
+  excellent: 4, good: 3, fair: 2, poor: 1, broken: 0,
+}
+
+function suggestResolution(exc: TriageResult): { recommendation: Recommendation; reasoning: string } {
+  const imei = exc.imei_record as unknown as Record<string, string> | undefined
+  const claimed = (imei?.claimed_condition ?? '').toLowerCase()
+  const actual = (exc.final_condition ?? '').toLowerCase()
+  const claimedScore = CONDITION_SCORE[claimed] ?? 3
+  const actualScore = CONDITION_SCORE[actual] ?? 3
+  const downgrade = claimedScore - actualScore
+  const priceImpact = Math.abs(exc.price_adjustment ?? 0)
+  const severity = exc.mismatch_severity ?? ''
+  const reason = (exc.exception_reason ?? '').toLowerCase()
+
+  const hasDamageKeyword = /crack|shatter|broken|dent|bend|flood|water|missing/i.test(reason)
+  const hasCosmeticKeyword = /scratch|scuff|minor|light wear|cosmetic/i.test(reason)
+
+  if (exc.exception_type === 'missing_device') {
+    return { recommendation: 'reject', reasoning: 'Device reported missing — rejection required until device is located.' }
+  }
+
+  if (downgrade >= 2 || severity === 'major') {
+    return {
+      recommendation: hasDamageKeyword ? 'reject' : 'review',
+      reasoning: `${downgrade}-level downgrade (${claimed || '?'} → ${actual || '?'})${priceImpact > 0 ? `, $${priceImpact.toFixed(0)} price impact` : ''}. ${hasDamageKeyword ? 'Physical damage noted — recommend rejection.' : 'Significant downgrade — escalate for manager review.'}`,
+    }
+  }
+
+  if (downgrade === 1 || severity === 'moderate') {
+    if (priceImpact > 75 || hasDamageKeyword) {
+      return {
+        recommendation: 'review',
+        reasoning: `One-level downgrade (${claimed || '?'} → ${actual || '?'}) with ${priceImpact > 75 ? `$${priceImpact.toFixed(0)} price impact` : 'damage noted'}. Recommend manager review before approving.`,
+      }
+    }
+    return {
+      recommendation: 'approve',
+      reasoning: `Minor one-level downgrade (${claimed || '?'} → ${actual || '?'}) with low price impact. ${hasCosmeticKeyword ? 'Cosmetic wear is within normal range.' : 'Common for lightly used devices.'}`,
+    }
+  }
+
+  return {
+    recommendation: 'approve',
+    reasoning: downgrade < 0
+      ? `Device is in better condition than claimed (${claimed || '?'} → ${actual || '?'}). Safe to approve.`
+      : `No condition change detected${hasCosmeticKeyword ? ' — cosmetic note only' : ''}. Approve with standard notes.`,
+  }
+}
+
+const SUGGESTION_STYLES: Record<Recommendation, { badge: string; label: string }> = {
+  approve: { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', label: 'Approve' },
+  review:  { badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',   label: 'Review'  },
+  reject:  { badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',           label: 'Reject'  },
+}
+
 export default function COEExceptionsPage() {
   const [exceptions, setExceptions] = useState<TriageResult[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -35,6 +94,12 @@ export default function COEExceptionsPage() {
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
   const [decisionNotes, setDecisionNotes] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Pre-compute suggestions for all displayed exceptions
+  const suggestions = useMemo(
+    () => new Map(exceptions.map(e => [e.id, suggestResolution(e)])),
+    [exceptions]
+  )
 
   const fetchExceptions = useCallback(async () => {
     setIsLoading(true)
@@ -124,6 +189,11 @@ export default function COEExceptionsPage() {
                   <TableHead>Actual</TableHead>
                   <TableHead>Price Adj.</TableHead>
                   <TableHead>Reason</TableHead>
+                  <TableHead>
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 text-amber-500" />Suggestion
+                    </span>
+                  </TableHead>
                   <TableHead>Triaged By</TableHead>
                   <TableHead>Triaged</TableHead>
                   <TableHead className="text-right">Decision</TableHead>
@@ -132,6 +202,13 @@ export default function COEExceptionsPage() {
               <TableBody>
                 {filtered.map(exc => {
                   const imei = exc.imei_record as unknown as Record<string, string> | undefined
+                  const suggestion = suggestions.get(exc.id)
+                  const suggStyle = suggestion ? SUGGESTION_STYLES[suggestion.recommendation] : null
+                  const openDialog = (act: 'approve' | 'reject') => {
+                    setSelected(exc)
+                    setAction(act)
+                    setDecisionNotes(suggestion?.reasoning ?? '')
+                  }
                   return (
                     <TableRow key={exc.id}>
                       <TableCell className="font-mono text-sm">{imei?.imei || '—'}</TableCell>
@@ -159,6 +236,16 @@ export default function COEExceptionsPage() {
                       <TableCell className="max-w-[200px]">
                         <p className="text-sm text-muted-foreground truncate">{exc.exception_reason || '—'}</p>
                       </TableCell>
+                      <TableCell>
+                        {suggStyle && suggestion && (
+                          <span
+                            title={suggestion.reasoning}
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${suggStyle.badge}`}
+                          >
+                            <Sparkles className="h-2.5 w-2.5" />{suggStyle.label}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {(exc.triaged_by as { full_name?: string })?.full_name ?? '—'}
                       </TableCell>
@@ -170,14 +257,14 @@ export default function COEExceptionsPage() {
                           <Button
                             size="sm"
                             variant="success"
-                            onClick={() => { setSelected(exc); setAction('approve'); }}
+                            onClick={() => openDialog('approve')}
                           >
                             <CheckCircle2 className="mr-1 h-3.5 w-3.5" />Approve
                           </Button>
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => { setSelected(exc); setAction('reject'); }}
+                            onClick={() => openDialog('reject')}
                           >
                             <XCircle className="mr-1 h-3.5 w-3.5" />Reject
                           </Button>
@@ -207,7 +294,10 @@ export default function COEExceptionsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">
-            <Label className="text-sm">Decision Notes (optional)</Label>
+            <Label className="text-sm flex items-center gap-1">
+              Decision Notes
+              {decisionNotes && <span className="text-[10px] font-normal text-amber-500 flex items-center gap-0.5"><Sparkles className="h-2.5 w-2.5" />AI pre-filled</span>}
+            </Label>
             <Textarea
               placeholder="Reason for your decision..."
               value={decisionNotes}
