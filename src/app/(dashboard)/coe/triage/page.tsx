@@ -511,13 +511,14 @@ export default function COETriagePage() {
     return () => window.removeEventListener('dlm:db-change', handleDbChange)
   }, [fetchPending])
 
-  // Device search for add dialog
+  // Device search for add dialog — fetch catalog on empty query so dropdown shows on focus
   useEffect(() => {
-    if (!debouncedDeviceSearch.trim()) { setDeviceResults([]); return }
     const run = async () => {
       setIsSearchingDevices(true)
       try {
-        const res = await fetch(`/api/devices?search=${encodeURIComponent(debouncedDeviceSearch)}&limit=10`)
+        const q = debouncedDeviceSearch.trim()
+        const url = q ? `/api/devices?search=${encodeURIComponent(q)}&limit=20` : `/api/devices?page_size=20&sort_by=make&sort_order=asc`
+        const res = await fetch(url)
         if (res.ok) { const data = await res.json(); setDeviceResults(data.data || []) }
       } catch {} finally { setIsSearchingDevices(false) }
     }
