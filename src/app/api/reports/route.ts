@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
     const { count: openExceptions } = await supabase
       .from('order_exceptions')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'open')
+      .in('approval_status', ['pending', 'coe_approved'])
 
     return NextResponse.json({
       period_days: days,
