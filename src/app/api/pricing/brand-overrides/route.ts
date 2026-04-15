@@ -19,7 +19,7 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerSupa
   return { userId: user.id }
 }
 
-export async function GET(_request?: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()

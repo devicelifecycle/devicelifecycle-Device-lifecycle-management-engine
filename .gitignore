@@ -25,6 +25,9 @@ __pycache__/
 *.tsbuildinfo
 next-env.d.ts
 
+# Python scrapling venv — must stay out of the project root for Turbopack
+.venv-scrapling/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
