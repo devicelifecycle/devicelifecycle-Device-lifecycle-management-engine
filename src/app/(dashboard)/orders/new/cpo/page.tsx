@@ -465,14 +465,9 @@ export default function NewCPOOrderPage() {
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             {price?.loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                             {price?.engine_cpo_price > 0 && !price.loading && (
-                              <>
-                                <span className="font-medium text-foreground">CPO Price: {formatCurrency(price.engine_cpo_price)} <span className="font-normal text-muted-foreground">/ unit ({price.source})</span></span>
-                                {price.source === 'Pricing Table' && price.cpo_competitors.length === 0 && (
-                                  <span className="text-amber-600 dark:text-amber-400" title="No competitor prices found — using internal formula">⚠ internal estimate</span>
-                                )}
-                              </>
+                              <span className="font-medium text-foreground">CPO Price: {formatCurrency(price.engine_cpo_price)} <span className="font-normal text-muted-foreground">/ unit ({price.source})</span></span>
                             )}
-                            {price?.error && <span className="text-muted-foreground">No price data — enter manually</span>}
+                            {price?.error && <span className="text-muted-foreground">No price data</span>}
                           </div>
                         )}
                       </div>

@@ -618,16 +618,10 @@ export default function NewTradeInPage() {
                                         disabled
                                       />
                                     </div>
-                                    {price.source === 'Pricing Table' && price.competitors.length === 0 ? (
-                                      <span className="text-[10px] text-amber-600 dark:text-amber-400" title="No competitor prices found for this device — using internal pricing formula">
-                                        ⚠ No competitor data — internal estimate
-                                      </span>
-                                    ) : (
-                                      <span className="text-[10px] text-muted-foreground">{price.source}</span>
-                                    )}
+                                    <span className="text-[10px] text-muted-foreground">{price.source}</span>
                                   </div>
                                 ) : price?.error ? (
-                                  <span className="text-xs text-muted-foreground h-10 flex items-center">No price data — enter manually</span>
+                                  <span className="text-xs text-muted-foreground h-10 flex items-center">No price data</span>
                                 ) : (
                                   <span className="text-xs text-muted-foreground h-10 flex items-center">Unit price</span>
                                 )}
