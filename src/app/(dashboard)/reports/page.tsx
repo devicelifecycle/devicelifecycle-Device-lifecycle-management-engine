@@ -5,319 +5,384 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useOnDbChange } from '@/hooks/useOnDbChange'
-import Link from 'next/link'
-import { BarChart3, ShoppingCart, DollarSign, Truck, AlertTriangle, TrendingUp, Clock, CheckCircle2 } from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from 'recharts'
+import {
+  ShoppingCart, DollarSign, TrendingUp, TrendingDown,
+  Package, AlertTriangle, CheckCircle2, Clock, BarChart3,
+  RefreshCw, Loader2,
+} from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
 
-interface OrderStats {
-  total: number
-  byStatus: Record<string, number>
-  byType: { trade_in: number; cpo: number }
-  totalRevenue: number
-  avgOrderValue: number
+interface DailyPoint { date: string; count: number; revenue: number }
+interface TopDevice { make: string; model: string; count: number; total: number }
+
+interface ReportData {
+  period_days: number
+  orders: {
+    total: number; active: number; by_status: Record<string, number>
+    by_type: { trade_in: number; cpo: number }
+    total_value: number; avg_value: number
+    completion_rate: number; cancellation_rate: number
+    this_period: number; prev_period: number; period_growth: number | null
+  }
+  revenue: {
+    total: number; this_period: number; prev_period: number
+    period_growth: number | null; daily: DailyPoint[]
+  }
+  top_devices: TopDevice[]
+  pricing: { total_competitor_prices: number; devices_with_prices: number }
+  operations: { sla_breaches_in_period: number; open_exceptions: number }
 }
 
-interface ShippingStats {
-  total_shipments: number
-  inbound: number
-  outbound: number
-  delivered: number
-  in_transit: number
-  exceptions: number
-  average_delivery_days: number
+function GrowthBadge({ pct }: { pct: number | null }) {
+  if (pct === null) return null
+  const up = pct >= 0
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium ${up ? 'text-green-600' : 'text-red-500'}`}>
+      {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+      {up ? '+' : ''}{pct}%
+    </span>
+  )
 }
+
+const PERIOD_OPTIONS = [
+  { label: 'Last 7 days', value: '7' },
+  { label: 'Last 30 days', value: '30' },
+  { label: 'Last 90 days', value: '90' },
+]
 
 export default function ReportsPage() {
-  const [orderStats, setOrderStats] = useState<OrderStats | null>(null)
-  const [shippingStats, setShippingStats] = useState<ShippingStats | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [data, setData] = useState<ReportData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState('30')
 
-  const fetchStats = useCallback(async () => {
-    setIsLoading(true)
+  const load = useCallback(async (days: string) => {
+    setLoading(true)
     try {
-      const [ordersRes, shippingRes] = await Promise.all([
-        fetch('/api/orders?page_size=200'),
-        fetch('/api/shipments/stats'),
-      ])
-
-      if (ordersRes.ok) {
-        const data = await ordersRes.json()
-        const orders = data.data || []
-        const byStatus: Record<string, number> = {}
-        let tradeIn = 0, cpo = 0, revenue = 0
-
-        orders.forEach((o: { status: string; type: string; total_amount?: number }) => {
-          byStatus[o.status] = (byStatus[o.status] || 0) + 1
-          if (o.type === 'trade_in') tradeIn++
-          else cpo++
-          revenue += o.total_amount || 0
-        })
-
-        setOrderStats({
-          total: data.total || orders.length,
-          byStatus,
-          byType: { trade_in: tradeIn, cpo },
-          totalRevenue: revenue,
-          avgOrderValue: orders.length > 0 ? revenue / orders.length : 0,
-        })
-      }
-
-      if (shippingRes.ok) {
-        const data = await shippingRes.json()
-        setShippingStats(data)
-      }
-    } catch {} finally { setIsLoading(false) }
+      const res = await fetch(`/api/reports?days=${days}`)
+      if (res.ok) setData(await res.json())
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  useEffect(() => { fetchStats() }, [fetchStats])
-  useOnDbChange(fetchStats)
+  useEffect(() => { load(period) }, [load, period])
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div><h1 className="text-2xl font-bold">Reports</h1><p className="text-muted-foreground">Analytics and performance metrics</p></div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-xl skeleton-3d" />)}
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-64 rounded-xl skeleton-3d" />)}
-        </div>
-      </div>
-    )
+  // Format date label for chart — show "Apr 10" style
+  const fmtDay = (d: string) => {
+    const dt = new Date(d + 'T00:00:00')
+    return dt.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
   }
 
-  const topStatCards = [
-    {
-      title: 'Total Orders',
-      value: orderStats?.total || 0,
-      icon: ShoppingCart,
-      iconBg: 'bg-blue-500/10',
-      iconColor: 'text-blue-600',
-    },
-    {
-      title: 'Total Revenue',
-      value: formatCurrency(orderStats?.totalRevenue || 0),
-      icon: DollarSign,
-      iconBg: 'bg-amber-500/10',
-      iconColor: 'text-amber-600 dark:text-amber-400',
-    },
-    {
-      title: 'Avg. Order Value',
-      value: formatCurrency(orderStats?.avgOrderValue || 0),
-      icon: TrendingUp,
-      iconBg: 'bg-purple-500/10',
-      iconColor: 'text-purple-600',
-    },
-    {
-      title: 'Total Shipments',
-      value: shippingStats?.total_shipments || 0,
-      icon: Truck,
-      iconBg: 'bg-amber-500/10',
-      iconColor: 'text-amber-600',
-    },
-  ]
+  // Show every Nth label so the axis doesn't crowd
+  const tickEvery = period === '7' ? 1 : period === '30' ? 5 : 14
+
+  const topStatusEntries = data
+    ? Object.entries(data.orders.by_status).sort(([, a], [, b]) => b - a)
+    : []
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Reports</h1>
-        <p className="text-muted-foreground">Analytics and performance metrics</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/orders">
-            <Button variant="outline" size="sm">Open Orders Workspace</Button>
-          </Link>
-          <Link href="/coe/receiving">
-            <Button variant="outline" size="sm">Open Receiving</Button>
-          </Link>
-          <Link href="/coe/shipping">
-            <Button variant="outline" size="sm">Open Shipping</Button>
-          </Link>
-          <Link href="/coe/exceptions">
-            <Button variant="outline" size="sm">Open Exceptions</Button>
-          </Link>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Reports</h1>
+          <p className="text-muted-foreground">Analytics and performance metrics</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={period} onValueChange={v => { setPeriod(v); }}>
+            <SelectTrigger className="w-36 h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIOD_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => load(period)} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
         </div>
       </div>
 
-      {/* Top Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {topStatCards.map(stat => (
-          <Card key={stat.title} className="relative overflow-hidden holographic card-3d">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                  <p className="text-2xl font-bold tracking-tight stat-3d">{stat.value}</p>
-                </div>
-                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.iconBg}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {loading && !data && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-xl skeleton-3d" />)}
+        </div>
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Orders by Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Orders by Status</CardTitle>
-            <CardDescription>Distribution across the workflow</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {orderStats?.byStatus && Object.entries(orderStats.byStatus)
-                .sort(([, a], [, b]) => b - a)
-                .map(([status, count]) => {
-                  const config = ORDER_STATUS_CONFIG[status as keyof typeof ORDER_STATUS_CONFIG]
-                  const pct = orderStats.total > 0 ? (count / orderStats.total) * 100 : 0
-                  return (
-                    <Link key={status} href={`/orders?status=${status}`} className="flex items-center gap-3 rounded-md px-1 py-1 hover:bg-muted/40">
-                      <span className={`w-24 text-xs font-medium ${config?.color || ''}`}>
-                        {config?.label || status}
-                      </span>
-                      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${config?.bgColor || 'bg-gray-300'}`}
-                          style={{ width: `${Math.max(pct, 2)}%` }}
-                        />
+      {data && (
+        <>
+          {/* KPI row */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="holographic card-3d">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Orders</p>
+                    <p className="text-2xl font-bold mt-1">{data.orders.total.toLocaleString()}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs text-muted-foreground">This period: {data.orders.this_period}</span>
+                      <GrowthBadge pct={data.orders.period_growth} />
+                    </div>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10">
+                    <ShoppingCart className="h-5 w-5 text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="holographic card-3d">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Value</p>
+                    <p className="text-2xl font-bold mt-1">{formatCurrency(data.orders.total_value)}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs text-muted-foreground">Period: {formatCurrency(data.revenue.this_period)}</span>
+                      <GrowthBadge pct={data.revenue.period_growth} />
+                    </div>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10">
+                    <DollarSign className="h-5 w-5 text-emerald-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="holographic card-3d">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Avg. Order Value</p>
+                    <p className="text-2xl font-bold mt-1">{formatCurrency(data.orders.avg_value)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {data.orders.completion_rate}% completion rate
+                    </p>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-500/10">
+                    <TrendingUp className="h-5 w-5 text-purple-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="holographic card-3d">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Active Orders</p>
+                    <p className="text-2xl font-bold mt-1">{data.orders.active}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {data.operations.open_exceptions} open exceptions
+                    </p>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10">
+                    <Package className="h-5 w-5 text-amber-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Charts row */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Daily order volume */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                  Order Volume
+                </CardTitle>
+                <CardDescription>Orders created per day</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.revenue.daily} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(v, i) => i % tickEvery === 0 ? fmtDay(v) : ''}
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <Tooltip
+                      labelFormatter={v => fmtDay(String(v))}
+                      formatter={(v: number) => [v, 'Orders']}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--popover))' }}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Daily revenue */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  Revenue Trend
+                </CardTitle>
+                <CardDescription>Order value created per day</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.revenue.daily} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(v, i) => i % tickEvery === 0 ? fmtDay(v) : ''}
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={v => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <Tooltip
+                      labelFormatter={v => fmtDay(String(v))}
+                      formatter={(v: number) => [formatCurrency(v), 'Revenue']}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--popover))' }}
+                    />
+                    <Bar dataKey="revenue" fill="#10b981" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Bottom row */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            {/* Order status breakdown */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Orders by Status</CardTitle>
+                <CardDescription>Full pipeline distribution</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2.5">
+                  {topStatusEntries.slice(0, 10).map(([status, count]) => {
+                    const cfg = ORDER_STATUS_CONFIG[status as keyof typeof ORDER_STATUS_CONFIG]
+                    const pct = data.orders.total > 0 ? (count / data.orders.total) * 100 : 0
+                    return (
+                      <div key={status} className="flex items-center gap-2">
+                        <span className={`w-28 text-xs font-medium truncate ${cfg?.color || 'text-muted-foreground'}`}>
+                          {cfg?.label || status}
+                        </span>
+                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${cfg?.bgColor || 'bg-gray-300'}`}
+                            style={{ width: `${Math.max(pct, 2)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-medium w-6 text-right tabular-nums">{count}</span>
                       </div>
-                      <span className="text-sm font-medium w-8 text-right">{count}</span>
-                    </Link>
-                  )
-                })
-              }
-              {(!orderStats?.byStatus || Object.keys(orderStats.byStatus).length === 0) && (
-                <p className="text-sm text-muted-foreground text-center py-8">No order data available</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Orders by Type */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Orders by Type</CardTitle>
-            <CardDescription>Trade-In vs CPO breakdown</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-xl border p-6 text-center">
-                <p className="text-3xl font-bold text-blue-600">{orderStats?.byType.trade_in || 0}</p>
-                <p className="text-sm text-muted-foreground mt-1">Trade-In Orders</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Devices bought from customers</p>
-              </div>
-              <div className="rounded-xl border p-6 text-center">
-                <p className="text-3xl font-bold text-purple-600">{orderStats?.byType.cpo || 0}</p>
-                <p className="text-sm text-muted-foreground mt-1">CPO Orders</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Certified devices sold to customers</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            {/* Top devices */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Top Traded Devices</CardTitle>
+                <CardDescription>Most frequent in this period</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {data.top_devices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">No device data for this period</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {data.top_devices.slice(0, 8).map((d, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">{d.make} {d.model}</p>
+                          <p className="text-xs text-muted-foreground">{formatCurrency(d.total / d.count)} avg</p>
+                        </div>
+                        <Badge variant="secondary" className="text-xs shrink-0">{d.count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-        {/* Shipping Overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Shipping Overview</CardTitle>
-            <CardDescription>Shipment volume and performance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {shippingStats ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4 text-center">
+            {/* Ops health */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Operations Health</CardTitle>
+                <CardDescription>Key indicators</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2.5">
+                {/* Order type split */}
+                <div className="rounded-lg border p-3 flex items-center justify-between">
                   <div>
-                    <p className="text-2xl font-bold">{shippingStats.inbound}</p>
-                    <p className="text-xs text-muted-foreground">Inbound</p>
+                    <p className="text-xs font-medium">Order Type Split</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Trade-In vs CPO</p>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{shippingStats.outbound}</p>
-                    <p className="text-xs text-muted-foreground">Outbound</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{shippingStats.delivered}</p>
-                    <p className="text-xs text-muted-foreground">Delivered</p>
+                  <div className="text-right text-xs">
+                    <p><span className="font-medium text-blue-600">{data.orders.by_type.trade_in}</span> trade-in</p>
+                    <p><span className="font-medium text-purple-600">{data.orders.by_type.cpo}</span> CPO</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-amber-600" />
-                    <span className="text-sm">In Transit</span>
-                  </div>
-                  <Badge variant="secondary">{shippingStats.in_transit}</Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                    <span className="text-sm">Exceptions</span>
-                  </div>
-                  <Badge variant={shippingStats.exceptions > 0 ? 'destructive' : 'secondary'}>{shippingStats.exceptions}</Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border p-3">
+
+                <div className="rounded-lg border p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <span className="text-sm">Avg. Delivery Time</span>
+                    <span className="text-xs font-medium">Completion Rate</span>
                   </div>
-                  <span className="text-sm font-medium">{shippingStats.average_delivery_days} days</span>
+                  <span className="text-sm font-bold text-green-600">{data.orders.completion_rate}%</span>
                 </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">No shipping data available</p>
-            )}
-          </CardContent>
-        </Card>
 
-        {/* SLA Performance */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quick Insights</CardTitle>
-            <CardDescription>Key performance indicators</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <span className="text-sm">Active Orders</span>
-                <span className="text-sm font-bold">
-                  {orderStats?.byStatus
-                    ? Object.entries(orderStats.byStatus)
-                        .filter(([s]) => !['closed', 'cancelled', 'rejected', 'delivered'].includes(s))
-                        .reduce((sum, [, c]) => sum + c, 0)
-                    : 0}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <span className="text-sm">Completion Rate</span>
-                <span className="text-sm font-bold">
-                  {orderStats?.total
-                    ? `${Math.round(((orderStats.byStatus['closed'] || 0) + (orderStats.byStatus['delivered'] || 0)) / orderStats.total * 100)}%`
-                    : '0%'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <span className="text-sm">Cancellation Rate</span>
-                <span className="text-sm font-bold">
-                  {orderStats?.total
-                    ? `${Math.round(((orderStats.byStatus['cancelled'] || 0)) / orderStats.total * 100)}%`
-                    : '0%'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <span className="text-sm">Rejection Rate</span>
-                <span className="text-sm font-bold">
-                  {orderStats?.total
-                    ? `${Math.round(((orderStats.byStatus['rejected'] || 0)) / orderStats.total * 100)}%`
-                    : '0%'}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                <div className="rounded-lg border p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-amber-600" />
+                    <span className="text-xs font-medium">Cancellation Rate</span>
+                  </div>
+                  <span className="text-sm font-bold">{data.orders.cancellation_rate}%</span>
+                </div>
+
+                <div className="rounded-lg border p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    <span className="text-xs font-medium">SLA Breaches</span>
+                  </div>
+                  <Badge variant={data.operations.sla_breaches_in_period > 0 ? 'destructive' : 'secondary'}>
+                    {data.operations.sla_breaches_in_period}
+                  </Badge>
+                </div>
+
+                <div className="rounded-lg border p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-blue-500" />
+                    <span className="text-xs font-medium">Competitor Prices</span>
+                  </div>
+                  <span className="text-xs font-medium tabular-nums">
+                    {data.pricing.total_competitor_prices.toLocaleString()} rows
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   )
 }
