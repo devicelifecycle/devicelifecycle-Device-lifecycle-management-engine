@@ -373,6 +373,57 @@ export default function AdminPricingClient() {
   const [intlUploading, setIntlUploading] = useState(false)
   const [intlResult, setIntlResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null)
 
+  // Brand pricing overrides (P4 #16)
+  const [brandOverrides, setBrandOverrides] = useState<Array<{
+    id: string; make: string; margin_percent: number | null; enabled: boolean; notes: string | null; updated_at: string
+  }>>([])
+  const [brandOverrideDialog, setBrandOverrideDialog] = useState(false)
+  const [brandOverrideForm, setBrandOverrideForm] = useState({ make: '', margin_percent: '', notes: '' })
+  const [brandOverrideSaving, setBrandOverrideSaving] = useState(false)
+
+  const fetchBrandOverrides = useCallback(async () => {
+    const res = await fetch('/api/pricing/brand-overrides')
+    if (res.ok) setBrandOverrides((await res.json()).data || [])
+  }, [])
+
+  const handleSaveBrandOverride = async () => {
+    setBrandOverrideSaving(true)
+    try {
+      const res = await fetch('/api/pricing/brand-overrides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          make: brandOverrideForm.make.trim(),
+          margin_percent: brandOverrideForm.margin_percent !== '' ? parseFloat(brandOverrideForm.margin_percent) : null,
+          notes: brandOverrideForm.notes || null,
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed') }
+      toast.success('Brand override saved')
+      setBrandOverrideDialog(false)
+      setBrandOverrideForm({ make: '', margin_percent: '', notes: '' })
+      await fetchBrandOverrides()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save')
+    } finally { setBrandOverrideSaving(false) }
+  }
+
+  const handleToggleBrandOverride = async (make: string, enabled: boolean) => {
+    const res = await fetch('/api/pricing/brand-overrides', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ make, enabled }),
+    })
+    if (res.ok) setBrandOverrides(prev => prev.map(b => b.make === make ? { ...b, enabled } : b))
+    else toast.error('Failed to update')
+  }
+
+  const handleDeleteBrandOverride = async (make: string) => {
+    const res = await fetch(`/api/pricing/brand-overrides?make=${encodeURIComponent(make)}`, { method: 'DELETE' })
+    if (res.ok) { setBrandOverrides(prev => prev.filter(b => b.make !== make)); toast.success('Override removed') }
+    else toast.error('Failed to delete')
+  }
+
   // Catalog tab - full pricing data by category
   const [catalogData, setCatalogData] = useState<{
     data: Array<{
@@ -449,13 +500,17 @@ export default function AdminPricingClient() {
   const fetchSettings = useCallback(async () => {
     setSettingsLoading(true)
     try {
-      const res = await fetch('/api/pricing/settings')
+      const [res, resBO] = await Promise.all([
+        fetch('/api/pricing/settings'),
+        fetch('/api/pricing/brand-overrides'),
+      ])
       if (res.ok) {
         const d = await res.json()
         setSettingsForm({ ...SETTINGS_DEFAULTS, ...(d.data || {}) })
       }
+      if (resBO.ok) setBrandOverrides((await resBO.json()).data || [])
     } catch {} finally { setSettingsLoading(false) }
-  }, [])
+  }, [setBrandOverrides])
 
   // Active tab — controls deferred fetches. Catalog is heavy and only needed on "training" tab.
   const [activeTab, setActiveTab] = useState('trade-in')
@@ -3404,12 +3459,162 @@ export default function AdminPricingClient() {
               )}
             </CardContent>
           </Card>
+
+          {/* ── Brand Pricing Overrides (P4 #16) ────────────────────────────── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Brand Pricing Overrides</CardTitle>
+                  <CardDescription>Set a per-brand margin target that overrides the global setting. Applies when no per-call override is provided.</CardDescription>
+                </div>
+                <Button size="sm" onClick={() => { setBrandOverrideForm({ make: '', margin_percent: '', notes: '' }); setBrandOverrideDialog(true) }}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />Add Override
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {brandOverrides.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No brand overrides configured — global margin settings apply to all brands.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Brand</TableHead>
+                      <TableHead>Margin Target</TableHead>
+                      <TableHead>Enabled</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {brandOverrides.map(b => (
+                      <TableRow key={b.id}>
+                        <TableCell className="font-medium">{b.make}</TableCell>
+                        <TableCell>
+                          {b.margin_percent != null
+                            ? <span className="font-mono text-sm">{b.margin_percent}%</span>
+                            : <span className="text-muted-foreground text-sm">Global default</span>}
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={b.enabled}
+                            onCheckedChange={v => handleToggleBrandOverride(b.make, v)}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteBrandOverride(b.make)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Demand-Based Margin Adjustment (P4 #18) ──────────────────────── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Demand-Based Margin Adjustment</CardTitle>
+                  <CardDescription>Automatically shift the margin target based on device order velocity over the last 30 days.</CardDescription>
+                </div>
+                <Switch
+                  checked={settingsForm.demand_adjustment_enabled === 'true'}
+                  onCheckedChange={async v => {
+                    setSettingsForm(prev => ({ ...prev, demand_adjustment_enabled: v ? 'true' : 'false' }))
+                    await fetch('/api/pricing/settings', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ demand_adjustment_enabled: v }),
+                    })
+                    toast.success(`Demand adjustment ${v ? 'enabled' : 'disabled'}`)
+                  }}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm">
+                <p className="font-medium text-xs uppercase tracking-wide text-muted-foreground mb-3">Adjustment thresholds</p>
+                <div className="flex items-center justify-between">
+                  <span>High demand <span className="text-muted-foreground">({">"} 15 orders / 30 days)</span></span>
+                  <Badge variant="secondary" className="text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30">−2% margin</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Normal demand <span className="text-muted-foreground">(3–15 orders / 30 days)</span></span>
+                  <Badge variant="secondary">No adjustment</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Low demand <span className="text-muted-foreground">{"(< 3 orders / 30 days)"}</span></span>
+                  <Badge variant="secondary" className="text-amber-600 bg-amber-100 dark:bg-amber-900/30">+3% margin</Badge>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">Does not apply when the caller passes an explicit margin override (e.g., enterprise orders with custom margin).</p>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
       {/* ============================================================ */}
       {/* DIALOGS */}
       {/* ============================================================ */}
+
+      {/* Brand Override Dialog */}
+      <Dialog open={brandOverrideDialog} onOpenChange={setBrandOverrideDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Brand Pricing Override</DialogTitle>
+            <DialogDescription>Set a margin target for a specific device brand. Leave margin blank to use the global setting.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-sm">Brand Name</Label>
+              <Input
+                className="mt-1.5"
+                placeholder="e.g. Apple, Samsung, Google"
+                value={brandOverrideForm.make}
+                onChange={e => setBrandOverrideForm(p => ({ ...p, make: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-sm">Margin Target % <span className="text-muted-foreground font-normal">(leave blank = global)</span></Label>
+              <Input
+                className="mt-1.5"
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                placeholder={`Global: ${settingsForm.trade_in_profit_percent || '20'}%`}
+                value={brandOverrideForm.margin_percent}
+                onChange={e => setBrandOverrideForm(p => ({ ...p, margin_percent: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-sm">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                className="mt-1.5"
+                placeholder="e.g. Higher margin due to parts scarcity"
+                value={brandOverrideForm.notes}
+                onChange={e => setBrandOverrideForm(p => ({ ...p, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBrandOverrideDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveBrandOverride} disabled={brandOverrideSaving || !brandOverrideForm.make.trim()}>
+              {brandOverrideSaving ? 'Saving...' : 'Save Override'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Competitor Price Dialog */}
       <Dialog open={cpDialogOpen} onOpenChange={(open) => {

@@ -262,6 +262,11 @@ export interface PriceCalculationResultV2 {
   outlier_reason?: string;
   // Price source
   price_source?: string;
+  // Per-brand margin override applied (P4 #16)
+  brand_override?: { make: string; margin_percent: number };
+  // Demand-based margin adjustment (P4 #18)
+  demand_score?: 'high' | 'normal' | 'low';
+  demand_margin_adjustment?: number;
   breakdown: {
     anchor_price: number;
     condition_adjustment: number;
