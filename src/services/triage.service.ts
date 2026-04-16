@@ -377,14 +377,31 @@ export class TriageService {
       .eq('id', triageResultId)
       .single()
 
+    // Determine if this is a customer dispute or a final COE/admin decision.
+    // When a customer rejects (disputes), the exception should remain open in the
+    // COE queue so a manager can review it — we must NOT set exception_approved_at.
+    // When COE/admin rejects, the decision is final and exception_approved_at is set.
+    const { data: actorProfile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', approvedById)
+      .single()
+    const isCustomerDispute = !approved && actorProfile?.role === 'customer'
+
+    const updatePayload: Record<string, unknown> = {
+      exception_approved: approved,
+      exception_approved_by_id: approvedById,
+      exception_notes: notes,
+    }
+    // Only stamp exception_approved_at for final decisions (approved or COE/admin rejection).
+    // Customer disputes leave it null so the exception stays visible in the COE queue.
+    if (!isCustomerDispute) {
+      updatePayload.exception_approved_at = new Date().toISOString()
+    }
+
     const { data, error } = await supabase
       .from('triage_results')
-      .update({
-        exception_approved: approved,
-        exception_approved_by_id: approvedById,
-        exception_approved_at: new Date().toISOString(),
-        exception_notes: notes,
-      })
+      .update(updatePayload)
       .eq('id', triageResultId)
       .select()
       .single()
@@ -399,10 +416,15 @@ export class TriageService {
       (existingTriage?.imei_record as IMEIRecord | null) ?? null,
       supabase,
     )
+    // Customer disputes: put exception back to needs_exception so COE sees it.
+    // Final decisions (approved or COE/admin rejection): mark complete or rejected.
+    const imeiStatus = isCustomerDispute
+      ? 'needs_exception'
+      : approved ? 'complete' : 'rejected'
     await supabase
       .from('imei_records')
       .update({
-        triage_status: approved ? 'complete' : 'rejected',
+        triage_status: imeiStatus,
         actual_condition: approved ? triageResult.final_condition : null,
       })
       .eq('id', triageResult.imei_record_id)
@@ -451,7 +473,7 @@ export class TriageService {
       const order = existingTriage.order as unknown as Order
       const imeiRecord = existingTriage.imei_record as IMEIRecord | null
       const customerId = order.customer_id as string // We checked it exists above
-      
+
       // Get device info
       let deviceName = ''
       if (imeiRecord?.device_id) {
@@ -473,6 +495,35 @@ export class TriageService {
         new_price: approved ? (imeiRecord?.quoted_price ?? 0) + (existingTriage.price_adjustment ?? 0) : undefined,
         notes,
       })
+
+      // When exception is rejected/disputed, notify admins and COE managers so they
+      // can investigate. Without this COE has no visibility that the customer disagreed.
+      if (!approved) {
+        const { data: internalUsers } = await supabase
+          .from('users')
+          .select('id')
+          .in('role', ['admin', 'coe_manager'])
+          .eq('is_active', true)
+
+        const disputeTitle = `Exception disputed — Order #${order.order_number}`
+        const disputeMsg = `${deviceName ? deviceName + ' — ' : ''}Exception was disputed${notes ? `: "${notes}"` : ''}. Manual review required.`
+
+        for (const u of internalUsers || []) {
+          await NotificationService.createNotification({
+            user_id: (u as { id: string }).id,
+            type: 'in_app',
+            title: disputeTitle,
+            message: disputeMsg,
+            link: `/orders/${order.id}`,
+            metadata: {
+              order_id: order.id,
+              order_number: order.order_number,
+              triage_result_id: triageResultId,
+              audience: 'internal',
+            },
+          }).catch(() => {})
+        }
+      }
     }
 
     await this.syncOrderStatusAfterTriage(
@@ -599,7 +650,11 @@ export class TriageService {
 
       const records = data ?? []
       const total = records.length
-      const complete = records.filter(r => r.triage_status === 'complete').length
+      // 'rejected' counts as resolved — COE has declined the mismatch claim and
+      // processing continues at the original price. Without this, a rejected exception
+      // leaves triage_status='rejected' which is neither complete/pending/needsException
+      // and the order would be stuck in in_triage forever.
+      const complete = records.filter(r => r.triage_status === 'complete' || r.triage_status === 'rejected').length
       const pending = records.filter(r => r.triage_status === 'pending').length
       const needsException = records.filter(r => r.triage_status === 'needs_exception').length
 

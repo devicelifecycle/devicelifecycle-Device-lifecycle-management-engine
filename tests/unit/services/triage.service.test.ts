@@ -318,6 +318,19 @@ describe('TriageService order lookups', () => {
           }
         }
 
+        if (table === 'users') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { role: 'coe_manager' },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+
         throw new Error(`Unexpected table: ${table}`)
       }),
     })

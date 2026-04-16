@@ -458,11 +458,9 @@ export class PricingService {
       !hasFormulaOverrides &&
       input.risk_mode !== 'enterprise'
 
-    const formulaResult = await this.calculatePriceV2(normalizedInput, supabase)
-    if (formulaResult.success && formulaResult.trade_price > 0) {
-      return formulaResult
-    }
-
+    // When prefer_data_driven is enabled (and no formula overrides), run the ML model
+    // FIRST. Only fall through to the formula if the model returns no price.
+    // Previously the formula always ran first, making the setting effectively ignored.
     if (shouldUseDataDriven) {
       const model = PricingModelRegistry.get('data_driven')
       if (model) {
@@ -485,6 +483,11 @@ export class PricingService {
           )
         }
       }
+    }
+
+    const formulaResult = await this.calculatePriceV2(normalizedInput, supabase)
+    if (formulaResult.success && formulaResult.trade_price > 0) {
+      return formulaResult
     }
 
     return formulaResult
