@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic'
 
 
 function mapDeviceConditionToPricingCondition(condition?: string): 'new' | 'excellent' | 'good' | 'fair' | 'poor' {
-  if (condition === 'new' || condition === 'excellent') return 'excellent'
+  if (condition === 'new') return 'new'
+  if (condition === 'excellent') return 'excellent'
   if (condition === 'fair') return 'fair'
   if (condition === 'broken' || condition === 'poor') return 'poor'
   return 'good'

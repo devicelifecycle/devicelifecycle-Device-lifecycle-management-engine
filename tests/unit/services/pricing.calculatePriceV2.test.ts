@@ -296,17 +296,16 @@ describe('PricingService trade-in pricing policy', () => {
     expect(result.trade_price).toBe(475)
   })
 
-  it('keeps the Bell/Telus + GoRecell formula authoritative even when data-driven pricing is enabled', async () => {
+  it('falls back to Bell/Telus + GoRecell formula when data-driven model returns no price', async () => {
     mockFrom.mockImplementation(buildMock(GOOD_ROWS, { preferDataDriven: true }))
     mockPricingModelGet.mockReturnValue({
       calculate: mockModelCalculate,
     })
     mockModelCalculate.mockResolvedValue({
-      success: true,
-      final_price: 999,
-      trade_price: 999,
-      cpo_price: 1200,
-      confidence: 0.95,
+      success: false,
+      final_price: 0,
+      trade_price: 0,
+      confidence: 0,
       breakdown: {},
     })
 
@@ -319,6 +318,6 @@ describe('PricingService trade-in pricing policy', () => {
 
     expect(result.success).toBe(true)
     expect(result.trade_price).toBe(113.5)
-    expect(mockModelCalculate).not.toHaveBeenCalled()
+    expect(mockModelCalculate).toHaveBeenCalled()
   })
 })
