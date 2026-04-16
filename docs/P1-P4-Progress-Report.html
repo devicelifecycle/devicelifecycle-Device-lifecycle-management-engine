@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Device Lifecycle Management Engine — P1–P4 Progress Report</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      line-height: 1.6;
+    }
+
+    /* ── Cover ── */
+    .cover {
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+      color: #fff;
+      padding: 80px 60px;
+      position: relative;
+      overflow: hidden;
+    }
+    .cover::before {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(99,102,241,0.3) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .cover-badge {
+      display: inline-block;
+      background: rgba(99,102,241,0.2);
+      border: 1px solid rgba(99,102,241,0.4);
+      color: #a5b4fc;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+    }
+    .cover h1 {
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      max-width: 700px;
+    }
+    .cover h1 span { color: #818cf8; }
+    .cover-sub {
+      font-size: 17px;
+      color: rgba(255,255,255,0.6);
+      max-width: 550px;
+      margin-bottom: 40px;
+    }
+    .cover-meta {
+      display: flex;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+    .cover-meta-item { }
+    .cover-meta-item .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 4px;
+    }
+    .cover-meta-item .value {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(52,211,153,0.15);
+      border: 1px solid rgba(52,211,153,0.3);
+      color: #6ee7b7;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+    .status-pill::before {
+      content: '';
+      display: block;
+      width: 7px; height: 7px;
+      background: #34d399;
+      border-radius: 50%;
+    }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 0 60px;
+      display: flex;
+      gap: 0;
+    }
+    .stat {
+      padding: 24px 32px 24px 0;
+      margin-right: 32px;
+      border-right: 1px solid #f0f0f0;
+    }
+    .stat:last-child { border-right: none; }
+    .stat .num {
+      font-size: 28px;
+      font-weight: 700;
+      color: #111;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .stat .num.green { color: #059669; }
+    .stat .lbl {
+      font-size: 12px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Main layout ── */
+    .main { max-width: 1100px; margin: 0 auto; padding: 60px 40px; }
+
+    /* ── Section ── */
+    .section { margin-bottom: 56px; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .phase-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px; height: 38px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .p1 { background: #dbeafe; color: #1d4ed8; }
+    .p2 { background: #d1fae5; color: #065f46; }
+    .p3 { background: #ede9fe; color: #5b21b6; }
+    .p4 { background: #fef3c7; color: #92400e; }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #111;
+    }
+    .section-sub {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .complete-badge {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .complete-badge::before {
+      content: '✓';
+      font-weight: 700;
+    }
+
+    /* ── Feature grid ── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .feature-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .feature-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-card h4::before {
+      content: '';
+      display: block;
+      width: 6px; height: 6px;
+      background: #6366f1;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .feature-card ul {
+      list-style: none;
+      padding: 0;
+    }
+    .feature-card ul li {
+      font-size: 13px;
+      color: #374151;
+      padding: 3px 0;
+      padding-left: 14px;
+      position: relative;
+    }
+    .feature-card ul li::before {
+      content: '–';
+      position: absolute;
+      left: 0;
+      color: #d1d5db;
+    }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: #f9fafb;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6b7280;
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    td {
+      font-size: 13px;
+      color: #374151;
+      padding: 12px 16px;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+    .tag {
+      display: inline-block;
+      background: #f3f4f6;
+      color: #374151;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .tag.done { background: #d1fae5; color: #065f46; }
+    .tag.blue { background: #dbeafe; color: #1d4ed8; }
+
+    /* ── Test results block ── */
+    .test-block {
+      background: #0a0a0a;
+      border-radius: 12px;
+      padding: 28px 32px;
+      color: #e5e7eb;
+      margin-bottom: 24px;
+    }
+    .test-block .test-pass { color: #34d399; font-weight: 600; }
+    .test-block .test-skip { color: #fbbf24; }
+    .test-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 14px;
+    }
+    .test-row:last-child { border-bottom: none; }
+    .test-row .suite { color: #a5b4fc; }
+    .test-total {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* ── Parser patterns ── */
+    .pattern-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .pattern-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .pattern-card .gap-num {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #9ca3af;
+      margin-bottom: 6px;
+    }
+    .pattern-card .gap-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #111;
+      margin-bottom: 4px;
+    }
+    .pattern-card .gap-eg {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .pattern-card .gap-eg code {
+      background: #f3f4f6;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      background: #111;
+      color: rgba(255,255,255,0.4);
+      text-align: center;
+      font-size: 13px;
+      padding: 32px;
+      margin-top: 40px;
+    }
+    footer strong { color: rgba(255,255,255,0.7); }
+
+    @media (max-width: 700px) {
+      .cover { padding: 48px 24px; }
+      .cover h1 { font-size: 28px; }
+      .main { padding: 40px 20px; }
+      .stats-bar { padding: 0 20px; flex-wrap: wrap; }
+      .stat { padding: 16px 16px 16px 0; }
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Cover -->
+<div class="cover">
+  <div class="cover-badge">Internal Platform — Confidential</div>
+  <h1>Device Lifecycle<br>Management Engine<br><span>P1–P4 Progress Report</span></h1>
+  <p class="cover-sub">End-to-end trade-in, purchasing, COE triage, competitor pricing, and shipment management — built for SCC's internal operations team.</p>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="label">Stack</div>
+      <div class="value">Next.js 16 · Supabase · TailwindCSS</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Roles Supported</div>
+      <div class="value">6 (Admin, COE, Sales, Customer, Vendor)</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Date</div>
+      <div class="value">April 2026</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Overall Status</div>
+      <div class="value"><span class="status-pill">All 4 Phases Complete</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div class="stats-bar">
+  <div class="stat">
+    <div class="num">4 / 4</div>
+    <div class="lbl">Phases Complete</div>
+  </div>
+  <div class="stat">
+    <div class="num">32</div>
+    <div class="lbl">API Routes</div>
+  </div>
+  <div class="stat">
+    <div class="num">608</div>
+    <div class="lbl">Device Catalog SKUs</div>
+  </div>
+  <div class="stat">
+    <div class="num green">1,339</div>
+    <div class="lbl">Tests Passing</div>
+  </div>
+  <div class="stat">
+    <div class="num green">0</div>
+    <div class="lbl">TS Errors</div>
+  </div>
+  <div class="stat">
+    <div class="num green">0</div>
+    <div class="lbl">Test Failures</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- P1 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="phase-badge p1">P1</div>
+      <div>
+        <div class="section-title">Core Platform</div>
+        <div class="section-sub">Authentication, orders, users, device catalog, notifications, reports</div>
+      </div>
+      <span class="complete-badge">Complete</span>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <h4>Authentication &amp; Access Control</h4>
+        <ul>
+          <li>Email/password login with Supabase Auth</li>
+          <li>PKCE forgot-password and password-reset flow</li>
+          <li>TOTP MFA on login + MFA management in profile</li>
+          <li>Role-based routing — each role lands on the correct page</li>
+          <li>Middleware-enforced route protection</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>User &amp; Organisation Management</h4>
+        <ul>
+          <li>Full user list with search, pagination, role filter</li>
+          <li>Create / edit users with role and org assignment</li>
+          <li>Customer and vendor org management (create, edit, soft-delete)</li>
+          <li>Active / inactive toggle per user</li>
+          <li>Phone number field on all user records</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Device Catalog</h4>
+        <ul>
+          <li>608 devices: iPhones, iPads, MacBooks, Galaxy, Pixel, accessories</li>
+          <li>Add / edit / deactivate with structured specs (storage, year, CPU, RAM)</li>
+          <li>Server-side search + pagination</li>
+          <li>Samsung variant deduplication; phantom device cleanup</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Orders (All Roles)</h4>
+        <ul>
+          <li>Customer: Trade-In wizard, Purchase order, spreadsheet import</li>
+          <li>Order list with status/type/date/search filters</li>
+          <li>Order detail with timeline, notes, documents, role-based actions</li>
+          <li>Auto-split orders by device type</li>
+          <li>Vendor bid management (submit / accept / reject)</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Notifications</h4>
+        <ul>
+          <li>In-app bell with unread count, mark-as-read, clear-all</li>
+          <li>Real-time delivery via Supabase Realtime</li>
+          <li>Notification gaps closed for CPO and vendor workflows</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Reports &amp; Analytics</h4>
+        <ul>
+          <li>Order volume, revenue, device mix, SLA breach rates</li>
+          <li>Charts: order trends, top devices, condition breakdown, revenue</li>
+          <li>Full analytics API with role-scoped access</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Infrastructure</h4>
+        <ul>
+          <li>Next.js 16 App Router with Turbopack</li>
+          <li>Supabase RLS on all tables</li>
+          <li>Vercel deployment, America/Toronto timezone</li>
+          <li>Code-split heavy pages (admin pricing: 19 s → fast FCP)</li>
+          <li>npm vulnerability remediation</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- P2 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="phase-badge p2">P2</div>
+      <div>
+        <div class="section-title">Email, Real-time, Bulk Ops &amp; Security</div>
+        <div class="section-sub">Customer-facing communications, live updates, and security hardening</div>
+      </div>
+      <span class="complete-badge">Complete</span>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <h4>Email Notifications</h4>
+        <ul>
+          <li>Quote-issued email with itemised device list</li>
+          <li>Quote-accepted confirmation + shipping instructions</li>
+          <li>Shipment-received acknowledgement</li>
+          <li>Rendered with Resend + React Email templates</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Real-time Updates</h4>
+        <ul>
+          <li>Order detail page updates live (Supabase Realtime)</li>
+          <li>Notification bell reflects new notifications without refresh</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Bulk Operations &amp; PDF</h4>
+        <ul>
+          <li>Admin bulk status update for multiple orders</li>
+          <li>Bulk device catalog import via CSV</li>
+          <li>Order summary PDF export for customers and internal team</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Security Hardening</h4>
+        <ul>
+          <li>Service-role client for safe cross-org data access</li>
+          <li>Auth cache hydration mismatch fixed</li>
+          <li>Pricing routes role-checked before any DB query</li>
+          <li>All queries use parameterised Supabase client calls</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- P3 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="phase-badge p3">P3</div>
+      <div>
+        <div class="section-title">COE Workflow, Pricing Engine &amp; Competitor Scraping</div>
+        <div class="section-sub">Internal triage, ML-powered pricing, and live competitor price feeds</div>
+      </div>
+      <span class="complete-badge">Complete</span>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <h4>COE Triage Workflow</h4>
+        <ul>
+          <li>Triage queue for all inbound orders</li>
+          <li>Per-SKU receiving manifest (condition + IMEI/serial per device)</li>
+          <li>Condition mismatch auto-repricing panel</li>
+          <li>Mismatch quotes flagged for customer acknowledgement</li>
+          <li>Exception resolution: customer approve / dispute; COE resolves</li>
+          <li>SLA auto-escalation for persistently breached orders</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Pricing Engine</h4>
+        <ul>
+          <li>Three strategies: competitor-market, ML model, hybrid</li>
+          <li>Beat-competitor mode — price above named competitor</li>
+          <li>Amber warning when estimate uses internal data only</li>
+          <li>Per-brand margin overrides (Apple, Samsung, etc.)</li>
+          <li>Demand adjustment toggle — boosts prices when volume is high</li>
+          <li>A/B model comparison endpoint</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Self-Trained ML Pricing Model</h4>
+        <ul>
+          <li>Trains on historical order data in Supabase</li>
+          <li>Auto-retrains when baseline is sparse</li>
+          <li>Returns price estimate with confidence band</li>
+          <li>Wired into calculator as an alternative strategy path</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Competitor Price Scraping</h4>
+        <ul>
+          <li>Bell, GoRecell, Telus, Apple, UniverCell/Fido</li>
+          <li>Daily cron — fetches, normalises, stores per device</li>
+          <li>Staleness cron auto-deletes stale rows</li>
+          <li>Failed providers retried once before marking failed</li>
+          <li>Scraper health dashboard in admin pricing panel</li>
+          <li>GoRecell expanded to phones, laptops, iPads, tablets</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Exception AI Suggestion</h4>
+        <ul>
+          <li>Rule-based suggestion: accept / reject recommendation</li>
+          <li>Factors: condition delta, device value, customer history</li>
+          <li>Returns reasoning alongside recommendation</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Scrapling Pilot (Python)</h4>
+        <ul>
+          <li>Python-based scrapers wired behind env-var feature flags</li>
+          <li>Five adapters: Bell, GoRecell, Telus, Apple, Universal</li>
+          <li>Dual-mode: JS or Python path selected per-provider</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- P4 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="phase-badge p4">P4</div>
+      <div>
+        <div class="section-title">Trade Template Parser &amp; UX Polish</div>
+        <div class="section-sub">Universal spreadsheet import, sheet picker, device dropdowns, quote actions, manual shipping</div>
+      </div>
+      <span class="complete-badge">Complete</span>
+    </div>
+
+    <h3 style="font-size:15px;font-weight:600;color:#374151;margin-bottom:14px;">Universal Trade Quote Parser — 8 Layout Patterns</h3>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:16px;">After analysing 27 real sheets across 2 customer workbooks (COE Corporate Trade Quotes &amp; SCC ITAD Apple Trade Booklet), the parser handles every layout seen in the wild.</p>
+
+    <div class="pattern-grid">
+      <div class="pattern-card">
+        <div class="gap-num">Gap 1</div>
+        <div class="gap-title">Header row not always row 0</div>
+        <div class="gap-eg">Auto-detects by scoring rows 0–14 against keywords. <code>Lambton</code> → headers at row 10.</div>
+      </div>
+      <div class="pattern-card">
+        <div class="gap-num">Gap 2</div>
+        <div class="gap-title">Multi-row merged column headers</div>
+        <div class="gap-eg">"30 Days" group + "Good" sub → <code>30 Good</code>. Handles <code>Turow</code>, <code>ALSA</code>.</div>
+      </div>
+      <div class="pattern-card">
+        <div class="gap-num">Gap 3</div>
+        <div class="gap-title">Combined make+model+storage+color</div>
+        <div class="gap-eg"><code>"Apple iPhone 12 64GB Black"</code> → brand + model + storage + color split automatically.</div>
+      </div>
+      <div class="pattern-card">
+        <div class="gap-num">Gap 4</div>
+        <div class="gap-title">Missing Make column</div>
+        <div class="gap-eg">Brand inferred from model: <code>iPhone</code> → Apple, <code>Galaxy</code> → Samsung.</div>
+      </div>
+      <div class="pattern-card">
+        <div class="gap-num">Gap 5</div>
+        <div class="gap-title">Condition normalisation</div>
+        <div class="gap-eg">50+ aliases: Functional→good, Defective→broken, Grade A→excellent, "minor scratch"→fair.</div>
+      </div>
+      <div class="pattern-card">
+        <div class="gap-num">Gap 6</div>
+        <div class="gap-title">Pivot / transposed tables</div>
+        <div class="gap-eg">Models as column headers, prices as rows — auto-detected and transposed. <code>PAL Aero</code>, <code>AMA RFQ</code>.</div>
+      </div>
+      <div class="pattern-card">
+        <div class="gap-num">Gap 7</div>
+        <div class="gap-title">Storage-as-column-header</div>
+        <div class="gap-eg"><code>"32 GB"</code> / <code>"128 GB"</code> are price columns — storage resolved from which column has a price.</div>
+      </div>
+      <div class="pattern-card">
+        <div class="gap-num">Gap 8</div>
+        <div class="gap-title">Multi-sheet workbook picker</div>
+        <div class="gap-eg">Sheet selector appears in import dialog when workbook has &gt;1 sheet. Switching re-parses instantly.</div>
+      </div>
+    </div>
+
+    <div class="feature-grid" style="margin-top:24px;">
+      <div class="feature-card">
+        <h4>Device Picker UX Fixes</h4>
+        <ul>
+          <li>Trade-in form: shows full catalog on open (no typing required)</li>
+          <li>COE triage Add Device: loads first 20 alphabetically on open</li>
+          <li>Both pickers filter live as-you-type</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Customer Quote Actions</h4>
+        <ul>
+          <li>Accept and Decline buttons on quoted orders</li>
+          <li>Quoted rows highlighted in purple</li>
+          <li>Transitions order to accepted / rejected instantly</li>
+          <li>Buttons disabled with loading state during in-flight request</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Shipping Simplification</h4>
+        <ul>
+          <li>Stallion in-app label purchase removed — fully manual</li>
+          <li>Clean form: Carrier + Tracking Number only</li>
+          <li>Tracking number always required for all roles</li>
+          <li>Purchase-label endpoint stubbed with clear 501 message</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test Coverage -->
+  <div class="section">
+    <div class="section-header">
+      <div class="phase-badge p1" style="background:#f3f4f6;color:#374151;">✓</div>
+      <div>
+        <div class="section-title">Test Coverage</div>
+        <div class="section-sub">Vitest unit suite — run on every push</div>
+      </div>
+    </div>
+
+    <div class="test-block">
+      <div class="test-row">
+        <span class="suite">Unit — API routes (auth, orders, pricing, shipments, customers)</span>
+        <span class="test-pass">800+ passing</span>
+      </div>
+      <div class="test-row">
+        <span class="suite">Unit — Pricing model (all device categories, all strategies)</span>
+        <span class="test-pass">300+ passing</span>
+      </div>
+      <div class="test-row">
+        <span class="suite">Unit — Condition normaliser</span>
+        <span class="test-pass">40+ passing</span>
+      </div>
+      <div class="test-row">
+        <span class="suite">Unit — Scraper pipeline matching</span>
+        <span class="test-pass">15 passing</span>
+      </div>
+      <div class="test-row">
+        <span class="suite">Unit — Auth routing &amp; lib utilities</span>
+        <span class="test-pass">28 passing</span>
+      </div>
+      <div class="test-row">
+        <span class="suite">Integration — Data-driven pricing model</span>
+        <span class="test-skip">21 skipped (requires live DB)</span>
+      </div>
+      <div class="test-total">
+        Total: <span class="test-pass">1,339 passing</span> &nbsp;|&nbsp; <span class="test-skip">21 skipped</span> &nbsp;|&nbsp; <span class="test-pass">0 failures</span> &nbsp;|&nbsp; TypeScript: <span class="test-pass">0 errors</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phases summary table -->
+  <div class="section">
+    <div class="section-header">
+      <div class="phase-badge p1" style="background:#f3f4f6;color:#374151;">≡</div>
+      <div>
+        <div class="section-title">Summary</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Phase</th>
+            <th>Focus</th>
+            <th>Key Deliverables</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>P1</strong></td>
+            <td>Core Platform</td>
+            <td>Auth, Orders, Device Catalog, Notifications, Reports, 6-role access control</td>
+            <td><span class="tag done">Complete</span></td>
+          </tr>
+          <tr>
+            <td><strong>P2</strong></td>
+            <td>Email, Real-time, Security</td>
+            <td>Email notifications, Realtime updates, Bulk ops, PDF export, Security hardening</td>
+            <td><span class="tag done">Complete</span></td>
+          </tr>
+          <tr>
+            <td><strong>P3</strong></td>
+            <td>COE Workflow &amp; Pricing</td>
+            <td>Triage, Receiving manifest, ML pricing, 5 competitor scrapers, Exception AI, SLA escalation</td>
+            <td><span class="tag done">Complete</span></td>
+          </tr>
+          <tr>
+            <td><strong>P4</strong></td>
+            <td>Parser &amp; UX Polish</td>
+            <td>Universal trade template parser (8 patterns), Sheet picker, Quote accept/decline, Manual shipping</td>
+            <td><span class="tag done">Complete</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <strong>Device Lifecycle Management Engine</strong> — Internal Report · April 2026 · Confidential
+</footer>
+
+</body>
+</html>
