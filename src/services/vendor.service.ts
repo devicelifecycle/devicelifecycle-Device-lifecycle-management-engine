@@ -403,6 +403,7 @@ export class VendorService {
       .from('vendors')
       .select('*')
       .eq('is_active', true)
+      .contains('capabilities', [capability])
       .order('rating', { ascending: false })
 
     if (error) {

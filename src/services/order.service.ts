@@ -738,7 +738,8 @@ export class OrderService {
           anchor_price: result.breakdown?.anchor_price,
         }
 
-        await supabase
+        // Use service-role for writes — customers may lack RLS permission to update unit_price
+        await pricingSupabase
           .from('order_items')
           .update({
             unit_price: unitPrice,
@@ -754,7 +755,7 @@ export class OrderService {
     }
 
     // Recalculate order totals
-    const { data: updatedItems } = await supabase
+    const { data: updatedItems } = await pricingSupabase
       .from('order_items')
       .select('unit_price, quantity')
       .eq('order_id', orderId)
@@ -764,7 +765,7 @@ export class OrderService {
       0
     )
 
-    await supabase
+    await pricingSupabase
       .from('orders')
       .update({
         total_amount: totalAmount,

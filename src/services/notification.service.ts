@@ -4,7 +4,6 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { getAppPath } from '@/lib/app-url'
 import { EmailService } from '@/services/email.service'
 import { ORDER_EMAIL_CONFIG } from '@/lib/constants'
 import type {
@@ -340,15 +339,18 @@ export class NotificationService {
       })())
     }
 
-    // Admin users (all active admins)
+    // Admin + COE manager users
     if (config.admin) {
       lookups.push((async () => {
         const { data } = await supabase
           .from('users')
-          .select('id, email, full_name, notification_email')
-          .eq('role', 'admin')
+          .select('id, email, full_name, notification_email, role')
           .eq('is_active', true)
-        ;(data || []).forEach(admin => {
+        const internalUsers = (data || []).filter((u) => {
+          const r = (u as { role?: string }).role
+          return r === 'admin' || r === 'coe_manager'
+        })
+        internalUsers.forEach(admin => {
           inAppUserIds.add((admin as { id: string }).id)
           const a = admin as { email?: string; notification_email?: string | null; full_name?: string; id: string }
           const effectiveEmail = a.email?.endsWith('@login.local') ? a.notification_email : a.email
@@ -516,20 +518,18 @@ export class NotificationService {
     hoursRemaining?: number
   ): Promise<void> {
     try {
-      // Use service-role — this may be called from cron context
-      let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>
-      try {
-        supabase = await createServerSupabaseClient()
-      } catch {
-        supabase = createServiceRoleClient() as unknown as Awaited<ReturnType<typeof createServerSupabaseClient>>
-      }
+      // Always use service-role — this is called from cron context (no request session)
+      const supabase = createServiceRoleClient()
       const { data: user } = await supabase
         .from('users')
-        .select('email, full_name, phone')
+        .select('email, full_name, phone, notification_email')
         .eq('id', userId)
         .single()
 
-      if (!user?.email) return
+      const effectiveEmail = (user as { email?: string; notification_email?: string | null } | null)?.email?.endsWith('@login.local')
+        ? (user as { notification_email?: string | null }).notification_email
+        : (user as { email?: string } | null)?.email
+      if (!effectiveEmail) return
 
       const subject = severity === 'breach'
         ? `[URGENT] SLA Breach — Order #${orderNumber}`
@@ -540,8 +540,8 @@ export class NotificationService {
         : `Order #${orderNumber} is approaching its SLA deadline.${hoursRemaining != null ? ` ${hoursRemaining} hours remaining.` : ''}`
 
       await EmailService.sendOrderStatusEmail({
-        to: user.email,
-        recipientName: user.full_name || 'Team Member',
+        to: effectiveEmail,
+        recipientName: (user as { full_name?: string } | null)?.full_name || 'Team Member',
         orderNumber,
         orderId,
         fromStatus: '',
@@ -643,12 +643,16 @@ export class NotificationService {
 
       // Also send email to primary contact
       if (customer.contact_email) {
-        const orderUrl = getAppPath(`/orders/${input.order_id}`)
-        await EmailService.sendEmail(
-          customer.contact_email,
-          title,
-          `Hello ${customer.contact_name || customer.company_name || 'Customer'},\n\n${message}\n\nView order: ${orderUrl}\n\nThank you.`
-        )
+        await EmailService.sendOrderStatusEmail({
+          to: customer.contact_email,
+          recipientName: customer.contact_name || customer.company_name || 'Customer',
+          orderNumber: input.order_number,
+          orderId: input.order_id,
+          fromStatus: 'in_triage',
+          toStatus: 'exception_required',
+          subject: title,
+          message,
+        })
       }
 
       await this.sendSmsIfConfigured(
@@ -722,12 +726,16 @@ export class NotificationService {
       }
 
       if (customer.contact_email) {
-        const orderUrl = getAppPath(`/orders/${input.order_id}`)
-        await EmailService.sendEmail(
-          customer.contact_email,
-          title,
-          `Hello ${customer.contact_name || customer.company_name || 'Customer'},\n\n${message}\n\nView order: ${orderUrl}\n\nThank you.`
-        )
+        await EmailService.sendOrderStatusEmail({
+          to: customer.contact_email,
+          recipientName: customer.contact_name || customer.company_name || 'Customer',
+          orderNumber: input.order_number,
+          orderId: input.order_id,
+          fromStatus: 'exception_required',
+          toStatus: input.approved ? 'exception_approved' : 'exception_rejected',
+          subject: title,
+          message,
+        })
       }
 
       await this.sendSmsIfConfigured(
