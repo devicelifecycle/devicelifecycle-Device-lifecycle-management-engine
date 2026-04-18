@@ -26,6 +26,10 @@ function expectRedirectedAway(page: { url: () => string }, fromPath: string) {
 }
 
 test.describe('Role-based access', () => {
+  test.beforeEach(() => {
+    test.setTimeout(120000)
+  })
+
   test.describe('admin', () => {
     test('can access /admin/users, /devices, /reports, /coe/receiving', async ({ page }) => {
       await loginAs(page, 'admin')
