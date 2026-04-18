@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
+import { readBooleanServerEnv, readServerEnv, readServerEnvAny } from '@/lib/server-env'
 
 describe('server env helpers', () => {
   it('trims surrounding whitespace and blank values', () => {
@@ -23,5 +23,18 @@ describe('server env helpers', () => {
     expect(readBooleanServerEnv('TEST_BOOL_ENV', true)).toBe(true)
 
     delete process.env.TEST_BOOL_ENV
+  })
+
+  it('reads the first populated env from a fallback list', () => {
+    delete process.env.TEST_ENV_PRIMARY
+    ;(process.env as Record<string, string | undefined>).TEST_ENV_SECONDARY = '  secondary-value  '
+
+    expect(readServerEnvAny(['TEST_ENV_PRIMARY', 'TEST_ENV_SECONDARY'])).toBe('secondary-value')
+
+    ;(process.env as Record<string, string | undefined>).TEST_ENV_PRIMARY = ' primary-value '
+    expect(readServerEnvAny(['TEST_ENV_PRIMARY', 'TEST_ENV_SECONDARY'])).toBe('primary-value')
+
+    delete process.env.TEST_ENV_PRIMARY
+    delete process.env.TEST_ENV_SECONDARY
   })
 })

@@ -10,6 +10,15 @@ export function readServerEnv(name: string): string | undefined {
   return normalized.length > 0 ? normalized : undefined
 }
 
+export function readServerEnvAny(names: readonly string[]): string | undefined {
+  for (const name of names) {
+    const value = readServerEnv(name)
+    if (value) return value
+  }
+
+  return undefined
+}
+
 export function readBooleanServerEnv(name: string, defaultValue = false): boolean {
   const value = readServerEnv(name)
   if (!value) return defaultValue

@@ -325,10 +325,11 @@ export default function LoginPage() {
                 /* Login form */
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="font-body text-xs font-semibold text-muted-foreground">
+                    <label htmlFor="email" className="font-body text-xs font-semibold text-muted-foreground">
                       Login ID or Email
                     </label>
                     <Input
+                      id="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Enter your login ID"
@@ -340,7 +341,7 @@ export default function LoginPage() {
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="font-body text-xs font-semibold text-muted-foreground">
+                      <label htmlFor="password" className="font-body text-xs font-semibold text-muted-foreground">
                         Password
                       </label>
                       <Link
@@ -352,6 +353,7 @@ export default function LoginPage() {
                     </div>
                     <div className="relative">
                       <Input
+                        id="password"
                         type={showPassword ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}

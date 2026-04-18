@@ -1,8 +1,7 @@
-import { config as loadEnv } from 'dotenv'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { loadE2EEnv } from './env'
 
-loadEnv({ path: '.env.local' })
-loadEnv()
+loadE2EEnv()
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
