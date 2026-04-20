@@ -374,6 +374,7 @@ export class SLAService {
           orderNumber: order.order_number,
           orderId: order.id,
           daysRemaining,
+          quotedAmount: order.quoted_amount ?? undefined,
         })
         sent++
       }

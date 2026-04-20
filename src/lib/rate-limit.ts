@@ -55,15 +55,20 @@ export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitR
 }
 
 /**
- * Get client IP from request headers.
- * NOTE: x-forwarded-for and x-real-ip can be spoofed if not behind a trusted proxy.
- * Ensure your reverse proxy (Vercel, nginx, etc.) overwrites these; otherwise attackers
- * could bypass rate limits by spoofing IPs.
+ * Get client IP from request headers, Vercel-safe.
+ *
+ * On Vercel: `x-real-ip` is injected by the edge network and cannot be spoofed
+ * from outside. We prefer it over `x-forwarded-for`, whose leftmost entry can be
+ * forged by the client before hitting the edge (classic rate-limit bypass).
+ *
+ * If `x-real-ip` is absent (local dev, non-Vercel), we take the LAST entry of
+ * `x-forwarded-for` — the one appended by the nearest trusted proxy — rather than
+ * the first (client-controlled) entry.
  */
 export function getClientIp(request: Request): string {
   return (
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||
+    request.headers.get('x-forwarded-for')?.split(',').pop()?.trim() ||
     'unknown'
   )
 }

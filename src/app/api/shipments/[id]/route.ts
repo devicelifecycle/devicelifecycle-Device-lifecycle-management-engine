@@ -118,6 +118,16 @@ export async function PATCH(
     }
 
     if (data.status) {
+      // Carrier and tracking number are required when setting or changing the shipment status
+      const metadata = data.metadata as Record<string, unknown> | undefined
+      const carrier = metadata?.carrier as string | undefined
+      const trackingNumber = metadata?.tracking_number as string | undefined
+      if (!carrier || !trackingNumber) {
+        return NextResponse.json(
+          { error: 'carrier and tracking_number are required when updating shipment status' },
+          { status: 400 }
+        )
+      }
       const shipment = await ShipmentService.updateShipmentStatus(
         (await params).id,
         data.status,

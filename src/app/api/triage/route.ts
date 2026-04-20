@@ -186,12 +186,19 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // Skip already-registered IMEIs
-        const { data: existing } = await supabase
-          .from('imei_records')
-          .select('id')
-          .or(`imei.eq.${imei || '__none__'},serial_number.eq.${serial || '__none__'}`)
-          .maybeSingle()
+        // Skip already-registered IMEIs — use separate .eq() calls to avoid
+        // string interpolation into .or() which is vulnerable to filter injection.
+        let existing: { id: string } | null = null
+        if (imei) {
+          const { data } = await supabase
+            .from('imei_records').select('id').eq('imei', imei).maybeSingle()
+          existing = data
+        }
+        if (!existing && serial) {
+          const { data } = await supabase
+            .from('imei_records').select('id').eq('serial_number', serial).maybeSingle()
+          existing = data
+        }
         if (existing) {
           skipped++
           duplicate++

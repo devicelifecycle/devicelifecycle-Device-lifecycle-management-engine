@@ -952,7 +952,13 @@ export class PricingService {
       }
 
       if (!anchorPrice) {
-        return this.v2ErrorResult('No competitor trade-in data found for this device. Run the price scraper (Admin → Pricing → Run Scraper) to fetch current market rates before quoting.')
+        // No competitor OR historical baseline data — return a soft amber warning
+        // (success: false) so the UI can show an amber badge rather than a red error.
+        // Admin should run the price scraper or enter manual competitor prices.
+        return {
+          ...this.v2ErrorResult('No trade-in data available for this device. Enter manual competitor prices or run the price scraper (Admin → Pricing → Run Scraper) before quoting.'),
+          data_staleness_warning: 'No competitor or historical trade-in data found. Manual pricing required — run the price scraper to enable auto-quoting for this device.',
+        }
       }
 
       // Step 3: Apply condition multiplier (only when anchor is a base/"new" equivalent)
