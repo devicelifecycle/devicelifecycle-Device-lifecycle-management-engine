@@ -256,10 +256,14 @@ export default function OrderDetailClient() {
           const allRows = data.data || data || []
           // Filter by storage with normalization so "128 GB" and "128GB" are treated the same.
           const requestedStorage = normalizeStorageToken(storage)
-          const rows = allRows.filter((r: Record<string, unknown>) => {
+          const storageMatchedRows = allRows.filter((r: Record<string, unknown>) => {
             if (!r.storage) return true
             return normalizeStorageToken(r.storage) === requestedStorage
           })
+          // Fall back to all rows only when no storage-specific rows exist,
+          // so the UI always shows competitor prices rather than a blank table.
+          // The avg_trade formula below still uses the correct Bell/Telus/GoRecell blend.
+          const rows = storageMatchedRows.length > 0 ? storageMatchedRows : allRows
           // Group by condition
           const byCondition = new Map<string, { name: string; trade: number | null; sell: number | null }[]>()
           for (const row of rows) {
