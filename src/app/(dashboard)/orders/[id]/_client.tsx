@@ -228,6 +228,11 @@ export default function OrderDetailClient() {
   const [exceptionProcessingId, setExceptionProcessingId] = useState<string | null>(null)
 
   const fetchMarketContext = async (items: OrderItem[]) => {
+    const normalizeStorageToken = (value: unknown): string =>
+      String(value ?? '')
+        .toUpperCase()
+        .replace(/\s+/g, '')
+
     const uniqueDevices = new Map<string, { device_id: string; storage: string }>()
     items.forEach(item => {
       if (item.device_id) {
@@ -248,8 +253,15 @@ export default function OrderDetailClient() {
         if (res.ok) {
           const data = await res.json()
           const allRows = data.data || data || []
-          // Filter by storage
-          const rows = allRows.filter((r: Record<string, unknown>) => !r.storage || r.storage === storage)
+          // Filter by storage with normalization so "128 GB" and "128GB" are treated the same.
+          const requestedStorage = normalizeStorageToken(storage)
+          const storageMatchedRows = allRows.filter((r: Record<string, unknown>) => {
+            if (!r.storage) return true
+            return normalizeStorageToken(r.storage) === requestedStorage
+          })
+          // If storage-specific rows are missing, fall back to all rows for this device
+          // so competitors still render instead of a misleading "No data" state.
+          const rows = storageMatchedRows.length > 0 ? storageMatchedRows : allRows
           // Group by condition
           const byCondition = new Map<string, { name: string; trade: number | null; sell: number | null }[]>()
           for (const row of rows) {
