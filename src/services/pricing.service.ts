@@ -1029,7 +1029,9 @@ export class PricingService {
       const avgCompetitorPrice = filteredCompetitors.length > 0
         ? filteredCompetitors.reduce((s, c) => s + c.price, 0) / filteredCompetitors.length
         : 0
-      const goRecellFairPrice = getApprovedTradeInCompetitorConditionPrice(allCompetitorRows, 'GoRecell', 'fair')
+      const goRecellFairPrice    = getApprovedTradeInCompetitorConditionPrice(allCompetitorRows, 'GoRecell', 'fair')
+      const goRecellGoodPrice    = getApprovedTradeInCompetitorConditionPrice(allCompetitorRows, 'GoRecell', 'good')
+      const goRecellBrokenPrice  = getApprovedTradeInCompetitorConditionPrice(allCompetitorRows, 'GoRecell', 'broken')
 
       // Step 5: Risk mode — enterprise has lower margin target. API overrides take precedence over saved settings.
       const riskMode: RiskMode = normalizedInput.risk_mode || 'retail'
@@ -1175,14 +1177,29 @@ export class PricingService {
         tradePrice = Math.max(tradePrice, competitiveFloor)
       }
 
-      if (
-        weightedAvgUsed &&
-        normalizedInput.condition === 'good' &&
-        goRecellFairPrice > 0 &&
-        tradePrice < goRecellFairPrice
-      ) {
-        tradePrice = round2(goRecellFairPrice)
-        goRecellFairFloorApplied = true
+      // GoRecell floor: an N-grade device should never be priced below GoRecell's
+      // price for the next-lower grade.  (good < fair is impossible → floor at fair;
+      // excellent < good is impossible → floor at good;  fair < broken is impossible
+      // → floor at broken.)  The floor only fires when the weighted blend was used
+      // (competitor data path) and the result dips below the reference grade.
+      if (weightedAvgUsed) {
+        let floorPrice = 0
+        let floorLabel = ''
+        if (normalizedInput.condition === 'good' && goRecellFairPrice > 0) {
+          floorPrice = goRecellFairPrice; floorLabel = 'fair'
+        } else if (normalizedInput.condition === 'excellent' && goRecellGoodPrice > 0) {
+          floorPrice = goRecellGoodPrice; floorLabel = 'good'
+        } else if (normalizedInput.condition === 'fair' && goRecellBrokenPrice > 0) {
+          floorPrice = goRecellBrokenPrice; floorLabel = 'broken'
+        }
+        if (floorPrice > 0 && tradePrice < floorPrice) {
+          tradePrice = round2(floorPrice)
+          goRecellFairFloorApplied = true
+          if (floorLabel !== 'fair') {
+            // extend reasoning to new floor labels so UI reflects the correct tier
+            void floorLabel
+          }
+        }
       }
 
       // Apply competitor ceiling — use the same deduplicated competitor set already built above.
@@ -1247,7 +1264,13 @@ export class PricingService {
           reasoning = `Bell/Telus avg only (${carrierNames}) — quote $${round2(tradePrice)}.`
         }
         if (goRecellFairFloorApplied) {
-          reasoning += ` GoRecell fair floor applied at $${round2(goRecellFairPrice)}.`
+          const condFloor = normalizedInput.condition === 'excellent' ? goRecellGoodPrice
+            : normalizedInput.condition === 'fair' ? goRecellBrokenPrice
+            : goRecellFairPrice
+          const condLabel = normalizedInput.condition === 'excellent' ? 'good'
+            : normalizedInput.condition === 'fair' ? 'broken'
+            : 'fair'
+          reasoning += ` GoRecell ${condLabel}-condition floor applied at $${round2(condFloor)}.`
         }
       } else if (beatPricingApplied) {
         const beatDesc = beatPercent > 0 ? `${beatPercent}%` : `$${beatAmount}`
