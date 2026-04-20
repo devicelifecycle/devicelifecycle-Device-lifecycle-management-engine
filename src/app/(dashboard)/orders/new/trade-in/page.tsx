@@ -545,11 +545,15 @@ export default function NewTradeInPage() {
                                     const q = (deviceSearches[index] || '').toLowerCase()
                                     const serverResults = deviceSearchResults[index]
                                     // Show server search results if typing, else show full catalog (sorted, capped at 50)
+                                    const fuzzyMatch = (device: any) => {
+                                      if (!q) return true
+                                      const text = `${device.make} ${device.model}`.toLowerCase()
+                                      const tokens = q.trim().split(/\s+/).filter((s: string) => s)
+                                      return tokens.every((token: string) => text.includes(token))
+                                    }
                                     const filtered = (serverResults !== undefined
                                       ? serverResults
-                                      : q
-                                        ? devices.filter(d => `${d.make} ${d.model}`.toLowerCase().includes(q))
-                                        : devices
+                                      : q ? devices.filter(fuzzyMatch) : devices
                                     ).slice(0, 50)
                                     if (filtered.length === 0) return <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
                                     return filtered.map(d => (
@@ -853,8 +857,10 @@ export default function NewTradeInPage() {
                           {/* Competitor prices — internal only, never shown to customers */}
                           <TableCell className="bg-amber-50/40 min-w-[200px]">
                             {price.competitors.length > 0 ? (() => {
-                              const isGoRecellName = (n: string) => n.toLowerCase().includes('gorecell') || n.toLowerCase().includes('go recell') || n.toLowerCase().includes('goresell')
-                              const carriers = price.competitors.filter(c => !isGoRecellName(c.name))
+                              // Mirror server-side formula: only Bell and Telus form the carrier group
+                              const isBellTelus = (n: string) => { const l = n.toLowerCase(); return l === 'bell' || l === 'telus' }
+                              const isGoRecellName = (n: string) => { const l = n.toLowerCase(); return l.includes('gorecell') || l.includes('go recell') || l.includes('goresell') }
+                              const carriers = price.competitors.filter(c => isBellTelus(c.name))
                               const goRecell = price.competitors.find(c => isGoRecellName(c.name))
                               const carrierAvg = carriers.length > 0
                                 ? carriers.reduce((s, c) => s + c.price, 0) / carriers.length

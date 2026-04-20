@@ -158,17 +158,23 @@ function buildApprovedTradeInPricingBlend(
   goRecellPrice: number
   referencePrice: number
 } {
-  const deduped = new Map<'Bell' | 'Telus' | 'GoRecell', { name: 'Bell' | 'Telus' | 'GoRecell'; price: number }>()
+  const grouped = new Map<'Bell' | 'Telus' | 'GoRecell', number[]>()
   for (const entry of list) {
     if (!Number.isFinite(entry.price) || entry.price <= 0) continue
     const canonical = getApprovedTradeInPricingCompetitorName(entry.name)
     if (!canonical) continue
-    if (!deduped.has(canonical)) {
-      deduped.set(canonical, { name: canonical, price: entry.price })
-    }
+    const existing = grouped.get(canonical) || []
+    existing.push(entry.price)
+    grouped.set(canonical, existing)
   }
 
-  const approvedCompetitors = Array.from(deduped.values())
+  const approvedCompetitors: Array<{ name: 'Bell' | 'Telus' | 'GoRecell'; price: number }> = []
+  for (const [name, prices] of grouped.entries()) {
+    if (prices.length === 0) continue
+    const avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length
+    approvedCompetitors.push({ name, price: avgPrice })
+  }
+
   const bellTelusCompetitors = approvedCompetitors.filter(
     (entry): entry is { name: 'Bell' | 'Telus'; price: number } => entry.name === 'Bell' || entry.name === 'Telus'
   )
@@ -264,7 +270,7 @@ function getApprovedTradeInCompetitorConditionPrice<T extends TradeInCompetitorR
 function filterCompetitorOutliers(
   list: Array<{ name: string; price: number }>
 ): Array<{ name: string; price: number }> {
-  if (list.length < 4) return list
+  if (list.length < 2) return list
   const sorted = [...list].sort((a, b) => b.price - a.price)
   const highest = sorted[0].price
   const secondHighest = sorted[1].price
