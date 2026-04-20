@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║  Device Lifecycle Management Engine — Technical Book PART 4         ║
+  ║  Continues from: software-book-part3.html                           ║
+  ║  Focus: core-file walkthroughs                                      ║
+  ║                                                                      ║
+  ║  HOW TO CONTINUE THIS DOCUMENT (for Codex / ChatGPT):               ║
+  ║  1. Open the latest software-book-part*.html file.                  ║
+  ║  2. Find the last <!-- CONTINUE_FROM_HERE: ... --> marker.          ║
+  ║  3. Continue with the next important files or UI surfaces.          ║
+  ║  4. Preserve the class/style conventions from earlier parts.        ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Lifecycle Management Engine — Book Part 4 (Core File Walkthroughs)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root { --ink:#1a1a2e;--accent:#2563eb;--accent2:#7c3aed;--muted:#64748b;--border:#e2e8f0;--code-bg:#0f172a;--code-fg:#e2e8f0; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#fff}
+  .main{max-width:900px;margin:0 auto;padding:60px 80px}
+  @media(max-width:768px){.main{padding:30px 20px}}
+  .chapter-header{page-break-before:always;background:linear-gradient(135deg,#0f172a,#1e1b4b);color:#fff;padding:60px;margin:60px -80px 50px;border-radius:0}
+  .chapter-num{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:3px;color:#60a5fa;margin-bottom:12px}
+  .chapter-header h2{font-size:36px;font-weight:700;color:#f8fafc;margin-bottom:12px}
+  .chapter-header p{font-size:16px;color:#94a3b8;max-width:680px}
+  h3.sub{font-size:20px;font-weight:600;color:var(--accent);margin:36px 0 14px}
+  h4.subsub{font-size:16px;font-weight:600;color:var(--ink);margin:24px 0 10px}
+  p{margin-bottom:14px}
+  ul,ol{margin:12px 0 16px 24px}
+  li{margin-bottom:6px}
+  pre{background:var(--code-bg);color:var(--code-fg);padding:24px;border-radius:10px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6;margin:20px 0 24px;border-left:3px solid var(--accent)}
+  code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12.5px;color:#7c3aed}
+  pre code{background:none;padding:0;color:inherit}
+  .note{background:#eff6ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .warn-box{background:#fffbeb;border-left:4px solid #d97706;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .fix-box{background:#f0fdf4;border-left:4px solid #059669;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .note-label,.warn-label,.fix-label{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .note-label{color:#1d4ed8}.warn-label{color:#92400e}.fix-label{color:#065f46}
+  .line-explain{font-size:13px;color:var(--muted);padding:8px 12px;background:#f8fafc;border-radius:0 0 8px 8px;margin:-18px 0 18px;border-left:3px solid #e2e8f0}
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:13.5px}
+  th{background:#0f172a;color:#f8fafc;padding:10px 14px;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:nth-child(even) td{background:#f8fafc}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin:30px 0}
+  .stat-card{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center}
+  .stat-card .num{font-size:32px;font-weight:700;color:var(--accent);line-height:1}
+  .stat-card .lbl{font-size:12px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:0.5px}
+  @media print{.chapter-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}pre{white-space:pre-wrap;word-break:break-word}}
+</style>
+</head>
+<body>
+<div class="main">
+
+<!-- CONTINUE_FROM_HERE: Chapter 19 — Pricing service walkthrough -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 19</div>
+  <h2>Core File Walkthrough I — <code>pricing.service.ts</code></h2>
+  <p>The single most important business file in the system: quote generation, competitor blending, floors, margins, confidence, CPO sell pricing, and multiple fallback paths all converge here.</p>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card"><div class="num">1,962</div><div class="lbl">Lines in<br>pricing.service.ts</div></div>
+  <div class="stat-card"><div class="num">33</div><div class="lbl">Touches Since<br>March 1</div></div>
+  <div class="stat-card"><div class="num">1</div><div class="lbl">Primary Financial<br>Risk File</div></div>
+</div>
+
+<h3 class="sub">19.1 Why this file became so large</h3>
+<p>This file is large because it had to preserve history while the pricing policy was still evolving. Early versions used internal price tables and marketplace anchors. Later versions moved toward competitor-first pricing. The code therefore contains both persistent CRUD helpers and the mature <code>calculatePriceV2()</code> path that eventually became the main quoting engine.</p>
+
+<h3 class="sub">19.2 The internal structure of the file</h3>
+<table>
+  <thead><tr><th>Section</th><th>Representative Functions</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>Normalization helpers</td><td><code>normalizeStorageInput</code>, <code>mapIssuesToDeductionKeys</code>, <code>mapDeviceConditionToCompetitorCondition</code></td><td>Converts user-facing values into canonical keys used by the engine.</td></tr>
+    <tr><td>Competitor selection</td><td><code>getApprovedTradeInPricingCompetitorName</code>, <code>selectApprovedTradeInPricingRows</code>, <code>buildApprovedTradeInPricingBlend</code></td><td>Chooses which competitors are allowed to drive live quotes and how their rows are blended.</td></tr>
+    <tr><td>Primary engine</td><td><code>calculatePriceV2</code></td><td>Main quote flow for trade-in and CPO.</td></tr>
+    <tr><td>Legacy/compatibility engine</td><td><code>calculatePrice</code>, <code>calculateTradeInFromCompetitors</code></td><td>Earlier paths kept alive for compatibility and utilities.</td></tr>
+    <tr><td>Settings and data access</td><td><code>getPricingSettings</code>, CRUD methods for <code>market_prices</code>, <code>competitor_prices</code>, and <code>pricing_tables</code></td><td>Administrative control over all data the engine reads.</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">19.3 The main call graph of <code>calculatePriceV2()</code></h3>
+<ol>
+  <li>Resolve a comparable device id and normalize storage.</li>
+  <li>Load pricing settings.</li>
+  <li>Apply optional brand margin overrides.</li>
+  <li>Apply optional demand-based margin adjustments.</li>
+  <li>Attempt to find a market anchor from approved competitor rows first.</li>
+  <li>If no fresh exact-condition rows exist, fall back carefully through stale rows, all-condition rows, same-device any-storage rows, then trained baselines.</li>
+  <li>Collect all competitor rows for the device/storage and choose one row per approved competitor.</li>
+  <li>Apply condition logic, deductions, breakage risk, and broken-device special handling.</li>
+  <li>Blend Bell/Telus and GoRecell according to policy when live competitor data exists.</li>
+  <li>Apply GoRecell Fair floor for good-condition quotes when needed.</li>
+  <li>Clamp against competitor ceiling when beat-mode is not explicitly enabled.</li>
+  <li>Compute margin, repair buffer, channel recommendation, CPO price, staleness warnings, and confidence.</li>
+  <li>Return a shaped response that both APIs and UI pages can consume.</li>
+</ol>
+
+<h3 class="sub">19.4 The Bell/Telus/GoRecell policy in code</h3>
+<pre><code>const approvedPricingBlend = buildApprovedTradeInPricingBlend(filteredCompetitors)
+const goRecellPrice = approvedPricingBlend.goRecellPrice
+const bellTelusAvg = approvedPricingBlend.bellTelusAvg
+const policyReferencePrice = approvedPricingBlend.referencePrice
+
+if (hasCompetitorData && !beatPercent && !beatAmount) {
+  tradePrice = round2(policyReferencePrice > 0 ? policyReferencePrice : avgCompetitorPrice)
+  weightedAvgUsed = true
+}</code></pre>
+<div class="line-explain">The policy is explicit. Bell and Telus are averaged together first. That carrier average is then averaged with GoRecell. If that computed reference exists, it becomes the quote. Only if the policy reference is unavailable does the function fall back to the general competitor average.</div>
+
+<pre><code>if (
+  weightedAvgUsed &&
+  normalizedInput.condition === 'good' &&
+  goRecellFairPrice > 0 &&
+  tradePrice < goRecellFairPrice
+) {
+  tradePrice = round2(goRecellFairPrice)
+  goRecellFairFloorApplied = true
+}</code></pre>
+<div class="line-explain">This block encodes the business rule that a good-condition quote must not fall below GoRecell Fair when the approved weighted-policy path is being used.</div>
+
+<h3 class="sub">19.5 The most important design decisions inside this file</h3>
+<table>
+  <thead><tr><th>Decision</th><th>Why It Exists</th></tr></thead>
+  <tbody>
+    <tr><td>Do not use wholesale C-stock as the trade-in anchor</td><td>Wholesale is a resale-side value and can overpay customers if used as the customer quote anchor.</td></tr>
+    <tr><td>Deduplicate competitor rows by approved competitor name</td><td>Each provider may have multiple rows; the engine needs one trustworthy row per provider, not a noisy average of duplicates.</td></tr>
+    <tr><td>Prefer exact-condition rows but allow controlled fallback</td><td>Without fallback, some models would quote as unavailable; with uncontrolled fallback, the engine could mix incompatible rows.</td></tr>
+    <tr><td>Apply competitor ceiling when not in beat mode</td><td>Prevents internal math from overshooting the market unintentionally.</td></tr>
+    <tr><td>Return confidence and staleness warnings</td><td>The quote engine should expose uncertainty rather than hide it.</td></tr>
+  </tbody>
+</table>
+
+<div class="warn-box">
+  <div class="warn-label">Why bugs kept happening here</div>
+  The pricing engine had three independent moving parts: business policy, market data freshness, and device normalization. Any change in one could make the whole quote look wrong. That is why many pricing “bugs” were really scraper or catalog bugs surfacing through this service.
+</div>
+
+<h3 class="sub">19.6 What future maintainers should watch first</h3>
+<ul>
+  <li>Any change to <code>selectApprovedTradeInPricingRows()</code> affects which competitor rows are even seen by the policy.</li>
+  <li>Any change to storage normalization affects lookups before the math even begins.</li>
+  <li>Any change to staleness thresholds can silently change whether quotes use fresh rows, stale rows, or fallback baselines.</li>
+  <li>Any new competitor should not enter live quoting until policy explicitly approves it.</li>
+</ul>
+
+<!-- CONTINUE_FROM_HERE: Chapter 20 — Scraper pipeline walkthrough -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 20</div>
+  <h2>Core File Walkthrough II — <code>scrapers/pipeline.ts</code></h2>
+  <p>This file is the control tower for competitor scraping: provider fan-out, discovery vs targeted runs, device resolution, deduplication, outlier filtering, and persistence.</p>
+</div>
+
+<h3 class="sub">20.1 Why this file mattered so much</h3>
+<p>When competitor prices were wrong in the app, the root cause was often here, not in the UI. The pipeline decides which providers run, what devices they run against, how scraped values map back to the catalog, and which rows actually get saved.</p>
+
+<h3 class="sub">20.2 Discovery mode vs non-discovery mode</h3>
+<pre><code>export async function runScraperPipeline(
+  devices?: DeviceToScrape[],
+  supabaseClient?: SupabaseClient,
+  discovery = true,
+  providerIds?: ScraperProviderId[]
+) { ... }</code></pre>
+<div class="line-explain"><strong>Discovery mode</strong> means “scrape broadly and discover items from provider catalogs.” <strong>Non-discovery mode</strong> means “refresh an existing set of known devices.” This distinction became important when discovery-mode matching was found to be riskier for production updates.</div>
+
+<h3 class="sub">20.3 The dangerous part: catalog matching</h3>
+<pre><code>export function isSafeCatalogModelMatch(scrapedModel: string, catalogModel: string): boolean {
+  if (scrapedModel === catalogModel) return true
+
+  const scrapedExtendsCatalog = modelTokenMatch(scrapedModel, catalogModel) && scrapedModel !== catalogModel
+  const catalogExtendsScraped = modelTokenMatch(catalogModel, scrapedModel) && catalogModel !== scrapedModel
+
+  if (!scrapedExtendsCatalog || catalogExtendsScraped) return false
+
+  return hasCompatibleVariantProfile(scrapedModel, catalogModel)
+}</code></pre>
+<div class="line-explain">This function exists because simple string-prefix matching is not enough. A safe match must preserve direction and variant identity. If a scraped model is longer than a catalog model, that does not make it compatible unless the variant profiles also align.</div>
+
+<h3 class="sub">20.4 What the pipeline does after scraping</h3>
+<ol>
+  <li>Run providers in parallel using <code>Promise.allSettled()</code>.</li>
+  <li>Collect all scraped prices into one array.</li>
+  <li>Deduplicate rows so the same device/provider/condition does not cause upsert conflicts.</li>
+  <li>Resolve each scraped make/model/storage to a catalog device id.</li>
+  <li>Optionally create missing devices only when discovery mode allows it.</li>
+  <li>Reject rows with implausible values using category-aware outlier thresholds.</li>
+  <li>Normalize competitor names, storage, and condition before persisting.</li>
+  <li>Batch upsert into <code>competitor_prices</code>.</li>
+</ol>
+
+<pre><code>const seenConflictRows = new Map&lt;string, typeof batchRows[number]&gt;()
+for (const row of batchRows) {
+  const key = `${row.device_id}|${row.storage}|${row.competitor_name}|${row.condition}`
+  const existing = seenConflictRows.get(key)
+  ...
+}</code></pre>
+<div class="line-explain">This conflict-key map prevents the classic Postgres upsert error where multiple rows in a single batch target the same conflict key. The pipeline chooses the strongest row before sending the batch to the database.</div>
+
+<h3 class="sub">20.5 Why the pipeline was repeatedly patched in April</h3>
+<table>
+  <thead><tr><th>Problem</th><th>Pipeline responsibility</th></tr></thead>
+  <tbody>
+    <tr><td>Wrong competitor prices under wrong devices</td><td>Variant-safe matching and phantom-row cleanup support.</td></tr>
+    <tr><td>GoRecell storage parsing errors</td><td>Pipeline had to trust normalized storage coming from adapters and preserve it consistently.</td></tr>
+    <tr><td>Stale or duplicated competitor rows</td><td>Deduplication and later cron cleanup needed to work together.</td></tr>
+    <tr><td>Provider instability</td><td>Retry-once behavior and per-provider health persistence were introduced around this subsystem.</td></tr>
+  </tbody>
+</table>
+
+<div class="fix-box">
+  <div class="fix-label">Mental model</div>
+  Treat this file as a data hygiene layer, not only a scraper runner. Its real job is to make unsafe scraped data safe enough for the pricing engine.
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 21 — Triage service walkthrough -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 21</div>
+  <h2>Core File Walkthrough III — <code>triage.service.ts</code></h2>
+  <p>The triage service turns physical inspection results into workflow decisions. It decides whether an item is complete, repriced, escalated, disputed, or still blocking order progression.</p>
+</div>
+
+<h3 class="sub">21.1 The central flow: <code>submitTriageResult()</code></h3>
+<pre><code>static async submitTriageResult(input: TriageInput) {
+  const imeiRecord = ...
+  const pricedImeiRecord = await this.resolveImeiQuotedPrice(...)
+  const outcome = this.calculateTriageOutcome(input, pricedImeiRecord)
+  const triageResult = await supabase.from('triage_results').insert(...)
+  await supabase.from('imei_records').update({
+    actual_condition: outcome.final_condition,
+    triage_status: outcome.exception_required ? 'needs_exception' : 'complete',
+  })
+  if (outcome.exception_required) {
+    await NotificationService.sendExceptionNotification(...)
+  }
+  await this.syncOrderStatusAfterTriage(...)
+}</code></pre>
+<div class="line-explain">This method is the bridge between inspection and workflow. It does not just save a technician’s notes. It computes the outcome, persists it, updates the device record, optionally notifies the customer organization, and then attempts to move the order forward.</div>
+
+<h3 class="sub">21.2 Where the grading policy lives</h3>
+<pre><code>private static calculateTriageOutcome(input: TriageInput, imeiRecord: IMEIRecord): TriageOutcome {
+  const failedTests = Object.values(input.functional_tests).filter(v =&gt; !v).length
+  let finalCondition = input.physical_condition
+
+  if (failedTests &gt; 3) finalCondition = 'poor'
+  else if (failedTests &gt; 1) finalCondition = this.downgradeCondition(finalCondition)
+
+  if (input.battery_health &lt; 70) finalCondition = 'poor'
+  else if (input.battery_health &lt; 80) finalCondition = this.downgradeCondition(finalCondition)
+
+  if (input.screen_condition === 'damaged' || input.screen_condition === 'dead') finalCondition = 'poor'
+  else if (input.screen_condition === 'cracked') finalCondition = this.downgradeCondition(finalCondition)
+  ...
+}</code></pre>
+<div class="line-explain">This is pure business logic. Failed tests, battery health, and screen condition are treated as downgrade triggers. The service compares the final condition to the originally claimed condition and then computes a price adjustment from that difference.</div>
+
+<h3 class="sub">21.3 Why exception semantics were tricky</h3>
+<p>The subtle bug pattern in triage was not “save failed” but “order state is not semantically aligned with device state.” A device can be triaged, disputed, approved, rejected, or repriced while the order itself still needs a coherent single status. Several April fixes focused on exactly that gap.</p>
+
+<table>
+  <thead><tr><th>Method</th><th>Role in the workflow</th></tr></thead>
+  <tbody>
+    <tr><td><code>handleException()</code></td><td>Applies the outcome of customer approval/dispute/admin review and resolves the exception branch.</td></tr>
+    <tr><td><code>resolveImeiQuotedPrice()</code></td><td>Ensures triage compares against the correct quoted amount, not a stale or missing number.</td></tr>
+    <tr><td><code>syncOrderStatusAfterTriage()</code></td><td>Checks whether all items in the order have reached a resolved state and updates the order status accordingly.</td></tr>
+    <tr><td><code>checkOrderTriageComplete()</code></td><td>Computes whether unresolved triage work still exists.</td></tr>
+  </tbody>
+</table>
+
+<div class="warn-box">
+  <div class="warn-label">Where to be careful</div>
+  Any future change to “resolved” semantics must consider rejected items, customer disputes, and customer-approved repricing separately. The queue logic depends on those distinctions.
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 22 — Parser walkthrough -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 22</div>
+  <h2>Core File Walkthrough IV — <code>parse-trade-template/route.ts</code></h2>
+  <p>This route is effectively a data-ingestion engine disguised as an API route. It handles non-standard spreadsheets from real customers and converts them into structured rows the platform can reason about.</p>
+</div>
+
+<h3 class="sub">22.1 Why this route is unusually complex</h3>
+<p>Most import endpoints assume a stable CSV contract. This one could not. It had to survive multiple spreadsheet dialects: headers at arbitrary rows, merged headers, model names with brand/storage/color jammed into one cell, pricing pivot tables, and storage represented as column names rather than data.</p>
+
+<h3 class="sub">22.2 The parser’s layered heuristics</h3>
+<table>
+  <thead><tr><th>Heuristic</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>findHeaderRow()</code></td><td>Scores the first 15 rows to locate the most likely header row and optional grouping row.</td></tr>
+    <tr><td><code>buildHeaders()</code></td><td>Merges multi-row headers like “30 Days” + “Good” into usable header labels.</td></tr>
+    <tr><td><code>splitCombinedField()</code></td><td>Extracts brand, model, storage, and color when customers put everything in one cell.</td></tr>
+    <tr><td><code>inferBrand()</code></td><td>Guesses the make when there is no make/brand column.</td></tr>
+    <tr><td><code>detectPivot()</code> and <code>parsePivot()</code></td><td>Recognize and transpose price-matrix spreadsheets.</td></tr>
+    <tr><td><code>detectStorageColumns()</code></td><td>Handles storage-as-column layouts.</td></tr>
+    <tr><td><code>inferColumnsWithLLM()</code></td><td>Asks Groq to infer ambiguous columns only as a fallback, not the primary parser.</td></tr>
+  </tbody>
+</table>
+
+<pre><code>function splitCombinedField(cell: string): { brand: string; model: string; storage: string; color: string } {
+  const storageMatch = s.match(/\b(\d+)\s*(GB|TB)\b/i)
+  const storage = storageMatch ? `${storageMatch[1]}${storageMatch[2].toUpperCase()}` : ''
+  ...
+  const finalBrand = brand || (lower.match(/\b(iphone|ipad|macbook|imac|airpods)/) ? 'Apple' : '')
+  return { brand: finalBrand, model, storage, color }
+}</code></pre>
+<div class="line-explain">This is a good example of the parser style. It does not require perfect structure. It extracts what can be extracted, then uses domain heuristics to fill the rest.</div>
+
+<h3 class="sub">22.3 Why the LLM fallback is not the first parser</h3>
+<p>The route includes an LLM column-inference fallback, but it is purposely not the default parser. Deterministic heuristics are cheaper, faster, more testable, and easier to audit. The LLM exists to rescue unusual files, not to replace the structured parser.</p>
+
+<div class="note">
+  <div class="note-label">Good engineering choice</div>
+  The parser is “heuristics first, AI last.” That is the right order for operational software that needs predictable imports.
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 23 — Auth walkthrough -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 23</div>
+  <h2>Core File Walkthrough V — <code>useAuth.ts</code></h2>
+  <p>This file is the session brain for the client side. It owns login, logout, MFA verification, cached-role routing, session health checks, and the timing-sensitive logic that made sign-in feel fast again.</p>
+</div>
+
+<h3 class="sub">23.1 Why auth issues felt worse than they looked</h3>
+<p>Most auth bugs in this project were not credential failures. They were user-experience failures: long login delays, wrong post-login route, double navigation, stale role context, or sign-out that seemed to “half work.” This hook was patched repeatedly because it sits at the boundary between Supabase session state and client-side navigation.</p>
+
+<h3 class="sub">23.2 The key ideas in this hook</h3>
+<table>
+  <thead><tr><th>Mechanism</th><th>Why It Exists</th></tr></thead>
+  <tbody>
+    <tr><td>Module-level browser Supabase client</td><td>Avoids recreating the client in render paths and reduces subtle timing issues.</td></tr>
+    <tr><td>Trusted cached user in sessionStorage</td><td>Speeds up perceived navigation without trusting cache blindly.</td></tr>
+    <tr><td>Role and user-id routing cookies</td><td>Allows middleware and client routing to skip unnecessary database reads on hot paths.</td></tr>
+    <tr><td><code>skipNextSignedInRef</code></td><td>Prevents duplicate profile fetches after login because the hook already hydrated the user.</td></tr>
+    <tr><td>Periodic session health check</td><td>Clears bad sessions and redirects when the client has drifted out of sync.</td></tr>
+  </tbody>
+</table>
+
+<pre><code>const cachedUser = readTrustedCachedUser()
+if (cachedUser && cachedUser.id === userId) {
+  writeCachedUser(cachedUser)
+  setState({ user: cachedUser, isLoading: false, isInitializing: false, isAuthenticated: true })
+  router.replace(getDefaultAppPathForRole(cachedUser.role))
+  fetchUser().catch(() =&gt; {})
+  return
+}</code></pre>
+<div class="line-explain">This is the fast path. If the cache is trusted and belongs to the same authenticated user, the app navigates immediately using the cached role and refreshes the full profile in the background.</div>
+
+<pre><code>const { data: { subscription } } = supabase.auth.onAuthStateChange(
+  async (event, session) =&gt; {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') { ... }
+    else if (event === 'SIGNED_OUT') { ... }
+  }
+)</code></pre>
+<div class="line-explain">This subscription keeps the hook synchronized with Supabase auth events, but it must be coordinated with the manual login flow to avoid duplicate work and state flicker.</div>
+
+<h3 class="sub">23.3 Why this hook is operationally important</h3>
+<ul>
+  <li>If login feels slow, start here before blaming the login page UI.</li>
+  <li>If users land on the wrong dashboard, inspect the routing cookie logic and the cached-role path.</li>
+  <li>If cross-device behavior feels stale, inspect how this hook interacts with realtime and page-level fetches.</li>
+  <li>If MFA seems broken, inspect the challenge branch in <code>login()</code> and the profile fetch after verification.</li>
+</ul>
+
+<!-- CONTINUE_FROM_HERE: Chapter 24 — Part 4 close -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 24</div>
+  <h2>What Part 4 Completes</h2>
+  <p>This volume turns the placeholder at the end of Part 3 into an actual continuation and documents the five files that explain most of the system’s late-stage bug history and business behavior.</p>
+</div>
+
+<table>
+  <thead><tr><th>Covered in Part 4</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/services/pricing.service.ts</code></td><td>Documented</td></tr>
+    <tr><td><code>src/lib/scrapers/pipeline.ts</code></td><td>Documented</td></tr>
+    <tr><td><code>src/services/triage.service.ts</code></td><td>Documented</td></tr>
+    <tr><td><code>src/app/api/orders/parse-trade-template/route.ts</code></td><td>Documented</td></tr>
+    <tr><td><code>src/hooks/useAuth.ts</code></td><td>Documented</td></tr>
+  </tbody>
+</table>
+
+<div class="fix-box">
+  <div class="fix-label">Best next documentation volume</div>
+  The next part should move outward from core services into the high-branch UI surfaces: <code>orders/[id]/_client.tsx</code>, <code>coe/triage/page.tsx</code>, <code>admin/pricing/_client.tsx</code>, and the order-creation pages.
+</div>
+
+<div style="margin-top:80px;padding:40px;background:linear-gradient(135deg,#0f172a,#1e1b4b);border-radius:16px;color:#fff;text-align:center">
+  <h2 style="font-size:28px;margin-bottom:16px;color:#f8fafc">Part 4 Complete: The Core Logic Volume</h2>
+  <p style="color:#94a3b8;max-width:660px;margin:0 auto 24px">The book now has a real continuation after Part 3. The most important backend files in the system are now documented in a way future reviewers can actually use.</p>
+  <p style="color:#64748b;font-size:13px;font-family:'JetBrains Mono',monospace">Device Lifecycle Management Engine — Internal Technical Documentation — Part 4</p>
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 25 — UI convergence surfaces -->
+
+</div>
+</body>
+</html>

@@ -406,6 +406,15 @@ export default function OrderDetailClient() {
     }
   }, [depreciationSchedule, order?.depreciation_rate_override])
 
+  // Auto-fetch competitor market context for internal users when order loads
+  useEffect(() => {
+    if (!isCustomer && !isVendor && order?.items?.length) {
+      fetchMarketContext(order.items)
+    }
+  // fetchMarketContext is not stable across renders; re-run only when order changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, isCustomer, isVendor])
+
   // Reconstruct depreciation schedule when items have buyback but no schedule (e.g. page refresh)
   useEffect(() => {
     if (!isCpoOrder || !order?.items || depreciationSchedule) return
@@ -2570,6 +2579,56 @@ export default function OrderDetailClient() {
               )}
             </CardContent>
           </Card>
+
+          {/* Market Prices — internal users only */}
+          {!isCustomer && !isVendor && order?.items && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4" />
+                  Market Prices
+                </CardTitle>
+                <CardDescription>Bell / GoRecell / Telus trade-in</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-0">
+                {Array.from(
+                  new Map(
+                    order.items
+                      .filter(i => i.device_id)
+                      .map(i => [`${i.device_id}_${getStorageForItem(i)}`, i])
+                  ).entries()
+                ).map(([key, item]) => {
+                  const ctx = marketContext[key]
+                  const condition = mapOrderConditionToCompetitorCondition(item.actual_condition || item.claimed_condition || 'good')
+                  const condData = ctx?.conditions.find(c => c.condition === condition)
+                  const deviceName = item.device ? `${item.device.make} ${item.device.model}` : 'Device'
+                  const deviceLabel = `${deviceName} ${getStorageForItem(item)}`
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">{deviceLabel}</p>
+                      {ctx?.loading ? (
+                        <p className="text-xs text-muted-foreground">Loading…</p>
+                      ) : condData ? (
+                        <div className="space-y-0.5">
+                          {condData.competitors.filter(c => c.trade != null).map(c => (
+                            <div key={c.name} className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">{c.name}</span>
+                              <span className="font-medium">{formatCurrency(c.trade!)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No data for {condition}</p>
+                      )}
+                    </div>
+                  )
+                })}
+                {!order.items.some(i => i.device_id) && (
+                  <p className="text-xs text-muted-foreground">No devices with pricing data</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Timeline */}
           <Card>

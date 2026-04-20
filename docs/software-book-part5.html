@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║  Device Lifecycle Management Engine — Technical Book PART 5         ║
+  ║  Continues from: software-book-part4.html                           ║
+  ║  Focus: UI convergence pages + remaining workflow services          ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Lifecycle Management Engine — Book Part 5 (UI & Workflow Services)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root { --ink:#1a1a2e;--accent:#2563eb;--muted:#64748b;--border:#e2e8f0;--code-bg:#0f172a;--code-fg:#e2e8f0; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#fff}
+  .main{max-width:900px;margin:0 auto;padding:60px 80px}
+  @media(max-width:768px){.main{padding:30px 20px}}
+  .chapter-header{page-break-before:always;background:linear-gradient(135deg,#0f172a,#1e1b4b);color:#fff;padding:60px;margin:60px -80px 50px;border-radius:0}
+  .chapter-num{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:3px;color:#60a5fa;margin-bottom:12px}
+  .chapter-header h2{font-size:36px;font-weight:700;color:#f8fafc;margin-bottom:12px}
+  .chapter-header p{font-size:16px;color:#94a3b8;max-width:680px}
+  h3.sub{font-size:20px;font-weight:600;color:var(--accent);margin:36px 0 14px}
+  h4.subsub{font-size:16px;font-weight:600;color:var(--ink);margin:24px 0 10px}
+  p{margin-bottom:14px}
+  ul,ol{margin:12px 0 16px 24px}
+  li{margin-bottom:6px}
+  pre{background:var(--code-bg);color:var(--code-fg);padding:24px;border-radius:10px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6;margin:20px 0 24px;border-left:3px solid var(--accent)}
+  code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12.5px;color:#7c3aed}
+  pre code{background:none;padding:0;color:inherit}
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:13.5px}
+  th{background:#0f172a;color:#f8fafc;padding:10px 14px;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:nth-child(even) td{background:#f8fafc}
+  .note{background:#eff6ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .warn-box{background:#fffbeb;border-left:4px solid #d97706;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .fix-box{background:#f0fdf4;border-left:4px solid #059669;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .note-label,.warn-label,.fix-label{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .note-label{color:#1d4ed8}.warn-label{color:#92400e}.fix-label{color:#065f46}
+  .line-explain{font-size:13px;color:var(--muted);padding:8px 12px;background:#f8fafc;border-radius:0 0 8px 8px;margin:-18px 0 18px;border-left:3px solid #e2e8f0}
+</style>
+</head>
+<body>
+<div class="main">
+
+<!-- CONTINUE_FROM_HERE: Chapter 25 — Order detail UI -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 25</div>
+  <h2>UI Convergence Surface I — <code>orders/[id]/_client.tsx</code></h2>
+  <p>The most important UI screen in the entire product. If the services are the engine room, this page is the bridge. Quotes, transitions, mismatches, shipments, bids, exceptions, and customer actions all meet here.</p>
+</div>
+
+<h3 class="sub">25.1 Why this page is so large</h3>
+<p>This file is large because an order is the center of the business. The order-detail UI must expose different actions to different roles without duplicating the workflow into separate screens. That means the page accumulates orchestration logic for admin, COE, customer, and vendor behavior.</p>
+
+<table>
+  <thead><tr><th>Cluster</th><th>Representative Handlers</th><th>Why It Lives Here</th></tr></thead>
+  <tbody>
+    <tr><td>Transitions</td><td><code>handleTransition</code>, <code>handleCustomerShipDevices</code></td><td>Order status progression is contextual to the viewed order.</td></tr>
+    <tr><td>Pricing and quotes</td><td><code>handleSuggestPrice</code>, <code>handleSavePrices</code>, <code>handleSendQuote</code>, <code>handleSaveAndSendQuote</code></td><td>Item-level and order-level pricing decisions both originate from the detail page.</td></tr>
+    <tr><td>Mismatches and repricing</td><td><code>handleAddMismatch</code>, <code>handleRepriceMismatchedItems</code>, <code>handleSendMismatchNotice</code></td><td>Receiving and triage discrepancies feed back into the quote flow.</td></tr>
+    <tr><td>Vendor workflow</td><td><code>fetchVendorsList</code>, <code>handleAssignVendor</code>, <code>fetchVendorBids</code>, <code>handleAcceptBid</code>, <code>handleRejectBid</code></td><td>Vendor decisions are often made while inspecting a specific order.</td></tr>
+    <tr><td>Shipping</td><td><code>handleCreateShipment</code>, <code>openShipmentDialog</code></td><td>Shipping is not a standalone business object from the operator’s point of view; it is an order action.</td></tr>
+    <tr><td>Exceptions</td><td><code>fetchPendingExceptions</code>, <code>handleExceptionDecision</code></td><td>Triage exceptions return to the order because they affect the customer-facing quote.</td></tr>
+  </tbody>
+</table>
+
+<div class="warn-box">
+  <div class="warn-label">Maintainability note</div>
+  This page is a natural candidate for future decomposition into feature sections or hooks. Right now it is correct but dense because it mirrors the real operational complexity of a single order.
+</div>
+
+<h3 class="sub">25.2 The page’s real job</h3>
+<p>Its real job is not rendering. It is mediation. The page mediates between:</p>
+<ul>
+  <li>order data and live market context</li>
+  <li>mismatch findings and repricing</li>
+  <li>customer-facing quote visibility and internal price editing</li>
+  <li>vendor sourcing and accepted bid selection</li>
+  <li>manual shipping creation and tracking visibility</li>
+  <li>exception handling and order completion</li>
+</ul>
+
+<!-- CONTINUE_FROM_HERE: Chapter 26 — Triage UI -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 26</div>
+  <h2>UI Convergence Surface II — <code>coe/triage/page.tsx</code></h2>
+  <p>The COE triage page became the operational cockpit for intake, spreadsheet imports, IMEI lookup, diagnostics, repricing, and technician submission.</p>
+</div>
+
+<h3 class="sub">26.1 What makes this page operationally different</h3>
+<p>Unlike a typical CRUD dashboard page, triage is not just editing an entity. It is executing a physical process. The page must support queue review, spreadsheet-assisted intake, manual IMEI registration, diagnostics capture, mismatch detection, and technician submission, often under time pressure.</p>
+
+<table>
+  <thead><tr><th>Area</th><th>Representative Functions</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>Spreadsheet intake</td><td><code>runTemplateUpload</code>, <code>handleFileUpload</code>, <code>handleBulkImport</code></td><td>Bring batches of received devices into the queue.</td></tr>
+    <tr><td>Order-centric intake</td><td><code>lookupManualOrder</code>, <code>handleLoadIntakeOrder</code>, <code>handleAddIntakeImei</code>, <code>handleSubmitIntake</code></td><td>Link physical received devices to an expected order manifest.</td></tr>
+    <tr><td>Queue sync</td><td><code>fetchPending</code>, visibility and database-change effects</td><td>Keep the triage queue updated without manual refresh dependence.</td></tr>
+    <tr><td>Technician workflow</td><td><code>openTriageDialog</code>, <code>toggleChecklistItem</code>, <code>toggleIssue</code>, <code>handleSubmitTriage</code></td><td>Capture the inspection result in a structured way.</td></tr>
+    <tr><td>Repricing follow-up</td><td><code>handleApplyRepricing</code></td><td>Push mismatch outcomes back into the quote side of the system.</td></tr>
+  </tbody>
+</table>
+
+<div class="fix-box">
+  <div class="fix-label">Why this page kept changing</div>
+  Presentation-day issues often surfaced here because triage sits between inbound shipping, order linking, pricing, and customer communication. If any upstream or downstream workflow was weak, triage exposed it.
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 27 — Admin pricing UI -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 27</div>
+  <h2>UI Convergence Surface III — <code>admin/pricing/_client.tsx</code></h2>
+  <p>The admin pricing page evolved from a simple calculator into a full market-operations console.</p>
+</div>
+
+<h3 class="sub">27.1 What this page ended up owning</h3>
+<table>
+  <thead><tr><th>Capability</th><th>Representative Functions</th></tr></thead>
+  <tbody>
+    <tr><td>Price calculator</td><td><code>handleCalculate</code>, <code>handleCpoCalculate</code>, condition mapping helpers</td></tr>
+    <tr><td>Brand overrides</td><td><code>fetchBrandOverrides</code>, <code>handleSaveBrandOverride</code>, <code>handleToggleBrandOverride</code>, <code>handleDeleteBrandOverride</code></td></tr>
+    <tr><td>Catalog + competitor data</td><td><code>fetchCatalog</code>, <code>fetchDevices</code>, <code>fetchCompetitorPrices</code>, <code>deviceAnchorPrices</code></td></tr>
+    <tr><td>Scraper operations</td><td><code>handleRunScraper</code>, <code>handleCleanupPhantomDevices</code>, <code>handleCleanupUnknownStorage</code></td></tr>
+    <tr><td>Benchmarking and audits</td><td><code>buildBenchmarkRows</code>, <code>handlePreviewBenchmark</code>, <code>handleApplyBenchmark</code>, <code>handleDownloadPriceChanges</code></td></tr>
+    <tr><td>Settings</td><td><code>fetchSettings</code>, <code>handleSaveSettings</code>, <code>handleSendUpdatedQuotes</code></td></tr>
+  </tbody>
+</table>
+
+<p>This page is effectively the operational front-end for everything described in <code>pricing.service.ts</code> and <code>scrapers/pipeline.ts</code>. It gives admins the ability to observe, verify, override, clean, benchmark, and export pricing behavior from one place.</p>
+
+<div class="note">
+  <div class="note-label">Why this is important</div>
+  The pricing system would be hard to trust without this page. The engine alone computes numbers, but this page gives staff the visibility needed to understand why those numbers exist and how fresh they are.
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 28 — Order creation surfaces -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 28</div>
+  <h2>UI Convergence Surface IV — Order Creation Pages</h2>
+  <p>The order-creation flow exists in both unified and specialized forms: the unified new-order page plus dedicated trade-in and CPO pages. Together they define how new work enters the system.</p>
+</div>
+
+<h3 class="sub">28.1 Unified order creation</h3>
+<p><code>src/app/(dashboard)/orders/new/page.tsx</code> became the umbrella surface for internal users and customer-safe flows. It supports:</p>
+<ul>
+  <li>manual line-item entry</li>
+  <li>CSV and Excel upload</li>
+  <li>column alias normalization</li>
+  <li>condition typo correction</li>
+  <li>internal-only price lookups</li>
+  <li>template downloads for both trade-in and CPO</li>
+</ul>
+
+<pre><code>function normalizeHeader(raw: string): string {
+  const lower = raw.toLowerCase().trim().replace(/\s+/g, ' ')
+  if (COLUMN_ALIASES[lower]) return COLUMN_ALIASES[lower]
+  ...
+}
+
+function normalizeCondition(raw: string): string {
+  if (!raw) return 'good'
+  ...
+  return 'good'
+}</code></pre>
+<div class="line-explain">These helpers are an example of the product philosophy by late April: be forgiving on input, normalize aggressively, and keep the operator moving.</div>
+
+<h3 class="sub">28.2 Specialized trade-in page</h3>
+<p><code>orders/new/trade-in/page.tsx</code> contains the trade-in-specific pricing lookup path, beat overrides, server-side search for the growing catalog, and CSV-assisted intake. It also paginates through the full device catalog to avoid cutoffs as the catalog expands.</p>
+
+<h3 class="sub">28.3 Specialized CPO page</h3>
+<p><code>orders/new/cpo/page.tsx</code> is intentionally simpler because CPO orders always use a fixed logical condition for quoting. It focuses on CPO price lookup, competitor sell-price context, and CPO-specific uploads.</p>
+
+<div class="warn-box">
+  <div class="warn-label">Late-stage learning</div>
+  The creation pages needed strong template support not because users dislike forms, but because enterprise customers already have spreadsheets. The product had to adapt to their workflow rather than force them into a new one.
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 29 — Remaining services -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 29</div>
+  <h2>Remaining Workflow Services — Orders, Vendors, Shipments, Notifications</h2>
+  <p>This chapter covers the remaining service files that make the visible UI actions actually happen.</p>
+</div>
+
+<h3 class="sub">29.1 <code>order.service.ts</code></h3>
+<p>The order service owns the canonical lifecycle: create, update, delete, validate transitions, transition status, auto-quote trade-ins, record sales history, add timeline events, and write audit logs.</p>
+
+<pre><code>static async createOrder(input: CreateOrderInput, userId: string, orgId: string): Promise&lt;Order&gt; {
+  const direction = input.direction || (input.type === 'trade_in' ? 'inbound' : 'outbound')
+  ...
+  const { data: createdOrder } = await supabase.from('orders').insert({...}).select().single()
+  ...
+  await this.addTimelineEvent(order.id, 'Order Created', `Order ${orderNumber} created`, userId)
+  await this.logAudit(userId, 'create', 'order', order.id, null, order)
+}</code></pre>
+<div class="line-explain">Order creation is not just persistence. It infers direction, secures a unique order number, creates child items, updates aggregate quantity, adds timeline history, and writes audit metadata.</div>
+
+<pre><code>static async transitionOrder(id: string, toStatus: OrderStatus, userId: string, notes?: string): Promise&lt;Order&gt; {
+  ...
+  if (toStatus === 'submitted' &amp;&amp; order.type === 'trade_in') {
+    await this.autoQuoteOrderItems(id)
+  }
+  if (toStatus === 'closed') {
+    await this.recordSalesHistory(supabase, id, order.type as 'trade_in' | 'cpo')
+  }
+  ...
+}</code></pre>
+<div class="line-explain">This is the business-state machine. Certain status changes do more than update status. They trigger quoting, sales-history recording, split-order logic, timeline entries, and audit logs.</div>
+
+<h3 class="sub">29.2 <code>vendor.service.ts</code></h3>
+<p>The vendor service handles vendor-side economics and allocation. It supports direct assignment, open bidding, auto-accept for full-quantity first bids, and auto-splitting when accepted bids jointly cover the whole order.</p>
+
+<pre><code>static async submitBid(input: {...}): Promise&lt;VendorBid &amp; { auto_accepted?: boolean }&gt; {
+  const bid = await supabase.from('vendor_bids').insert({...status:'pending'}).select().single()
+  ...
+  if (order &amp;&amp; !order.vendor_id &amp;&amp; input.quantity &gt;= (order.total_quantity || 0)) {
+    const accepted = await this.updateBidStatus(bid.id, 'accepted')
+    return { ...accepted, auto_accepted: true }
+  }
+  return bid
+}</code></pre>
+<div class="line-explain">This is one of the workflow accelerators in the system: the first complete-coverage bid can be auto-accepted, reducing manual admin work for straightforward sourcing cases.</div>
+
+<h3 class="sub">29.3 <code>shipment.service.ts</code></h3>
+<p>The shipment service reflects a key product simplification: shipping is now fundamentally manual-tracking first. It still tracks statuses, webhooks, receiving, and notifications, but the system no longer depends on in-app label purchasing.</p>
+
+<table>
+  <thead><tr><th>Method</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>createShipment()</code></td><td>Create a shipment record with carrier, tracking number, addresses, and direction.</td></tr>
+    <tr><td><code>updateShipmentStatus()</code></td><td>Advance shipment lifecycle with timestamp side effects.</td></tr>
+    <tr><td><code>processTrackingWebhook()</code></td><td>Map carrier tracking events into internal statuses and append tracking events.</td></tr>
+    <tr><td><code>markAsReceived()</code></td><td>Turn inbound delivery into receiving-side workflow effects, including quantity mismatch notes.</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">29.4 <code>notification.service.ts</code> and <code>email.service.ts</code></h3>
+<p>These services are the communications layer. They turn workflow transitions into in-app notifications, email, and optionally SMS. The notification service decides recipients and message variants; the email service actually formats and sends the messages through the configured provider.</p>
+
+<pre><code>static async sendOrderTransitionNotifications(order, fromStatus, toStatus): Promise&lt;void&gt; {
+  const config = ORDER_EMAIL_CONFIG[toStatus]
+  if (!config) return
+  ...
+  // gather customer, vendor, assigned user, and admin recipients
+  ...
+  // deduplicate emails and send in parallel
+}</code></pre>
+<div class="line-explain">This method is workflow glue. It knows who needs to hear about a status change, what text they should receive, whether customer wording should differ, and how to avoid duplicate email delivery.</div>
+
+<div class="fix-box">
+  <div class="fix-label">Why these services matter together</div>
+  Orders, vendors, shipments, and notifications are tightly coupled. A workflow is only “real” when status changes, sourcing decisions, shipment states, and communications all stay in sync. These services are that sync layer.
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 30 — Closing -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 30</div>
+  <h2>The Documentation Set Is Now Functionally Complete</h2>
+  <p>With Part 5, the book now covers the platform from architecture to phases to engineering history to core files to UI convergence surfaces and remaining workflow services.</p>
+</div>
+
+<table>
+  <thead><tr><th>Coverage Area</th><th>Where It Is Covered</th></tr></thead>
+  <tbody>
+    <tr><td>Architecture and phase history</td><td>Parts 1–2</td></tr>
+    <tr><td>Day-by-day engineering journal</td><td>Part 3</td></tr>
+    <tr><td>Core backend walkthroughs</td><td>Part 4</td></tr>
+    <tr><td>Heavy UI pages and remaining services</td><td>Part 5</td></tr>
+  </tbody>
+</table>
+
+<div style="margin-top:80px;padding:40px;background:linear-gradient(135deg,#0f172a,#1e1b4b);border-radius:16px;color:#fff;text-align:center">
+  <h2 style="font-size:28px;margin-bottom:16px;color:#f8fafc">Part 5 Complete: UI and Workflow Closure</h2>
+  <p style="color:#94a3b8;max-width:660px;margin:0 auto 24px">The software book now covers the architecture, timeline, core logic, UI convergence surfaces, and workflow services. The remaining step is packaging it cleanly into one master deliverable.</p>
+  <p style="color:#64748b;font-size:13px;font-family:'JetBrains Mono',monospace">Device Lifecycle Management Engine — Internal Technical Documentation — Part 5</p>
+</div>
+
+<!-- CONTINUE_FROM_HERE: Appendix Volume or PDF export -->
+
+</div>
+</body>
+</html>
