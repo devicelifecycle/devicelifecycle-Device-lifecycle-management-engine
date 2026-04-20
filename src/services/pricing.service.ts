@@ -482,11 +482,46 @@ export class PricingService {
         }))
 
         if (modelResult.success && (modelResult.trade_price ?? modelResult.final_price) > 0) {
-          return this.adaptModelResultToV2(
+          const adapted = this.adaptModelResultToV2(
             modelResult,
             qty,
             normalizedInput.risk_mode || 'retail'
           )
+          // Fetch competitor prices so the UI can display the comparison table.
+          // The data-driven model doesn't query competitor_prices itself.
+          try {
+            const competitorCondition = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
+            let { data: compRows } = await supabase
+              .from('competitor_prices')
+              .select('competitor_name, trade_in_price')
+              .eq('device_id', normalizedInput.device_id)
+              .eq('storage', normalizedInput.storage)
+              .eq('condition', competitorCondition)
+              .not('trade_in_price', 'is', null)
+              .gt('trade_in_price', 0)
+            if (!compRows || compRows.length === 0) {
+              const { data: fallback } = await supabase
+                .from('competitor_prices')
+                .select('competitor_name, trade_in_price')
+                .eq('device_id', normalizedInput.device_id)
+                .eq('storage', normalizedInput.storage)
+                .not('trade_in_price', 'is', null)
+                .gt('trade_in_price', 0)
+              compRows = fallback
+            }
+            if (compRows && compRows.length > 0) {
+              const raw = compRows.map(r => ({ name: r.competitor_name || 'Unknown', price: Number(r.trade_in_price) || 0 }))
+              const filtered = filterCompetitorOutliers(raw)
+              adapted.competitors = filtered.map(c => ({
+                name: c.name,
+                price: c.price,
+                gap_percent: 0,
+              }))
+            }
+          } catch {
+            // non-fatal — model price still valid
+          }
+          return adapted
         }
       }
     }
