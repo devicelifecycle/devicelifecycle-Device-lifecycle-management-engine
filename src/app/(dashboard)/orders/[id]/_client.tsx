@@ -156,6 +156,7 @@ export default function OrderDetailClient() {
   const [isNotifyingPriceChange, setIsNotifyingPriceChange] = useState(false)
   const [isGeneratingPostTriageQuote, setIsGeneratingPostTriageQuote] = useState(false)
   const [suggestingItemId, setSuggestingItemId] = useState<string | null>(null)
+  const [isSuggestingAll, setIsSuggestingAll] = useState(false)
   const [transitionTarget, setTransitionTarget] = useState<OrderStatus | null>(null)
   const [transitionNotes, setTransitionNotes] = useState('')
   const [beatCompetitorPercent, setBeatCompetitorPercent] = useState<number>(0)
@@ -255,13 +256,10 @@ export default function OrderDetailClient() {
           const allRows = data.data || data || []
           // Filter by storage with normalization so "128 GB" and "128GB" are treated the same.
           const requestedStorage = normalizeStorageToken(storage)
-          const storageMatchedRows = allRows.filter((r: Record<string, unknown>) => {
+          const rows = allRows.filter((r: Record<string, unknown>) => {
             if (!r.storage) return true
             return normalizeStorageToken(r.storage) === requestedStorage
           })
-          // If storage-specific rows are missing, fall back to all rows for this device
-          // so competitors still render instead of a misleading "No data" state.
-          const rows = storageMatchedRows.length > 0 ? storageMatchedRows : allRows
           // Group by condition
           const byCondition = new Map<string, { name: string; trade: number | null; sell: number | null }[]>()
           for (const row of rows) {
@@ -274,11 +272,27 @@ export default function OrderDetailClient() {
             })
           }
           const conditions = Array.from(byCondition.entries()).map(([condition, competitors]) => {
-            const trades = competitors.filter(c => c.trade != null).map(c => c.trade!)
             const sells = competitors.filter(c => c.sell != null).map(c => c.sell!)
+            // Mirror the server-side formula: (avg(Bell,Telus) + GoRecell) / 2
+            const bellTelusAvg = (() => {
+              const bt = competitors.filter(c => (c.name === 'Bell' || c.name === 'Telus') && c.trade != null)
+              return bt.length ? bt.reduce((s, c) => s + c.trade!, 0) / bt.length : 0
+            })()
+            const goRecellTrade = competitors.find(c => c.name === 'GoRecell' && c.trade != null)?.trade ?? 0
+            let avg_trade = 0
+            if (bellTelusAvg > 0 && goRecellTrade > 0) {
+              avg_trade = (bellTelusAvg + goRecellTrade) / 2
+            } else if (goRecellTrade > 0) {
+              avg_trade = goRecellTrade
+            } else if (bellTelusAvg > 0) {
+              avg_trade = bellTelusAvg
+            } else {
+              const trades = competitors.filter(c => c.trade != null).map(c => c.trade!)
+              avg_trade = trades.length ? trades.reduce((a, b) => a + b, 0) / trades.length : 0
+            }
             return {
               condition,
-              avg_trade: trades.length ? trades.reduce((a, b) => a + b, 0) / trades.length : 0,
+              avg_trade,
               avg_cpo: sells.length ? sells.reduce((a, b) => a + b, 0) / sells.length : 0,
               competitors,
             }
@@ -532,13 +546,19 @@ export default function OrderDetailClient() {
     return order?.customer?.default_risk_mode || 'retail'
   }
 
-  const handleSuggestPrice = async (item: OrderItem) => {
+  const suggestPriceForItem = async (
+    item: OrderItem,
+    mode: 'trade' | 'cpo',
+    options?: { silent?: boolean }
+  ): Promise<boolean> => {
     if (!item.device_id) {
-      toast.error('Device not found for this item')
-      return
+      if (!options?.silent) toast.error('Device not found for this item')
+      return false
     }
+
     setSuggestingItemId(item.id)
     try {
+      const isTrade = mode === 'trade'
       const res = await fetch('/api/pricing/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -549,17 +569,24 @@ export default function OrderDetailClient() {
           carrier: 'Unlocked',
           condition: item.claimed_condition || 'good',
           risk_mode: getRiskMode(),
-          quantity: item.quantity,
-          beat_competitor_percent: beatCompetitorPercent,
+          quantity: isTrade ? (item.quantity || 1) : 1,
+          ...(isTrade ? { beat_competitor_percent: beatCompetitorPercent } : {}),
         }),
       })
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to calculate price')
+        throw new Error(err.error || `Failed to calculate ${isTrade ? 'price' : 'CPO price'}`)
       }
+
       const result = await res.json()
-      if (result.success && result.trade_price != null) {
-        // API returns total (trade_price * quantity); we need per-unit for the input
+      if (!result.success) {
+        if (!options?.silent) toast.error(result.error || `Could not calculate ${isTrade ? 'price' : 'CPO price'}`)
+        return false
+      }
+
+      if (isTrade && result.trade_price != null) {
+        // API returns total (trade_price * quantity); dialog input stores unit price.
         const qty = item.quantity || 1
         const unitPrice = result.trade_price / qty
         setItemPrices(prev => ({ ...prev, [item.id]: unitPrice.toFixed(2) }))
@@ -573,46 +600,16 @@ export default function OrderDetailClient() {
             channel_decision: result.channel_decision?.recommended_channel,
           },
         }))
-        toast.success(`Suggested ${formatCurrency(unitPrice)} (${result.channel_decision?.margin_tier || '—'} margin)`)
-      } else {
-        toast.error(result.error || 'Could not calculate price')
+        if (!options?.silent) {
+          toast.success(`Suggested ${formatCurrency(unitPrice)} (${result.channel_decision?.margin_tier || '—'} margin)`)
+        }
+        return true
       }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to suggest price')
-    } finally {
-      setSuggestingItemId(null)
-    }
-  }
 
-  const handleSuggestCpoPrice = async (item: OrderItem) => {
-    if (!item.device_id) {
-      toast.error('Device not found for this item')
-      return
-    }
-    setSuggestingItemId(item.id)
-    try {
-      const res = await fetch('/api/pricing/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          version: 'v2',
-          device_id: item.device_id,
-          storage: getStorageForItem(item),
-          carrier: 'Unlocked',
-          condition: item.claimed_condition || 'good',
-          risk_mode: getRiskMode(),
-          quantity: 1,
-        }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to calculate CPO price')
-      }
-      const result = await res.json()
       const cpoUnit = result.cpo_price ?? result.trade_price
-      if (result.success && cpoUnit != null && cpoUnit > 0) {
+      if (!isTrade && cpoUnit != null && cpoUnit > 0) {
         setItemPrices(prev => ({ ...prev, [item.id]: cpoUnit.toFixed(2) }))
-        // Intentionally NOT setting suggested_by_calc:true — CPO API blocks it
+        // Intentionally NOT setting suggested_by_calc:true — CPO API blocks it.
         setItemMetadata(prev => ({
           ...prev,
           [item.id]: {
@@ -623,14 +620,56 @@ export default function OrderDetailClient() {
             anchor_price: result.breakdown?.anchor_price,
           },
         }))
-        toast.success(`CPO suggested price: ${formatCurrency(cpoUnit)}`)
-      } else {
-        toast.error(result.error || 'Could not calculate CPO price')
+        if (!options?.silent) toast.success(`CPO suggested price: ${formatCurrency(cpoUnit)}`)
+        return true
       }
+
+      if (!options?.silent) toast.error(result.error || `Could not calculate ${isTrade ? 'price' : 'CPO price'}`)
+      return false
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to suggest CPO price')
+      if (!options?.silent) toast.error(e instanceof Error ? e.message : `Failed to suggest ${mode === 'trade' ? 'price' : 'CPO price'}`)
+      return false
     } finally {
       setSuggestingItemId(null)
+    }
+  }
+
+  const handleSuggestPrice = async (item: OrderItem) => {
+    await suggestPriceForItem(item, 'trade')
+  }
+
+  const handleSuggestCpoPrice = async (item: OrderItem) => {
+    await suggestPriceForItem(item, 'cpo')
+  }
+
+  const handleSuggestAllPrices = async () => {
+    if (!order?.items?.length) return
+
+    const eligibleItems = order.items.filter(item => item.device_id)
+    if (eligibleItems.length === 0) {
+      toast.error('No devices found to suggest pricing')
+      return
+    }
+
+    setIsSuggestingAll(true)
+    let successCount = 0
+
+    try {
+      const mode: 'trade' | 'cpo' = isCpoOrder ? 'cpo' : 'trade'
+      for (const item of eligibleItems) {
+        const ok = await suggestPriceForItem(item, mode, { silent: true })
+        if (ok) successCount += 1
+      }
+
+      if (successCount === eligibleItems.length) {
+        toast.success(`Suggested pricing for all ${successCount} device(s)`)
+      } else if (successCount > 0) {
+        toast.warning(`Suggested pricing for ${successCount}/${eligibleItems.length} device(s). Review remaining items manually.`)
+      } else {
+        toast.error('Could not suggest pricing for the selected devices')
+      }
+    } finally {
+      setIsSuggestingAll(false)
     }
   }
 
@@ -2613,6 +2652,14 @@ export default function OrderDetailClient() {
                   const ctx = marketContext[key]
                   const condition = mapOrderConditionToCompetitorCondition(item.actual_condition || item.claimed_condition || 'good')
                   const condData = ctx?.conditions.find(c => c.condition === condition)
+                  const nearestCondData = condData ?? (() => {
+                    const qualityOrder: Array<'excellent' | 'good' | 'fair' | 'broken'> = ['excellent', 'good', 'fair', 'broken']
+                    const idx = qualityOrder.indexOf(condition as 'excellent' | 'good' | 'fair' | 'broken')
+                    if (idx < 0 || !ctx?.conditions?.length) return undefined
+                    const preferNext = ctx.conditions.find(c => qualityOrder.indexOf(c.condition as 'excellent' | 'good' | 'fair' | 'broken') === idx + 1)
+                    const preferPrev = ctx.conditions.find(c => qualityOrder.indexOf(c.condition as 'excellent' | 'good' | 'fair' | 'broken') === idx - 1)
+                    return preferNext ?? preferPrev ?? ctx.conditions[0]
+                  })()
                   const deviceName = item.device ? `${item.device.make} ${item.device.model}` : 'Device'
                   const deviceLabel = `${deviceName} ${getStorageForItem(item)}`
                   return (
@@ -2620,17 +2667,28 @@ export default function OrderDetailClient() {
                       <p className="text-xs font-medium text-muted-foreground">{deviceLabel}</p>
                       {ctx?.loading ? (
                         <p className="text-xs text-muted-foreground">Loading…</p>
-                      ) : condData ? (
-                        <div className="space-y-0.5">
-                          {condData.competitors.filter(c => c.trade != null).map(c => (
-                            <div key={c.name} className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">{c.name}</span>
-                              <span className="font-medium">{formatCurrency(c.trade!)}</span>
-                            </div>
-                          ))}
+                      ) : nearestCondData ? (
+                        <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+                          <div className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                            <span>Competitor prices</span>
+                            {nearestCondData.condition !== condition && <span>Nearest match: {nearestCondData.condition}</span>}
+                          </div>
+                          <div className="space-y-0.5">
+                            {nearestCondData.competitors.filter(c => c.trade != null).map(c => (
+                              <div key={c.name} className="flex justify-between text-xs">
+                                <span className="text-amber-900/80 dark:text-amber-100/80">{c.name}</span>
+                                <span className="font-semibold text-amber-950 dark:text-amber-50">{formatCurrency(c.trade!)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground">No data for {condition}</p>
+                        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                          <p className="font-semibold">No competitor data for {condition}</p>
+                          <p className="mt-1 text-amber-800/90 dark:text-amber-200/90">
+                            The quote still calculates, but there are no competitor rows yet for this device/storage.
+                          </p>
+                        </div>
                       )}
                     </div>
                   )
@@ -2723,6 +2781,22 @@ export default function OrderDetailClient() {
               </div>
             </div>
           )}
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSuggestAllPrices}
+              disabled={isSuggestingAll || !!suggestingItemId || !(order?.items?.some(item => item.device_id))}
+            >
+              {isSuggestingAll ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              <span className="ml-1">{isSuggestingAll ? 'Suggesting…' : isCpoOrder ? 'Suggest All CPO' : 'Suggest All'}</span>
+            </Button>
+          </div>
           <div className="space-y-6 py-4">
             {order?.items?.map(item => {
               const ctxKey = `${item.device_id}_${getStorageForItem(item)}`
@@ -2782,7 +2856,7 @@ export default function OrderDetailClient() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={!item.device_id || !!suggestingItemId}
+                        disabled={!item.device_id || !!suggestingItemId || isSuggestingAll}
                         onClick={() => handleSuggestPrice(item)}
                       >
                         {suggestingItemId === item.id ? (
@@ -2798,7 +2872,7 @@ export default function OrderDetailClient() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={!item.device_id || !!suggestingItemId}
+                        disabled={!item.device_id || !!suggestingItemId || isSuggestingAll}
                         onClick={() => handleSuggestCpoPrice(item)}
                       >
                         {suggestingItemId === item.id ? (
@@ -2897,6 +2971,16 @@ export default function OrderDetailClient() {
                           ))}
                         </TableBody>
                       </Table>
+                    </div>
+                  )}
+                  {ctx && !ctx.loading && ctx.conditions.length === 0 && (
+                    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50/90 p-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                        No competitor data found
+                      </p>
+                      <p className="mt-1 text-xs text-amber-900/85 dark:text-amber-100/85">
+                        No competitor rows are available yet for {getStorageForItem(item)}. The quote is still available, but it is using internal pricing logic rather than market rows.
+                      </p>
                     </div>
                   )}
                   {ctx?.loading && (
