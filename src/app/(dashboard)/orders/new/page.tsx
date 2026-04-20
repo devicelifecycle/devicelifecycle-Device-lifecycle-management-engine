@@ -1118,17 +1118,43 @@ export default function NewOrderPage() {
                         <TableCell className="text-right text-xs">{item.quantity}</TableCell>
                         <TableCell className="text-right font-mono text-xs text-muted-foreground">{enginePrice > 0 ? formatCurrency(enginePrice) : '—'}</TableCell>
                         {/* Competitor prices — internal only */}
-                        <TableCell className="bg-amber-50/40 min-w-[150px]">
-                          {price?.competitors && price.competitors.length > 0 ? (
-                            <div className="space-y-0.5">
-                              {price.competitors.map(c => (
-                                <div key={c.name} className="flex items-center justify-between gap-2 text-[11px]">
-                                  <span className="text-muted-foreground truncate max-w-[80px]">{c.name}</span>
-                                  <span className="font-mono font-medium text-amber-800">{formatCurrency(c.price)}</span>
+                        <TableCell className="bg-amber-50/40 min-w-[200px]">
+                          {price?.competitors && price.competitors.length > 0 ? (() => {
+                            const isBellTelus = (n: string) => { const l = n.toLowerCase(); return l === 'bell' || l === 'telus' }
+                            const isGoRecellName = (n: string) => { const l = n.toLowerCase(); return l.includes('gorecell') || l.includes('go recell') }
+                            const carriers = price.competitors.filter(c => isBellTelus(c.name))
+                            const goRecell = price.competitors.find(c => isGoRecellName(c.name))
+                            const carrierAvg = carriers.length > 0
+                              ? carriers.reduce((s, c) => s + c.price, 0) / carriers.length : 0
+                            return (
+                              <div className="space-y-0.5 text-[11px]">
+                                {carriers.map(c => (
+                                  <div key={c.name} className="flex items-center justify-between gap-2">
+                                    <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[90px]">{c.name}</span>
+                                    <span className="font-mono text-amber-800">{formatCurrency(c.price)}</span>
+                                  </div>
+                                ))}
+                                {carriers.length >= 2 && (
+                                  <div className="flex items-center justify-between gap-2 border-t border-amber-200/40 pt-0.5">
+                                    <span className="text-slate-600 dark:text-slate-400 italic">Carrier avg</span>
+                                    <span className="font-mono text-amber-700">{formatCurrency(carrierAvg)}</span>
+                                  </div>
+                                )}
+                                {goRecell && (
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-amber-700 font-semibold truncate max-w-[90px]">{goRecell.name}</span>
+                                    <span className="font-mono font-semibold text-amber-700">{formatCurrency(goRecell.price)}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between gap-2 border-t border-amber-300/60 pt-0.5 mt-0.5">
+                                  <span className="text-slate-800 dark:text-slate-200 font-semibold">
+                                    {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
+                                  </span>
+                                  <span className="font-mono font-bold text-amber-900">{formatCurrency(enginePrice)}</span>
                                 </div>
-                              ))}
-                            </div>
-                          ) : (
+                              </div>
+                            )
+                          })() : (
                             <span className="text-xs text-muted-foreground">No data</span>
                           )}
                         </TableCell>
