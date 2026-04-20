@@ -392,7 +392,7 @@
     <div class="lbl">Phases Complete</div>
   </div>
   <div class="stat">
-    <div class="num">32</div>
+    <div class="num">104</div>
     <div class="lbl">API Routes</div>
   </div>
   <div class="stat">
@@ -472,6 +472,10 @@
           <li>In-app bell with unread count, mark-as-read, clear-all</li>
           <li>Real-time delivery via Supabase Realtime</li>
           <li>Notification gaps closed for CPO and vendor workflows</li>
+          <li>11 notification triggers verified — all firing correctly</li>
+          <li>COE managers included on all order-transition emails (Audit R3)</li>
+          <li>SLA cron emails use service-role client — no session required (Audit R3)</li>
+          <li>@login.local internal IDs resolved to notification_email for outbound mail</li>
         </ul>
       </div>
       <div class="feature-card">
@@ -485,11 +489,12 @@
       <div class="feature-card">
         <h4>Infrastructure</h4>
         <ul>
-          <li>Next.js 16 App Router with Turbopack</li>
+          <li>Next.js 16.2.2 App Router with Turbopack</li>
           <li>Supabase RLS on all tables</li>
           <li>Vercel deployment, America/Toronto timezone</li>
           <li>Code-split heavy pages (admin pricing: 19 s → fast FCP)</li>
-          <li>npm vulnerability remediation</li>
+          <li>Next.js CVE remediation complete — upgraded to 16.2.2</li>
+          <li>npm audit: 0 critical vulnerabilities</li>
         </ul>
       </div>
     </div>
@@ -513,6 +518,8 @@
           <li>Quote-issued email with itemised device list</li>
           <li>Quote-accepted confirmation + shipping instructions</li>
           <li>Shipment-received acknowledgement</li>
+          <li>Exception raised + resolved — branded HTML template (Audit R3)</li>
+          <li>SLA breach escalation email to assigned COE user (Audit R3)</li>
           <li>Rendered with Resend + React Email templates</li>
         </ul>
       </div>
@@ -574,7 +581,9 @@
           <li>Amber warning when estimate uses internal data only</li>
           <li>Per-brand margin overrides (Apple, Samsung, etc.)</li>
           <li>Demand adjustment toggle — boosts prices when volume is high</li>
-          <li>A/B model comparison endpoint</li>
+          <li>Multi-model A/B comparison endpoint — verified working</li>
+          <li>PricingModelRegistry: SimpleMargin, CompetitorBeat, DataDriven</li>
+          <li>Auto-quote uses service-role for order_items writes (Audit R3)</li>
         </ul>
       </div>
       <div class="feature-card">
@@ -611,6 +620,15 @@
           <li>Python-based scrapers wired behind env-var feature flags</li>
           <li>Five adapters: Bell, GoRecell, Telus, Apple, Universal</li>
           <li>Dual-mode: JS or Python path selected per-provider</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h4>Vendor Routing</h4>
+        <ul>
+          <li>Capability-based vendor matching — filters by device type (Audit R3)</li>
+          <li>Rating-ordered results for best vendor selection</li>
+          <li>Multi-vendor order splitting via OrderSplitService</li>
+          <li>Bid management — submit, accept, reject with notifications</li>
         </ul>
       </div>
     </div>
@@ -744,6 +762,56 @@
     </div>
   </div>
 
+  <!-- Audit History -->
+  <div class="section">
+    <div class="section-header">
+      <div class="phase-badge p1" style="background:#fef3c7;color:#92400e;">!</div>
+      <div>
+        <div class="section-title">Audit History</div>
+        <div class="section-sub">Three rounds of post-build verification — every bug tracked and fixed</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Round</th>
+            <th>Date</th>
+            <th>Scope</th>
+            <th>Findings &amp; Fixes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Round 1</strong></td>
+            <td>Early April 2026</td>
+            <td>Full P1 build</td>
+            <td>6 bugs fixed; 10 missing API routes created (total 32 → 42 routes)</td>
+          </tr>
+          <tr>
+            <td><strong>Round 2</strong></td>
+            <td>Mid April 2026</td>
+            <td>Data-flow &amp; logic</td>
+            <td>12 bugs fixed: pagination (page_size), column name mismatches (company_name), enum mismatches, redirect loops, RLS query rewrites. Routes grew to 104 with P3/P4 additions.</td>
+          </tr>
+          <tr>
+            <td><strong>Round 3</strong></td>
+            <td>April 18, 2026</td>
+            <td>Notifications, orders, vendors</td>
+            <td>
+              5 bugs fixed:<br>
+              1. Exception/resolved emails now use branded HTML (not plain-text)<br>
+              2. COE managers added to order-transition email recipients<br>
+              3. SLA cron email switched to service-role client + @login.local guard<br>
+              4. Auto-quote uses service-role for order_items writes (RLS bypass)<br>
+              5. Vendor capability filter now applied in getVendorsByCapability
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- Phases summary table -->
   <div class="section">
     <div class="section-header">
@@ -772,13 +840,13 @@
           <tr>
             <td><strong>P2</strong></td>
             <td>Email, Real-time, Security</td>
-            <td>Email notifications, Realtime updates, Bulk ops, PDF export, Security hardening</td>
+            <td>Email notifications (incl. exception + SLA), Realtime updates, Bulk ops, PDF export, Security hardening</td>
             <td><span class="tag done">Complete</span></td>
           </tr>
           <tr>
             <td><strong>P3</strong></td>
             <td>COE Workflow &amp; Pricing</td>
-            <td>Triage, Receiving manifest, ML pricing, 5 competitor scrapers, Exception AI, SLA escalation</td>
+            <td>Triage, Receiving manifest, ML pricing, Multi-model A/B, 5 competitor scrapers, Exception AI, SLA escalation, Vendor capability routing</td>
             <td><span class="tag done">Complete</span></td>
           </tr>
           <tr>
@@ -795,7 +863,7 @@
 </div>
 
 <footer>
-  <strong>Device Lifecycle Management Engine</strong> — Internal Report · April 2026 · Confidential
+  <strong>Device Lifecycle Management Engine</strong> — Internal Report · April 19, 2026 · Audit Round 3 · Confidential
 </footer>
 
 </body>
