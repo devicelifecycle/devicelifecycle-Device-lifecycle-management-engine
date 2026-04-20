@@ -130,8 +130,8 @@ export default function CustomerOrdersPage() {
                           <div className="flex items-center gap-2 justify-end">
                             <Button
                               size="sm"
-                              variant="default"
-                              className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700"
+                              variant="success"
+                              className="h-7 px-2 text-xs"
                               disabled={isBusy}
                               onClick={() => handleQuoteAction(order.id, 'accepted')}
                             >
@@ -141,7 +141,7 @@ export default function CustomerOrdersPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50"
+                              className="h-7 px-2 text-xs text-red-500 border-red-200 bg-background/70 hover:bg-red-50/60 hover:border-red-300 hover:text-red-600"
                               disabled={isBusy}
                               onClick={() => handleQuoteAction(order.id, 'rejected')}
                             >
