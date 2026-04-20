@@ -6,6 +6,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeSearchInput } from '@/lib/utils'
 import { OrderSplitService } from './order-split.service'
+import { NotificationService } from './notification.service'
+import { EmailService } from './email.service'
 import type {
   Vendor,
   VendorBid,
@@ -265,6 +267,57 @@ export class VendorService {
         // Auto-split failed — not fatal, bid was still created
         console.error('Auto-split check failed:', e)
       }
+    }
+
+    // Notify vendor users that they have been assigned to this order
+    try {
+      const srClient = createServiceRoleClient()
+      const { data: vendor } = await srClient
+        .from('vendors')
+        .select('contact_email, contact_name, contact_phone, organization_id')
+        .eq('id', vendorId)
+        .single()
+
+      // In-app notification to all active users in vendor's organization
+      if (vendor?.organization_id) {
+        const { data: vendorUsers } = await srClient
+          .from('users')
+          .select('id')
+          .eq('organization_id', vendor.organization_id)
+          .eq('is_active', true)
+        for (const u of vendorUsers || []) {
+          await NotificationService.createNotification({
+            user_id: u.id,
+            type: 'in_app',
+            title: 'New Order Assignment',
+            message: `You have been assigned to fulfil Order #${orderId}. Quantity: ${quantity} unit${quantity !== 1 ? 's' : ''} at $${unitPrice}/unit.`,
+            link: `/orders/${orderId}`,
+            metadata: { order_id: orderId, vendor_id: vendorId },
+          })
+        }
+      }
+
+      // Email notification to vendor contact
+      const effectiveEmail = vendor?.contact_email?.endsWith('@login.local')
+        ? undefined
+        : vendor?.contact_email
+      if (effectiveEmail) {
+        const subject = `New Order Assignment — Order #${orderId}`
+        const html = `<p>Hi ${vendor?.contact_name || 'Vendor'},</p>
+<p>You have been assigned to fulfil an order.</p>
+<ul>
+  <li><strong>Order:</strong> #${orderId}</li>
+  <li><strong>Quantity:</strong> ${quantity} unit${quantity !== 1 ? 's' : ''}</li>
+  <li><strong>Unit Price:</strong> $${unitPrice}</li>
+  <li><strong>Total:</strong> $${(quantity * unitPrice).toFixed(2)}</li>
+  <li><strong>Lead Time:</strong> ${leadTimeDays} day${leadTimeDays !== 1 ? 's' : ''}</li>
+</ul>
+<p>Please log in to the platform to review and confirm the order details.</p>`
+        await EmailService.sendEmail(effectiveEmail, subject, html)
+      }
+    } catch (notifyErr) {
+      // Non-fatal: bid was already created successfully
+      console.error('[VendorService] assignVendorToOrder notification failed:', notifyErr)
     }
 
     return bid

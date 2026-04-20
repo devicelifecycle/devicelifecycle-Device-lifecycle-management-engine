@@ -495,12 +495,16 @@ export class EmailService {
     orderNumber: string
     orderId: string
     daysRemaining: number
+    quotedAmount?: number
   }): Promise<boolean> {
-    const { to, recipientName, orderNumber, orderId, daysRemaining } = params
+    const { to, recipientName, orderNumber, orderId, daysRemaining, quotedAmount } = params
     const orderUrl = getAppPath(`/orders/${orderId}`)
 
     const urgencyColor = daysRemaining <= 2 ? '#ef4444' : daysRemaining <= 4 ? '#f59e0b' : '#3b82f6'
     const urgencyText = daysRemaining <= 2 ? 'Urgent: ' : ''
+    const formattedAmount = quotedAmount != null
+      ? `$${quotedAmount.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : null
 
     const html = `
 <!DOCTYPE html>
@@ -524,14 +528,27 @@ export class EmailService {
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">
                 ${urgencyText}Your quote for Order #${orderNumber} is still awaiting your response.
-                Please review and accept or reject the quote.
+                Please review and accept or reject the quote before it expires.
               </p>
 
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;border-collapse:collapse;">
                 <tr>
-                  <td style="padding:20px 24px;">
-                    <p style="margin:0 0 4px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order #${orderNumber}</p>
-                    <p style="margin:0;color:${urgencyColor};font-size:18px;font-weight:600;">${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining to respond</p>
+                  <td style="padding:16px 24px;border-bottom:1px solid #e4e4e7;">
+                    <p style="margin:0 0 4px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order</p>
+                    <p style="margin:0;color:#18181b;font-size:16px;font-weight:600;">#${orderNumber}</p>
+                  </td>
+                </tr>
+                ${formattedAmount ? `
+                <tr>
+                  <td style="padding:16px 24px;border-bottom:1px solid #e4e4e7;">
+                    <p style="margin:0 0 4px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Quoted Amount</p>
+                    <p style="margin:0;color:#059669;font-size:22px;font-weight:700;">${formattedAmount}</p>
+                  </td>
+                </tr>` : ''}
+                <tr>
+                  <td style="padding:16px 24px;">
+                    <p style="margin:0 0 4px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Time Remaining</p>
+                    <p style="margin:0;color:${urgencyColor};font-size:18px;font-weight:600;">${daysRemaining} day${daysRemaining !== 1 ? 's' : ''}</p>
                   </td>
                 </tr>
               </table>
@@ -539,7 +556,7 @@ export class EmailService {
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
                   <td style="background:#18181b;border-radius:6px;">
-                    <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Review Quote</a>
+                    <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Review &amp; Respond to Quote</a>
                   </td>
                 </tr>
               </table>
