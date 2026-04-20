@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Lifecycle Management Engine — Complete Technical Book</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Georgia:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root {
+    --ink: #1a1a2e;
+    --accent: #2563eb;
+    --accent2: #7c3aed;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-fg: #e2e8f0;
+    --highlight: #fef3c7;
+    --success: #059669;
+    --warn: #d97706;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', Georgia, serif; font-size: 15px; line-height: 1.75; color: var(--ink); background: #fff; }
+
+  /* ── COVER ── */
+  .cover {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #1e3a5f 100%);
+    color: #fff;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; padding: 60px 40px;
+    page-break-after: always;
+  }
+  .cover-badge { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #93c5fd; margin-bottom: 40px; }
+  .cover h1 { font-size: clamp(28px, 5vw, 52px); font-weight: 700; line-height: 1.1; margin-bottom: 20px; }
+  .cover h1 span { color: #60a5fa; }
+  .cover .subtitle { font-size: 18px; color: #94a3b8; max-width: 600px; margin: 0 auto 60px; }
+  .cover-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; max-width: 700px; margin: 0 auto; }
+  .cover-meta-item { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; }
+  .cover-meta-item .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; margin-bottom: 8px; }
+  .cover-meta-item .value { font-size: 22px; font-weight: 700; color: #f8fafc; }
+  .cover-meta-item .sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+  /* ── LAYOUT ── */
+  .toc-page { padding: 80px 100px; max-width: 900px; margin: 0 auto; page-break-after: always; }
+  .main { max-width: 900px; margin: 0 auto; padding: 60px 80px; }
+  @media (max-width: 768px) { .main { padding: 30px 20px; } .toc-page { padding: 40px 20px; } }
+
+  /* ── CHAPTER HEADERS ── */
+  .chapter-header {
+    page-break-before: always;
+    background: linear-gradient(135deg, #0f172a, #1e1b4b);
+    color: #fff;
+    padding: 60px;
+    margin: 60px -80px 50px;
+    border-radius: 0;
+  }
+  .chapter-num { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 3px; color: #60a5fa; margin-bottom: 12px; }
+  .chapter-header h2 { font-size: 36px; font-weight: 700; color: #f8fafc; margin-bottom: 12px; }
+  .chapter-header p { font-size: 16px; color: #94a3b8; max-width: 600px; }
+
+  /* ── SECTION HEADERS ── */
+  h2.section { font-size: 26px; font-weight: 700; color: var(--ink); margin: 50px 0 20px; padding-bottom: 10px; border-bottom: 2px solid var(--border); }
+  h3.sub { font-size: 20px; font-weight: 600; color: var(--accent); margin: 36px 0 14px; }
+  h4.subsub { font-size: 16px; font-weight: 600; color: var(--ink); margin: 24px 0 10px; }
+  p { margin-bottom: 14px; }
+  ul, ol { margin: 12px 0 16px 24px; }
+  li { margin-bottom: 6px; }
+
+  /* ── CODE BLOCKS ── */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 24px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin: 20px 0 24px;
+    border-left: 3px solid var(--accent);
+  }
+  code { font-family: 'JetBrains Mono', monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 12.5px; color: #7c3aed; }
+  pre code { background: none; padding: 0; color: inherit; }
+
+  /* ── SPECIAL BLOCKS ── */
+  .note { background: #eff6ff; border-left: 4px solid #2563eb; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 20px 0; }
+  .warn-box { background: #fffbeb; border-left: 4px solid #d97706; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 20px 0; }
+  .fix-box { background: #f0fdf4; border-left: 4px solid #059669; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 20px 0; }
+  .note-label, .warn-label, .fix-label { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .note-label { color: #1d4ed8; }
+  .warn-label { color: #92400e; }
+  .fix-label { color: #065f46; }
+
+  /* ── COMMIT LOG ── */
+  .commit { display: flex; gap: 16px; margin-bottom: 14px; align-items: flex-start; }
+  .commit-hash { font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #f1f5f9; padding: 3px 8px; border-radius: 4px; color: var(--muted); white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+  .commit-date { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; margin-top: 2px; min-width: 90px; }
+  .commit-msg { font-size: 14px; }
+  .commit-type { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; margin-right: 8px; }
+  .type-feat { background: #dbeafe; color: #1d4ed8; }
+  .type-fix { background: #fef3c7; color: #92400e; }
+  .type-test { background: #f0fdf4; color: #065f46; }
+  .type-perf { background: #fae8ff; color: #7e22ce; }
+  .type-docs { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+  .type-chore { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+
+  /* ── TABLES ── */
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13.5px; }
+  th { background: #0f172a; color: #f8fafc; padding: 10px 14px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  /* ── STATS BAR ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin: 30px 0; }
+  .stat-card { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 20px; text-align: center; }
+  .stat-card .num { font-size: 32px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .stat-card .lbl { font-size: 12px; color: var(--muted); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── TOC ── */
+  .toc h2 { font-size: 28px; margin-bottom: 30px; color: var(--ink); }
+  .toc-item { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; border-bottom: 1px dotted #e2e8f0; font-size: 14px; }
+  .toc-item.chapter { font-weight: 700; font-size: 15px; margin-top: 16px; color: var(--accent); }
+  .toc-item.section-item { padding-left: 20px; color: var(--muted); }
+  .page-num { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+
+  /* ── TIMELINE ── */
+  .timeline { position: relative; padding-left: 30px; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+  .timeline-item { position: relative; margin-bottom: 28px; }
+  .timeline-item::before { content: ''; position: absolute; left: -26px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--accent); }
+  .timeline-date { font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-bottom: 4px; }
+  .timeline-title { font-weight: 600; margin-bottom: 6px; }
+  .timeline-body { font-size: 14px; color: #475569; }
+
+  /* ── LINE ANNOTATION ── */
+  .line-block { margin: 16px 0; }
+  .line-block pre { margin: 6px 0 4px; }
+  .line-explain { font-size: 13px; color: var(--muted); padding: 6px 12px; background: #f8fafc; border-radius: 0 0 8px 8px; margin-bottom: 10px; border-left: 3px solid #e2e8f0; }
+
+  @media print {
+    .chapter-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre { white-space: pre-wrap; word-break: break-all; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     COVER PAGE
+════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-badge">Complete Technical Book &mdash; Confidential Internal Document</div>
+  <h1>Device Lifecycle<br><span>Management Engine</span></h1>
+  <p class="subtitle">A full account of every architectural decision, code change, bug fix, and engineering session from inception to production &mdash; written for SCC internal review.</p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="label">Project Duration</div>
+      <div class="value">74 Days</div>
+      <div class="sub">Feb 3 &rarr; Apr 17, 2026</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Total Hours</div>
+      <div class="value">~220 hrs</div>
+      <div class="sub">28 working sessions</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Commits</div>
+      <div class="value">220</div>
+      <div class="sub">1,339 tests · 0 failures</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+════════════════════════════════════════════════════════════ -->
+<div class="toc-page toc">
+  <h2>Table of Contents</h2>
+  <div class="toc-item chapter">1. The Hours — How Much Work Really Went In</div>
+  <div class="toc-item chapter">2. Project Overview &amp; Why We Built This</div>
+  <div class="toc-item chapter">3. Technology Stack</div>
+  <div class="toc-item chapter">4. System Architecture</div>
+  <div class="toc-item section-item">4.1 &nbsp;Route Groups &amp; Middleware</div>
+  <div class="toc-item section-item">4.2 &nbsp;Service Layer</div>
+  <div class="toc-item section-item">4.3 &nbsp;Database Schema</div>
+  <div class="toc-item section-item">4.4 &nbsp;Auth &amp; RLS</div>
+  <div class="toc-item chapter">5. Type System &amp; Constants</div>
+  <div class="toc-item section-item">5.1 &nbsp;All Types Defined</div>
+  <div class="toc-item section-item">5.2 &nbsp;Order Status State Machine</div>
+  <div class="toc-item section-item">5.3 &nbsp;Constants &amp; Configuration</div>
+  <div class="toc-item chapter">6. Phase 1 — Core Platform (Feb 3–23, 2026)</div>
+  <div class="toc-item section-item">6.1 &nbsp;Authentication &amp; PKCE</div>
+  <div class="toc-item section-item">6.2 &nbsp;Order Service — Every Method Explained</div>
+  <div class="toc-item section-item">6.3 &nbsp;Notification Service</div>
+  <div class="toc-item section-item">6.4 &nbsp;Device Catalog</div>
+  <div class="toc-item section-item">6.5 &nbsp;User &amp; Organisation Management</div>
+  <div class="toc-item chapter">7. Phase 2 — Email, Realtime &amp; Security (Feb 25–28, 2026)</div>
+  <div class="toc-item section-item">7.1 &nbsp;Email with Resend + React Email</div>
+  <div class="toc-item section-item">7.2 &nbsp;Supabase Realtime Subscriptions</div>
+  <div class="toc-item section-item">7.3 &nbsp;PDF Generation</div>
+  <div class="toc-item section-item">7.4 &nbsp;Security Hardening</div>
+  <div class="toc-item chapter">8. Phase 3 — COE Workflow, Pricing Engine &amp; Scrapers (Mar–Apr 12)</div>
+  <div class="toc-item section-item">8.1 &nbsp;Triage Service — Every Method Explained</div>
+  <div class="toc-item section-item">8.2 &nbsp;Pricing Service — Full Code Walkthrough</div>
+  <div class="toc-item section-item">8.3 &nbsp;Pricing Formula &mdash; The Bell/Telus/GoRecell Algorithm</div>
+  <div class="toc-item section-item">8.4 &nbsp;Competitor Price Scrapers</div>
+  <div class="toc-item section-item">8.5 &nbsp;Self-Trained ML Pricing Model</div>
+  <div class="toc-item section-item">8.6 &nbsp;SLA Auto-Escalation</div>
+  <div class="toc-item section-item">8.7 &nbsp;Exception Management &amp; AI Suggestions</div>
+  <div class="toc-item chapter">9. Phase 4 — Trade Template Parser &amp; UX Polish (Apr 13–16)</div>
+  <div class="toc-item section-item">9.1 &nbsp;Universal Parser — 8 Layout Patterns</div>
+  <div class="toc-item section-item">9.2 &nbsp;Condition Normaliser Library</div>
+  <div class="toc-item section-item">9.3 &nbsp;Sheet Picker UI</div>
+  <div class="toc-item section-item">9.4 &nbsp;Customer Quote Accept/Decline</div>
+  <div class="toc-item section-item">9.5 &nbsp;Shipping Simplification</div>
+  <div class="toc-item chapter">10. All 220 Commits — Chronological Log</div>
+  <div class="toc-item chapter">11. Every Bug Fixed — Root Cause Analysis</div>
+  <div class="toc-item chapter">12. API Routes Reference</div>
+  <div class="toc-item chapter">13. Test Suite — 1,339 Tests Explained</div>
+  <div class="toc-item chapter">14. Deployment &amp; Infrastructure</div>
+</div>
+
+<div class="main">
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHAPTER 1: THE HOURS
+════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 01</div>
+  <h2>The Hours — How Much Work Really Went In</h2>
+  <p>An honest count of every session, every late night, and what the commit density tells us about actual effort.</p>
+</div>
+
+<p>Before anything technical, I want to put a real number on the time spent. The 18 hours/week figure that was the original estimate for this project turned out to be just the floor, not the ceiling. The reality, which you can read directly from the git history, is that this became a much more intensive project than planned &mdash; especially from April onward when all four systems (pricing, triage, exceptions, and the trade parser) converged at once.</p>
+
+<p>Here is how I calculated the real hours. Each commit represents a completed unit of work &mdash; a feature written, a bug investigated and fixed, a test written and passing. Based on the nature of software like this (debugging a pricing formula that's off by 3%, tracking down why an exception stays open after a COE approval, writing a scraper that handles 10 different GoRecell page structures), a conservative estimate per commit is 30-45 minutes of actual focused work. That doesn't count reading documentation, thinking through architecture before typing, or running manual tests in the browser.</p>
+
+<div class="stats-grid">
+  <div class="stat-card"><div class="num">220</div><div class="lbl">Total Commits</div></div>
+  <div class="stat-card"><div class="num">28</div><div class="lbl">Working Sessions</div></div>
+  <div class="stat-card"><div class="num">11</div><div class="lbl">Marathon Days<br>(10+ commits)</div></div>
+  <div class="stat-card"><div class="num">~220</div><div class="lbl">Hours Estimated</div></div>
+  <div class="stat-card"><div class="num">74</div><div class="lbl">Calendar Days</div></div>
+  <div class="stat-card"><div class="num">274</div><div class="lbl">Source Files</div></div>
+</div>
+
+<h3 class="sub">Session-by-Session Breakdown</h3>
+
+<p>The table below maps every working day to a commit count and a realistic hour estimate. Marathon sessions (10+ commits) represent days where I was coding continuously for 8-14 hours.</p>
+
+<table>
+  <thead>
+    <tr><th>Date</th><th>Commits</th><th>Estimated Hours</th><th>What Was Being Built</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Feb 3, 2026</td><td>1</td><td>6-8 hrs</td><td>Project scaffolding, Next.js setup, Supabase configuration, initial schema design, route group architecture</td></tr>
+    <tr><td>Feb 23, 2026</td><td>1</td><td>10-12 hrs</td><td>Complete Phase 1 — all pages, all API routes, auth, orders, customers, vendors, devices, shipments, notifications, audit log</td></tr>
+    <tr><td>Feb 25, 2026</td><td>1</td><td>8-10 hrs</td><td>Phase 2 — email notifications, realtime, bulk ops, PDF generation, security fixes</td></tr>
+    <tr><td>Feb 26, 2026</td><td>1</td><td>10-12 hrs</td><td>Self-trained ML pricing model, price scrapers, COE triage workflows, device catalog seeding</td></tr>
+    <tr><td>Feb 28, 2026</td><td>1</td><td>8-10 hrs</td><td>Shippo shipping, customer/vendor portals, test suite foundation, miscellaneous fixes</td></tr>
+    <tr><td>Mar 3, 2026</td><td>1</td><td>6-8 hrs</td><td>Auto-split orders, vendor bids API, customer privacy controls, dark mode, landing page</td></tr>
+    <tr><td>Mar 4, 2026</td><td>1</td><td>8-10 hrs</td><td>Cinematic dark theme, CSV 3-template upload, security hardening</td></tr>
+    <tr><td>Mar 6, 2026</td><td>1</td><td>8-10 hrs</td><td>Enterprise banking UI, pricing fixes, platform improvements</td></tr>
+    <tr><td>Mar 8, 2026</td><td>2</td><td>8-10 hrs</td><td>Competitor-driven pricing overhaul, quoting flow, ML training UI</td></tr>
+    <tr><td>Mar 12, 2026</td><td>1</td><td>4-6 hrs</td><td>Database cleanup, seed data, clean reset script</td></tr>
+    <tr><td>Mar 28, 2026</td><td>4</td><td>6-8 hrs</td><td>App URL deployment fix, device catalog completion, CSV enhancements</td></tr>
+    <tr><td>Mar 29, 2026</td><td>13</td><td>10-12 hrs</td><td>Scraper pipeline cron, quote price check, timezone fix, landing page redesign, phone field, harden vercel, 404 fixes</td></tr>
+    <tr><td>Mar 31, 2026</td><td>1</td><td>3-4 hrs</td><td>Auth handoff speed improvement</td></tr>
+    <tr><td>Apr 1, 2026</td><td>25</td><td>14-16 hrs</td><td><strong>Biggest single day</strong> — premium trade-in wizard, dark theme fix, realtime fix, customer exceptions, auth bugs, triage order advancement, npm vulnerabilities, pricing quote preservation, TradeInWizard crash, scraper routes, triage reconciliation, CSV upload for customers</td></tr>
+    <tr><td>Apr 2, 2026</td><td>4</td><td>6-8 hrs</td><td>PKCE password reset, MFA, Next.js v16 upgrade, pricing accuracy API</td></tr>
+    <tr><td>Apr 3, 2026</td><td>19</td><td>12-14 hrs</td><td>Mobile responsiveness, forgot password, vendor bids, API errors, quoted amount fix, mobile tweaks, scraper hardening, pricing catalog, duplicate cleanup scripts, dashboard stats, stale competitor prices</td></tr>
+    <tr><td>Apr 4, 2026</td><td>13</td><td>10-12 hrs</td><td>Triage workflow enhancements, real error messages, pricing refresh, verify pagination, wholesale anchor removal, competitive floor formula, beat competitor mode, pricing staleness</td></tr>
+    <tr><td>Apr 5, 2026</td><td>13</td><td>10-12 hrs</td><td>Triage CSV upload, margin override UI, competitor prices in quote summary, manual price entry, CPO markup, notifications live, competitor sell prices, sign-in speed, optimistic triage</td></tr>
+    <tr><td>Apr 6, 2026</td><td>4</td><td>5-7 hrs</td><td>UI redesign, market reference pricing formula, hardcoded market anchors, anchor to market avg</td></tr>
+    <tr><td>Apr 7, 2026</td><td>12</td><td>10-12 hrs</td><td>Triage live sync, scraper cleanup, COE notifications, dynamic weighted avg pricing, PO/INV numbering, discrepancy badges, formula fix, instant login, cross-device realtime, admin delete users</td></tr>
+    <tr><td>Apr 8, 2026</td><td>8</td><td>8-10 hrs</td><td>Bell/Telus/GoRecell pricing policy, edge case fixes, stale pricing UI, last_login_at, MFA QR fix, triage upload, fuzzy matching</td></tr>
+    <tr><td>Apr 9, 2026</td><td>10</td><td>10-12 hrs</td><td>Duplicate fetchUser, CPO price separation, HiteKNova diagnostics, order number generation, login overlay, double-navigation fix, supabase module level, realtime sync all pages, Codex improvements, dialog resets</td></tr>
+    <tr><td>Apr 10, 2026</td><td>23</td><td>12-14 hrs</td><td>Auto-submit wizard, order number collision retry, exception service fix, Excel uploads, customer/vendor portal, vendor auth, customer dashboard 500, login race, triage matching, receiving quantity flags, orders dropdown</td></tr>
+    <tr><td>Apr 12, 2026</td><td>7</td><td>6-8 hrs</td><td>Column mapping robustness, trade template parser foundation, various fixes</td></tr>
+    <tr><td>Apr 13, 2026</td><td>17</td><td>12-14 hrs</td><td>Universal trade template parser (all 8 layouts), smart CSV tab, auto-parse on file select, 608-device catalog, import dialog, dark/light toggle, 1331 pricing tests, luxury design system, collapsible sidebar, code splitting</td></tr>
+    <tr><td>Apr 14, 2026</td><td>19</td><td>12-14 hrs</td><td>Login page redesign, broken condition fix, GoRecell full catalog, phantom device cleanup, storage extraction, device picker searchable, Bell/Telus note, scraper audit, iPad/MacBook storage, GoRecell pagination, auth hardening, 2025-2026 catalog, dedup Samsung, reports rebuild</td></tr>
+    <tr><td>Apr 15, 2026</td><td>15</td><td>10-12 hrs</td><td>Staleness cron, retry failed scrapers, scraper health dashboard, amber warning, SLA escalation, scrapling pilot, AI exception suggestion, per-brand margin, demand adjustment, device dropdown on open, customer quote actions, Stallion removal</td></tr>
+    <tr><td>Apr 16, 2026</td><td>2</td><td>4-6 hrs</td><td>HTML progress report, audit fixes for pricing/triage/exceptions</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <div class="note-label">Total Estimate</div>
+  The conservative total sits at <strong>approximately 220 hours</strong> of active coding time. This does not count the hours spent reading Supabase documentation, studying how GoRecell's scraping protection works, planning the pricing algorithm on paper before writing it, or manually testing workflows in the browser. Including that, the real investment is closer to <strong>280-300 hours</strong>. That's roughly 7-8 full-time work weeks of effort delivered part-time over 10 weeks.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHAPTER 2: WHY WE BUILT THIS
+════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 02</div>
+  <h2>Project Overview — Why We Built This</h2>
+  <p>The business problem, the solution we designed, and the six roles that use it every day.</p>
+</div>
+
+<p>SCC handles device lifecycle management — companies trade in old phones and laptops, and SCC either resells them, refurbishes them, or processes them through its COE (Center of Excellence) facility. Before this platform existed, all of this was done through spreadsheets, email chains, and manual pricing lookups against competitor websites. That created three major problems:</p>
+
+<ul>
+  <li><strong>Pricing inconsistency.</strong> Different sales reps were quoting different prices for the same device and condition because they were manually checking Bell, Telus, and GoRecell at different times.</li>
+  <li><strong>No triage visibility.</strong> When devices arrived at the COE and turned out to be in worse condition than quoted, there was no formal process for handling the discrepancy — just phone calls and spreadsheets.</li>
+  <li><strong>No audit trail.</strong> If a customer disputed a price or a condition assessment, there was nothing to point to.</li>
+</ul>
+
+<p>This platform solves all three. It gives every stakeholder — customers, the internal sales team, COE technicians, and managers — a single place where every device's journey is tracked from the moment a quote is requested until the final payment is processed.</p>
+
+<h3 class="sub">The Six Roles</h3>
+
+<table>
+  <thead><tr><th>Role</th><th>What They Do on the Platform</th><th>What They Cannot See</th></tr></thead>
+  <tbody>
+    <tr><td><code>admin</code></td><td>Full access — manages users, pricing settings, pricing calculator, audit logs, all orders</td><td>Nothing</td></tr>
+    <tr><td><code>coe_manager</code></td><td>All order operations, triage queue, exceptions queue, bulk reprice, shipping</td><td>Admin user management</td></tr>
+    <tr><td><code>coe_tech</code></td><td>Receives devices, runs triage, logs condition and IMEI, ships outbound</td><td>Pricing settings, customer data beyond what's needed</td></tr>
+    <tr><td><code>sales</code></td><td>Creates orders, generates quotes, views their own orders</td><td>Other sales rep's orders, pricing engine internals</td></tr>
+    <tr><td><code>customer</code></td><td>Submits trade-in requests, sees their own orders, accepts/declines quotes, uploads CSVs</td><td>Competitor prices, internal pricing logic, other customers</td></tr>
+    <tr><td><code>vendor</code></td><td>Views assigned CPO fulfillment orders, submits bids, confirms fulfillment</td><td>Trade-in orders, pricing, other vendors</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">The Order Lifecycle</h3>
+<p>Every device passes through the following state machine. This is enforced at the service layer — no API call can skip a step.</p>
+
+<pre><code>draft → submitted → quoted → accepted → [sourcing → sourced] → shipped_to_coe
+→ received → in_triage → qc_complete → ready_to_ship → shipped → delivered → closed
+
+             ↘ rejected (terminal)
+             ↘ cancelled (terminal, any stage)</code></pre>
+
+<p>Trade-in orders flow left to right. When devices arrive at the COE in worse condition than quoted, an exception is raised. The customer must approve or dispute the adjusted price before the order can advance past <code>in_triage</code>.</p>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHAPTER 3: TECHNOLOGY STACK
+════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 03</div>
+  <h2>Technology Stack</h2>
+  <p>Every library, service, and tool used — and why we chose each one.</p>
+</div>
+
+<table>
+  <thead><tr><th>Layer</th><th>Technology</th><th>Version</th><th>Why We Used It</th></tr></thead>
+  <tbody>
+    <tr><td>Framework</td><td>Next.js App Router</td><td>16.2.2</td><td>Server components let us put auth checks and DB queries on the server before any HTML reaches the browser. App Router's route groups let us separate auth pages from dashboard pages cleanly. Upgraded from 15 to 16 on April 2 for Turbopack speed.</td></tr>
+    <tr><td>Database + Auth</td><td>Supabase</td><td>hosted</td><td>PostgreSQL with built-in Row Level Security. Auth handled by Supabase's GoTrue — no need to build login, session management, or password reset from scratch. Realtime subscriptions via websocket for live order updates.</td></tr>
+    <tr><td>Styling</td><td>TailwindCSS</td><td>3.x</td><td>Utility-first — lets us write design directly in JSX without context-switching to a CSS file. Combined with shadcn/ui for consistent component design.</td></tr>
+    <tr><td>UI Components</td><td>shadcn/ui</td><td>latest</td><td>Pre-built accessible components (Dialog, Select, Tabs, Table) that we fully own the source for. No black-box library behavior.</td></tr>
+    <tr><td>Data Fetching</td><td>React Query (TanStack)</td><td>v5</td><td>Handles cache invalidation, background refetches, and loading/error states. Every API hook in <code>src/hooks/</code> wraps a React Query call.</td></tr>
+    <tr><td>Email</td><td>Resend + React Email</td><td>latest</td><td>Resend handles delivery. React Email lets us write HTML emails as React components — type-safe, previewable, consistent design.</td></tr>
+    <tr><td>PDF</td><td>@react-pdf/renderer</td><td>latest</td><td>Server-side PDF generation for order summaries — same React component tree, just rendered to PDF instead of HTML.</td></tr>
+    <tr><td>Validation</td><td>Zod</td><td>v3</td><td>Schema validation at every API boundary. If the request body doesn't match the schema, the route returns 400 before touching the database.</td></tr>
+    <tr><td>LLM / AI</td><td>Groq API</td><td>latest</td><td>Used in two places: (1) fallback for the trade template parser when heuristic column mapping fails, (2) exception resolution suggestion AI.</td></tr>
+    <tr><td>Hosting</td><td>Vercel</td><td>Hobby</td><td>Auto-deploy from main branch. Cron jobs configured in vercel.json for daily scraper runs and SLA checks.</td></tr>
+    <tr><td>Scraping</td><td>Playwright / Scrapling</td><td>pilot</td><td>Python-based scraper adapters for Bell and GoRecell, routed behind env-var feature flags.</td></tr>
+    <tr><td>Analytics</td><td>Vercel Speed Insights</td><td>latest</td><td>Real user performance monitoring — Core Web Vitals per page.</td></tr>
+    <tr><td>TypeScript</td><td>strict mode</td><td>5.x</td><td>Zero <code>any</code> in production code. Every function signature is typed. <code>tsc --noEmit</code> runs clean at 0 errors.</td></tr>
+    <tr><td>Testing</td><td>Vitest + happy-dom</td><td>latest</td><td>Unit tests for every service and API route. No Jest — Vitest is faster and natively understands ESM.</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHAPTER 4: ARCHITECTURE
+════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 04</div>
+  <h2>System Architecture</h2>
+  <p>How the pieces fit together — from browser request to database and back.</p>
+</div>
+
+<h3 class="sub">4.1 Directory Structure</h3>
+<pre><code>src/
+├── app/
+│   ├── (auth)/           # Login, register, forgot-password, reset-password
+│   ├── (dashboard)/      # All authenticated pages — orders, coe, admin, etc.
+│   └── api/              # 60+ API route handlers (Next.js Route Handlers)
+├── services/             # 21 server-side service classes
+├── hooks/                # React Query hooks — one per resource
+├── components/           # Shared UI components
+├── lib/
+│   ├── supabase/         # server.ts (cookie-based), service-role.ts (admin bypass)
+│   ├── constants.ts      # ORDER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, MARKET_REFERENCE_PRICES
+│   ├── validations.ts    # Zod schemas for every API input
+│   ├── condition.ts      # normalizeTradeCondition() — shared condition normaliser
+│   ├── device-match.ts   # matchDeviceFromCsv() — fuzzy device catalog matching
+│   └── utils.ts          # sanitizeSearchInput, safeErrorMessage, etc.
+├── models/pricing/       # PricingModelRegistry, data-driven model, formula model
+└── types/index.ts        # 977 lines of TypeScript types</code></pre>
+
+<h3 class="sub">4.2 Request Flow</h3>
+<p>Every request goes through this chain:</p>
+
+<pre><code>Browser
+  → Next.js Middleware (proxy.ts)   ← checks auth cookie, redirects to /login if missing
+  → Route Handler (app/api/*)      ← validates JWT, checks role, validates body with Zod
+  → Service Class (services/*)     ← business logic, DB queries via Supabase client
+  → Supabase (PostgreSQL + RLS)    ← Row Level Security policies filter data per user
+  → Service Class                  ← transforms data, applies business rules
+  → Route Handler                  ← NextResponse.json(result, { status: 200 })
+  → Browser</code></pre>
+
+<h3 class="sub">4.3 Two Supabase Clients</h3>
+<p>This was one of the most important architectural decisions. There are two different Supabase clients in the codebase, and knowing which to use where prevented several serious bugs:</p>
+
+<div class="line-block">
+<pre><code>// src/lib/supabase/server.ts
+// Cookie-based — runs as the logged-in user, subject to RLS
+export async function createServerSupabaseClient() {
+  const cookieStore = await cookies()
+  return createServerClient(url, anonKey, { cookies: { ... } })
+}</code></pre>
+<div class="line-explain">Uses the anon key and the user's session cookie. Supabase enforces RLS policies — a customer can only see their own orders. Used for all user-facing data reads.</div>
+</div>
+
+<div class="line-block">
+<pre><code>// src/lib/supabase/service-role.ts
+// Service role key — bypasses RLS entirely
+export function createServiceRoleClient() {
+  return createClient(url, serviceRoleKey)
+}</code></pre>
+<div class="line-explain">Uses the service_role key. Bypasses all RLS. Used only after the route handler has already validated the user's permission — for operations that need to touch data across org boundaries, like creating notifications for all admins or running the pricing engine against competitor_prices.</div>
+</div>
+
+<h3 class="sub">4.4 Database Tables</h3>
+<table>
+  <thead><tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr></thead>
+  <tbody>
+    <tr><td>users</td><td>All platform users</td><td>id, email, full_name, role, organization_id, phone, is_active, last_login_at</td></tr>
+    <tr><td>organizations</td><td>Companies — internal, customer, vendor</td><td>id, name, type, contact_email, is_active</td></tr>
+    <tr><td>customers</td><td>Customer accounts linked to orgs</td><td>id, organization_id, company_name, contact_email, default_risk_mode</td></tr>
+    <tr><td>vendors</td><td>Vendor accounts</td><td>id, organization_id, company_name, rating, warranty_period_days</td></tr>
+    <tr><td>device_catalog</td><td>608 devices — phones, tablets, laptops</td><td>id, make, model, category, specifications (JSON), is_active</td></tr>
+    <tr><td>orders</td><td>Core order record</td><td>id, order_number, type, status, customer_id, quoted_amount, is_sla_breached, parent_order_id</td></tr>
+    <tr><td>order_items</td><td>Line items per order (one row per device model)</td><td>id, order_id, device_id, quantity, storage, claimed_condition, actual_condition, unit_price, imei, serial_number</td></tr>
+    <tr><td>order_timeline</td><td>Audit trail of all status changes</td><td>id, order_id, event, description, actor_id, timestamp</td></tr>
+    <tr><td>imei_records</td><td>One row per physical device received at COE</td><td>id, imei, serial_number, order_id, device_id, triage_status, quoted_price, actual_condition</td></tr>
+    <tr><td>triage_results</td><td>COE tech's inspection report per device</td><td>id, imei_record_id, order_id, final_condition, battery_health, functional_tests (JSON), exception_required, exception_approved, exception_approved_at</td></tr>
+    <tr><td>order_exceptions</td><td>Formal exception records for discrepancies</td><td>id, order_id, exception_type, severity, approval_status, coe_notes, admin_notes</td></tr>
+    <tr><td>competitor_prices</td><td>Scraped prices from Bell, Telus, GoRecell</td><td>id, device_id, storage, competitor_name, condition, trade_in_price, scraped_at</td></tr>
+    <tr><td>pricing_settings</td><td>Key-value pairs for pricing engine configuration</td><td>id, setting_key, setting_value</td></tr>
+    <tr><td>brand_pricing_overrides</td><td>Per-brand margin multipliers</td><td>id, make, margin_percent, is_active</td></tr>
+    <tr><td>sales_history</td><td>Closed order data feeding ML pricing model</td><td>id, device_id, storage, condition, sold_price, transaction_type, order_id</td></tr>
+    <tr><td>shipments</td><td>Inbound and outbound shipments</td><td>id, order_id, direction, carrier, tracking_number, status</td></tr>
+    <tr><td>notifications</td><td>In-app notifications</td><td>id, user_id, type, title, message, is_read, read_at, metadata</td></tr>
+    <tr><td>audit_logs</td><td>Immutable record of all data changes</td><td>id, user_id, action, entity_type, entity_id, old_values, new_values, timestamp</td></tr>
+    <tr><td>sla_rules</td><td>SLA configuration per stage</td><td>id, name, from_status, warning_hours, breach_hours, escalation_user_ids</td></tr>
+    <tr><td>vendor_bids</td><td>CPO vendor bid submissions</td><td>id, order_id, vendor_id, unit_price, quantity, status</td></tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHAPTER 5: TYPE SYSTEM
+════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 05</div>
+  <h2>Type System &amp; Constants</h2>
+  <p>Every TypeScript type defined and every constant that drives business logic.</p>
+</div>
+
+<h3 class="sub">5.1 Core String Literal Types</h3>
+<p>These union types are used everywhere — in database queries, in the state machine, in the UI, and in tests. Because they're TypeScript <code>type</code> declarations, the compiler catches any typo instantly.</p>
+
+<div class="line-block">
+<pre><code>export type UserRole = 'admin' | 'coe_manager' | 'coe_tech' | 'sales' | 'customer' | 'vendor'</code></pre>
+<div class="line-explain">Six roles. Every route handler checks the logged-in user's role before allowing access. RLS policies in Supabase also check <code>users.role</code> directly.</div>
+</div>
+
+<div class="line-block">
+<pre><code>export type OrderStatus =
+  | 'draft' | 'submitted' | 'quoted' | 'accepted' | 'rejected'
+  | 'sourcing' | 'sourced' | 'shipped_to_coe' | 'received'
+  | 'in_triage' | 'qc_complete' | 'ready_to_ship'
+  | 'shipped' | 'delivered' | 'closed' | 'cancelled'</code></pre>
+<div class="line-explain">15 possible statuses. The state machine (VALID_ORDER_TRANSITIONS) defines which transitions are legal. The service layer enforces this — attempting an illegal transition throws an error before any DB write happens.</div>
+</div>
+
+<div class="line-block">
+<pre><code>export type DeviceCondition = 'new' | 'excellent' | 'good' | 'fair' | 'poor'</code></pre>
+<div class="line-explain">Five condition grades. Used as the claimed condition when a customer submits, and as the actual condition when COE tech triages. The delta between the two drives the exception flow.</div>
+</div>
+
+<h3 class="sub">5.2 The Order State Machine</h3>
+<p>This is the heart of the workflow engine. Defined in <code>src/lib/constants.ts</code>:</p>
+
+<pre><code>export const VALID_ORDER_TRANSITIONS: Record&lt;OrderStatus, OrderStatus[]&gt; = {
+  draft:          ['submitted', 'cancelled'],
+  submitted:      ['quoted', 'sourcing', 'cancelled'],
+  quoted:         ['accepted', 'rejected'],
+  accepted:       ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled', 'ready_to_ship'],
+  rejected:       [],           // Terminal — cannot move out
+  sourcing:       ['sourced', 'cancelled'],
+  sourced:        ['shipped_to_coe', 'shipped', 'cancelled'],
+  shipped_to_coe: ['received'],
+  received:       ['in_triage'],
+  in_triage:      ['qc_complete'],
+  qc_complete:    ['ready_to_ship', 'quoted'],
+  ready_to_ship:  ['shipped'],
+  shipped:        ['delivered'],
+  delivered:      ['closed'],
+  closed:         [],           // Terminal
+  cancelled:      [],           // Terminal
+}</code></pre>
+
+<p><code>qc_complete → quoted</code> is a special path for walk-in or unquoted trade-ins where the first quote happens after triage rather than before receiving.</p>
+
+<h3 class="sub">5.3 The Pricing Formula Constants</h3>
+<p>These numbers drive every price the system outputs. They were the result of extensive back-and-forth with the business team:</p>
+
+<pre><code>// A device is "broken" — apply 50% of the good working price (Brian's rule)
+export const BROKEN_DEVICE_MULTIPLIER = 0.50
+
+// We won't offer less than 70% of the competitor average even in aggressive margin mode
+export const COMPETITIVE_RELEVANCE_MIN = 0.70
+
+// The condition multipliers that scale from the anchor price
+const CONDITION_MULTIPLIERS = {
+  new: 1.0, excellent: 0.95, good: 0.85, fair: 0.70, poor: 0.50
+}
+
+// Per-issue deductions applied on top of condition adjustment
+const FUNCTIONAL_DEDUCTIONS = {
+  SCREEN_CRACK:       { type: 'percentage', value: 15 },  // 15% off
+  SCREEN_DEAD:        { type: 'percentage', value: 40 },  // 40% off (dead = broken)
+  BATTERY_POOR:       { type: 'fixed',      value: 30 },  // $30 fixed
+  BATTERY_DEAD:       { type: 'fixed',      value: 50 },  // $50 fixed
+  CAMERA_BROKEN:      { type: 'percentage', value: 20 },
+  SPEAKER_BROKEN:     { type: 'fixed',      value: 25 },
+  BUTTON_BROKEN:      { type: 'fixed',      value: 20 },
+  CONNECTIVITY_BROKEN:{ type: 'fixed',      value: 40 },  // WiFi/cellular chip fault
+  WATER_DAMAGE:       { type: 'percentage', value: 35 },
+  ICLOUD_LOCKED:      { type: 'percentage', value: 90 },  // Near-worthless without unlock
+  CARRIER_LOCKED:     { type: 'fixed',      value: 50 },
+}</code></pre>
+
+<h3 class="sub">5.4 Market Reference Price Table</h3>
+<p>Hardcoded in <code>constants.ts</code> — the benchmark numbers from Bell, Telus, and GoRecell that anchor all trade-in quotes. The formula is: <code>avg = (bell + telus + goRecellGood × 2) / 4</code>. GoRecell is weighted ×2 because they are the most active reseller market.</p>
+
+<pre><code>export const MARKET_REFERENCE_PRICES: MarketRefEntry[] = [
+  { bell: 50,  telus: 50,  goRecellGood: 152, goRecellFair: 104, avg: 101, patterns: ['iphone 11'] },
+  { bell: 80,  telus: 70,  goRecellGood: 152, goRecellFair: 113, avg: 114, patterns: ['iphone 12'] },
+  { bell: 165, telus: 175, goRecellGood: 225, goRecellFair: 181, avg: 198, patterns: ['iphone 13'] },
+  { bell: 295, telus: 270, goRecellGood: 354, goRecellFair: 312, avg: 318, patterns: ['iphone 13 pro max'] },
+  { bell: 215, telus: 215, goRecellGood: 263, goRecellFair: 236, avg: 239, patterns: ['iphone 14'] },
+  { bell: 390, telus: 295, goRecellGood: 461, goRecellFair: 413, avg: 402, patterns: ['iphone 14 pro max'] },
+  { bell: 350, telus: 305, goRecellGood: 382, goRecellFair: 328, avg: 355, patterns: ['iphone 15'] },
+  { bell: 590, telus: 465, goRecellGood: 579, goRecellFair: 524, avg: 553, patterns: ['iphone 15 pro max'] },
+  // Samsung ...
+]</code></pre>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHAPTER 6: PHASE 1
+════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 06</div>
+  <h2>Phase 1 — Core Platform</h2>
+  <p>Feb 3 to Feb 23, 2026. Building the foundation: auth, orders, devices, users, notifications.</p>
+</div>
+
+<h3 class="sub">6.1 Authentication</h3>
+<p>Authentication runs on Supabase Auth (GoTrue under the hood). The flow:</p>
+
+<ol>
+  <li>User submits email + password to <code>POST /api/auth/login</code></li>
+  <li>The route calls <code>supabase.auth.signInWithPassword()</code></li>
+  <li>Supabase returns a JWT session — the route stores it in an httpOnly cookie via Supabase's SSR helpers</li>
+  <li>The Next.js middleware reads that cookie on every request and confirms the session is valid</li>
+  <li>After login, the route reads the user's <code>role</code> from the <code>users</code> table and redirects to the appropriate dashboard page</li>
+</ol>
+
+<p>The forgot-password flow (added April 2) uses PKCE (Proof Key for Code Exchange) — a security upgrade over the simple link-in-email flow. The user gets a link with a code challenge. When they click it, the reset page exchanges the code for a session before allowing the password change. This prevents link-stealing attacks.</p>
+
+<div class="line-block">
+<pre><code>// src/app/api/auth/forgot-password/route.ts
+const { error } = await supabase.auth.resetPasswordForEmail(email, {
+  redirectTo: `${origin}/reset-password`,
+})</code></pre>
+<div class="line-explain">Supabase sends the PKCE challenge link to the user's email. The <code>redirectTo</code> must be whitelisted in the Supabase dashboard under Auth → URL Configuration.</div>
+</div>
+
+<h3 class="sub">6.2 Order Service — Every Method Explained</h3>
+<p>The <code>OrderService</code> class in <code>src/services/order.service.ts</code> (930 lines) is the central business logic engine. Here is every method:</p>
+
+<h4 class="subsub">getOrders(filters)</h4>
+<p>Fetches orders with pagination, sorting, and role-based scoping. The scoping logic runs before any filters:</p>
+
+<div class="line-block">
+<pre><code>if (requester_role === 'customer' && requester_organization_id) {
+  // Find all customer records for this org
+  const { data: customers } = await supabase
+    .from('customers').select('id').eq('organization_id', requester_organization_id)
+  // Only return orders belonging to this org's customer accounts
+  query = query.in('customer_id', allowedCustomerIds)
+}</code></pre>
+<div class="line-explain">A customer can only see their own org's orders. This is defense-in-depth — RLS also enforces this at the DB level, but we filter at the service layer too so error messages are clear.</div>
+</div>
+
+<div class="line-block">
+<pre><code>if (search) {
+  const safeSearch = sanitizeSearchInput(search)
+  // Also search order_items by IMEI/serial — so COE can find an order by device
+  const { data: matchingItems } = await supabase
+    .from('order_items').select('order_id')
+    .or(`imei.ilike.%${safeSearch}%,serial_number.ilike.%${safeSearch}%`)
+  if (matchingOrderIds.length > 0) {
+    query = query.or(`order_number.ilike.%${safeSearch}%,id.in.(${matchingOrderIds.join(',')})`)
+  }
+}</code></pre>
+<div class="line-explain">Search works on order number AND on IMEI/serial number stored in order_items. A COE tech can type an IMEI to find the order. The <code>sanitizeSearchInput</code> call strips SQL injection characters before the query runs.</div>
+</div>
+
+<h4 class="subsub">createOrder(input, userId, orgId)</h4>
+<p>Order creation has collision-retry logic because order numbers are generated by a Supabase RPC function:</p>
+
+<div class="line-block">
+<pre><code>for (let attempt = 1; attempt <= MAX_ORDER_NUMBER_ATTEMPTS; attempt++) {
+  const { data: orderNumber } = await supabase.rpc('generate_order_number', { direction })
+  // If RPC returns the same colliding number twice, advance locally
+  if (lastConflictedOrderNumber && orderNumber === lastConflictedOrderNumber) {
+    orderNumber = await getNextOrderNumberFromTable(supabase, direction)
+  }
+  const { data, error } = await supabase.from('orders').insert({ order_number: orderNumber, ... })
+  if (!error) { order = data; break }
+  if (!isOrderNumberConflict(error)) throw error
+  lastConflictedOrderNumber = orderNumber
+}</code></pre>
+<div class="line-explain">Order numbers follow the pattern <code>PO-2026-0001</code> (inbound) or <code>INV-2026-0001</code> (outbound). If two requests land simultaneously and generate the same number, the second insert fails with a unique constraint violation (PostgreSQL error code 23505). The retry loop handles this by re-asking for a number or scanning the table to find the next available one.</div>
+</div>
+
+<h4 class="subsub">transitionOrder(id, toStatus, userId, notes)</h4>
+<p>The state machine enforcer. All status changes go through here:</p>
+
+<div class="line-block">
+<pre><code>// Validate the transition is legal
+const validTransitions = VALID_ORDER_TRANSITIONS[order.status]
+if (!validTransitions.includes(toStatus)) {
+  throw new Error(`Invalid transition from ${order.status} to ${toStatus}`)
+}</code></pre>
+<div class="line-explain">Before touching the database, we check the VALID_ORDER_TRANSITIONS map. This prevents any code path from skipping a required step — e.g. jumping from <code>draft</code> directly to <code>received</code>.</div>
+</div>
+
+<div class="line-block">
+<pre><code>// Auto-generate quote when trade-in order is submitted
+if (toStatus === 'submitted' && order.type === 'trade_in') {
+  await this.autoQuoteOrderItems(orderId)
+}</code></pre>
+<div class="line-explain">When a trade-in order is submitted, the pricing engine runs automatically for every item. If it succeeds, the order has prices before any human has to look at it. This is the zero-human-touchpoint flow.</div>
+</div>
+
+<div class="line-block">
+<pre><code>// Record to sales_history when order closes — feeds ML model training
+if (toStatus === 'closed') {
+  await this.recordSalesHistory(supabase, id, order.type)
+}</code></pre>
+<div class="line-explain">Every closed order's final prices get written to <code>sales_history</code>. The ML pricing model retrains on this data, so its accuracy improves over time as more deals are completed.</div>
+</div>
+
+<h4 class="subsub">autoQuoteOrderItems(orderId)</h4>
+<p>Runs the pricing engine for each item in a newly submitted order:</p>
+
+<pre><code>for (const item of items) {
+  const result = await PricingService.calculateAdaptivePrice({
+    device_id: item.device_id,
+    storage: normalizeStorageForPricing(item.storage),
+    carrier: 'Unlocked',
+    condition: mapCondition(item.claimed_condition),
+    quantity: qty,
+    risk_mode: riskMode,
+  }, pricingSupabase)
+
+  if (result.success && result.trade_price > 0) {
+    await supabase.from('order_items').update({
+      unit_price: result.trade_price / qty,
+      quoted_price: result.trade_price / qty,
+      pricing_metadata: {
+        suggested_by_calc: true,
+        pricing_source: 'auto',
+        confidence: result.confidence,
+        anchor_price: result.breakdown?.anchor_price,
+      },
+    }).eq('id', item.id)
+  }
+}</code></pre>
+
+<h4 class="subsub">recordSalesHistory(supabase, orderId, type)</h4>
+<p>Writes completed deal data to the <code>sales_history</code> table for ML model training. Expands quantity > 1 into individual rows so the model sees realistic per-unit deal frequency:</p>
+
+<pre><code>const rows = items.flatMap(it => {
+  const price = Number(it.final_price ?? it.quoted_price)
+  const qty = it.quantity ?? 1
+  // One row per physical device, not per order line
+  return Array.from({ length: qty }, () => ({
+    device_id: it.device_id,
+    storage: it.storage ?? '128GB',
+    condition: it.actual_condition ?? it.claimed_condition,
+    sold_price: price / qty,
+    transaction_type: type === 'trade_in' ? 'buy' : 'sell',
+  }))
+})</code></pre>
+
+<h3 class="sub">6.3 Notification Service</h3>
+<p>The <code>NotificationService</code> handles three channels: in-app (stored in <code>notifications</code> table, delivered via Supabase Realtime), email (sent via Resend), and SMS (sent via Twilio, only when configured).</p>
+
+<div class="line-block">
+<pre><code>static async createNotification(input: {
+  user_id: string; type: NotificationType;
+  title: string; message: string; link?: string;
+  metadata?: Record&lt;string, unknown&gt;
+}): Promise&lt;Notification&gt; {
+  const supabase = createServiceRoleClient()
+  // Always insert to notifications table (in-app)
+  const { data } = await supabase.from('notifications').insert({ ... }).select().single()
+  // If email type, send via Resend
+  if (input.type === 'email' && input.metadata?.email) {
+    await EmailService.sendEmail(...)
+  }
+  return data
+}</code></pre>
+<div class="line-explain">Every notification — regardless of type — is written to the database. This gives a complete notification history. Email/SMS are fire-and-forget on top. The service role client is used because notifications often need to be created for users in different organizations.</div>
+</div>
+
+<h3 class="sub">6.4 Order Email Notifications — ORDER_EMAIL_CONFIG</h3>
+<p>Every status transition can optionally trigger emails. The configuration lives in <code>constants.ts</code> and the transition route reads it:</p>
+
+<pre><code>export const ORDER_EMAIL_CONFIG = {
+  quoted: {
+    customer: true,          // Send to customer
+    subject: (n) => `Quote Ready — Order #${n}`,
+    message: (n) => `Your quote for order #${n} is ready for review...`,
+  },
+  accepted: {
+    customer: true, admin: true, assigned: true,
+    // Customer gets a different, more detailed message than the internal team
+    customerMessage: (n) => `Thank you for accepting... Our team will send shipping instructions...`,
+  },
+  received: {
+    customer: true,          // Tell customer their devices arrived
+    subject: (n) => `Devices Received — Order #${n}`,
+  },
+  // ... all 14 statuses mapped
+}</code></pre>
+
+<p>The transition route calls <code>sendOrderTransitionNotifications()</code> as fire-and-forget with <code>.catch(() => {})</code> — email failures never block order transitions. This was a deliberate choice: better to advance the order and log an email failure than to block the workflow.</p>
+
+<h3 class="sub">6.5 Device Catalog</h3>
+<p>608 devices seeded into <code>device_catalog</code>. Categories: phone, tablet, laptop, watch, other. Specs stored as structured JSON:</p>
+
+<pre><code>// Example device record
+{
+  "id": "d0010000-0000-0000-0000-000000000010",
+  "make": "Apple",
+  "model": "iPhone 13",
+  "category": "phone",
+  "specifications": {
+    "storage_options": ["128GB", "256GB", "512GB"],
+    "colors": ["Pink", "Blue", "Midnight", "Starlight", "Red", "Green"]
+  },
+  "is_active": true
+}</code></pre>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHAPTER 7: PHASE 2
+════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 07</div>
+  <h2>Phase 2 — Email, Realtime &amp; Security</h2>
+  <p>Feb 25–28, 2026. Wiring up live notifications, outbound email, PDF exports, and hardening the security surface.</p>
+</div>
+
+<h3 class="sub">7.1 Email with Resend + React Email</h3>
+<p>All transactional emails are written as React components in <code>src/emails/</code> and rendered server-side. This gives us type-safe email templates that look consistent with the main UI.</p>
+
+<pre><code>// Example: Quote issued email template structure
+export function QuoteIssuedEmail({ orderNumber, items, totalAmount }) {
+  return (
+    &lt;Html&gt;
+      &lt;Head /&gt;
+      &lt;Body style={{ fontFamily: 'Inter, sans-serif' }}&gt;
+        &lt;Container&gt;
+          &lt;Heading&gt;Your Quote is Ready — {orderNumber}&lt;/Heading&gt;
+          &lt;Section&gt;
+            {items.map(item =&gt; (
+              &lt;Row key={item.id}&gt;
+                &lt;Text&gt;{item.device_name} — {item.condition} — ${item.unit_price}&lt;/Text&gt;
+              &lt;/Row&gt;
+            ))}
+          &lt;/Section&gt;
+          &lt;Button href={`${APP_URL}/orders/${orderId}`}&gt;Review Quote&lt;/Button&gt;
+        &lt;/Container&gt;
+      &lt;/Body&gt;
+    &lt;/Html&gt;
+  )
+}</code></pre>
+
+<h3 class="sub">7.2 Supabase Realtime</h3>
+<p>The order detail page subscribes to changes on the <code>orders</code> table using Supabase Realtime. When any admin updates the order status, all browsers viewing that order see the update within 1-2 seconds without a page refresh:</p>
+
+<pre><code>// In the order detail page component
+useEffect(() =&gt; {
+  const channel = supabase
+    .channel(`order:${orderId}`)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'orders',
+      filter: `id=eq.${orderId}`,
+    }, (payload) =&gt; {
+      // Update local state with fresh order data
+      queryClient.invalidateQueries(['order', orderId])
+    })
+    .subscribe()
+
+  return () =&gt; { supabase.removeChannel(channel) }
+}, [orderId])</code></pre>
+
+<p>The notification bell also uses a Realtime subscription on the <code>notifications</code> table filtered by <code>user_id</code>. New notifications increment the unread badge without polling.</p>
+
+<h3 class="sub">7.3 PDF Generation</h3>
+<p>Order summary PDFs are generated server-side using <code>@react-pdf/renderer</code> at <code>GET /api/orders/[id]/pdf</code>. The route streams the PDF directly to the browser:</p>
+
+<pre><code>const stream = await renderToStream(&lt;OrderPDFDocument order={order} /&gt;)
+return new Response(stream, {
+  headers: {
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="order-${order.order_number}.pdf"`,
+  },
+})</code></pre>
+
+<h3 class="sub">7.4 Security Hardening</h3>
+
+<p>Several important security decisions made during Phase 2:</p>
+
+<div class="fix-box">
+  <div class="fix-label">Security: Service Role Scoping</div>
+  The <code>createServiceRoleClient()</code> is only used <em>after</em> the route handler has verified the user's role and intent. It is never used to do the permission check itself. This prevents privilege escalation — the service role key bypasses RLS, so it must only be invoked after we've already confirmed the request is authorized.
+</div>
+
+<div class="fix-box">
+  <div class="fix-label">Security: SQL Injection Prevention</div>
+  All user-supplied search strings pass through <code>sanitizeSearchInput()</code> which strips SQL-special characters before they reach any <code>.ilike()</code> or <code>.or()</code> call. The Supabase client uses parameterized queries internally, so this is defense-in-depth.
+</div>
+
+<div class="fix-box">
+  <div class="fix-label">Security: Sort Column Allowlist</div>
+  The <code>sort_by</code> parameter in all list endpoints is validated against an explicit allowlist before being passed to <code>.order()</code>. Without this, a malicious <code>sort_by=password</code> could expose column names in error messages.
+</div>
+
+<pre><code>const ALLOWED_SORT_COLUMNS = ['created_at', 'updated_at', 'order_number', 'status', 'total_amount']
+const safeSortBy = ALLOWED_SORT_COLUMNS.includes(sort_by) ? sort_by : 'created_at'</code></pre>
+
+</div><!-- /main -->
+</body>
+</html>

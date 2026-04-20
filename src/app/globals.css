@@ -4,28 +4,29 @@
 
 @layer base {
   :root {
-    --background: 36 29% 95%;
-    --foreground: 18 16% 14%;
-    --card: 36 24% 98%;
-    --card-foreground: 18 16% 14%;
-    --popover: 36 24% 98%;
-    --popover-foreground: 18 16% 14%;
+    /* Light mode — warm sand base with pure-white card surfaces for clear contrast */
+    --background: 36 28% 88%;
+    --foreground: 18 16% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 18 16% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 18 16% 12%;
     --primary: 21 67% 42%;
     --primary-foreground: 39 43% 97%;
-    --secondary: 32 26% 89%;
-    --secondary-foreground: 18 15% 24%;
-    --muted: 35 18% 91%;
-    --muted-foreground: 20 10% 41%;
-    --accent: 39 54% 88%;
-    --accent-foreground: 21 55% 26%;
+    --secondary: 32 26% 84%;
+    --secondary-foreground: 18 15% 22%;
+    --muted: 35 20% 84%;
+    --muted-foreground: 20 12% 38%;
+    --accent: 39 54% 82%;
+    --accent-foreground: 21 55% 24%;
     --destructive: 2 72% 52%;
     --destructive-foreground: 0 0% 100%;
     --success: 148 43% 34%;
     --success-foreground: 0 0% 100%;
     --warning: 35 78% 48%;
     --warning-foreground: 0 0% 0%;
-    --border: 28 20% 80%;
-    --input: 28 20% 80%;
+    --border: 28 22% 72%;
+    --input: 28 22% 72%;
     --ring: 21 67% 42%;
     --radius: 1rem;
     /* Brand shorthand for wizard / customer-facing pages */
@@ -78,31 +79,31 @@
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
   /* Neutral / draft */
-  .badge-draft      { @apply badge-base bg-stone-100 text-stone-600 ring-1 ring-inset ring-stone-400/20; }
+  .badge-draft      { @apply badge-base bg-stone-100 text-stone-600 ring-1 ring-inset ring-stone-400/20 dark:bg-stone-800/60 dark:text-stone-300 dark:ring-stone-500/30; }
   /* Submitted / waiting */
-  .badge-submitted  { @apply badge-base bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20; }
+  .badge-submitted  { @apply badge-base bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-500/30; }
   /* Quoted / priced */
-  .badge-quoted     { @apply badge-base bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-600/20; }
+  .badge-quoted     { @apply badge-base bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-600/20 dark:bg-violet-900/40 dark:text-violet-300 dark:ring-violet-500/30; }
   /* Accepted */
-  .badge-accepted   { @apply badge-base bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-600/20; }
+  .badge-accepted   { @apply badge-base bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-600/20 dark:bg-sky-900/40 dark:text-sky-300 dark:ring-sky-500/30; }
   /* Sourcing / in-progress */
-  .badge-sourcing   { @apply badge-base bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20; }
-  .badge-sourced    { @apply badge-base bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-700/20; }
+  .badge-sourcing   { @apply badge-base bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-500/30; }
+  .badge-sourced    { @apply badge-base bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-700/20 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-500/30; }
   /* In transit */
-  .badge-shipped    { @apply badge-base bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20; }
-  .badge-received   { @apply badge-base bg-cyan-50 text-cyan-700 ring-1 ring-inset ring-cyan-600/20; }
-  .badge-in_triage  { @apply badge-base bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20; }
+  .badge-shipped    { @apply badge-base bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20 dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-500/30; }
+  .badge-received   { @apply badge-base bg-cyan-50 text-cyan-700 ring-1 ring-inset ring-cyan-600/20 dark:bg-cyan-900/40 dark:text-cyan-300 dark:ring-cyan-500/30; }
+  .badge-in_triage  { @apply badge-base bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20 dark:bg-orange-900/40 dark:text-orange-300 dark:ring-orange-500/30; }
   /* QC / complete */
-  .badge-qc_complete { @apply badge-base bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/20; }
-  .badge-delivered  { @apply badge-base bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20; }
+  .badge-qc_complete { @apply badge-base bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/20 dark:bg-teal-900/40 dark:text-teal-300 dark:ring-teal-500/30; }
+  .badge-delivered  { @apply badge-base bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-900/40 dark:text-green-300 dark:ring-green-500/30; }
   /* Rejected / cancelled */
-  .badge-rejected   { @apply badge-base bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20; }
-  .badge-cancelled  { @apply badge-base bg-stone-100 text-stone-500 ring-1 ring-inset ring-stone-400/20; }
+  .badge-rejected   { @apply badge-base bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-900/40 dark:text-red-300 dark:ring-red-500/30; }
+  .badge-cancelled  { @apply badge-base bg-stone-100 text-stone-500 ring-1 ring-inset ring-stone-400/20 dark:bg-stone-800/60 dark:text-stone-400 dark:ring-stone-500/30; }
   /* Generic */
-  .badge-success    { @apply badge-base bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20; }
-  .badge-warning    { @apply badge-base bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20; }
-  .badge-error      { @apply badge-base bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20; }
-  .badge-info       { @apply badge-base bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20; }
+  .badge-success    { @apply badge-base bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-900/40 dark:text-green-300 dark:ring-green-500/30; }
+  .badge-warning    { @apply badge-base bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-500/30; }
+  .badge-error      { @apply badge-base bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-900/40 dark:text-red-300 dark:ring-red-500/30; }
+  .badge-info       { @apply badge-base bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-500/30; }
 
   /* Wizard / customer-facing: clean white pages */
   .wizard-page {

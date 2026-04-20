@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║  Device Lifecycle Management Engine — Technical Book PART 3         ║
+  ║  Continues from: software-book-part2.html                           ║
+  ║  Focus: March-to-April engineering journal + codebase atlas         ║
+  ║                                                                      ║
+  ║  HOW TO CONTINUE THIS DOCUMENT (for Codex / ChatGPT):               ║
+  ║  1. Open the latest software-book-part*.html file.                  ║
+  ║  2. Find the last <!-- CONTINUE_FROM_HERE: ... --> marker.          ║
+  ║  3. Continue with the next missing file-by-file chapter.            ║
+  ║  4. Preserve the HTML class conventions used in parts 1–3.          ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Lifecycle Management Engine — Book Part 3 (Engineering Journal &amp; Code Atlas)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root { --ink:#1a1a2e;--accent:#2563eb;--accent2:#7c3aed;--muted:#64748b;--border:#e2e8f0;--code-bg:#0f172a;--code-fg:#e2e8f0; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#fff}
+  .main{max-width:900px;margin:0 auto;padding:60px 80px}
+  @media(max-width:768px){.main{padding:30px 20px}}
+  .chapter-header{page-break-before:always;background:linear-gradient(135deg,#0f172a,#1e1b4b);color:#fff;padding:60px;margin:60px -80px 50px;border-radius:0}
+  .chapter-num{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:3px;color:#60a5fa;margin-bottom:12px}
+  .chapter-header h2{font-size:36px;font-weight:700;color:#f8fafc;margin-bottom:12px}
+  .chapter-header p{font-size:16px;color:#94a3b8;max-width:680px}
+  h2.section{font-size:26px;font-weight:700;color:var(--ink);margin:50px 0 20px;padding-bottom:10px;border-bottom:2px solid var(--border)}
+  h3.sub{font-size:20px;font-weight:600;color:var(--accent);margin:36px 0 14px}
+  h4.subsub{font-size:16px;font-weight:600;color:var(--ink);margin:24px 0 10px}
+  p{margin-bottom:14px}
+  ul,ol{margin:12px 0 16px 24px}
+  li{margin-bottom:6px}
+  pre{background:var(--code-bg);color:var(--code-fg);padding:24px;border-radius:10px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6;margin:20px 0 24px;border-left:3px solid var(--accent)}
+  code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12.5px;color:#7c3aed}
+  pre code{background:none;padding:0;color:inherit}
+  .note{background:#eff6ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .warn-box{background:#fffbeb;border-left:4px solid #d97706;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .fix-box{background:#f0fdf4;border-left:4px solid #059669;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .note-label,.warn-label,.fix-label{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .note-label{color:#1d4ed8}.warn-label{color:#92400e}.fix-label{color:#065f46}
+  .line-block{margin:16px 0}
+  .line-block pre{margin:6px 0 4px}
+  .line-explain{font-size:13px;color:var(--muted);padding:8px 12px;background:#f8fafc;border-radius:0 0 8px 8px;margin-bottom:10px;border-left:3px solid #e2e8f0}
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:13.5px}
+  th{background:#0f172a;color:#f8fafc;padding:10px 14px;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:nth-child(even) td{background:#f8fafc}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin:30px 0}
+  .stat-card{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center}
+  .stat-card .num{font-size:32px;font-weight:700;color:var(--accent);line-height:1}
+  .stat-card .lbl{font-size:12px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:0.5px}
+  .day-card{border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin:18px 0;background:#fff}
+  .day-card h4{font-size:16px;font-weight:700;margin-bottom:8px;color:#0f172a}
+  .day-meta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-bottom:10px}
+  @media print{.chapter-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}pre{white-space:pre-wrap;word-break:break-word}}
+</style>
+</head>
+<body>
+<div class="main">
+
+<!-- CONTINUE_FROM_HERE: Chapter 15 — Engineering Journal -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 15</div>
+  <h2>March 3 to April 16, 2026 — Day-by-Day Engineering Journal</h2>
+  <p>This chapter reconstructs the development arc after the initial foundation. It answers the practical question: on each active day, what changed, why did it change, and which subsystem moved because of it.</p>
+</div>
+
+<p>Parts 1 and 2 already described the platform architecture and the major phases. What they did not yet do was reconstruct the daily engineering cadence in enough detail for management review or audit handoff. This part fills that gap.</p>
+
+<div class="stats-grid">
+  <div class="stat-card"><div class="num">215</div><div class="lbl">Commits From<br>March 1 Onward</div></div>
+  <div class="stat-card"><div class="num">23</div><div class="lbl">Active Git Days</div></div>
+  <div class="stat-card"><div class="num">25</div><div class="lbl">Busiest Day<br>April 1, 2026</div></div>
+  <div class="stat-card"><div class="num">398</div><div class="lbl">Tracked Code/Test/<br>Script Files</div></div>
+  <div class="stat-card"><div class="num">84,484</div><div class="lbl">Approx Lines Across<br>src + scripts + tests</div></div>
+  <div class="stat-card"><div class="num">220</div><div class="lbl">Total Repo Commits<br>by April 16, 2026</div></div>
+</div>
+
+<h3 class="sub">15.1 Active-Day Ledger</h3>
+<p>The table below compresses the March 3 through April 16 timeline into active development days. These are the dates where the repository recorded code changes. Non-listed days were either review, testing, debugging without commit, deployment, or stakeholder call days.</p>
+
+<table>
+  <thead><tr><th>Date</th><th>Commits</th><th>Main Focus</th></tr></thead>
+  <tbody>
+    <tr><td>March 3, 2026</td><td>1</td><td>Auto-splitting, vendor bids, customer privacy, first landing page, dark mode</td></tr>
+    <tr><td>March 4, 2026</td><td>1</td><td>Dashboard theme polish, shipping cleanup, CSV template support, security hardening</td></tr>
+    <tr><td>March 6, 2026</td><td>1</td><td>Enterprise UI pass and pricing corrections</td></tr>
+    <tr><td>March 8, 2026</td><td>2</td><td>Competitor-driven pricing overhaul and theme warning cleanup</td></tr>
+    <tr><td>March 12, 2026</td><td>1</td><td>Database cleanup and reset-script stabilization</td></tr>
+    <tr><td>March 28, 2026</td><td>4</td><td>Deployment-aware URLs, device catalog completion, template downloads</td></tr>
+    <tr><td>March 29, 2026</td><td>13</td><td>Cron hardening, landing page redesign, timestamp normalization, production 404 cleanup</td></tr>
+    <tr><td>March 31, 2026</td><td>1</td><td>Auth handoff speedup</td></tr>
+    <tr><td>April 1, 2026</td><td>25</td><td>Customer/vendor/COE workflow marathon: auth, triage, quotes, CSV uploads, exceptions</td></tr>
+    <tr><td>April 2, 2026</td><td>4</td><td>PKCE reset flow, MFA, Next.js 16 upgrade, pricing accuracy API</td></tr>
+    <tr><td>April 3, 2026</td><td>19</td><td>Mobile responsiveness, pricing consistency, duplicate cleanup, stale data fixes</td></tr>
+    <tr><td>April 4, 2026</td><td>13</td><td>Receiving/triage expansion and heavy pricing formula refinement</td></tr>
+    <tr><td>April 5, 2026</td><td>13</td><td>Quote controls, competitor visibility, sign-in speed, order-intake tab</td></tr>
+    <tr><td>April 6, 2026</td><td>4</td><td>Market-reference pricing experiment</td></tr>
+    <tr><td>April 7, 2026</td><td>12</td><td>Triage live sync, numbering systems, realtime/auth performance, deletion tools</td></tr>
+    <tr><td>April 8, 2026</td><td>8</td><td>Bell/Telus/GoRecell pricing policy, Excel triage uploads, competitor UI fixes</td></tr>
+    <tr><td>April 9, 2026</td><td>10</td><td>Cross-device sync, login stabilization, dashboard reliability, pre-demo sanity fixes</td></tr>
+    <tr><td>April 10, 2026</td><td>23</td><td>Customer/vendor workflow fixes, receiving manifests, mismatch repricing, deployment repair</td></tr>
+    <tr><td>April 12, 2026</td><td>7</td><td>Smart template parser, performance optimizations, cron downscaling</td></tr>
+    <tr><td>April 13, 2026</td><td>17</td><td>Universal parser completion, design system, large test expansion, code splitting</td></tr>
+    <tr><td>April 14, 2026</td><td>19</td><td>Scraper/catalog correctness, reports rebuild, duplicate cleanup, analytics and health</td></tr>
+    <tr><td>April 15, 2026</td><td>15</td><td>SLA escalation, AI exception suggestions, brand overrides, manual-only shipping</td></tr>
+    <tr><td>April 16, 2026</td><td>2</td><td>Documentation and audit fixes in pricing, triage, and exception flows</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">15.2 Sprint Clusters — What Actually Moved</h3>
+
+<div class="day-card">
+  <h4>March 3 to March 12, 2026 — Workflow branching and first stabilization wave</h4>
+  <div class="day-meta">6 active commits across 5 dates</div>
+  <ul>
+    <li><strong>March 3:</strong> order auto-splitting, vendor bids API, customer privacy boundaries, dark mode, landing page first pass.</li>
+    <li><strong>March 4:</strong> cinematic theme layer, shipping fixes, CSV upload templates, security checks moved earlier in pricing routes.</li>
+    <li><strong>March 6:</strong> enterprise/banking visual treatment plus general pricing and UI cleanup.</li>
+    <li><strong>March 8:</strong> first major competitor-based pricing rewrite, quoting flow refresh, ML training UI.</li>
+    <li><strong>March 12:</strong> cleanup day: order persistence bugs, seed corrections, reset-script repair.</li>
+  </ul>
+  <div class="fix-box">
+    <div class="fix-label">Meaning</div>
+    By mid-March the platform had already stopped being a simple CRUD dashboard. It had split into multiple operational lanes: customer intake, vendor response, pricing intelligence, and workflow visibility.
+  </div>
+</div>
+
+<div class="day-card">
+  <h4>March 28 to March 31, 2026 — Production-awareness arrives</h4>
+  <div class="day-meta">18 active commits across 3 dates</div>
+  <ul>
+    <li>Deployment-aware URL generation fixed production emails that still pointed to localhost.</li>
+    <li>The catalog was expanded and template downloads were made explicit for customer-facing workflows.</li>
+    <li>Vercel cron health, analytics, and timestamp normalization were tightened.</li>
+    <li>Several production 404s were eliminated by aligning front-end calls with real API routes.</li>
+    <li>Auth handoff speed became a first-class concern by March 31.</li>
+  </ul>
+  <div class="warn-box">
+    <div class="warn-label">Why This Matters</div>
+    This is the point where the project stopped behaving like a local prototype and started reacting to production conditions: URLs, timezone behavior, cron semantics, and missing-route failures.
+  </div>
+</div>
+
+<div class="day-card">
+  <h4>April 1 to April 5, 2026 — Workflow marathon and presentation hardening</h4>
+  <div class="day-meta">74 active commits across 5 dates</div>
+  <ul>
+    <li><strong>April 1:</strong> massive workflow repair day. Customer order auth, CSV upload access, exception approval, triage state sync, quote preservation, notification gaps, and login routing all moved at once.</li>
+    <li><strong>April 2:</strong> PKCE password reset, MFA, Next.js 16 migration, pricing accuracy and model-comparison endpoints.</li>
+    <li><strong>April 3:</strong> mobile-first polish, pricing consistency, duplicate cleanup scripts, stale data fixes, Speed Insights.</li>
+    <li><strong>April 4:</strong> receiving/QC/triage enhancements, pricing formula corrections, beat-competitor logic, CSV bulk triage import.</li>
+    <li><strong>April 5:</strong> quote summary controls, manual prices, CPO condition cleanup, optimistic triage UI, sign-in speed, cross-device cache busting, order-intake tab.</li>
+  </ul>
+  <div class="fix-box">
+    <div class="fix-label">Pattern</div>
+    The repeated theme during this window was not adding brand-new features. It was making the already-built workflows demo-safe: fewer dead ends, fewer stale states, fewer role mismatches, clearer quote controls, and faster navigation.
+  </div>
+</div>
+
+<div class="day-card">
+  <h4>April 6 to April 10, 2026 — Pricing algorithm convergence and receiving realism</h4>
+  <div class="day-meta">57 active commits across 5 dates</div>
+  <ul>
+    <li><strong>April 6:</strong> market-reference pricing experiment using benchmark tables.</li>
+    <li><strong>April 7:</strong> live triage sync, separate PO vs invoice numbering, discrepancy UI, deletion tools, auth speed, realtime.</li>
+    <li><strong>April 8:</strong> Bell/Telus/GoRecell policy becomes canonical, Excel triage uploads, fuzzy matching, competitor visibility repair.</li>
+    <li><strong>April 9:</strong> diagnostics auto-fill, login overlay and double-navigation fixes, realtime subscriptions extended across plain-fetch pages.</li>
+    <li><strong>April 10:</strong> customer auto-submit, exception-service repair, customer dashboard 500 fixes, receiving manifests, mismatch repricing, Vercel deployment repair, vendor and triage hardening.</li>
+  </ul>
+  <div class="note">
+    <div class="note-label">Architectural Shift</div>
+    The pricing engine changed several times here because the business rule itself was still being negotiated: first weighted averages, then explicit Bell/Telus averages, then blending with GoRecell, then floors to make sure quotes stayed above GoRecell Fair where required.
+  </div>
+</div>
+
+<div class="day-card">
+  <h4>April 12 to April 16, 2026 — Parser maturity, scraper integrity, and audit cleanup</h4>
+  <div class="day-meta">60 active commits across 5 dates</div>
+  <ul>
+    <li><strong>April 12:</strong> smart trade-template import, shared condition normalization, performance work for admin pricing and order creation.</li>
+    <li><strong>April 13:</strong> universal parser completion, larger catalog, full design-system pass, 1,331 pricing tests, code splitting, client-wrapper fixes.</li>
+    <li><strong>April 14:</strong> GoRecell full-catalog scraper expansion, phantom-device cleanup, variant-safe catalog matching, server-side search, reports rebuild, scraper health, duplicate cleanup.</li>
+    <li><strong>April 15:</strong> stale-data warnings, SLA auto-escalation, scrapling pilot routing, AI-assisted exception suggestions, brand margin overrides, manual-only shipping.</li>
+    <li><strong>April 16:</strong> docs deliverables plus audit fixes to pricing precedence, triage resolution semantics, and exception queue behavior.</li>
+  </ul>
+  <div class="fix-box">
+    <div class="fix-label">Outcome</div>
+    By April 16, the project had shifted from broad feature building to high-precision correction work: bad scraper mappings, stale competitor data, type edge cases, audit expectations, and explanation/documentation quality.
+  </div>
+</div>
+
+<h3 class="sub">15.3 Verbatim Git Ledger — March 3 to April 16, 2026</h3>
+<p>This is the compact git-backed ledger for the active development window. It is intentionally kept close to the commit subjects so future reviewers can cross-reference repository history directly.</p>
+
+<pre><code>2026-03-03 | 57a3bd2 | feat: Auto-split orders, vendor bids API, customer privacy, dark mode, landing page
+2026-03-04 | ccdddc3 | feat: Cinematic dark theme, shipping fixes, CSV 3-template upload, security hardening
+2026-03-06 | fae4733 | Enterprise banking UI, pricing fixes, and platform improvements
+2026-03-08 | cc6338d | feat: Competitor-driven pricing overhaul, quoting flow, training UI, notifications
+2026-03-08 | 350e731 | fix: Remove redundant defaultTheme when forcedTheme is set
+2026-03-12 | 9daf7d9 | fix: database cleanup - order update, seed data, and clean reset script
+2026-03-28 | 9752cfe | Save current changes
+2026-03-28 | 4372528 | fix: make app urls deployment-aware
+2026-03-28 | 68e8b14 | feat: Complete device catalog, pricing quality fixes, CSV template enhancements
+2026-03-28 | 555a5f5 | chore: ignore generated python bytecode
+2026-03-29 | 7e63ca5 | feat: Enable auto scraper pipeline + quote-price-check cron
+2026-03-29 | eb3499b | fix: Set all timestamps to America/Toronto timezone
+2026-03-29 | 0503d08 | feat: redesign landing page welcome experience
+2026-03-29 | 54f3803 | feat: Add phone field to user management, remove SMS test card
+2026-03-29 | d6a7e8c | feat: polish landing page scroll experience
+2026-03-29 | a8fbc8d | fix: Stop stallion-tracking cron from inflating Vercel error rate
+2026-03-29 | 5124884 | fix: harden vercel cron health and enable analytics
+2026-03-29 | b608466 | fix: eliminate common production 404s
+2026-03-29 | 4182856 | fix: handle favicon head requests
+2026-03-29 | c348ab3 | feat: simplify and elevate landing page
+2026-03-29 | 48ab3a3 | feat: refine landing page pacing and tone
+2026-03-29 | 69edeab | feat: elevate landing page device showcase
+2026-03-29 | 3efb58c | test: harden critical workflow coverage
+2026-03-31 | 21f33b5 | fix: speed up auth handoff
+2026-04-01 | cb78f65 | fix: harden login recovery for live workflows
+2026-04-01 | 8caceb4 | feat: Premium UI redesign — Apple/GoRecell-inspired trade-in wizard + ring badges
+2026-04-01 | 2b9c043 | fix: Replace CSS variable opacity refs in TradeInWizard with concrete hex
+2026-04-01 | 44c9952 | fix: stabilize dashboard navigation and realtime
+2026-04-01 | f8c7d1a | fix: prevent post-login redirects from overriding navigation
+2026-04-01 | 49b5459 | fix: allow customer and vendor order detail routes
+2026-04-01 | c153bda | fix: harden customer order auth and exceptions
+2026-04-01 | c206e3c | fix: avoid auth cache hydration mismatch
+2026-04-01 | 122c4c1 | fix: advance inbound trade-ins through coe workflow
+2026-04-01 | a251061 | fix: advance triage orders through coe workflow
+2026-04-01 | f275620 | fix: Patch high-severity npm vulnerabilities (minimatch, picomatch, flatted, eslint)
+2026-04-01 | 6393757 | fix: preserve quoted pricing through triage
+2026-04-01 | bc3e299 | fix: Resolve TradeInWizard crash — wrong catalog endpoint + naming conflict
+2026-04-01 | db78374 | fix: allow customers to resolve triage exceptions
+2026-04-01 | e0cb18b | fix: complete triage orders after customer exception approval
+2026-04-01 | 5d5bfaa | fix: refresh triage status sync from live order state
+2026-04-01 | efa408a | fix: retry triage completion checks after exception approval
+2026-04-01 | 30ec7e3 | fix: bypass RLS for customer pricing quotes using service-role client
+2026-04-01 | 932293b | chore: trace triage status sync in production
+2026-04-01 | 35c33fe | fix: add missing /api/pricing/scrape/changes route
+2026-04-01 | d10902c | fix: make UniverCell action ID discovery self-healing
+2026-04-01 | 0732715 | fix: reconcile triage orders after exception approval
+2026-04-01 | 5124c0c | fix: allow customers to upload csv orders
+2026-04-01 | bbca846 | fix: close three notification gaps across CPO + vendor workflows
+2026-04-01 | ab27470 | fix: speed up role-aware login routing
+2026-04-02 | b07ffcd | feat: add PKCE password reset, MFA challenge on login, and MFA management in profile
+2026-04-02 | 737d956 | feat: upgrade Next.js to v16, add pricing accuracy API and A/B model compare
+2026-04-02 | c8a48d7 | Finalize workflow, auth, and deployment fixes
+2026-04-02 | 6fea92a | Fix pricing market alignment and scraper fallbacks
+2026-04-03 | 6e48c27 | feat: complete mobile responsiveness across all dashboard pages
+2026-04-03 | b706cb4 | fix: make forgot password prominent + profile name updates instantly
+2026-04-03 | 60c9588 | fix: gate price-change emails behind explicit admin send action
+2026-04-03 | ab7ccff | fix: vendors can view own bids + hide CPO option for sales role
+2026-04-03 | f56aa4b | fix: show actual API error in COE triage and shipping failure toasts
+2026-04-03 | 3d0ec7f | fix: quoted_amount on transition, exception final_amount, useAuth fields
+2026-04-03 | 53cf7a5 | fix: finalize mobile tweaks and promise-based route test params
+2026-04-03 | 9dd2944 | fix: harden scraper selection and pricing input matching
+2026-04-03 | f6ad3c8 | Harden pricing catalog resolution and scoped scraper imports
+2026-04-03 | f67440a | fix: cap non-beat quotes at competitor ceiling and add full-catalog pricing audit
+2026-04-03 | fa24d53 | fix: relax pricing read helper to accept supabase query builders
+2026-04-03 | 3d901f6 | Add safe duplicate device cleanup script
+2026-04-03 | 3733c57 | Add fuzzy device alias audit and cleanup scripts
+2026-04-03 | 0e2e0bf | Make fuzzy device cleanup idempotent
+2026-04-03 | 06bfff2 | fix: dashboard stats cover all orders + quote banner matches button labels
+2026-04-03 | 6bfcae4 | fix: surface backend fixes in frontend UI
+2026-04-03 | 1b4f7a7 | fix: stale competitor prices in quotes + faster auth
+2026-04-03 | be80a6a | feat: add Vercel Speed Insights
+2026-04-03 | 7732a6b | fix: vendor orders page crash + bids query mutation bug
+2026-04-04 | 6fb29c3 | fix: move </Tabs> inside vendor orders page to fix crash
+2026-04-04 | 0d78b7d | feat: trade-in receiving/QC/triage workflow enhancements
+2026-04-04 | 81a862a | fix: surface real error messages across order transition workflows
+2026-04-04 | 705e542 | Fix full-catalog pricing refresh and market sync
+2026-04-04 | 7bc8447 | Fix pricing verification pagination
+2026-04-04 | e0b832d | fix: keep trade-in quotes anchored to competitor prices, not inflated wholesale
+2026-04-04 | 9634110 | fix: always apply margin in default pricing path, normalize storage in data-driven model
+2026-04-04 | 03fbb64 | fix: pricing backend/frontend consistency — storage normalization, margin, staleness
+2026-04-04 | 6af88ce | fix: remove wholesale/pricing_tables as trade-in anchor — causes over-payment
+2026-04-04 | 734a687 | fix: competitive floor uses avg not highest, lower default to 0.70; add pricing cross-verification tests
+2026-04-04 | 206c2ae | feat: quote above competitor by adjustable beat amount (trade-in + CPO)
+2026-04-04 | 25669cd | fix: pricing correctness — staleness from settings, CONNECTIVITY_BROKEN deduction, correct WiFi mapping
+2026-04-04 | 5cd6bfd | feat: full triage CSV upload workflow — parse all spreadsheet columns + bulk import
+2026-04-05 | 643aeae | feat: editable margin override in Quote Summary on trade-in order page
+2026-04-05 | 6ad2deb | feat: competitor prices in quote summary + per-item manual price entry + fix CPO markup
+2026-04-05 | bd340f1 | fix: CPO orders have no condition selection — always Excellent
+2026-04-05 | e8a8c88 | feat: competitor prices + manual price entry in unified order page; fix CPO condition
+2026-04-05 | 450ab0f | feat: clickable notification rows, live quote refresh after settings save, and admin CSV order access
+2026-04-05 | edce3e4 | feat: show competitor sell prices on CPO order quote summary
+2026-04-05 | e00445c | fix: speed up sign in and dashboard hydration
+2026-04-05 | 34947e2 | fix: make triage queue updates optimistic
+2026-04-05 | ec8c2c5 | fix: anchor trade-in quote to avg competitor price instead of highest
+2026-04-05 | d68ac90 | fix: beat competitor modes are mutually exclusive + per-quote beat override in quote summary
+2026-04-05 | e0f173a | fix: apply competitor filter to filteredComp and improve empty state UX
+2026-04-05 | 9e4e2d4 | fix: cross-device stale data, login lag, and cache busting
+2026-04-05 | a9650c7 | feat: add Order Intake tab to triage page for order-centric device registration
+2026-04-06 | c5977ab | feat: UI redesign + market reference pricing formula
+2026-04-06 | 445c51c | feat: hardcode market reference prices from carrier/GoRecell benchmark table
+2026-04-06 | 0749fd3 | fix: anchor trade-in price to market reference average, not above highest competitor
+2026-04-06 | 17d2143 | fix: apply market reference anchor to all pricing paths system-wide
+2026-04-07 | debd193 | feat: triage live sync + scraper cleanup + catalog seeding + COE notifications
+2026-04-07 | d5f6a77 | fix: dynamic weighted avg pricing — all competitors, GoRecell Good ×2
+2026-04-07 | c6c458a | feat: implement PO vs Invoice numbering with separate sequences
+2026-04-07 | 72a1d5d | Integrate DiscrepancyDetail component and fix Next.js 15+ async params compatibility
+2026-04-07 | ce95114 | Add discrepancy badges to orders list
+2026-04-07 | f156674 | fix: all competitors feed weighted avg, not just exact-condition match
+2026-04-07 | 8fb4e87 | fix: correct two-step pricing formula — carrier avg then avg with GoRecell Good
+2026-04-07 | 6d5d05e | fix: formula applies to all conditions — fetch all competitor rows, deduplicate by name
+2026-04-07 | 817dbbd | fix: instant login/signout + cross-device real-time data sync
+2026-04-07 | eb896d5 | Fix auth latency and cross-device realtime updates
+2026-04-07 | dac8484 | perf: parallel email candidates + instant nav on cached role for fast login/out
+2026-04-07 | 8c0f02d | feat: admin can delete users, vendors, and organizations
+2026-04-08 | 9eeb895 | Implement Bell Telus GoRecell pricing policy
+2026-04-08 | 8398459 | Fix pricing edge cases for complex models
+2026-04-08 | 45a11d7 | Fix stale pricing updates across device selection flows
+2026-04-08 | a635474 | fix: write last_login_at on every successful login
+2026-04-08 | 144bfaf | fix: contain MFA QR code SVG within its box
+2026-04-08 | 77178a4 | Fix competitor pricing visibility and GoRecell floors
+2026-04-08 | 3945469 | fix: triage CSV upload shows 0 matched when no order ref
+2026-04-08 | 10879d6 | fix: competitor name visibility, triage upload Excel support + fuzzy matching + export
+2026-04-09 | 8b097d5 | fix: eliminate duplicate fetchUser on login + triage order linking
+2026-04-09 | 5844cc0 | fix: CPO price distinct from trade-in + cross-device realtime sync
+2026-04-09 | 8b2760d | feat: HiteKNova/TestPod diagnostics auto-fill in triage dialog
+2026-04-09 | e1ee19f | fix: order number generation + cross-device realtime sync
+2026-04-09 | 3c0e96c | fix: keep login overlay visible until navigation completes
+2026-04-09 | 6cdcd52 | fix: eliminate login double-navigation and realtime subscription bugs
+2026-04-09 | d82bc34 | fix: move supabase clients to module level in reset-password and profile pages
+2026-04-09 | c0aa334 | fix: add cross-device realtime sync to all plain-fetch pages
+2026-04-09 | ea6e3dd | feat: Codex improvements — customer dashboard, order retry, triage upload, auth + URL fixes
+2026-04-09 | ee3635e | fix: pre-presentation sanity pass — dialog resets, shipments limit, upload-csv error
+2026-04-10 | 9513730 | fix: auto-submit customer orders and add error handling to wizard
+2026-04-10 | c3ac8e9 | fix: add order number collision retry to CSV upload route
+2026-04-10 | 2dcf2b3 | fix: critical issues in exception service and notification handling
+2026-04-10 | b3c9763 | docs: add comprehensive testing and validation summary
+2026-04-10 | 664d22d | feat: add Excel uploads for order workflows
+2026-04-10 | b63c106 | Refine customer portal and vendor CPO workflows
+2026-04-10 | 4833ed4 | Harden vendor triage and auth workflows
+2026-04-10 | 226a35f | fix: resolve customer dashboard 500 errors and missing CSS animation
+2026-04-10 | c6941c2 | fix: login race condition, customer dashboard scoping, reset password URL
+2026-04-10 | 5fd52a5 | fix triage matching and coe access
+2026-04-10 | 4d518ef | flag receiving quantity mismatches
+2026-04-10 | b88e45b | add recent orders dropdown to triage
+2026-04-10 | 0d11a7c | align visible order value
+2026-04-10 | 35ca4ec | add quantity trail display to triage intake and upload summaries
+2026-04-10 | 1ced5a0 | Reconnect Vercel deployment status
+2026-04-10 | 6436834 | add order selector to receiving dialog
+2026-04-10 | 7523d8a | show outbound orders in receiving page
+2026-04-10 | b4b567f | show trade-in receiving queue with inbound action
+2026-04-10 | 3707755 | connect receiving mismatch to quote updates and fix triage import diagnostics
+2026-04-10 | 21e375a | fix duplicate mismatch dialogs in order detail
+2026-04-10 | c96f6fe | flag auto-updated mismatch quotes for customer ack workflow
+2026-04-10 | b95a261 | feat: per-SKU receiving manifest + quote-accepted shipping email
+2026-04-10 | dbdbe0b | feat: triage manifest summary + condition mismatch repricing panel
+2026-04-12 | 79bd097 | feat: smart trade template import — parser API + staff & customer upload flows
+2026-04-12 | 9fc6cdf | fix: widen match_status type cast to include catalog_matched variant
+2026-04-12 | 1be6c9d | refactor: extract shared condition normalizer + add LLM fallback monitoring
+2026-04-12 | c71b557 | temp: downgrade cron schedules to once-daily for Hobby plan
+2026-04-12 | 197e13a | perf: fix /admin/pricing FCP 19s → deferred fetches + opt-in batch calc
+2026-04-12 | 303cdea | perf: reduce oversized device/order fetches across order creation pages
+2026-04-12 | e893178 | feat: color-coded toasts, polished dialogs, success/warning button variants
+2026-04-13 | 30e14dd | feat: apply success/warning variants to all primary CTA buttons
+2026-04-13 | c27c15d | fix: eliminate color misplacements across the platform
+2026-04-13 | 885f111 | fix: landing page alignment, scroll, and copy issues
+2026-04-13 | a6f9609 | fix: robust column mapping for any customer trade-in template upload
+2026-04-13 | e35cf0e | feat: universal trade template parser for COE + SCC ITAD file formats
+2026-04-13 | dc4b8f5 | feat: upgrade new-order CSV tab to use smart parse-trade-template parser
+2026-04-13 | 904c4ce | feat: auto-parse spreadsheet on file select in import dialog
+2026-04-13 | 236d66b | fix: resolve 0 SKUs bug + expand device catalog to 608 entries
+2026-04-13 | 373fca9 | feat: import dialog customer workflow + working dark/light mode toggle
+2026-04-13 | 3f2d146 | test: comprehensive pricing model coverage — 1331 tests across all device categories
+2026-04-13 | e984b0c | feat: apply luxury editorial design system across entire interface
+2026-04-13 | 99bc79e | fix: all text visible in both light and dark mode
+2026-04-13 | e1aee0e | feat: collapsible sidebar with spring animation
+2026-04-13 | f98315f | perf: code-split heavy pages + fix login GPU load (mobile scores 3→expected 60+)
+2026-04-13 | 502d5a3 | fix: add 'use client' to dynamic wrapper pages (ssr:false requires client component)
+2026-04-13 | e6baad4 | feat: redesign login with Bloom glass morphism + add display/serif fonts
+2026-04-13 | b4dbd22 | fix: replace video background with CSS gradient on login page
+2026-04-14 | 6e76809 | redesign: login page — match dashboard design system, restore back button
+2026-04-14 | fa37a5e | fix: normalize 'broken' condition to 'poor' before Zod enum validation
+2026-04-14 | f4c4b38 | feat: expand GoRecell scraper to full catalog — laptops, iPads, tablets
+2026-04-14 | 97cb564 | fix: correct competitor prices showing under wrong devices
+2026-04-14 | f804600 | fix: add phantom device cleanup to restore correct competitor prices
+2026-04-14 | 8ba04d9 | fix: extract pure storage size from GoRecell rule titles
+2026-04-14 | b71c364 | fix: searchable device picker for all catalog + landing page scroll fix
+2026-04-14 | 94450dd | fix: device dropdown portal, Bell/Telus note, scraper variant matching + health audit
+2026-04-14 | 7c7f946 | fix: fix iPad/MacBook storage extraction and expand GoRecell catalog coverage
+2026-04-14 | 16eb360 | fix: paginate GoRecell Phase 1 at 100/page and paginate supplementary searches
+2026-04-14 | 7af1d32 | Harden auth pricing access and clean duplicate catalog data
+2026-04-14 | b460b64 | feat: add missing 2025-2026 Samsung and Google devices to catalog
+2026-04-14 | 7163c43 | fix: paginate device catalog load and add server-side search to trade-in dropdown
+2026-04-14 | 672025b | fix: show search prompt instead of 60 Apple devices on empty dropdown
+2026-04-14 | aa157c2 | feat: rebuild reports page with full analytics API
+2026-04-14 | aae9a69 | fix: dedup Samsung SAM-* vs SMS-* catalog rows
+2026-04-14 | c998b63 | feat: staleness cron now auto-deletes rows beyond 2× threshold
+2026-04-14 | a8a65c2 | feat: retry failed scraper providers once before marking failed
+2026-04-14 | 65c63a5 | feat: show persistent cron scraper health in admin pricing panel
+2026-04-15 | 2e4c4de | feat: show amber warning when pricing uses internal estimate (no competitor data)
+2026-04-15 | 02d2481 | feat: SLA auto-escalation for persistently breached orders
+2026-04-15 | a5e0b8b | Revert "feat: show amber warning when pricing uses internal estimate (no competitor data)"
+2026-04-15 | 2869558 | feat: show amber warning when pricing uses internal estimate (no competitor data)
+2026-04-15 | 020389b | feat(scrapers): wire scrapling pilot routing into pipeline + commit RLS gaps + TestPod env var
+2026-04-15 | b18666e | feat(exceptions): rule-based AI suggestion for exception resolution
+2026-04-15 | dbd9ee2 | feat(pricing): per-brand margin overrides + demand-based adjustment (P4 #16, #18)
+2026-04-15 | bfb08b5 | fix: seed boolean flags in DEFAULT_PRICING_SETTINGS + add test coverage for new features
+2026-04-15 | 22cee49 | fix: accept optional NextRequest in brand-overrides GET to satisfy TS strict check
+2026-04-15 | 23f2632 | fix: remove .venv-scrapling symlink fallback to fix Turbopack build panic
+2026-04-15 | bc76fa3 | feat: device dropdown shows catalog on open + customer quote accept/decline
+2026-04-15 | 5b418bf | fix: triage device picker shows catalog on load instead of waiting for search input
+2026-04-15 | 592e16f | feat: remove Stallion label purchase — manual tracking only
+2026-04-15 | 23afbe3 | test: update shipment tests to reflect manual-only shipping (Stallion removed)
+2026-04-15 | 6fb7fb6 | docs: add P1-P4 progress report for manager review
+2026-04-16 | 0aeab18 | docs: add viewable HTML progress report (P1-P4)
+2026-04-16 | 2263c52 | fix: audit fixes for pricing, triage, and exception flows</code></pre>
+
+<!-- CONTINUE_FROM_HERE: Chapter 16 — Codebase Atlas -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 16</div>
+  <h2>Codebase Atlas — Where the Logic Actually Lives</h2>
+  <p>A guided map of the files that carried the most weight in the project, including the largest files, the hottest files, and the logic seams that caused the most bugs.</p>
+</div>
+
+<h3 class="sub">16.1 System Slices</h3>
+<p>The platform became large enough that a file list alone is not useful. The better frame is to treat the codebase as operating slices.</p>
+
+<table>
+  <thead><tr><th>Slice</th><th>Primary Files</th><th>Why This Slice Exists</th></tr></thead>
+  <tbody>
+    <tr><td>Pricing Engine</td><td><code>src/services/pricing.service.ts</code>, <code>src/app/(dashboard)/admin/pricing/_client.tsx</code>, <code>tests/unit/services/pricing.calculatePriceV2.test.ts</code></td><td>All quote generation, competitor blending, beat modes, brand overrides, staleness handling, demand adjustment, and confidence reporting live here.</td></tr>
+    <tr><td>Order Lifecycle</td><td><code>src/services/order.service.ts</code>, <code>src/app/(dashboard)/orders/[id]/_client.tsx</code>, <code>src/app/(dashboard)/orders/new/*.tsx</code>, <code>src/app/api/orders/upload-csv/route.ts</code></td><td>Order creation, transitions, split orders, customer/vendor views, CSV-driven batch intake, and order detail orchestration.</td></tr>
+    <tr><td>Triage &amp; Receiving</td><td><code>src/services/triage.service.ts</code>, <code>src/app/(dashboard)/coe/triage/page.tsx</code>, <code>src/app/(dashboard)/coe/receiving/page.tsx</code>, <code>src/app/api/triage/upload-template/route.ts</code></td><td>Physical-device intake, test results, mismatch handling, exception workflows, intake manifests, and spreadsheet-assisted receiving.</td></tr>
+    <tr><td>Auth &amp; Session Routing</td><td><code>src/hooks/useAuth.ts</code>, <code>src/middleware.ts</code>, <code>src/app/(auth)/login/page.tsx</code>, <code>src/app/(dashboard)/profile/page.tsx</code></td><td>Sign-in, routing cookies, cached role handoff, MFA, password reset, and the long sequence of fixes for slow or inconsistent navigation.</td></tr>
+    <tr><td>Template Parsing</td><td><code>src/app/api/orders/parse-trade-template/route.ts</code>, <code>src/lib/condition.ts</code>, <code>tests/unit/api/orders.parse-trade-template.route.test.ts</code></td><td>Ingests highly inconsistent customer spreadsheets and normalizes them into structured device rows.</td></tr>
+    <tr><td>Scrapers &amp; Catalog Matching</td><td><code>src/lib/scrapers/pipeline.ts</code>, <code>src/lib/scrapers/adapters/gorecell.ts</code>, <code>src/lib/scrapers/adapters/telus.ts</code>, <code>src/lib/scrapers/adapters/universal.ts</code></td><td>Collects competitor prices, maps scraped models to catalog rows, filters outliers, and persists normalized competitor prices.</td></tr>
+    <tr><td>Notifications &amp; Email</td><td><code>src/services/notification.service.ts</code>, <code>src/services/email.service.ts</code>, notification routes and templates</td><td>In-app alerts, email dispatch, workflow notifications, quote updates, SLA escalations, and vendor/customer/COE communication.</td></tr>
+    <tr><td>Shipment &amp; Vendor Operations</td><td><code>src/services/shipment.service.ts</code>, <code>src/services/vendor.service.ts</code>, <code>src/app/(dashboard)/vendor/orders/page.tsx</code>, shipment routes</td><td>Vendor bids, manual tracking, shipment creation, outbound/inbound movement, and the removal of external label purchase dependence.</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">16.2 Largest Files by Line Count</h3>
+
+<table>
+  <thead><tr><th>File</th><th>Lines</th><th>Why It Grew</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/app/(dashboard)/admin/pricing/_client.tsx</code></td><td>3,771</td><td>Admin pricing became both a control room and an analytics surface: settings, overrides, audits, health, refresh tools, model comparisons, competitor visibility, and warnings.</td></tr>
+    <tr><td><code>src/app/(dashboard)/orders/[id]/_client.tsx</code></td><td>3,027</td><td>Order detail turned into the convergence screen for quotes, discrepancies, transitions, customer actions, vendor actions, manifests, and exception acknowledgements.</td></tr>
+    <tr><td><code>src/app/(dashboard)/coe/triage/page.tsx</code></td><td>2,147</td><td>The triage page absorbed queueing, intake, manifest previews, spreadsheet uploads, diagnostics, status coloring, mismatch panels, and receiving links.</td></tr>
+    <tr><td><code>src/services/pricing.service.ts</code></td><td>1,962</td><td>Multiple pricing generations coexist here: legacy table-based paths, data-driven/ML paths, competitor blending, staleness logic, floors, margins, brand overrides, and CRUD helpers.</td></tr>
+    <tr><td><code>src/app/(dashboard)/orders/new/page.tsx</code></td><td>1,201</td><td>Unified order creation became a role-sensitive launcher for trade-in, CPO, CSV import, and customer-facing flows.</td></tr>
+    <tr><td><code>scripts/live-workflow-check.mjs</code></td><td>1,094</td><td>Live workflow verification expanded as more presentation-day regressions needed automated checking.</td></tr>
+    <tr><td><code>src/types/index.ts</code></td><td>976</td><td>The shared data model widened as every workflow gained more states, flags, metadata, and response shapes.</td></tr>
+    <tr><td><code>src/app/(dashboard)/orders/new/trade-in/page.tsx</code></td><td>966</td><td>The trade-in wizard carried the premium UI redesign, customer-safe quote hiding, condition selection, and import helpers.</td></tr>
+    <tr><td><code>src/services/order.service.ts</code></td><td>930</td><td>Order status logic, splits, derived data, persistence rules, and side effects grew with the process maturity.</td></tr>
+    <tr><td><code>src/app/(dashboard)/orders/page.tsx</code></td><td>899</td><td>The orders index became role-filtered, status-rich, and notification-aware.</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">16.3 Most-Changed Files Since March 1, 2026</h3>
+<p>Line count shows size. Touch count shows volatility. Both matter.</p>
+
+<table>
+  <thead><tr><th>File</th><th>Touches</th><th>Interpretation</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/services/pricing.service.ts</code></td><td>33</td><td>The business rule kept changing; this file was the center of that negotiation.</td></tr>
+    <tr><td><code>src/app/(dashboard)/orders/new/trade-in/page.tsx</code></td><td>24</td><td>The trade-in intake experience was repeatedly tuned for quoting, import, condition handling, and customer-safe visibility.</td></tr>
+    <tr><td><code>src/app/(dashboard)/orders/[id]/page.tsx</code></td><td>23</td><td>Order details kept absorbing workflow-specific actions and bug fixes.</td></tr>
+    <tr><td><code>src/app/(dashboard)/admin/pricing/page.tsx</code></td><td>22</td><td>Pricing administration stayed active as scraper health, overrides, audits, and comparisons were layered in.</td></tr>
+    <tr><td><code>src/hooks/useAuth.ts</code></td><td>20</td><td>Login lag, stale caches, duplicate fetches, and cross-device consistency all converged here.</td></tr>
+    <tr><td><code>src/app/(dashboard)/coe/triage/page.tsx</code></td><td>20</td><td>Triage was central to demo prep and operational realism, so it received frequent fixes.</td></tr>
+    <tr><td><code>src/app/(auth)/login/page.tsx</code></td><td>18</td><td>Branding, flow timing, reset prominence, and performance concerns all touched the login surface.</td></tr>
+    <tr><td><code>src/app/(dashboard)/dashboard/page.tsx</code></td><td>16</td><td>Role-aware dashboard data and empty-state correctness were recurring issues.</td></tr>
+    <tr><td><code>src/services/triage.service.ts</code></td><td>15</td><td>Exception semantics and order-state synchronization needed repeated tightening.</td></tr>
+    <tr><td><code>src/app/(dashboard)/orders/new/cpo/page.tsx</code></td><td>15</td><td>CPO-specific workflow gaps surfaced late and were corrected in several passes.</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">16.4 Core Logic Excerpts — Explained</h3>
+
+<h4 class="subsub">A. Pricing blend logic in <code>src/services/pricing.service.ts</code></h4>
+<div class="line-block">
+<pre><code>function buildApprovedTradeInPricingBlend(
+  list: Array&lt;{ name: string; price: number }&gt;
+) {
+  const deduped = new Map()
+  for (const entry of list) {
+    if (!Number.isFinite(entry.price) || entry.price &lt;= 0) continue
+    const canonical = getApprovedTradeInPricingCompetitorName(entry.name)
+    if (!canonical) continue
+    if (!deduped.has(canonical)) deduped.set(canonical, { name: canonical, price: entry.price })
+  }
+
+  const approvedCompetitors = Array.from(deduped.values())
+  const bellTelusCompetitors = approvedCompetitors.filter(
+    (entry) =&gt; entry.name === 'Bell' || entry.name === 'Telus'
+  )
+  const bellTelusAvg = bellTelusCompetitors.length &gt; 0
+    ? bellTelusCompetitors.reduce((sum, entry) =&gt; sum + entry.price, 0) / bellTelusCompetitors.length
+    : 0
+  const goRecellPrice = approvedCompetitors.find((entry) =&gt; entry.name === 'GoRecell')?.price ?? 0
+
+  let referencePrice = 0
+  if (bellTelusAvg &gt; 0 &amp;&amp; goRecellPrice &gt; 0) referencePrice = (bellTelusAvg + goRecellPrice) / 2
+  else if (goRecellPrice &gt; 0) referencePrice = goRecellPrice
+  else if (bellTelusAvg &gt; 0) referencePrice = bellTelusAvg
+}</code></pre>
+<div class="line-explain"><strong>What each block does:</strong> the loop first removes bad numeric rows, then canonicalizes names so spelling or casing differences collapse into the three approved competitors. Bell and Telus are averaged together first because they represent the carrier reference market. GoRecell is then blended with that carrier average to produce the working reference price. The fallback branches avoid returning zero when only one side is available.</div>
+</div>
+
+<h4 class="subsub">B. Header detection in <code>src/app/api/orders/parse-trade-template/route.ts</code></h4>
+<div class="line-block">
+<pre><code>function findHeaderRow(rawRows: unknown[][]): { headerIdx: number; groupIdx: number | null } {
+  let bestScore = 0
+  let headerIdx = 0
+  const limit = Math.min(rawRows.length, 15)
+  for (let i = 0; i &lt; limit; i++) {
+    const score = scoreHeaderRow(rawRows[i])
+    if (score &gt; bestScore) { bestScore = score; headerIdx = i }
+  }
+  const groupIdx = (headerIdx &gt; 0 &amp;&amp; rawRows[headerIdx - 1].filter(c =&gt; String(c ?? '').trim()).length &gt;= 2)
+    ? headerIdx - 1
+    : null
+  return { headerIdx, groupIdx }
+}</code></pre>
+<div class="line-explain"><strong>Why this mattered:</strong> many customer spreadsheets do not start with headers on row 0. This function scans the first 15 rows, scores them against known header patterns, and optionally detects a group-label row above the real headers. Without this step, the parser would treat company names, date rows, or merged title rows as data.</div>
+</div>
+
+<h4 class="subsub">C. Safe catalog matching in <code>src/lib/scrapers/pipeline.ts</code></h4>
+<div class="line-block">
+<pre><code>export function isSafeCatalogModelMatch(scrapedModel: string, catalogModel: string): boolean {
+  if (scrapedModel === catalogModel) return true
+
+  const scrapedExtendsCatalog = modelTokenMatch(scrapedModel, catalogModel) &amp;&amp; scrapedModel !== catalogModel
+  const catalogExtendsScraped = modelTokenMatch(catalogModel, scrapedModel) &amp;&amp; catalogModel !== scrapedModel
+
+  if (!scrapedExtendsCatalog || catalogExtendsScraped) return false
+
+  return hasCompatibleVariantProfile(scrapedModel, catalogModel)
+}</code></pre>
+<div class="line-explain"><strong>Root cause addressed:</strong> earlier scraper runs allowed longer scraped names like <code>iPhone 14 Pro Max</code> to land on shorter catalog rows like <code>iPhone 14</code>. This guard forces directionality and compatible variant keywords so <code>Pro</code>, <code>Max</code>, <code>Plus</code>, <code>Ultra</code>, and similar suffixes do not silently collapse into the wrong device.</div>
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 17 — Bug Fix Families -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 17</div>
+  <h2>Recurring Bug Families and How They Were Contained</h2>
+  <p>The repo history shows repeat patterns. This chapter groups them by failure mode rather than by date so a future maintainer can reason about risk faster.</p>
+</div>
+
+<table>
+  <thead><tr><th>Bug Family</th><th>Observed Symptom</th><th>Main Fix Direction</th></tr></thead>
+  <tbody>
+    <tr><td>Auth lag and stale role routing</td><td>Slow sign-in, double navigation, wrong dashboard after login, stale logout behavior</td><td>Cache the trusted user carefully, tie routing cookies to both role and user id, avoid duplicate fetches, keep login overlay until navigation finishes, move client creation out of render loops.</td></tr>
+    <tr><td>Pricing inflation or underpricing</td><td>Quotes too high, quotes below GoRecell Fair, stale competitor rows, wrong fallback path</td><td>Refine competitor selection, enforce Bell/Telus + GoRecell blend, normalize storage, apply staleness checks, add floors, add cross-verification tests.</td></tr>
+    <tr><td>Scraper-to-catalog mis-mapping</td><td>Competitor prices shown under the wrong device, especially Pro/Max/Plus variants</td><td>Tighten model matching, expand variant profiles, paginate full catalogs, clean phantom rows, extract pure storage tokens from noisy titles.</td></tr>
+    <tr><td>Triage state desynchronization</td><td>Orders stuck in triage, customer approval not completing flow, rejected devices counted incorrectly</td><td>Retry status sync, refresh from live order state, separate exception resolution semantics, keep rejected items marked resolved for queue logic.</td></tr>
+    <tr><td>Customer portal inconsistency</td><td>Dashboard empty, duplicate order-submission views, prices shown too early, 500s on first load</td><td>Scope dashboard data correctly, hide prices until quotes are sent, unify submission surfaces, fix missing animations and route guards.</td></tr>
+    <tr><td>Vendor/CPO visibility gaps</td><td>CPO orders not appearing to vendors, missing notifications, own bids not visible</td><td>Harden vendor bid APIs, close notification gaps, fix role filters, surface vendor-owned data correctly.</td></tr>
+    <tr><td>Spreadsheet import mismatch</td><td>Rows matched to catalog but not to order, Excel unsupported, quantity unclear</td><td>Add order-intake tab, support Excel, add fuzzy matching, show quantity trails, expose manifest summaries and unmatched exports.</td></tr>
+    <tr><td>Deployment-awareness errors</td><td>Password resets or email links opening localhost, Vercel status confusion</td><td>Centralize app URL logic, reconnect deployment status reporting, adjust cron health responses, normalize timestamps.</td></tr>
+    <tr><td>Duplicate data drift</td><td>Duplicate customer profiles, duplicate device rows, alias-driven catalog pollution</td><td>Run exact and fuzzy cleanup scripts, prevent duplicate inserts, make cleanup idempotent, audit duplicates regularly.</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">17.1 The deepest risk area: pricing + scrapers + catalog</h3>
+<p>The most sensitive subsystem was the combination of competitor scraping, device matching, and final quote generation. A minor bug in any one layer could look like a pricing bug in the UI even when the UI was rendering correctly. That is why so many late-stage fixes touched both <code>src/lib/scrapers/pipeline.ts</code> and <code>src/services/pricing.service.ts</code> together.</p>
+
+<div class="warn-box">
+  <div class="warn-label">Audit Takeaway</div>
+  If a future quote looks wrong, inspect the stack in this order: saved competitor rows, scraper model/storage normalization, approved-competitor selection, staleness filters, pricing settings, then UI display. Skipping straight to the UI is usually the wrong debugging order.
+</div>
+
+<h3 class="sub">17.2 The second deepest risk area: auth + routing + realtime</h3>
+<p>The next recurring cluster was auth/state propagation. The app mixes Supabase auth, role-aware dashboards, client-side transitions, and realtime updates. Bugs here were rarely “bad password” problems. They were usually timing problems: cached user too early, navigation before session hydration, stale subscription state, or multiple fetches racing each other.</p>
+
+<!-- CONTINUE_FROM_HERE: Chapter 18 — File-by-file roadmap -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 18</div>
+  <h2>Roadmap to the Full File-by-File Book</h2>
+  <p>This part does not yet annotate every literal line in the repository. Instead, it establishes the exact reading order required to do that accurately in later volumes.</p>
+</div>
+
+<p>A truly line-by-line explanation for the whole platform would be very large. The repository currently spans roughly <strong>84,484 lines</strong> across source, tests, and scripts. The safe way to document it is not to rush a shallow mega-file; it is to annotate the highest-risk files first, then move outward.</p>
+
+<table>
+  <thead><tr><th>Priority</th><th>File</th><th>Why It Should Be Annotated Next</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><code>src/services/pricing.service.ts</code></td><td>Most business-sensitive file; changed most often; highest financial impact.</td></tr>
+    <tr><td>2</td><td><code>src/lib/scrapers/pipeline.ts</code></td><td>Root of competitor-data correctness and variant-safe catalog matching.</td></tr>
+    <tr><td>3</td><td><code>src/services/triage.service.ts</code></td><td>Defines the post-receipt workflow, exception semantics, and completion logic.</td></tr>
+    <tr><td>4</td><td><code>src/app/api/orders/parse-trade-template/route.ts</code></td><td>Complex parser with multiple heuristics and customer-facing import risk.</td></tr>
+    <tr><td>5</td><td><code>src/hooks/useAuth.ts</code></td><td>Central to almost every workflow complaint around lag, navigation, and session correctness.</td></tr>
+    <tr><td>6</td><td><code>src/services/order.service.ts</code></td><td>Core order transition semantics and side effects.</td></tr>
+    <tr><td>7</td><td><code>src/services/vendor.service.ts</code></td><td>Owns bid submission and vendor-side lifecycle behavior.</td></tr>
+    <tr><td>8</td><td><code>src/services/shipment.service.ts</code></td><td>Shipping rules changed materially when external label purchase was removed.</td></tr>
+    <tr><td>9</td><td><code>src/app/(dashboard)/orders/[id]/_client.tsx</code></td><td>Largest convergence surface for role-specific UI behavior.</td></tr>
+    <tr><td>10</td><td><code>src/app/(dashboard)/coe/triage/page.tsx</code></td><td>Operationally critical screen with the most workflow-specific UI branches.</td></tr>
+  </tbody>
+</table>
+
+<div class="fix-box">
+  <div class="fix-label">Recommended Continuation</div>
+  The next documentation volume should be a genuine file walkthrough beginning with <code>pricing.service.ts</code>, <code>pipeline.ts</code>, and <code>triage.service.ts</code>. Those three files explain the majority of the late-stage bug history.
+</div>
+
+<div style="margin-top:80px;padding:40px;background:linear-gradient(135deg,#0f172a,#1e1b4b);border-radius:16px;color:#fff;text-align:center">
+  <h2 style="font-size:28px;margin-bottom:16px;color:#f8fafc">Part 3 Complete: The Missing Journal and Atlas</h2>
+  <p style="color:#94a3b8;max-width:660px;margin:0 auto 24px">This continuation closes the biggest documentation gap Claude had left behind: the daily engineering story and the map of where the logic lives. It sets up the next volume for line-by-line technical commentary.</p>
+  <p style="color:#64748b;font-size:13px;font-family:'JetBrains Mono',monospace">Device Lifecycle Management Engine — Internal Technical Documentation — Part 3</p>
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 19 — Full file walkthrough volume -->
+
+</div>
+</body>
+</html>

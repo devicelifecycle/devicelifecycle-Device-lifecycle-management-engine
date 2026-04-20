@@ -49,6 +49,23 @@ function stripStorage(model: string): string {
     .trim()
 }
 
+/**
+ * Remove common trailing noise tokens from free-typed model values.
+ * Example: "iphone 14 s" -> "iphone 14".
+ */
+function sanitizeModelNoise(model: string): string {
+  const n = normalize(model)
+  if (!n) return ''
+
+  // If the model ends with a standalone trailing "s" after a number,
+  // treat it as typo/noise rather than a real variant suffix.
+  if (/\b\d+\s+s$/i.test(n)) {
+    return n.replace(/\s+s$/i, '').trim()
+  }
+
+  return n
+}
+
 /** Known brand prefixes for splitting "Samsung Galaxy S24" -> make=Samsung, model=Galaxy S24 */
 const BRAND_PREFIXES = ['samsung', 'apple', 'google', 'oneplus', 'motorola', 'moto', 'lg', 'sony',
   'xiaomi', 'huawei', 'oppo', 'vivo', 'nokia', 'microsoft', 'lenovo', 'dell', 'hp', 'asus']
@@ -76,6 +93,23 @@ function resolveMake(csvMake: string): string {
   const n = normalize(csvMake)
   if (!n) return ''
   return MAKE_ALIASES[n] ?? n
+}
+
+/**
+ * If a model string redundantly includes the make prefix
+ * (e.g. make=apple, model="apple iphone 15"), strip the make so
+ * model matching can align with catalog entries.
+ */
+function stripLeadingMakePrefix(make: string, model: string): string {
+  if (!make || !model) return model
+  const makeToken = normalize(make)
+  const modelToken = normalize(model)
+
+  if (modelToken.startsWith(makeToken + ' ')) {
+    return modelToken.slice(makeToken.length).trim()
+  }
+
+  return modelToken
 }
 
 /**
@@ -162,7 +196,7 @@ export function matchDeviceFromCsv(
   deviceModel: string | undefined | null
 ): Device | undefined {
   let csvMake = resolveMake(deviceMake ?? '')
-  let csvModelRaw = normalize(stripStorage(deviceModel ?? ''))
+  let csvModelRaw = sanitizeModelNoise(stripStorage(deviceModel ?? ''))
 
   // When make has full name "Samsung Galaxy S24" and model is empty, split it
   if (!csvModelRaw && csvMake) {
@@ -170,7 +204,7 @@ export function matchDeviceFromCsv(
     const split = splitMakeModel(combined)
     if (split) {
       csvMake = split.make
-      csvModelRaw = normalize(stripStorage(split.model))
+      csvModelRaw = sanitizeModelNoise(stripStorage(split.model))
     }
   }
   // When model has full name "Samsung Galaxy S24" and make is empty, split it
@@ -178,7 +212,7 @@ export function matchDeviceFromCsv(
     const split = splitMakeModel(deviceModel ?? '')
     if (split) {
       csvMake = split.make
-      csvModelRaw = normalize(stripStorage(split.model))
+      csvModelRaw = sanitizeModelNoise(stripStorage(split.model))
     }
   }
 
@@ -186,6 +220,10 @@ export function matchDeviceFromCsv(
   if (!csvMake && /^\d+(\s+(pro\s+max|pro|plus|mini|ultra|max))?$/i.test(csvModelRaw)) {
     csvMake = 'apple'
   }
+
+  // Some templates include make twice across columns, e.g.
+  // make="apple", model="apple iphone 15".
+  csvModelRaw = stripLeadingMakePrefix(csvMake, csvModelRaw)
 
   if (!csvMake || !csvModelRaw) return undefined
 

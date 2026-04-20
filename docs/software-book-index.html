@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Lifecycle Management Engine — Software Book Index</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root { --ink:#1a1a2e;--accent:#2563eb;--muted:#64748b;--border:#e2e8f0; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:#f8fafc;color:var(--ink);line-height:1.7}
+  .wrap{max-width:980px;margin:0 auto;padding:56px 24px}
+  .hero{background:linear-gradient(135deg,#0f172a,#1e1b4b);color:#fff;border-radius:24px;padding:44px 40px;margin-bottom:28px}
+  .hero h1{font-size:34px;margin-bottom:10px}
+  .hero p{color:#94a3b8;max-width:720px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin:24px 0 34px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:18px;padding:22px}
+  .card h2{font-size:18px;margin-bottom:8px}
+  .meta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-bottom:10px}
+  .card p{font-size:14px;color:#334155;margin-bottom:16px}
+  .card a{display:inline-block;text-decoration:none;background:#2563eb;color:#fff;padding:10px 14px;border-radius:10px;font-weight:600}
+  .section{background:#fff;border:1px solid var(--border);border-radius:18px;padding:24px}
+  ul{margin:12px 0 0 22px}
+  li{margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Device Lifecycle Management Engine — Software Book</h1>
+    <p>This index ties together the full documentation set that was built incrementally. Read in order for the full narrative: architecture, phases, engineering journal, codebase atlas, and deep core-file walkthroughs.</p>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Part 1</h2>
+      <div class="meta">Chapters 1–7</div>
+      <p>Foundation, high-level architecture, phase framing, and the initial platform story.</p>
+      <a href="./software-book-part1.html">Open Part 1</a>
+    </div>
+
+    <div class="card">
+      <h2>Part 2</h2>
+      <div class="meta">Chapters 8–14</div>
+      <p>COE workflow, pricing/scraper architecture, parser phase, commit log, API reference, tests, and deployment.</p>
+      <a href="./software-book-part2.html">Open Part 2</a>
+    </div>
+
+    <div class="card">
+      <h2>Part 3</h2>
+      <div class="meta">Chapters 15–18</div>
+      <p>March-to-April engineering journal, active-day ledger, git-backed timeline, codebase atlas, and recurring bug families.</p>
+      <a href="./software-book-part3.html">Open Part 3</a>
+    </div>
+
+    <div class="card">
+      <h2>Part 4</h2>
+      <div class="meta">Chapters 19–24</div>
+      <p>Detailed walkthroughs of the highest-risk backend files: pricing, scraper pipeline, triage, parser, and auth.</p>
+      <a href="./software-book-part4.html">Open Part 4</a>
+    </div>
+
+    <div class="card">
+      <h2>Part 5</h2>
+      <div class="meta">Chapters 25–30</div>
+      <p>Heavy UI workflow pages, order creation surfaces, and the remaining order/vendor/shipment/notification services.</p>
+      <a href="./software-book-part5.html">Open Part 5</a>
+    </div>
+
+    <div class="card">
+      <h2>Complete Book</h2>
+      <div class="meta">All Parts Combined</div>
+      <p>Single-file master deliverable that consolidates the documentation set into one complete HTML book.</p>
+      <a href="./software-book-complete.html">Open Complete Book</a>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 style="font-size:22px;margin-bottom:10px">Recommended Reading Order</h2>
+    <ul>
+      <li>Start with Part 1 to understand the platform purpose and structure.</li>
+      <li>Read Part 2 for feature phases, API surface, tests, and deployment context.</li>
+      <li>Read Part 3 for the day-by-day engineering history and the map of where logic lives.</li>
+      <li>Read Part 4 for the real core logic walkthroughs of the most sensitive files.</li>
+      <li>Read Part 5 for the heavy UI pages and the remaining workflow services.</li>
+      <li>Open Complete Book for the single-file consolidated version.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

@@ -231,7 +231,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="landing-shell relative overflow-x-clip text-[#16120f]">
+    <div className="landing-shell relative text-[#16120f]">
       <motion.div
         className="fixed inset-x-0 top-0 z-[80] h-px origin-left bg-gradient-to-r from-[#e8bb77] via-[#d46f39] to-[#8dbde9]"
         style={{ scaleX: progressScaleX }}
@@ -302,7 +302,7 @@ export default function LandingPage() {
           </div>
         </motion.header>
 
-        <main className="pb-16 pt-6">
+        <main className="overflow-x-clip pb-16 pt-6">
           <section ref={heroRef} className="relative" id="top">
             <div className="grid min-h-[calc(100svh-5rem)] items-center gap-8 py-8 sm:gap-12 sm:py-12 lg:grid-cols-[0.92fr_1.08fr] lg:gap-16 lg:py-20">
               <motion.div

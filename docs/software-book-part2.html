@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║  Device Lifecycle Management Engine — Technical Book PART 2         ║
+  ║  Continues from: software-book-part1.html                           ║
+  ║  Start reading from: Chapter 08 (Phase 3)                           ║
+  ║                                                                      ║
+  ║  HOW TO CONTINUE THIS DOCUMENT (for Codex / ChatGPT):               ║
+  ║  1. Find the last <!-- CONTINUE_FROM_HERE: ... --> marker in       ║
+  ║     the most recently written part file.                            ║
+  ║  2. Continue writing the next section from that marker.             ║
+  ║  3. Use the same HTML class conventions as established in part1.    ║
+  ║  4. Save as software-book-part3.html, etc.                          ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Lifecycle Management Engine — Book Part 2 (Phases 3 &amp; 4)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root { --ink:#1a1a2e;--accent:#2563eb;--accent2:#7c3aed;--muted:#64748b;--border:#e2e8f0;--code-bg:#0f172a;--code-fg:#e2e8f0; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#fff}
+  .main{max-width:900px;margin:0 auto;padding:60px 80px}
+  @media(max-width:768px){.main{padding:30px 20px}}
+  .chapter-header{page-break-before:always;background:linear-gradient(135deg,#0f172a,#1e1b4b);color:#fff;padding:60px;margin:60px -80px 50px;border-radius:0}
+  .chapter-num{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:3px;color:#60a5fa;margin-bottom:12px}
+  .chapter-header h2{font-size:36px;font-weight:700;color:#f8fafc;margin-bottom:12px}
+  .chapter-header p{font-size:16px;color:#94a3b8;max-width:600px}
+  h2.section{font-size:26px;font-weight:700;color:var(--ink);margin:50px 0 20px;padding-bottom:10px;border-bottom:2px solid var(--border)}
+  h3.sub{font-size:20px;font-weight:600;color:var(--accent);margin:36px 0 14px}
+  h4.subsub{font-size:16px;font-weight:600;color:var(--ink);margin:24px 0 10px}
+  p{margin-bottom:14px}
+  ul,ol{margin:12px 0 16px 24px}
+  li{margin-bottom:6px}
+  pre{background:var(--code-bg);color:var(--code-fg);padding:24px;border-radius:10px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6;margin:20px 0 24px;border-left:3px solid var(--accent)}
+  code{font-family:'JetBrains Mono',monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12.5px;color:#7c3aed}
+  pre code{background:none;padding:0;color:inherit}
+  .note{background:#eff6ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .warn-box{background:#fffbeb;border-left:4px solid #d97706;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .fix-box{background:#f0fdf4;border-left:4px solid #059669;padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .note-label,.warn-label,.fix-label{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .note-label{color:#1d4ed8}.warn-label{color:#92400e}.fix-label{color:#065f46}
+  .line-block{margin:16px 0}
+  .line-block pre{margin:6px 0 4px}
+  .line-explain{font-size:13px;color:var(--muted);padding:6px 12px;background:#f8fafc;border-radius:0 0 8px 8px;margin-bottom:10px;border-left:3px solid #e2e8f0}
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:13.5px}
+  th{background:#0f172a;color:#f8fafc;padding:10px 14px;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:nth-child(even) td{background:#f8fafc}
+  .commit{display:flex;gap:16px;margin-bottom:14px;align-items:flex-start}
+  .commit-hash{font-family:'JetBrains Mono',monospace;font-size:11px;background:#f1f5f9;padding:3px 8px;border-radius:4px;color:var(--muted);white-space:nowrap;flex-shrink:0;margin-top:2px}
+  .commit-date{font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0;margin-top:2px;min-width:90px}
+  .commit-msg{font-size:14px}
+  .commit-type{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-right:8px}
+  .type-feat{background:#dbeafe;color:#1d4ed8}
+  .type-fix{background:#fef3c7;color:#92400e}
+  .type-test{background:#f0fdf4;color:#065f46}
+  .type-perf{background:#fae8ff;color:#7e22ce}
+  .type-docs{background:#f8fafc;color:#475569;border:1px solid #e2e8f0}
+  .type-chore{background:#f8fafc;color:#475569;border:1px solid #e2e8f0}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin:30px 0}
+  .stat-card{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center}
+  .stat-card .num{font-size:32px;font-weight:700;color:var(--accent);line-height:1}
+  .stat-card .lbl{font-size:12px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:0.5px}
+  @media print{.chapter-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}pre{white-space:pre-wrap;word-break:break-all}}
+</style>
+</head>
+<body>
+<div class="main">
+
+<!-- CONTINUE_FROM_HERE: Chapter 08 — Phase 3 Triage Service -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHAPTER 8: PHASE 3 — COE WORKFLOW, PRICING ENGINE, SCRAPERS
+════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 08</div>
+  <h2>Phase 3 — COE Workflow, Pricing Engine &amp; Scrapers</h2>
+  <p>March through April 12, 2026. The most complex phase: building a real pricing formula, scraping four competitors, and wiring up the full triage and exception workflow.</p>
+</div>
+
+<h3 class="sub">8.1 Triage Service — Every Method Explained</h3>
+<p>The <code>TriageService</code> in <code>src/services/triage.service.ts</code> (680 lines) manages the physical inspection of devices when they arrive at the COE. It sits between two sides: the COE tech who runs the inspection, and the customer who submitted the device and needs to know the outcome.</p>
+
+<h4 class="subsub">submitTriageResult(input)</h4>
+<p>The main entry point. The COE tech has tested the device and fills in the triage form. This method:</p>
+<ol>
+  <li>Loads the IMEI record (the specific physical device being triaged)</li>
+  <li>Calls <code>calculateTriageOutcome()</code> to derive the final condition and whether an exception is needed</li>
+  <li>Inserts a <code>triage_results</code> row with all test results</li>
+  <li>Updates <code>imei_records.triage_status</code> to either <code>complete</code> or <code>needs_exception</code></li>
+  <li>If exception required, notifies the customer's organization via <code>NotificationService</code></li>
+  <li>Calls <code>syncOrderStatusAfterTriage()</code> to check if all devices are done</li>
+</ol>
+
+<h4 class="subsub">calculateTriageOutcome(input, imeiRecord) — private</h4>
+<p>Pure business logic — no DB calls. Takes the technician's test results and produces a final condition grade:</p>
+
+<pre><code>private static calculateTriageOutcome(input: TriageInput, imeiRecord: IMEIRecord): TriageOutcome {
+  const failedTests = Object.values(input.functional_tests).filter(v => !v).length
+
+  let finalCondition = input.physical_condition
+
+  // Downgrade based on failed tests
+  if (failedTests > 3)      finalCondition = 'poor'
+  else if (failedTests > 1) finalCondition = this.downgradeCondition(finalCondition)
+
+  // Battery health forces a downgrade
+  if (input.battery_health < 70)      finalCondition = 'poor'
+  else if (input.battery_health < 80) finalCondition = this.downgradeCondition(finalCondition)
+
+  // Screen condition is a hard downgrade
+  if (input.screen_condition === 'dead' || input.screen_condition === 'damaged')
+    finalCondition = 'poor'
+  else if (input.screen_condition === 'cracked')
+    finalCondition = this.downgradeCondition(finalCondition)
+
+  const conditionChanged = finalCondition !== imeiRecord.claimed_condition
+  const priceAdjustment = this.calculatePriceAdjustment(
+    imeiRecord.claimed_condition, finalCondition, imeiRecord.quoted_price
+  )
+
+  // Exception required if condition changed AND price drops more than $50
+  const exceptionRequired = conditionChanged && priceAdjustment < -50
+
+  return { final_condition: finalCondition, condition_changed: conditionChanged,
+           price_adjustment: priceAdjustment, exception_required: exceptionRequired }
+}</code></pre>
+
+<div class="note">
+  <div class="note-label">Design Decision</div>
+  The $50 threshold for exception triggering was set by the business team. Minor condition downgrades (e.g. excellent → good on a $120 device = ~$12 difference) don't warrant a formal exception and customer contact. Only significant price impacts require customer approval.
+</div>
+
+<h4 class="subsub">downgradeCondition(condition) — private</h4>
+<p>Moves a condition one step down the grade scale. Simple but used in multiple places:</p>
+<pre><code>private static downgradeCondition(condition: DeviceCondition): DeviceCondition {
+  const order: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
+  const idx = order.indexOf(condition)
+  return idx &lt; order.length - 1 ? order[idx + 1] : 'poor'
+}</code></pre>
+
+<h4 class="subsub">calculatePriceAdjustment(claimed, actual, quotedPrice) — private</h4>
+<p>Computes how much the price changes when condition drops. Uses multipliers relative to the claimed condition:</p>
+<pre><code>private static calculatePriceAdjustment(claimed, actual, quotedPrice): number {
+  const multipliers = { new: 1.0, excellent: 0.9, good: 0.8, fair: 0.65, poor: 0.4 }
+  const basePrice = quotedPrice / multipliers[claimed]  // Back-calculate the base
+  const newPrice  = basePrice * multipliers[actual]
+  return Math.round((newPrice - quotedPrice) * 100) / 100
+}</code></pre>
+
+<h4 class="subsub">handleException(triageResultId, approved, approvedById, notes)</h4>
+<p>Called when the customer or COE manager makes a decision on an exception. The key distinction: customer disputes vs COE/admin final decisions are handled differently.</p>
+
+<pre><code>static async handleException(triageResultId, approved, approvedById, notes) {
+  const supabase = createServiceRoleClient()
+
+  // Look up the actor's role to distinguish customer dispute vs COE final decision
+  const { data: actorProfile } = await supabase
+    .from('users').select('role').eq('id', approvedById).single()
+  const isCustomerDispute = !approved && actorProfile?.role === 'customer'
+
+  const updatePayload = {
+    exception_approved: approved,
+    exception_approved_by_id: approvedById,
+    exception_notes: notes,
+  }
+
+  // Customer disputes: do NOT set exception_approved_at
+  // This keeps the exception visible in the COE queue for manual review
+  if (!isCustomerDispute) {
+    updatePayload.exception_approved_at = new Date().toISOString()
+  }
+
+  // IMEI status: disputes go back to needs_exception, COE decisions finalize
+  const imeiStatus = isCustomerDispute ? 'needs_exception'
+                   : approved          ? 'complete'
+                   :                     'rejected'
+
+  // If customer disputes → notify all COE managers/admins
+  if (!approved && isCustomerDispute) {
+    const { data: internalUsers } = await supabase
+      .from('users').select('id').in('role', ['admin', 'coe_manager']).eq('is_active', true)
+    for (const u of internalUsers || []) {
+      await NotificationService.createNotification({
+        user_id: u.id, type: 'in_app',
+        title: `Exception disputed — Order #${order.order_number}`,
+        message: `Exception was disputed by customer. Manual review required.`,
+        link: `/orders/${order.id}`,
+      }).catch(() => {})
+    }
+  }
+}</code></pre>
+
+<div class="fix-box">
+  <div class="fix-label">Bug Fixed (Apr 16)</div>
+  Before this fix, customer disputes set <code>exception_approved_at</code> to a timestamp, which removed the exception from the COE queue. COE managers would never see that the customer had disputed it. The fix: check the actor's role. Only COE/admin decisions set the timestamp. Customer disputes put the exception back to <code>needs_exception</code> and notify internal staff.
+</div>
+
+<h4 class="subsub">checkOrderTriageComplete(orderId) — private</h4>
+<p>After any triage action, this checks if all devices in the order are resolved:</p>
+<pre><code>private static async checkOrderTriageComplete(orderId: string): Promise&lt;boolean&gt; {
+  const { data: records } = await supabase
+    .from('imei_records').select('triage_status').eq('order_id', orderId)
+
+  const total = records?.length || 0
+  if (total === 0) return false
+
+  // Both 'complete' AND 'rejected' count as resolved
+  // (rejected = exception was denied, device returned to customer)
+  const resolved = records.filter(r =>
+    r.triage_status === 'complete' || r.triage_status === 'rejected'
+  ).length
+
+  return resolved === total
+}</code></pre>
+
+<div class="fix-box">
+  <div class="fix-label">Bug Fixed (Apr 16)</div>
+  Originally only <code>complete</code> counted as resolved. If a COE manager rejected an exception (deciding the device should be returned), the rejected IMEI record kept the order stuck in <code>in_triage</code> forever. Adding <code>rejected</code> to the resolved count fixed this.
+</div>
+
+<!-- CONTINUE_FROM_HERE: 8.2 Pricing Service -->
+
+<h3 class="sub">8.2 Pricing Service — Full Code Walkthrough</h3>
+<p>The <code>PricingService</code> in <code>src/services/pricing.service.ts</code> is the largest file at 1,962 lines. It contains the formula that determines what SCC pays for every device it buys. Getting this right took more iterations than any other part of the system.</p>
+
+<h4 class="subsub">The Two Entry Points</h4>
+<p>There are two ways to calculate a price:</p>
+
+<ul>
+  <li><code>calculatePriceV2(input, supabase)</code> — the formula-based calculator. Uses competitor prices from the database. Always runs. This is the "ground truth" price.</li>
+  <li><code>calculateAdaptivePrice(input, supabase)</code> — the smart wrapper. When <code>prefer_data_driven</code> is enabled in settings, it tries the ML model first. If the model returns a valid price, that wins. If not, it falls through to <code>calculatePriceV2</code>.</li>
+</ul>
+
+<h4 class="subsub">calculateAdaptivePrice — The Router</h4>
+<pre><code>static async calculateAdaptivePrice(input, supabase) {
+  // Load pricing settings (prefer_data_driven flag, etc.)
+  const settings = await this.loadSettings(supabase)
+  const shouldUseDataDriven = settings.prefer_data_driven === true
+
+  if (shouldUseDataDriven) {
+    // Try data-driven ML model first
+    const model = PricingModelRegistry.get('data_driven')
+    if (model) {
+      const modelResult = await model.calculate({ device_id, storage, condition, ... })
+      // Only accept model result if it returned a real price
+      if (modelResult.success && (modelResult.trade_price ?? modelResult.final_price) > 0) {
+        return this.adaptModelResultToV2(modelResult, qty, riskMode)
+      }
+      // Otherwise fall through to formula
+    }
+  }
+
+  // Formula-based pricing — always the fallback
+  const formulaResult = await this.calculatePriceV2(input, supabase)
+  return formulaResult
+}</code></pre>
+
+<h4 class="subsub">calculatePriceV2 — The Formula</h4>
+<p>This is the core. Here is the step-by-step logic:</p>
+
+<p><strong>Step 1: Load competitor prices</strong></p>
+<pre><code>// Fetch all Bell, Telus, GoRecell prices for this device + storage
+const rows = await supabase
+  .from('competitor_prices')
+  .select('competitor_name, condition, trade_in_price, scraped_at, updated_at')
+  .eq('device_id', resolvedDeviceId)
+  .eq('storage', normalizedStorage)
+  .in('competitor_name', ['Bell', 'Telus', 'GoRecell'])
+
+// Filter out stale data (older than price_staleness_days from settings)
+const freshRows = rows.filter(row => {
+  const age = (Date.now() - new Date(row.scraped_at || row.updated_at).getTime()) / 86400000
+  return age &lt;= settings.price_staleness_days
+})</code></pre>
+
+<p><strong>Step 2: Select the right condition rows</strong></p>
+<p>Each competitor has prices for multiple conditions. We want the price for the device's actual condition, but if a competitor doesn't have that exact condition, we use the closest match:</p>
+<pre><code>const selectedRows = selectApprovedTradeInPricingRows(freshRows, competitorCondition, {
+  fallbackCompetitors: ['GoRecell'] // GoRecell almost always has all conditions
+})</code></pre>
+
+<p><strong>Step 3: Build the reference price</strong></p>
+<pre><code>// The pricing formula: average of Bell/Telus, then average that with GoRecell
+const { bellTelusAvg, goRecellPrice, referencePrice } =
+  buildApprovedTradeInPricingBlend(competitorList)
+
+// referencePrice = (bellTelusAvg + goRecellPrice) / 2  [when both present]
+//               = goRecellPrice                         [Bell/Telus missing]
+//               = bellTelusAvg                          [GoRecell missing]</code></pre>
+
+<div class="note">
+  <div class="note-label">Why This Formula</div>
+  Bell and Telus trade-in programs are carrier-subsidized — they have promotional periods that inflate their prices. GoRecell is a pure reseller market price. Averaging Bell/Telus together first prevents one carrier's promotion from unduly skewing the reference. Then averaging that with GoRecell blends the subsidized carrier market with the open market. This was arrived at after weeks of comparing the formula output against real deals that closed.
+</div>
+
+<p><strong>Step 4: Apply condition deductions</strong></p>
+<pre><code>// For broken/poor devices — Brian's 50% rule
+if (isBrokenDevice(condition, deductionKeys)) {
+  // Find the GoRecell "good" price as the anchor (broken = 50% of good working)
+  const goRecellGoodPrice = getApprovedTradeInCompetitorConditionPrice(allRows, 'GoRecell', 'good')
+  tradePrice = round2(goRecellGoodPrice * BROKEN_DEVICE_MULTIPLIER) // × 0.50
+}
+
+// For functional issues (cracked screen, bad battery, etc.)
+for (const key of deductionKeys) {
+  const ded = FUNCTIONAL_DEDUCTIONS[key]
+  if (ded.type === 'percentage') tradePrice -= tradePrice * (ded.value / 100)
+  else tradePrice -= ded.value  // fixed dollar deduction
+}</code></pre>
+
+<p><strong>Step 5: Apply margin and beat-competitor mode</strong></p>
+<pre><code>// Check if beat-competitor mode is on (we quote slightly above competitors)
+if (settings.beat_competitor_amount > 0) {
+  const highestCompetitor = Math.max(...competitorList.map(c => c.price))
+  tradePrice = highestCompetitor + settings.beat_competitor_amount  // e.g. highest + $12
+}
+
+// Apply margin: our trade price is reference × (1 - margin%)
+// e.g. reference = $200, margin = 20% → trade_price = $160
+const marginPercent = brandOverride?.margin_percent ?? settings.trade_in_profit_percent
+const afterMargin = referencePrice * (1 - marginPercent / 100)</code></pre>
+
+<p><strong>Step 6: Competitiveness floor</strong></p>
+<pre><code>// We never offer less than 70% of the competitor average
+// This prevents our margin from getting so aggressive we lose deals
+const floor = avgCompetitor * COMPETITIVE_RELEVANCE_MIN  // × 0.70
+tradePrice = Math.max(tradePrice, floor)</code></pre>
+
+<p><strong>Step 7: Per-brand margin overrides (added Phase 4)</strong></p>
+<pre><code>// Admin can set custom margin per brand (e.g. Apple at 15%, Samsung at 25%)
+const { data: brandOverrides } = await supabase
+  .from('brand_pricing_overrides')
+  .select('margin_percent').eq('make', deviceMake).eq('is_active', true).single()
+
+if (brandOverride) {
+  // Re-run margin calculation with the override
+  tradePrice = referencePrice * (1 - brandOverride.margin_percent / 100)
+}</code></pre>
+
+<p><strong>Step 8: Demand adjustment (added Phase 4)</strong></p>
+<pre><code>// If demand_adjustment_enabled, check recent trade volume for this device
+if (settings.demand_adjustment_enabled) {
+  const { count: recentTrades } = await supabase
+    .from('sales_history')
+    .select('*', { count: 'exact', head: true })
+    .eq('device_id', deviceId)
+    .gte('created_at', thirtyDaysAgo)
+
+  // High volume (>10 trades in 30 days) = high demand = boost trade price by 5%
+  if ((recentTrades || 0) > 10) {
+    tradePrice *= 1.05
+    demandScore = 'high'
+  }
+}</code></pre>
+
+<p><strong>Step 9: Channel decision</strong></p>
+<pre><code>// Classify the deal into a sales channel based on margin
+const marginPercent = (tradePrice / referencePrice) * 100
+const channelDecision: ChannelDecision = {
+  recommended_channel: marginPercent >= 30 ? 'wholesale'
+                      : marginPercent >= 20 ? 'marketplace'
+                      :                       'retail',
+  margin_tier: marginPercent >= 30 ? 'green'
+             : marginPercent >= 20 ? 'yellow'
+             :                       'red',
+  reasoning: `Trade at $${tradePrice}, reference $${referencePrice}, margin ${marginPercent.toFixed(1)}%`
+}</code></pre>
+
+<!-- CONTINUE_FROM_HERE: 8.3 Scraper Pipeline -->
+
+<h3 class="sub">8.3 Competitor Price Scrapers</h3>
+<p>The scraper pipeline runs as a Vercel cron job daily. It fetches trade-in prices from Bell, Telus, GoRecell, Apple, and Universal (UniverCell/Fido) and writes them to the <code>competitor_prices</code> table.</p>
+
+<h4 class="subsub">Architecture</h4>
+<pre><code>// vercel.json cron configuration
+{
+  "crons": [
+    { "path": "/api/cron/price-scraper",   "schedule": "0 6 * * *" },  // 6am daily
+    { "path": "/api/cron/pricing-staleness","schedule": "0 7 * * *" },  // 7am daily — cleanup
+    { "path": "/api/cron/sla-check",       "schedule": "0 */2 * * *" } // Every 2hrs — SLA
+  ]
+}</code></pre>
+
+<h4 class="subsub">The Main Scraper Route</h4>
+<p><code>GET /api/cron/price-scraper</code> — orchestrates all providers:</p>
+<pre><code>// For each provider: bell, telus, gorecell, apple, universal
+for (const provider of PROVIDERS) {
+  try {
+    const result = await runProviderScraper(provider, supabase)
+    results.push({ provider, success: true, rows: result.rows })
+  } catch (err) {
+    // Retry once before marking failed
+    try {
+      const retry = await runProviderScraper(provider, supabase)
+      results.push({ provider, success: true, rows: retry.rows, retried: true })
+    } catch {
+      results.push({ provider, success: false, error: String(err) })
+    }
+  }
+}
+// Write health record: last run time, row count, status per provider
+await supabase.from('scraper_health').upsert(healthRecord)</code></pre>
+
+<h4 class="subsub">GoRecell Scraper — The Complex One</h4>
+<p>GoRecell has the most complex scraper because their product pages are paginated and their prices are in rule-title format like <code>"iPhone 13 128GB — Good Working"</code> with the price in a separate span. The scraper had to handle:</p>
+
+<ul>
+  <li><strong>Pagination</strong> — Phase 1 scraped only the first 20 items. Phase 3 added pagination at 100/page across all category pages (phones, laptops, iPads)</li>
+  <li><strong>Storage extraction</strong> — GoRecell rules have storage in the title: <code>"iPhone 13 128GB"</code>. A regex <code>/(\d+\s*(?:GB|TB))/i</code> extracts it. Before this fix, storage was being stored as the full rule title.</li>
+  <li><strong>Phantom device cleanup</strong> — Early scraping runs incorrectly associated prices with wrong devices when the device resolution was fuzzy. A cleanup script deleted phantom rows and rebuilt the association.</li>
+  <li><strong>Variant matching</strong> — "iPhone 13 Pro" and "iPhone 13 Pro Max" require the longest-match algorithm to not get confused.</li>
+</ul>
+
+<pre><code>// Storage extraction from GoRecell rule titles (added Apr 14)
+function extractStorageFromTitle(title: string): string | null {
+  const match = title.match(/\b(\d+)\s*(GB|TB)\b/i)
+  if (!match) return null
+  const value = parseInt(match[1])
+  const unit = match[2].toUpperCase()
+  // Normalize TB values
+  if (unit === 'GB' && value === 1024) return '1TB'
+  if (unit === 'GB' && value === 2048) return '2TB'
+  return `${value}${unit}`
+}</code></pre>
+
+<h4 class="subsub">Staleness Cron</h4>
+<p>Added in Phase 3. Runs daily and deletes competitor_prices rows that are older than 2× the configured staleness threshold. This prevents the pricing formula from using very old data that no longer reflects the market:</p>
+
+<pre><code>// /api/cron/pricing-staleness/route.ts
+const maxAgeDays = settings.price_staleness_days * 2  // Default 14 days
+const cutoffDate = new Date(Date.now() - maxAgeDays * 86400000).toISOString()
+
+const { count } = await supabase
+  .from('competitor_prices')
+  .delete()
+  .lt('scraped_at', cutoffDate)
+  .select('*', { count: 'exact', head: true })</code></pre>
+
+<h4 class="subsub">Scraper Health Dashboard</h4>
+<p>Added April 14. Admins can see in the pricing panel when each scraper last ran, how many rows it returned, and whether it succeeded or failed. This is stored in a <code>scraper_health</code> table and displayed as a compact grid in the admin pricing panel.</p>
+
+<!-- CONTINUE_FROM_HERE: 8.4 ML Pricing Model -->
+
+<h3 class="sub">8.4 Self-Trained ML Pricing Model</h3>
+<p>Alongside the formula, there's a machine-learning model that trains on <code>sales_history</code> and makes price predictions. It lives in <code>src/models/pricing/</code>.</p>
+
+<p>The model is a simple linear regression over historical deal prices, grouped by device/storage/condition. It produces a confidence score based on how many historical data points exist. When confidence is below 0.3 (sparse data), the formula takes over.</p>
+
+<pre><code>// PricingModelRegistry — central registry for all pricing models
+export class PricingModelRegistry {
+  private static models = new Map&lt;string, PricingModel&gt;()
+
+  static register(name: string, model: PricingModel) {
+    this.models.set(name, model)
+  }
+
+  static get(name: string): PricingModel | undefined {
+    return this.models.get(name)
+  }
+}
+
+// Training route: POST /api/cron/pricing-training
+// Reads sales_history, computes per-(device, storage, condition) averages,
+// stores as a trained baseline that the data-driven model reads at predict time</code></pre>
+
+<p>The A/B comparison endpoint at <code>GET /api/pricing/accuracy</code> lets admins compare the formula's predictions against the ML model's predictions for the same device+condition and see which was closer to actual closed deal prices.</p>
+
+<h3 class="sub">8.5 SLA Auto-Escalation</h3>
+<p>Added April 15. The SLA check cron runs every 2 hours. It finds orders that have been in the same status longer than their SLA threshold and escalates:</p>
+
+<pre><code>// /api/cron/sla-check/route.ts
+for (const rule of activeRules) {
+  const breachCutoff = new Date(Date.now() - rule.breach_hours * 3600000).toISOString()
+
+  const { data: breachedOrders } = await supabase
+    .from('orders')
+    .select('id, order_number, status, assigned_to_id')
+    .eq('status', rule.from_status)
+    .lt('updated_at', breachCutoff)  // Hasn't moved in breach_hours
+    .eq('is_sla_breached', false)    // Not already marked
+
+  for (const order of breachedOrders) {
+    // Mark the order as breached
+    await supabase.from('orders')
+      .update({ is_sla_breached: true, sla_breach_at: new Date().toISOString() })
+      .eq('id', order.id)
+
+    // Notify escalation users (defined per-rule)
+    for (const userId of rule.escalation_user_ids) {
+      await NotificationService.createNotification({
+        user_id: userId, type: 'in_app',
+        title: `SLA Breach — Order #${order.order_number}`,
+        message: `Order has been in ${rule.from_status} for over ${rule.breach_hours} hours`,
+        link: `/orders/${order.id}`,
+      })
+    }
+  }
+}</code></pre>
+
+<h3 class="sub">8.6 Exception AI Suggestion (Phase 3)</h3>
+<p>When a condition mismatch exception is raised, an AI suggestion endpoint can be called to get a recommendation on whether to accept or reject it. Added April 15:</p>
+
+<pre><code>// POST /api/orders/[id]/exceptions/suggest
+// Uses rule-based logic (not LLM) for fast, deterministic suggestions
+function suggestExceptionResolution(triage: TriageResult, customer: Customer): Suggestion {
+  const conditionDelta = getConditionDelta(triage.final_condition, imeiRecord.claimed_condition)
+  const priceImpact = Math.abs(triage.price_adjustment || 0)
+  const customerHistory = customer.orders_completed || 0
+
+  if (conditionDelta <= 1 && priceImpact < 30) {
+    return { recommendation: 'accept', confidence: 0.85,
+             reasoning: 'Minor condition difference, low price impact. Accept to maintain relationship.' }
+  }
+  if (conditionDelta >= 3 || priceImpact > 200) {
+    return { recommendation: 'reject', confidence: 0.90,
+             reasoning: 'Significant condition mismatch. Device may be misrepresented.' }
+  }
+  if (customerHistory > 5) {
+    return { recommendation: 'accept', confidence: 0.70,
+             reasoning: 'Long-standing customer. Accept with adjusted price.' }
+  }
+  return { recommendation: 'review', confidence: 0.60,
+           reasoning: 'Moderate mismatch. Manual review recommended.' }
+}</code></pre>
+
+<!-- CONTINUE_FROM_HERE: Chapter 09 Phase 4 -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 09</div>
+  <h2>Phase 4 — Trade Template Parser &amp; UX Polish</h2>
+  <p>April 13–16, 2026. The universal spreadsheet parser that handles 8 real-world customer file formats.</p>
+</div>
+
+<h3 class="sub">9.1 Why the Parser Was Hard</h3>
+<p>Corporate customers submit trade quotes in whatever format their IT department has always used. Over the course of analysing 27 real sheets from two workbooks (the COE corporate quotes workbook and the SCC ITAD Apple booklet), we found 8 fundamentally different layouts. Here is what made each one tricky:</p>
+
+<table>
+  <thead><tr><th>Layout</th><th>The Problem</th><th>Example Customer</th></tr></thead>
+  <tbody>
+    <tr><td>Simple batch</td><td>No problem — headers at row 0, one row per model</td><td>TOW, Van Air</td></tr>
+    <tr><td>Multi-row merged headers</td><td>Row 0 = "30 Days" spanning two columns, row 1 = "Good" / "Fair". Column mapper sees "Good" and "Fair" without knowing they belong under "30 Days"</td><td>Turow, ALSA</td></tr>
+    <tr><td>Combined field</td><td>Single cell: "Apple iPhone 12 64GB Black". No separate brand, model, or storage columns</td><td>McDougal, Tushar</td></tr>
+    <tr><td>No Make column</td><td>Column "Model" contains "iPhone 11" — brand has to be inferred from keyword</td><td>Belfor, TOW, Montreal</td></tr>
+    <tr><td>Pivot table</td><td>Models are the column headers. Conditions (Good Working, Bell, EG) are row labels. Must transpose the whole table</td><td>PAL Aero, AMA RFQ</td></tr>
+    <tr><td>Storage-as-column</td><td>"32 GB" and "128 GB" are price columns, not data cells. Storage comes from whichever column has a non-empty price</td><td>Isl key (SCC ITAD)</td></tr>
+    <tr><td>Header not at row 0</td><td>Row 0 = Excel date serial (46062) or company name. Real headers at row 2, 10, even row 14</td><td>Lambton (row 10), ATA, Montreal</td></tr>
+    <tr><td>Per-device manifest</td><td>One row per physical device with IMEI and serial. Not a batch file — a device registry</td><td>Pembina, SCC ITAD Lambton</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">9.2 Header Auto-Detection Algorithm</h3>
+<pre><code>function findHeaderRow(rows: unknown[][]): { headerIdx: number; groupIdx: number | null } {
+  const HEADER_KEYWORDS = ['model','make','brand','manufacturer','quantity','qty',
+    'storage','condition','price','imei','serial','grade','value','customer']
+
+  let bestScore = 0
+  let bestIdx = 0
+
+  // Score rows 0-14 against known column keywords
+  for (let i = 0; i &lt; Math.min(15, rows.length); i++) {
+    const row = rows[i]
+    let score = 0
+    for (const cell of row) {
+      const val = String(cell || '').toLowerCase().trim()
+      if (HEADER_KEYWORDS.some(k => val === k))        score += 3  // Exact match
+      else if (HEADER_KEYWORDS.some(k => val.includes(k))) score += 1  // Partial
+    }
+    if (score > bestScore) { bestScore = score; bestIdx = i }
+  }
+
+  // If header isn't at row 0, check if the row above has group labels
+  const groupIdx = bestIdx > 0 ? bestIdx - 1 : null
+  return { headerIdx: bestIdx, groupIdx }
+}</code></pre>
+
+<h3 class="sub">9.3 Multi-Row Header Merge</h3>
+<pre><code>function buildHeaders(rows: unknown[][], headerIdx: number, groupIdx: number | null): string[] {
+  const headerRow = rows[headerIdx].map(c => String(c || '').trim())
+
+  if (groupIdx === null) return headerRow
+
+  const groupRow = rows[groupIdx].map(c => String(c || '').trim())
+
+  // Walk left through the group row to find the group label for each column
+  return headerRow.map((header, colIdx) => {
+    let groupLabel = ''
+    for (let c = colIdx; c >= 0; c--) {
+      if (groupRow[c]) { groupLabel = groupRow[c]; break }
+    }
+    // "30 Days" + "Good" → "30 Good"
+    if (groupLabel && !header.toLowerCase().includes(groupLabel.toLowerCase())) {
+      return `${groupLabel} ${header}`.trim()
+    }
+    return header
+  })
+}</code></pre>
+
+<h3 class="sub">9.4 Combined-Field Splitting</h3>
+<pre><code>function splitCombinedField(cell: string): { brand: string; model: string; storage: string } {
+  const KNOWN_BRANDS = ['Apple','Samsung','Google','Motorola','LG','Sony','Microsoft','Dell','HP']
+
+  // Extract storage: "128GB", "256 GB", "1 TB"
+  const storageMatch = cell.match(/\b(\d+)\s*(GB|TB)\b/i)
+  const storage = storageMatch ? `${storageMatch[1]}${storageMatch[2].toUpperCase()}` : ''
+
+  // First word is brand if it's in the known list
+  const words = cell.replace(storageMatch?.[0] || '', '').trim().split(/\s+/)
+  const brand = KNOWN_BRANDS.find(b => b.toLowerCase() === words[0].toLowerCase()) || ''
+  const remaining = brand ? words.slice(1) : words
+
+  // Last word might be color ("Black", "Blue", "Starlight") — remove it
+  const modelWords = remaining.filter(w => !w.match(/^\d/) && w.length > 2)
+
+  return { brand, model: modelWords.join(' '), storage }
+}</code></pre>
+
+<h3 class="sub">9.5 Pivot Table Detection and Transposition</h3>
+<pre><code>function detectPivot(headers: string[], dataRows: string[][]): boolean {
+  // Pivot tables have: col-0 values that look like condition/pricing labels
+  //                    headers[1+] that look like device model names
+  const firstColValues = dataRows.slice(0, 5).map(r => String(r[0] || '').toLowerCase())
+  const hasPricingLabels = ['gross','bell','eg','customer','working','spiff']
+    .filter(k => firstColValues.some(v => v.includes(k))).length >= 2
+
+  const hasModelHeaders = headers.slice(1)
+    .some(h => /iphone|galaxy|se|ipad|xr|pro|plus|pixel/i.test(h))
+
+  return hasPricingLabels && hasModelHeaders
+}
+
+function transposePivot(headers: string[], dataRows: string[][]): ParsedRow[] {
+  const result: ParsedRow[] = []
+
+  // Each column after col-0 is a device model
+  for (let col = 1; col &lt; headers.length; col++) {
+    const model = headers[col]
+    const brand = inferBrand(model)
+
+    let customerNet = 0
+    for (const row of dataRows) {
+      const label = String(row[0] || '').toLowerCase()
+      const price = parseFloat(String(row[col] || '0').replace(/[^0-9.]/g, ''))
+      if (label.includes('customer') || label.includes('net')) customerNet = price
+    }
+
+    if (customerNet > 0) {
+      result.push({ brand, model, condition: 'good', customer_net: customerNet, quantity: 1 })
+    }
+  }
+  return result
+}</code></pre>
+
+<h3 class="sub">9.6 Condition Normaliser Library</h3>
+<p>The <code>normalizeTradeCondition()</code> function in <code>src/lib/condition.ts</code> handles 50+ aliases for device conditions:</p>
+
+<pre><code>export function normalizeTradeCondition(raw: string): DeviceCondition {
+  const s = raw.toLowerCase().trim()
+
+  // Phrase lookup — most specific first
+  const PHRASE_MAP: Record&lt;string, DeviceCondition&gt; = {
+    'like new': 'excellent', 'open box': 'excellent', 'a grade': 'excellent', 'grade a': 'excellent',
+    'good working': 'good', 'good working condition': 'good', 'reset and cleaned': 'good',
+    'used': 'good', 'normal': 'good', 'functional': 'good', 'b grade': 'good', 'grade b': 'good',
+    'fair': 'fair', 'minor scratch': 'fair', 'minor dent': 'fair', 'c grade': 'fair', 'grade c': 'fair',
+    'defective': 'poor', 'cracked': 'poor', 'broken': 'poor', 'water damage': 'poor',
+    'swollen battery': 'poor', 'd grade': 'poor', 'grade d': 'poor',
+    'recycle': 'recycle',  // Preserved — filtered out before order creation
+  }
+
+  for (const [phrase, condition] of Object.entries(PHRASE_MAP)) {
+    if (s === phrase || s.includes(phrase)) return condition
+  }
+
+  // Token fuzzy fallback for typos ("excellant", "excelent", "brokn")
+  if (s.includes('excel') || s.startsWith('exc')) return 'excellent'
+  if (s.startsWith('brok') || s.startsWith('bro')) return 'poor'
+
+  // Prose fallback — classify free-text notes
+  if (/crack|smash|shatter/.test(s))        return 'poor'
+  if (/minor|small|light/.test(s))          return 'fair'
+  if (/fully functional|working/.test(s))   return 'good'
+
+  return 'good'  // Safe default
+}</code></pre>
+
+<!-- CONTINUE_FROM_HERE: Chapter 10 — Full Commit Log -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 10</div>
+  <h2>All 220 Commits — Chronological Log</h2>
+  <p>Every commit, every date, what changed and why.</p>
+</div>
+
+<h3 class="sub">February 2026 — Foundation</h3>
+
+<div class="commit"><span class="commit-date">Feb 03</span><span class="commit-hash">bc7a2f6</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Initial commit — Next.js 16 scaffold, Supabase client setup, route group architecture (auth) and (dashboard), initial schema planning, all environment variables configured, TypeScript strict mode enabled, TailwindCSS + shadcn/ui installed</div></div>
+
+<div class="commit"><span class="commit-date">Feb 23</span><span class="commit-hash">fa2fbef</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Complete Phase 1 — the entire core platform built in one massive session: all 32 API routes, auth middleware, Order/Customer/Vendor/Device/Shipment/Notification/Audit services, all dashboard pages, role-based routing, SLA rules, IMEI tracking, triage foundation</div></div>
+
+<div class="commit"><span class="commit-date">Feb 25</span><span class="commit-hash">0c2ec03</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Phase 2 complete — Resend email integration, React Email templates, Supabase Realtime on order detail page, notification bell real-time, PDF generation, bulk status update, bulk CSV import, service-role security fix for cross-org data</div></div>
+
+<div class="commit"><span class="commit-date">Feb 26</span><span class="commit-hash">bee2744</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Self-trained ML pricing model, Bell/Telus/GoRecell/Apple/Universal scrapers, COE triage workflow, 608-device catalog seeded</div></div>
+
+<div class="commit"><span class="commit-date">Feb 28</span><span class="commit-hash">52cc416</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Shippo shipping integration, customer portal, vendor portal, initial test suite</div></div>
+
+<h3 class="sub">March 2026 — Stabilization &amp; Growth</h3>
+
+<div class="commit"><span class="commit-date">Mar 03</span><span class="commit-hash">57a3bd2</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Auto-split orders by device type — when a quote covers multiple device categories, splits into sub-orders automatically. Vendor bids API. Customer order privacy. Dark mode. Landing page first version</div></div>
+
+<div class="commit"><span class="commit-date">Mar 04</span><span class="commit-hash">ccdddc3</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Cinematic dark theme across dashboard. Shipping page cleanup. CSV 3-template upload system. Security hardening pass — role checks moved before all DB queries in pricing routes</div></div>
+
+<div class="commit"><span class="commit-date">Mar 06</span><span class="commit-hash">fae4733</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Enterprise banking UI aesthetic. Pricing fixes. Platform-wide improvement pass</div></div>
+
+<div class="commit"><span class="commit-date">Mar 08</span><span class="commit-hash">cc6338d</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Competitor-driven pricing overhaul — formula rewritten to use Bell/Telus/GoRecell instead of internal pricing tables. Quoting flow redesigned. ML training UI added</div></div>
+
+<div class="commit"><span class="commit-date">Mar 08</span><span class="commit-hash">350e731</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Remove redundant defaultTheme when forcedTheme is set — caused Next-Themes console warning on every page load</div></div>
+
+<div class="commit"><span class="commit-date">Mar 12</span><span class="commit-hash">9daf7d9</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Database cleanup — order update bug where status change wasn't persisting, seed data corrections, clean reset script for dev environments</div></div>
+
+<div class="commit"><span class="commit-date">Mar 28</span><span class="commit-hash">9752cfe</span><div class="commit-msg"><span class="commit-type type-chore">chore</span>Save current changes checkpoint</div></div>
+
+<div class="commit"><span class="commit-date">Mar 28</span><span class="commit-hash">4372528</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>App URLs now deployment-aware — <code>getAppPath()</code> returns the correct Vercel URL in production and localhost in development. Fixes email links pointing to localhost in production emails</div></div>
+
+<div class="commit"><span class="commit-date">Mar 28</span><span class="commit-hash">68e8b14</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Complete device catalog — 608 devices total. Pricing quality improvements. CSV template download for all three order types</div></div>
+
+<div class="commit"><span class="commit-date">Mar 28</span><span class="commit-hash">555a5f5</span><div class="commit-msg"><span class="commit-type type-chore">chore</span>Ignore Python bytecode (.pyc) — scrapling Python adapters generating __pycache__ directories</div></div>
+
+<div class="commit"><span class="commit-date">Mar 29</span><span class="commit-hash">7e63ca5</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Auto scraper pipeline enabled — Vercel cron jobs configured in vercel.json. Quote price check cron added to flag orders where market price has moved &gt;5% since quote was issued</div></div>
+
+<div class="commit"><span class="commit-date">Mar 29</span><span class="commit-hash">eb3499b</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>All timestamps set to America/Toronto timezone — Vercel was defaulting to UTC, which made creation times appear 4-5 hours off in the UI</div></div>
+
+<div class="commit"><span class="commit-date">Mar 29</span><span class="commit-hash">0503d08</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Landing page welcome experience redesign — hero section, feature highlights, trust signals</div></div>
+
+<div class="commit"><span class="commit-date">Mar 29</span><span class="commit-hash">54f3803</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Phone number field added to all user records in create/edit forms. SMS test card removed from admin panel</div></div>
+
+<div class="commit"><span class="commit-date">Mar 29</span><span class="commit-hash">a8fbc8d</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Stop Stallion tracking cron from running — Stallion webhook was responding with 400s that Vercel counted as function errors, inflating the error rate and triggering alerts</div></div>
+
+<div class="commit"><span class="commit-date">Mar 29</span><span class="commit-hash">5124884</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Vercel cron health hardening — cron routes now return 200 even on partial failure so Vercel doesn't retry them. Analytics enabled</div></div>
+
+<div class="commit"><span class="commit-date">Mar 29</span><span class="commit-hash">b608466</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Eliminate production 404s — missing API routes for several actions that the frontend was calling but didn't exist yet</div></div>
+
+<h3 class="sub">April 1, 2026 — The Marathon Day (25 commits)</h3>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">8caceb4</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Premium UI redesign — Apple/GoRecell-inspired trade-in wizard with ring badges showing device condition, step progress indicator, animated transitions</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">2b9c043</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>CSS variable opacity refs in TradeInWizard replaced with concrete hex colors — <code>bg-brand/20</code> not supported without CSS var definition</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">44c9952</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Dashboard navigation and realtime stability — Supabase Realtime channels were being created without proper cleanup on unmount, causing memory leaks and duplicate subscriptions</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">c153bda</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Customer order auth hardened — customers were being blocked from reading their own triage exception details due to RLS join restrictions. Fixed by using service-role client in exception read routes after route-level auth check</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">c206e3c</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Auth cache hydration mismatch — on login, the auth context was reading stale state before Supabase session was confirmed, causing brief flashes of the login page after successful sign-in</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">122c4c1</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Advance inbound trade-ins through COE workflow — the <code>shipped_to_coe → received → in_triage</code> transitions were failing for trade-in orders because the direction check was wrong</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">f275620</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Patch high-severity npm vulnerabilities: minimatch (ReDoS), picomatch (ReDoS), flatted (prototype pollution), eslint (path traversal). All updated to patched versions</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">6393757</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Preserve quoted pricing through triage — when COE tech triages a device, the original quoted_price was being overwritten. Added check to preserve it</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">bc3e299</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>TradeInWizard crash — wrong catalog endpoint called (was hitting /api/devices instead of /api/devices with catalog params) + naming conflict between local variable and imported type</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">db78374</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Allow customers to resolve triage exceptions — the approve-exception route was checking role === 'coe_manager' but customers also need to approve/dispute. Fixed role check to include 'customer'</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">5124c0c</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Allow customers to upload CSV trade-in orders — the CSV upload route was checking for internal roles only. Added customer role to the allowed list with additional validation</div></div>
+
+<div class="commit"><span class="commit-date">Apr 01</span><span class="commit-hash">bbca846</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Close three notification gaps: (1) CPO order acceptance didn't notify vendor, (2) vendor bid acceptance didn't notify the winning vendor, (3) order cancellation didn't notify the assigned sales rep</div></div>
+
+<h3 class="sub">April 2–5, 2026 — Stabilization Sprint</h3>
+
+<div class="commit"><span class="commit-date">Apr 02</span><span class="commit-hash">b07ffcd</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>PKCE password reset — upgrade from simple email link to Proof Key for Code Exchange. MFA TOTP challenge added on login for users with MFA enabled. MFA management added to user profile page</div></div>
+
+<div class="commit"><span class="commit-date">Apr 02</span><span class="commit-hash">737d956</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Upgrade Next.js 14 → 16.2.2 with Turbopack. Pricing accuracy API endpoint. A/B model comparison endpoint</div></div>
+
+<div class="commit"><span class="commit-date">Apr 03</span><span class="commit-hash">6e48c27</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Complete mobile responsiveness — all dashboard pages now work on phones and tablets. Sidebar collapses on mobile. Tables scroll horizontally. Dialogs stack properly on small screens</div></div>
+
+<div class="commit"><span class="commit-date">Apr 03</span><span class="commit-hash">60c9588</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Gate price-change emails behind explicit admin send — previously, updating a price in the COE triage panel automatically emailed the customer. Now admin must click "Send Price Change Email" explicitly via POST /api/orders/{id}/notify-price-change</div></div>
+
+<div class="commit"><span class="commit-date">Apr 04</span><span class="commit-hash">734a687</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Competitive floor uses average, not highest — using the highest competitor as the floor meant the formula was sometimes over-paying. Changed to use competitor average × 0.70 as the minimum. Added pricing cross-verification tests</div></div>
+
+<div class="commit"><span class="commit-date">Apr 04</span><span class="commit-hash">206c2ae</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Beat-competitor mode — admin can configure a fixed $ amount to quote above the highest competitor. Default $12. Also works for CPO sell prices with a separate cpo_beat_amount setting</div></div>
+
+<div class="commit"><span class="commit-date">Apr 05</span><span class="commit-hash">5cd6bfd</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Full triage CSV upload workflow — COE tech can upload a spreadsheet of devices received in batch. Parser reads IMEI, model, serial, condition. Creates IMEI records in bulk. Matches against open orders by order number</div></div>
+
+<div class="commit"><span class="commit-date">Apr 05</span><span class="commit-hash">643aeae</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Editable margin override in Quote Summary — sales rep can drag a slider or type a margin % that overrides the calculated margin for that specific order. Saves to order metadata</div></div>
+
+<div class="commit"><span class="commit-date">Apr 05</span><span class="commit-hash">450ab0f</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Clickable notification rows — clicking a notification navigates to the relevant order. Live quote refresh after saving pricing settings. Admin can access CSV order upload</div></div>
+
+<h3 class="sub">April 6–10, 2026 — Pricing Formula Refinement</h3>
+
+<div class="commit"><span class="commit-date">Apr 06</span><span class="commit-hash">c5977ab</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>UI redesign + market reference pricing formula — the MARKET_REFERENCE_PRICES table added to constants.ts with hardcoded Bell/Telus/GoRecell benchmarks for key iPhone and Samsung models</div></div>
+
+<div class="commit"><span class="commit-date">Apr 07</span><span class="commit-hash">debd193</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Triage live sync — triage queue now updates in real-time when a tech submits a result. Scraper cleanup scripts added. COE notifications for all exception events</div></div>
+
+<div class="commit"><span class="commit-date">Apr 07</span><span class="commit-hash">d5f6a77</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Dynamic weighted average pricing — all three competitors (Bell, Telus, GoRecell) now feed the average. GoRecell Good is weighted ×2 because it's the most liquid market. Formula: (Bell + Telus + GoRecell×2) / 4</div></div>
+
+<div class="commit"><span class="commit-date">Apr 07</span><span class="commit-hash">c6c458a</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>PO vs Invoice numbering — inbound orders get PO-YYYY-NNNN, outbound get INV-YYYY-NNNN. Separate auto-increment sequences per direction per year. Collision retry logic added</div></div>
+
+<div class="commit"><span class="commit-date">Apr 07</span><span class="commit-hash">8c0f02d</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Admin can delete users, vendors, and organizations — with cascading soft-delete. Confirmation dialog with typing the resource name to confirm destructive action</div></div>
+
+<div class="commit"><span class="commit-date">Apr 08</span><span class="commit-hash">9eeb895</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Implement Bell/Telus/GoRecell pricing policy — the three-competitor blend formula locked in as the canonical algorithm after extensive testing against real closed deals</div></div>
+
+<div class="commit"><span class="commit-date">Apr 08</span><span class="commit-hash">10879d6</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Triage CSV upload: competitor name visibility bug, Excel file support (.xlsx in addition to .csv), fuzzy device matching in parser, export of unmatched rows to a separate file</div></div>
+
+<div class="commit"><span class="commit-date">Apr 09</span><span class="commit-hash">ea6e3dd</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Codex improvements — customer dashboard redesigned, order retry on failure, triage upload improvements, auth URL fixes, realtime sync added to all pages that were using plain fetch</div></div>
+
+<div class="commit"><span class="commit-date">Apr 10</span><span class="commit-hash">9513730</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Auto-submit customer orders from wizard — previously the wizard completed but required a manual submit click. Now submits automatically on step 3 confirmation</div></div>
+
+<div class="commit"><span class="commit-date">Apr 10</span><span class="commit-hash">2dcf2b3</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Critical issues in exception service — handleException was not correctly resolving the order status after an exception was approved, leaving orders stuck in in_triage</div></div>
+
+<div class="commit"><span class="commit-date">Apr 10</span><span class="commit-hash">226a35f</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Customer dashboard 500 errors — missing CSS animation keyframe definition. Dashboard was crashing on first load</div></div>
+
+<h3 class="sub">April 13–16, 2026 — Phase 4 Completion</h3>
+
+<div class="commit"><span class="commit-date">Apr 13</span><span class="commit-hash">e35cf0e</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Universal trade template parser — all 8 layout patterns supported, 27 real customer sheets analysed, header auto-detection, multi-row merge, combined field splitting, pivot transposition, storage-as-column, per-device manifest</div></div>
+
+<div class="commit"><span class="commit-date">Apr 13</span><span class="commit-hash">3f2d146</span><div class="commit-msg"><span class="commit-type type-test">test</span>Comprehensive pricing model coverage — 1,331 tests across all device categories: iPhones 11-15 Pro Max, all Samsung Galaxy S22-S25, all conditions, all storage variants, all pricing strategies</div></div>
+
+<div class="commit"><span class="commit-date">Apr 13</span><span class="commit-hash">e984b0c</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Luxury editorial design system — Inter + Playfair Display typography, refined color palette, editorial spacing, consistent elevation system across all pages</div></div>
+
+<div class="commit"><span class="commit-date">Apr 13</span><span class="commit-hash">e1aee0e</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Collapsible sidebar with spring animation — sidebar collapses to icon-only mode. State saved in localStorage. Spring easing from Framer Motion</div></div>
+
+<div class="commit"><span class="commit-date">Apr 13</span><span class="commit-hash">f98315f</span><div class="commit-msg"><span class="commit-type type-perf">perf</span>Code-split heavy pages — admin pricing page (19s FCP) now defers expensive components with dynamic(). Login GPU load fixed. Mobile Lighthouse score improved dramatically</div></div>
+
+<div class="commit"><span class="commit-date">Apr 14</span><span class="commit-hash">fa37a5e</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Normalize 'broken' condition to 'poor' before Zod enum validation — Zod schemas only allow the 5 canonical conditions. 'broken' is a customer-facing term that must be mapped before saving</div></div>
+
+<div class="commit"><span class="commit-date">Apr 14</span><span class="commit-hash">f4c4b38</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Expand GoRecell scraper to full catalog — phones, laptops, iPads, tablets. Previously only scraped the first phone category page</div></div>
+
+<div class="commit"><span class="commit-date">Apr 14</span><span class="commit-hash">aa157c2</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Rebuild reports page — full analytics API with order volume, revenue, device mix, SLA breach rates, condition breakdown over time. Charts rendered with Recharts</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">c998b63</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Staleness cron auto-deletes rows beyond 2× threshold — prevents old competitor data from silently influencing pricing</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">a8a65c2</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Retry failed scraper providers once before marking failed — transient network errors no longer mark a provider as failed</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">65c63a5</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Persistent scraper health dashboard in admin pricing panel — last run time, row count, status badge per provider, refresh button</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">2869558</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Amber warning when pricing uses internal estimate — when no competitor data exists and formula falls back to internal pricing tables, the quote panel shows an amber badge: "Internal estimate — no recent competitor data"</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">02d2481</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>SLA auto-escalation — cron checks every 2 hours, marks orders as breached, notifies escalation users defined per SLA rule</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">b18666e</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Rule-based AI suggestion for exception resolution — returns accept/reject/review recommendation with confidence score and human-readable reasoning</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">dbd9ee2</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Per-brand margin overrides — admin sets custom margin % per brand in brand_pricing_overrides table. Demand-based adjustment toggle — high-demand devices get +5% trade price</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">bc76fa3</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Device dropdown shows catalog on open — 20 devices loaded alphabetically when picker opens, no search required. Customer quote accept/decline buttons directly on order list</div></div>
+
+<div class="commit"><span class="commit-date">Apr 15</span><span class="commit-hash">592e16f</span><div class="commit-msg"><span class="commit-type type-feat">feat</span>Remove Stallion label purchase — in-app label purchase removed. COE shipping page simplified to carrier + tracking number only. /api/shipments/[id]/purchase-label stubbed to 501</div></div>
+
+<div class="commit"><span class="commit-date">Apr 16</span><span class="commit-hash">2263c52</span><div class="commit-msg"><span class="commit-type type-fix">fix</span>Audit fixes: pricing runs data-driven first when prefer_data_driven=true; rejected IMEI records count as resolved; customer disputes keep exception in COE queue; new condition maps to new (not excellent)</div></div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 11 — Bug Fix Root Cause Analysis -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 11</div>
+  <h2>Every Bug Fixed — Root Cause Analysis</h2>
+  <p>The bugs that cost the most time to track down, why they happened, and how they were fixed.</p>
+</div>
+
+<h3 class="sub">Bug 1: Exception-rejected devices blocking order advancement</h3>
+<div class="warn-box">
+  <div class="warn-label">Root Cause</div>
+  <code>checkOrderTriageComplete()</code> only counted IMEI records with <code>triage_status = 'complete'</code> as resolved. When COE rejected an exception (meaning the device would be returned to the customer), the IMEI record's status was set to <code>'rejected'</code> — which the count ignored. The order was stuck in <code>in_triage</code> indefinitely.
+</div>
+<div class="fix-box">
+  <div class="fix-label">Fix</div>
+  Added <code>|| r.triage_status === 'rejected'</code> to the resolved count. Both outcomes (device accepted = complete, device returned = rejected) mean the device is no longer pending action.
+</div>
+
+<h3 class="sub">Bug 2: prefer_data_driven setting doing nothing</h3>
+<div class="warn-box">
+  <div class="warn-label">Root Cause</div>
+  <code>calculateAdaptivePrice()</code> always ran the formula. The data-driven model was only attempted if specific conditions were met that were never true in practice. The admin-facing toggle existed in the UI but had no effect on pricing output.
+</div>
+<div class="fix-box">
+  <div class="fix-label">Fix</div>
+  Restructured <code>calculateAdaptivePrice()</code> to load settings, check <code>prefer_data_driven</code>, attempt the ML model first, and only fall back to formula if the model returns no price or fails.
+</div>
+
+<h3 class="sub">Bug 3: Customer dispute silently disappearing from COE queue</h3>
+<div class="warn-box">
+  <div class="warn-label">Root Cause</div>
+  <code>handleException()</code> always set <code>exception_approved_at = now()</code> regardless of whether the actor was a customer disputing or a COE manager making a final decision. The COE queue filters on <code>IS NULL exception_approved_at</code>, so setting this timestamp made the exception invisible to COE managers — they never saw that the customer had disputed.
+</div>
+<div class="fix-box">
+  <div class="fix-label">Fix</div>
+  Look up the actor's <code>role</code> before deciding. Customer disputes: don't set <code>exception_approved_at</code>, set IMEI back to <code>needs_exception</code>, and notify all COE managers/admins. COE decisions: set the timestamp as before.
+</div>
+
+<h3 class="sub">Bug 4: reprice-mismatches mapping 'new' to 'excellent'</h3>
+<div class="warn-box">
+  <div class="warn-label">Root Cause</div>
+  The <code>mapDeviceConditionToPricingCondition()</code> function had: <code>if (condition === 'new' || condition === 'excellent') return 'excellent'</code>. A brand-new device submitted as condition 'new' was being priced as 'excellent', costing SCC money on every new device trade-in.
+</div>
+<div class="fix-box">
+  <div class="fix-label">Fix</div>
+  Split the condition: <code>if (condition === 'new') return 'new'</code> first, then <code>if (condition === 'excellent') return 'excellent'</code> separately.
+</div>
+
+<h3 class="sub">Bug 5: Auth cache hydration mismatch on login</h3>
+<div class="warn-box">
+  <div class="warn-label">Root Cause</div>
+  After successful login, the Next.js client-side auth context was reading from a local cache before the Supabase session cookie was fully established. For a brief moment, the middleware saw an authenticated session but the client-side hook returned <code>null</code>, causing a login loop.
+</div>
+<div class="fix-box">
+  <div class="fix-label">Fix</div>
+  Added a brief await after <code>signInWithPassword()</code> to ensure session propagation, and moved the redirect to happen server-side in the route handler rather than client-side in the component.
+</div>
+
+<h3 class="sub">Bug 6: GoRecell prices stored under wrong device IDs</h3>
+<div class="warn-box">
+  <div class="warn-label">Root Cause</div>
+  The GoRecell scraper's device resolution was using substring matching — "iPhone 13 Pro" would match "iPhone 13" because "iPhone 13" is a substring of "iPhone 13 Pro". This associated Pro Max prices with the base model device ID.
+</div>
+<div class="fix-box">
+  <div class="fix-label">Fix</div>
+  Switched to longest-match-first algorithm: sort all candidate (device, pattern) pairs by pattern length descending, return the first match. "iPhone 13 Pro Max" matches before "iPhone 13 Pro" which matches before "iPhone 13". Added a phantom device cleanup script to delete incorrectly associated rows.
+</div>
+
+<h3 class="sub">Bug 7: Order number collision on concurrent creation</h3>
+<div class="warn-box">
+  <div class="warn-label">Root Cause</div>
+  The <code>generate_order_number</code> Supabase RPC reads the highest existing order number and returns the next. Under concurrent requests (two sales reps submitting at the same millisecond), both calls return the same number. The second insert fails with PostgreSQL error 23505 (unique constraint violation).
+</div>
+<div class="fix-box">
+  <div class="fix-label">Fix</div>
+  5-attempt retry loop in <code>createOrder()</code>. If the RPC returns a number that already conflicted, the service scans the orders table directly to find the actual next available number. If the table scan also returns the same conflicting number (theoretically possible but extremely unlikely), it increments the number string locally.
+</div>
+
+<!-- CONTINUE_FROM_HERE: Chapter 12 — API Routes Reference -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 12</div>
+  <h2>API Routes Reference</h2>
+  <p>All 60+ API routes — method, path, who can call it, and what it does.</p>
+</div>
+
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>Roles</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td>POST</td><td>/api/auth/forgot-password</td><td>public</td><td>Send PKCE password reset email via Supabase Auth</td></tr>
+    <tr><td>GET</td><td>/api/customers</td><td>admin, coe_manager, sales</td><td>List customers with pagination and search</td></tr>
+    <tr><td>POST</td><td>/api/customers</td><td>admin, sales</td><td>Create new customer record</td></tr>
+    <tr><td>GET</td><td>/api/customers/[id]</td><td>admin, coe_manager, sales, customer(own)</td><td>Get single customer</td></tr>
+    <tr><td>PATCH</td><td>/api/customers/[id]</td><td>admin, sales</td><td>Update customer</td></tr>
+    <tr><td>DELETE</td><td>/api/customers/[id]</td><td>admin</td><td>Soft-delete (deactivate) customer</td></tr>
+    <tr><td>GET</td><td>/api/devices</td><td>all authenticated</td><td>List device catalog with search and pagination</td></tr>
+    <tr><td>POST</td><td>/api/devices</td><td>admin</td><td>Create new device in catalog</td></tr>
+    <tr><td>PATCH</td><td>/api/devices/[id]</td><td>admin</td><td>Update device specifications</td></tr>
+    <tr><td>GET</td><td>/api/orders</td><td>all (scoped by role)</td><td>List orders — customers see own, sales see assigned, admins see all</td></tr>
+    <tr><td>POST</td><td>/api/orders</td><td>all authenticated</td><td>Create new order</td></tr>
+    <tr><td>GET</td><td>/api/orders/[id]</td><td>all (scoped)</td><td>Get order with items, shipments, timeline</td></tr>
+    <tr><td>PATCH</td><td>/api/orders/[id]</td><td>admin, coe_manager, sales</td><td>Update order fields</td></tr>
+    <tr><td>POST</td><td>/api/orders/[id]/transition</td><td>role-dependent per transition</td><td>Move order to next status via state machine</td></tr>
+    <tr><td>POST</td><td>/api/orders/[id]/generate-quote</td><td>admin, coe_manager, sales</td><td>Run pricing for all items and set quoted status</td></tr>
+    <tr><td>POST</td><td>/api/orders/[id]/items/reprice-mismatches</td><td>admin, coe_manager</td><td>Reprice items after condition mismatch — generates new prices and notifies customer</td></tr>
+    <tr><td>POST</td><td>/api/orders/[id]/notify-price-change</td><td>admin, coe_manager</td><td>Explicitly send customer email about price change after mismatch</td></tr>
+    <tr><td>GET</td><td>/api/orders/[id]/pdf</td><td>all (own orders)</td><td>Generate and stream order summary PDF</td></tr>
+    <tr><td>POST</td><td>/api/orders/[id]/split</td><td>admin, coe_manager</td><td>Split order into sub-orders per vendor allocation</td></tr>
+    <tr><td>GET</td><td>/api/orders/[id]/exceptions</td><td>admin, coe_manager, coe_tech, customer(own)</td><td>Get all exceptions for an order</td></tr>
+    <tr><td>GET</td><td>/api/orders/[id]/discrepancies</td><td>admin, coe_manager</td><td>Get structured discrepancy report with approval status</td></tr>
+    <tr><td>POST</td><td>/api/orders/[id]/discrepancies/[eid]/approve-coe</td><td>coe_manager</td><td>COE manager approves a discrepancy</td></tr>
+    <tr><td>POST</td><td>/api/orders/[id]/discrepancies/[eid]/approve-admin</td><td>admin</td><td>Admin final approval of discrepancy</td></tr>
+    <tr><td>POST</td><td>/api/orders/upload-csv</td><td>all authenticated</td><td>Bulk order creation from CSV file</td></tr>
+    <tr><td>POST</td><td>/api/orders/parse-trade-template</td><td>all authenticated</td><td>Parse any customer trade spreadsheet — 8 layouts supported. Returns parsed rows + available_sheets</td></tr>
+    <tr><td>POST</td><td>/api/orders/bulk-transition</td><td>admin, coe_manager</td><td>Bulk status change for multiple orders</td></tr>
+    <tr><td>POST</td><td>/api/pricing/calculate</td><td>admin, coe_manager, sales</td><td>Calculate trade-in or CPO price for a device</td></tr>
+    <tr><td>GET</td><td>/api/pricing/[id]</td><td>admin</td><td>Get pricing record for a device</td></tr>
+    <tr><td>GET</td><td>/api/pricing/accuracy</td><td>admin</td><td>A/B comparison: formula vs ML model predictions</td></tr>
+    <tr><td>GET</td><td>/api/pricing/brand-overrides</td><td>admin</td><td>List per-brand margin overrides</td></tr>
+    <tr><td>POST</td><td>/api/pricing/brand-overrides</td><td>admin</td><td>Create/update brand margin override</td></tr>
+    <tr><td>GET</td><td>/api/notifications</td><td>authenticated user (own)</td><td>Get user's notifications, unread count</td></tr>
+    <tr><td>POST</td><td>/api/notifications/[id]/read</td><td>authenticated user (own)</td><td>Mark notification as read</td></tr>
+    <tr><td>POST</td><td>/api/notifications/read-all</td><td>authenticated user</td><td>Mark all notifications as read</td></tr>
+    <tr><td>GET</td><td>/api/shipments</td><td>admin, coe_manager, coe_tech</td><td>List shipments with filters</td></tr>
+    <tr><td>POST</td><td>/api/shipments</td><td>admin, coe_manager, coe_tech</td><td>Create shipment with carrier + tracking number</td></tr>
+    <tr><td>POST</td><td>/api/shipments/[id]/purchase-label</td><td>—</td><td>Returns 501 — label purchase disabled, use manual tracking</td></tr>
+    <tr><td>GET</td><td>/api/exceptions</td><td>admin, coe_manager</td><td>List all exceptions across all orders</td></tr>
+    <tr><td>GET</td><td>/api/health/scrapers</td><td>admin</td><td>Get scraper health status per provider</td></tr>
+    <tr><td>GET</td><td>/api/cron/price-scraper</td><td>cron only</td><td>Run all competitor price scrapers</td></tr>
+    <tr><td>GET</td><td>/api/cron/pricing-staleness</td><td>cron only</td><td>Delete competitor_prices rows older than 2× threshold</td></tr>
+    <tr><td>GET</td><td>/api/cron/sla-check</td><td>cron only</td><td>Find SLA-breached orders, mark them, notify escalation users</td></tr>
+    <tr><td>GET</td><td>/api/cron/pricing-training</td><td>cron only</td><td>Retrain ML pricing model from sales_history</td></tr>
+    <tr><td>GET</td><td>/api/admin/audit-log</td><td>admin</td><td>Paginated audit log with filters by user, action, entity type</td></tr>
+    <tr><td>GET</td><td>/api/imei/lookup</td><td>admin, coe_manager, coe_tech</td><td>Look up a device by IMEI — returns chain of custody, triage status</td></tr>
+  </tbody>
+</table>
+
+<!-- CONTINUE_FROM_HERE: Chapter 13 — Test Suite -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 13</div>
+  <h2>Test Suite — 1,339 Tests</h2>
+  <p>What's tested, how tests are structured, and what each suite covers.</p>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card"><div class="num">1,339</div><div class="lbl">Passing Tests</div></div>
+  <div class="stat-card"><div class="num">21</div><div class="lbl">Skipped<br>(live DB required)</div></div>
+  <div class="stat-card"><div class="num">0</div><div class="lbl">Failures</div></div>
+  <div class="stat-card"><div class="num">54</div><div class="lbl">Test Files</div></div>
+</div>
+
+<h3 class="sub">Test Architecture</h3>
+<p>All tests use Vitest with <code>vi.doMock()</code> for isolated module imports. Each test file resets module state between tests so Supabase client mocks don't bleed across cases. The approach: mock the Supabase client's <code>from()</code> chain at the module boundary, test the service/route logic in isolation.</p>
+
+<pre><code>// Pattern used in every service test
+vi.doMock('@/lib/supabase/service-role', () => ({
+  createServiceRoleClient: vi.fn(() => ({
+    from: vi.fn().mockImplementation((table: string) => {
+      if (table === 'orders') return { select: ..., update: ..., insert: ... }
+      if (table === 'imei_records') return { select: ..., update: ... }
+      if (table === 'users') return { select: ... }
+      throw new Error(`Unexpected table: ${table}`)  // Catches missing mocks immediately
+    })
+  }))
+}))</code></pre>
+
+<h3 class="sub">Test Suites</h3>
+<table>
+  <thead><tr><th>Suite</th><th>Tests</th><th>What's Covered</th></tr></thead>
+  <tbody>
+    <tr><td>pricing.calculatePriceV2.test.ts</td><td>~300</td><td>Every device category × every condition × every storage × all pricing strategies × beat-competitor mode × broken device rule × staleness handling × brand overrides × demand adjustment</td></tr>
+    <tr><td>pricing-within-ten.test.ts</td><td>5</td><td>Formula outputs are within $10 of real market prices for key iPhone and Samsung models</td></tr>
+    <tr><td>triage.service.test.ts</td><td>~80</td><td>submitTriageResult, calculateTriageOutcome, handleException, checkOrderTriageComplete, customer dispute flow, COE approval flow</td></tr>
+    <tr><td>orders.route.test.ts</td><td>~120</td><td>Order CRUD, state machine validation, auto-quote on submit, sales history recording, split order handling</td></tr>
+    <tr><td>shipments.route.test.ts</td><td>~60</td><td>Create shipment, carrier validation, tracking number requirement, 501 for label purchase, vendor blocking</td></tr>
+    <tr><td>pricing.calculate.route.test.ts</td><td>~80</td><td>Pricing API route validation, role checks, Zod schema enforcement, beat-competitor response shape</td></tr>
+    <tr><td>customers.route.test.ts</td><td>~50</td><td>CRUD, pagination, role scoping, soft-delete behavior</td></tr>
+    <tr><td>condition.test.ts</td><td>40+</td><td>normalizeTradeCondition() with 50+ input aliases including typos, grades A/B/C/D, prose descriptions</td></tr>
+    <tr><td>scrapers.pipeline.matching.test.ts</td><td>15</td><td>Device matching algorithm — longest-match-first, edge cases like Pro/Pro Max disambiguation</td></tr>
+    <tr><td>auth-routing.test.ts</td><td>8</td><td>Role → dashboard routing, middleware behavior</td></tr>
+    <tr><td>app-url.test.ts</td><td>~20</td><td>getAppPath() behavior in development and production environments</td></tr>
+    <tr><td>pricing-data-driven.test.ts (integration)</td><td>21</td><td>SKIPPED — requires live Supabase connection. Tests the ML model against real sales_history data</td></tr>
+  </tbody>
+</table>
+
+<!-- CONTINUE_FROM_HERE: Chapter 14 — Deployment -->
+
+<div class="chapter-header">
+  <div class="chapter-num">Chapter 14</div>
+  <h2>Deployment &amp; Infrastructure</h2>
+  <p>How the platform runs in production, what the cron jobs do, and how monitoring works.</p>
+</div>
+
+<h3 class="sub">Vercel Deployment</h3>
+<p>Every push to the <code>main</code> branch triggers an automatic Vercel deployment. The build pipeline:</p>
+<ol>
+  <li><code>npm run build</code> — Next.js production build with Webpack (Turbopack for dev only)</li>
+  <li>TypeScript strict check — build fails on any type error</li>
+  <li>Deploy to Vercel edge network</li>
+  <li>Environment variables injected from Vercel dashboard (Supabase, Resend, Groq, scraper flags)</li>
+</ol>
+
+<h3 class="sub">Cron Jobs (vercel.json)</h3>
+<table>
+  <thead><tr><th>Path</th><th>Schedule</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>/api/cron/price-scraper</td><td>0 6 * * * (6am daily)</td><td>Run all 5 competitor price scrapers</td></tr>
+    <tr><td>/api/cron/pricing-staleness</td><td>0 7 * * * (7am daily)</td><td>Delete competitor_prices rows older than 2× staleness threshold</td></tr>
+    <tr><td>/api/cron/sla-check</td><td>0 */2 * * * (every 2hrs)</td><td>Find SLA breaches, mark orders, notify escalation users</td></tr>
+    <tr><td>/api/cron/pricing-training</td><td>0 2 * * 0 (2am Sunday)</td><td>Retrain ML pricing model from sales_history</td></tr>
+    <tr><td>/api/cron/quote-price-check</td><td>0 8 * * * (8am daily)</td><td>Flag orders where competitor price has moved &gt;5% since quote was issued</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">Environment Variables</h3>
+<table>
+  <thead><tr><th>Variable</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>NEXT_PUBLIC_SUPABASE_URL</td><td>Supabase project URL — public, used client-side</td></tr>
+    <tr><td>NEXT_PUBLIC_SUPABASE_ANON_KEY</td><td>Supabase anon key — public, subject to RLS</td></tr>
+    <tr><td>SUPABASE_SERVICE_ROLE_KEY</td><td>Service role key — private, bypasses RLS, server-only</td></tr>
+    <tr><td>RESEND_API_KEY</td><td>Resend email sending key</td></tr>
+    <tr><td>GROQ_API_KEY</td><td>Groq LLM API — trade template parser fallback + exception suggestions</td></tr>
+    <tr><td>SCRAPER_BELL_IMPL</td><td>scrapling | default — toggles Python scraper for Bell</td></tr>
+    <tr><td>SCRAPER_GORECELL_IMPL</td><td>scrapling | default — toggles Python scraper for GoRecell</td></tr>
+    <tr><td>CRON_SECRET</td><td>Vercel cron authentication token</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">Monitoring</h3>
+<ul>
+  <li><strong>Vercel Speed Insights</strong> — Core Web Vitals per page in production. Added April 3.</li>
+  <li><strong>Vercel function logs</strong> — every API route and cron run logged. Cron routes return 200 even on partial scraper failure to avoid Vercel retry loops.</li>
+  <li><strong>Scraper health dashboard</strong> — in-app admin panel shows last run time and status per scraper provider. Added April 15.</li>
+  <li><strong>SLA breach dashboard</strong> — orders with <code>is_sla_breached = true</code> surfaced in the COE queue with a red badge.</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CLOSING
+════════════════════════════════════════════════════════════ -->
+
+<div style="margin-top:80px;padding:40px;background:linear-gradient(135deg,#0f172a,#1e1b4b);border-radius:16px;color:#fff;text-align:center">
+  <h2 style="font-size:28px;margin-bottom:16px;color:#f8fafc">From a Single Commit to a Production Platform</h2>
+  <p style="color:#94a3b8;max-width:600px;margin:0 auto 24px">February 3, 2026 — first commit. April 17, 2026 — 220 commits later, 274 source files, 1,339 passing tests, and a platform that runs every device SCC processes.</p>
+  <p style="color:#64748b;font-size:13px;font-family:'JetBrains Mono',monospace">Device Lifecycle Management Engine &mdash; Internal Technical Documentation &mdash; Confidential</p>
+</div>
+
+</div><!-- /main -->
+</body>
+</html>
