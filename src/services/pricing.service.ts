@@ -489,34 +489,62 @@ export class PricingService {
           )
           // Fetch competitor prices so the UI can display the comparison table.
           // The data-driven model doesn't query competitor_prices itself.
+          // Falls back to nearest storage tier when exact storage has no data.
           try {
             const competitorCondition = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
-            let { data: compRows } = await supabase
-              .from('competitor_prices')
-              .select('competitor_name, trade_in_price')
-              .eq('device_id', normalizedInput.device_id)
-              .eq('storage', normalizedInput.storage)
-              .eq('condition', competitorCondition)
-              .not('trade_in_price', 'is', null)
-              .gt('trade_in_price', 0)
-            if (!compRows || compRows.length === 0) {
-              const { data: fallback } = await supabase
+            const fetchCompetitorRows = async (storage?: string) => {
+              const q = supabase
                 .from('competitor_prices')
-                .select('competitor_name, trade_in_price')
+                .select('competitor_name, trade_in_price, storage')
                 .eq('device_id', normalizedInput.device_id)
-                .eq('storage', normalizedInput.storage)
                 .not('trade_in_price', 'is', null)
                 .gt('trade_in_price', 0)
-              compRows = fallback
+              const withStorage = storage ? q.eq('storage', storage) : q
+              const withCond = withStorage.eq('condition', competitorCondition)
+              const { data } = await withCond
+              // If same-condition empty, relax condition filter
+              if (!data || data.length === 0) {
+                const { data: anyCond } = await (storage ? q.eq('storage', storage) : q)
+                return anyCond || []
+              }
+              return data
             }
+
+            // 1. Try exact storage
+            let compRows = await fetchCompetitorRows(normalizedInput.storage)
+
+            // 2. No data for this storage — try storage tiers in order of proximity
+            if (!compRows || compRows.length === 0) {
+              const STORAGE_ORDER = ['64GB', '128GB', '256GB', '512GB', '1TB', '2TB']
+              const idx = STORAGE_ORDER.indexOf(normalizedInput.storage)
+              const fallbackTiers = [
+                ...(idx >= 0 ? STORAGE_ORDER.slice(idx + 1) : []),
+                ...(idx > 0 ? STORAGE_ORDER.slice(0, idx).reverse() : []),
+              ]
+              for (const tier of fallbackTiers) {
+                const rows = await fetchCompetitorRows(tier)
+                if (rows && rows.length > 0) { compRows = rows; break }
+              }
+            }
+
+            // 3. Last resort — any storage
+            if (!compRows || compRows.length === 0) {
+              compRows = await fetchCompetitorRows(undefined)
+            }
+
             if (compRows && compRows.length > 0) {
-              const raw = compRows.map(r => ({ name: r.competitor_name || 'Unknown', price: Number(r.trade_in_price) || 0 }))
+              // One row per competitor: prefer approved names, keep highest price per name
+              const byName = new Map<string, number>()
+              for (const r of compRows) {
+                const canonical = normalizeCompetitorName(r.competitor_name || '')
+                const price = Number(r.trade_in_price) || 0
+                if (price > 0 && (!byName.has(canonical) || price > byName.get(canonical)!)) {
+                  byName.set(canonical, price)
+                }
+              }
+              const raw = Array.from(byName.entries()).map(([name, price]) => ({ name, price }))
               const filtered = filterCompetitorOutliers(raw)
-              adapted.competitors = filtered.map(c => ({
-                name: c.name,
-                price: c.price,
-                gap_percent: 0,
-              }))
+              adapted.competitors = filtered.map(c => ({ name: c.name, price: c.price, gap_percent: 0 }))
             }
           } catch {
             // non-fatal — model price still valid
@@ -959,7 +987,7 @@ export class PricingService {
       // Deduplicate by competitor name: prefer exact condition match, then freshest row.
       const competitorCondition = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
 
-      const allCompetitorRows = await this.runPricingRead<CompetitorPrice[]>(
+      let allCompetitorRows = await this.runPricingRead<CompetitorPrice[]>(
         'competitor_prices all conditions',
         () => supabase
           .from('competitor_prices')
@@ -970,6 +998,30 @@ export class PricingService {
           .gt('trade_in_price', 0),
         { allowNoRows: true, retries: 2 }
       ) || []
+
+      // Storage-tier fallback: when no data for exact storage, try nearby tiers
+      if (allCompetitorRows.length === 0) {
+        const STORAGE_ORDER = ['64GB', '128GB', '256GB', '512GB', '1TB', '2TB']
+        const idx = STORAGE_ORDER.indexOf(normalizedInput.storage)
+        const fallbackTiers = [
+          ...(idx >= 0 ? STORAGE_ORDER.slice(idx + 1) : []),
+          ...(idx > 0 ? STORAGE_ORDER.slice(0, idx).reverse() : []),
+        ]
+        for (const tier of fallbackTiers) {
+          const rows = await this.runPricingRead<CompetitorPrice[]>(
+            `competitor_prices storage fallback ${tier}`,
+            () => supabase
+              .from('competitor_prices')
+              .select('*')
+              .eq('device_id', normalizedInput.device_id)
+              .eq('storage', tier)
+              .not('trade_in_price', 'is', null)
+              .gt('trade_in_price', 0),
+            { allowNoRows: true, retries: 1 }
+          ) || []
+          if (rows.length > 0) { allCompetitorRows = rows; break }
+        }
+      }
 
       // Select one row per approved competitor. Each competitor gets its own
       // exact-condition preference, then falls back independently to its freshest
