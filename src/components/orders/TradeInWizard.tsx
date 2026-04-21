@@ -227,9 +227,11 @@ export default function TradeInWizard({ customerId, onSubmit, isSubmitting }: Wi
   const brandsForCategory = selectedCategory?.brands ?? DEVICE_BRANDS
   const filteredDevices = allDevices.filter(d => {
     const matchBrand = brand ? d.make?.toLowerCase() === brand.toLowerCase() : true
-    const matchSearch = modelSearch
-      ? d.model?.toLowerCase().includes(modelSearch.toLowerCase())
-      : true
+     const matchSearch = modelSearch ? (() => {
+       const text = d.model?.toLowerCase() || ''
+       const tokens = modelSearch.toLowerCase().trim().split(/\s+/).filter(Boolean)
+       return tokens.every(t => text.includes(t))
+     })() : true
     return matchBrand && matchSearch
   })
 

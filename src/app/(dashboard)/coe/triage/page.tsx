@@ -247,6 +247,86 @@ export default function COETriagePage() {
   const [manualOrderLooking, setManualOrderLooking] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
 
+  // ── Batch triage state ───────────────────────────────────────────────────
+  const [batchTriageOpen, setBatchTriageOpen] = useState(false)
+  const [batchTriageItems, setBatchTriageItems] = useState<IMEIRecord[]>([])
+  const [batchConditions, setBatchConditions] = useState<Record<string, DeviceCondition>>({})
+  const [batchBattery, setBatchBattery] = useState<Record<string, string>>({})
+  const [batchNotes, setBatchNotes] = useState('')
+  const [isBatchSubmitting, setIsBatchSubmitting] = useState(false)
+  const [batchGlobalCondition, setBatchGlobalCondition] = useState<DeviceCondition>('good')
+
+  const openBatchTriage = (items: IMEIRecord[]) => {
+    setBatchTriageItems(items)
+    const initCond: Record<string, DeviceCondition> = {}
+    const initBatt: Record<string, string> = {}
+    items.forEach(item => {
+      initCond[item.id] = (item.claimed_condition as DeviceCondition) || 'good'
+      initBatt[item.id] = '85'
+    })
+    setBatchConditions(initCond)
+    setBatchBattery(initBatt)
+    setBatchNotes('')
+    setBatchGlobalCondition('good')
+    setBatchTriageOpen(true)
+  }
+
+  const applyBatchGlobalCondition = (cond: DeviceCondition) => {
+    setBatchGlobalCondition(cond)
+    setBatchConditions(prev => {
+      const next = { ...prev }
+      batchTriageItems.forEach(item => { next[item.id] = cond })
+      return next
+    })
+  }
+
+  const handleBatchTriageSubmit = async () => {
+    if (batchTriageItems.length === 0) return
+    setIsBatchSubmitting(true)
+    const results = await Promise.allSettled(
+      batchTriageItems.map(item =>
+        fetch('/api/triage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imei_record_id: item.id,
+            physical_condition: batchConditions[item.id] || 'good',
+            functional_grade: batchConditions[item.id] || 'good',
+            cosmetic_grade: batchConditions[item.id] || 'good',
+            screen_condition: 'good',
+            battery_health: parseInt(batchBattery[item.id] || '85') || 85,
+            storage_verified: true,
+            original_accessories: false,
+            functional_tests: {
+              touchscreen: true, display: true, speakers: true, microphone: true,
+              cameras: true, wifi: true, bluetooth: true, cellular: true,
+              charging_port: true, buttons: true, face_id_or_touch_id: true, gps: true,
+            },
+            notes: batchNotes || 'Batch triage — bulk processed',
+          }),
+        }).then(async r => {
+          if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'Failed') }
+          return r.json()
+        })
+      )
+    )
+    setIsBatchSubmitting(false)
+    const passed = results.filter(r => r.status === 'fulfilled').length
+    const failed = results.filter(r => r.status === 'rejected').length
+    if (passed > 0) {
+      const succeededIds = batchTriageItems
+        .filter((_, i) => results[i].status === 'fulfilled')
+        .map(item => item.id)
+      setPendingItems(prev => prev.filter(p => !succeededIds.includes(p.id)))
+      toast.success(`Batch triage complete — ${passed} device${passed !== 1 ? 's' : ''} processed${failed > 0 ? `, ${failed} failed` : ''}`)
+    } else {
+      toast.error(`Batch triage failed for all ${failed} device${failed !== 1 ? 's' : ''}`)
+    }
+    if (passed > 0) {
+      setBatchTriageOpen(false)
+    }
+  }
+
   const handleRecentOrderSelect = async (orderId: string) => {
     const selectedOrder = recentOrders.find(order => order.id === orderId)
     if (!selectedOrder) return
@@ -920,6 +1000,18 @@ export default function COETriagePage() {
       (item.device as unknown as Record<string, string>)?.model?.toLowerCase().includes(q)
     )
   })
+
+  // Group pending items by order_id — orders with 2+ items get a Batch Triage button
+  const orderGroups = (() => {
+    const groups = new Map<string, IMEIRecord[]>()
+    for (const item of filtered) {
+      const orderId = (item.order as unknown as { id?: string })?.id || item.order_id || '__none__'
+      const arr = groups.get(orderId) || []
+      arr.push(item)
+      groups.set(orderId, arr)
+    }
+    return groups
+  })()
 
   const passedCount = TRIAGE_CHECKLIST_ITEMS.filter(c => checklist[c.id]).length
 
@@ -1764,6 +1856,9 @@ export default function COETriagePage() {
                   const device = item.device as unknown as Record<string, string> | undefined
                   const order = item.order as unknown as { order_number?: string; created_by?: { full_name?: string } } | undefined
                   const createdBy = order?.created_by?.full_name ?? ((item.metadata as Record<string, unknown>)?.added_by_id ? 'COE (manual add)' : '—')
+                  const orderId = (item.order as unknown as { id?: string })?.id || item.order_id || '__none__'
+                  const orderGroup = orderGroups.get(orderId) || []
+                  const isFirstInGroup = orderGroup.length > 1 && orderGroup[0]?.id === item.id
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-sm">{item.imei}</TableCell>
@@ -1777,13 +1872,25 @@ export default function COETriagePage() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm">{order?.order_number || '—'}</TableCell>
+                      <TableCell className="text-sm">
+                        {order?.order_number || '—'}
+                        {orderGroup.length > 1 && (
+                          <span className="ml-1.5 text-[10px] text-amber-600 font-medium">{orderGroup.length} pending</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{createdBy}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(item.created_at)}</TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" onClick={() => openTriageDialog(item)}>
-                          <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />Triage
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isFirstInGroup && (
+                            <Button size="sm" variant="outline" onClick={() => openBatchTriage(orderGroup)} className="text-xs">
+                              <ClipboardCheck className="mr-1 h-3.5 w-3.5" />Triage All ({orderGroup.length})
+                            </Button>
+                          )}
+                          <Button size="sm" onClick={() => openTriageDialog(item)}>
+                            <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />Triage
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -2138,6 +2245,124 @@ export default function COETriagePage() {
             <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleAddDevice} disabled={isAdding || !selectedDevice || !addForm.imei.trim()}>
               {isAdding ? 'Adding...' : 'Add to Triage'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Batch Triage Dialog ─────────────────────────────────────────── */}
+      <Dialog open={batchTriageOpen} onOpenChange={open => { if (!open && !isBatchSubmitting) setBatchTriageOpen(false) }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Batch Triage — {batchTriageItems.length} Device{batchTriageItems.length !== 1 ? 's' : ''}</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const o = batchTriageItems[0]?.order as unknown as { order_number?: string } | undefined
+                return o?.order_number ? `Order ${o.order_number} · ` : ''
+              })()}
+              Set condition for all devices at once, then submit in one go.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Global condition setter */}
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+              <span className="text-sm font-medium shrink-0">Set all to:</span>
+              <div className="flex flex-wrap gap-2">
+                {conditions.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => applyBatchGlobalCondition(c)}
+                    className={`px-3 py-1 rounded-md text-xs font-medium border transition-colors ${batchGlobalCondition === c ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
+                  >
+                    {CONDITION_CONFIG[c]?.label || c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Per-device table */}
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">IMEI</TableHead>
+                    <TableHead className="text-xs">Device</TableHead>
+                    <TableHead className="text-xs">Claimed</TableHead>
+                    <TableHead className="text-xs">Actual Condition</TableHead>
+                    <TableHead className="text-xs w-24">Battery %</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {batchTriageItems.map(item => {
+                    const dev = item.device as unknown as Record<string, string> | undefined
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono text-xs">{item.imei || item.serial_number || '—'}</TableCell>
+                        <TableCell className="text-xs font-medium">
+                          {dev ? `${dev.make} ${dev.model}` : '—'}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {item.claimed_condition && (
+                            <span className={CONDITION_CONFIG[item.claimed_condition as DeviceCondition]?.color}>
+                              {CONDITION_CONFIG[item.claimed_condition as DeviceCondition]?.label}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <Select
+                            value={batchConditions[item.id] || 'good'}
+                            onValueChange={v => setBatchConditions(prev => ({ ...prev, [item.id]: v as DeviceCondition }))}
+                          >
+                            <SelectTrigger className="h-7 text-xs w-28">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {conditions.map(c => (
+                                <SelectItem key={c} value={c} className="text-xs">
+                                  <span className={CONDITION_CONFIG[c]?.color}>{CONDITION_CONFIG[c]?.label}</span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            className="h-7 text-xs w-20"
+                            value={batchBattery[item.id] || '85'}
+                            onChange={e => setBatchBattery(prev => ({ ...prev, [item.id]: e.target.value }))}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Shared notes */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes (applied to all)</Label>
+              <Textarea
+                placeholder="e.g. Received in good shape overall, minor wear"
+                value={batchNotes}
+                onChange={e => setBatchNotes(e.target.value)}
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchTriageOpen(false)} disabled={isBatchSubmitting}>Cancel</Button>
+            <Button onClick={handleBatchTriageSubmit} disabled={isBatchSubmitting}>
+              {isBatchSubmitting
+                ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Processing...</>
+                : <><ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />Submit All ({batchTriageItems.length})</>
+              }
             </Button>
           </DialogFooter>
         </DialogContent>
