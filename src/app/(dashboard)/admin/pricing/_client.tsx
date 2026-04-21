@@ -580,13 +580,21 @@ export default function AdminPricingClient() {
   const filteredCpDevices = useMemo(() => {
     const query = cpDeviceSearch.trim().toLowerCase()
     if (!query) return devices
-    return devices.filter((device) => `${device.make} ${device.model}`.toLowerCase().includes(query))
+    const tokens = query.split(/\s+/).filter(Boolean)
+    return devices.filter((device) => {
+      const text = `${device.make} ${device.model}`.toLowerCase()
+      return tokens.every(token => text.includes(token))
+    })
   }, [devices, cpDeviceSearch])
 
   const filteredCalcDevices = useMemo(() => {
     const q = calcDeviceFilter.trim().toLowerCase()
     if (!q) return devices
-    return devices.filter((d) => `${d.make} ${d.model}`.toLowerCase().includes(q))
+    const tokens = q.split(/\s+/).filter(Boolean)
+    return devices.filter((d) => {
+      const text = `${d.make} ${d.model}`.toLowerCase()
+      return tokens.every(token => text.includes(token))
+    })
   }, [devices, calcDeviceFilter])
 
   // ============================================================================
@@ -598,8 +606,12 @@ export default function AdminPricingClient() {
     let resolvedDeviceId = cpForm.device_id
 
     if (!resolvedDeviceId && normalizedSearch) {
+      const searchTokens = normalizedSearch.split(/\s+/).filter(Boolean)
       const exact = devices.find((device) => `${device.make} ${device.model}`.toLowerCase() === normalizedSearch)
-      const partial = exact || devices.find((device) => `${device.make} ${device.model}`.toLowerCase().includes(normalizedSearch))
+      const partial = exact || devices.find((device) => {
+        const text = `${device.make} ${device.model}`.toLowerCase()
+        return searchTokens.every(token => text.includes(token))
+      })
       if (partial) {
         resolvedDeviceId = partial.id
       }
