@@ -230,8 +230,10 @@ async function scrapeBellTypeScript(devices: DeviceToScrape[]): Promise<ScraperR
         }
       }
 
+      // buyback_value_max = Bell's maximum payout = excellent/like-new condition.
+      // Derive other conditions from the excellent baseline (not 'good') so prices are correct.
       const requestedCondition = device.condition ?? 'good'
-      const adjustedTradePrice = convertConditionPrice(tradePrice, 'good', requestedCondition)
+      const adjustedTradePrice = convertConditionPrice(tradePrice, 'excellent', requestedCondition)
 
       prices.push({
         competitor_name: 'Bell', make: device.make, model: device.model, storage: device.storage,
@@ -318,6 +320,8 @@ async function scrapeBellFullCatalogTypeScript(limitProducts?: number): Promise<
         continue
       }
 
+      // buyback_value_max is Bell's maximum payout = excellent condition.
+      // Expand from 'excellent' so good/fair/broken are correctly lower than the max.
       scraped.push(
         ...expandPriceByConditions(
           {
@@ -329,8 +333,8 @@ async function scrapeBellFullCatalogTypeScript(limitProducts?: number): Promise<
             scraped_at: now,
           },
           tradeValue,
-          'good',
-          (condition) => ({ source: 'bell-api-discovery', product_code: product.product_code, title, base_condition: 'good', condition })
+          'excellent',
+          (condition) => ({ source: 'bell-api-discovery', product_code: product.product_code, title, base_condition: 'excellent', condition })
         )
       )
       await throttle(120)

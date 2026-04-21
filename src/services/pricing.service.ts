@@ -489,47 +489,32 @@ export class PricingService {
           )
           // Fetch competitor prices so the UI can display the comparison table.
           // The data-driven model doesn't query competitor_prices itself.
-          // Falls back to nearest storage tier when exact storage has no data.
+          // NEVER fall back to a different storage tier — showing 512GB prices for a
+          // 128GB query is misleading and was the root cause of "wrong prices" bugs.
           try {
             const competitorCondition = mapDeviceConditionToCompetitorCondition(normalizedInput.condition)
-            const fetchCompetitorRows = async (storage?: string) => {
-              const q = supabase
+
+            // Exact storage + exact condition
+            const { data: exactRows } = await supabase
+              .from('competitor_prices')
+              .select('competitor_name, trade_in_price, storage')
+              .eq('device_id', normalizedInput.device_id)
+              .eq('storage', normalizedInput.storage)
+              .eq('condition', competitorCondition)
+              .not('trade_in_price', 'is', null)
+              .gt('trade_in_price', 0)
+
+            // Only relax condition (not storage) when exact condition has no rows
+            let compRows = exactRows && exactRows.length > 0 ? exactRows : null
+            if (!compRows) {
+              const { data: anyCondRows } = await supabase
                 .from('competitor_prices')
                 .select('competitor_name, trade_in_price, storage')
                 .eq('device_id', normalizedInput.device_id)
+                .eq('storage', normalizedInput.storage)
                 .not('trade_in_price', 'is', null)
                 .gt('trade_in_price', 0)
-              const withStorage = storage ? q.eq('storage', storage) : q
-              const withCond = withStorage.eq('condition', competitorCondition)
-              const { data } = await withCond
-              // If same-condition empty, relax condition filter
-              if (!data || data.length === 0) {
-                const { data: anyCond } = await (storage ? q.eq('storage', storage) : q)
-                return anyCond || []
-              }
-              return data
-            }
-
-            // 1. Try exact storage
-            let compRows = await fetchCompetitorRows(normalizedInput.storage)
-
-            // 2. No data for this storage — try storage tiers in order of proximity
-            if (!compRows || compRows.length === 0) {
-              const STORAGE_ORDER = ['64GB', '128GB', '256GB', '512GB', '1TB', '2TB']
-              const idx = STORAGE_ORDER.indexOf(normalizedInput.storage)
-              const fallbackTiers = [
-                ...(idx >= 0 ? STORAGE_ORDER.slice(idx + 1) : []),
-                ...(idx > 0 ? STORAGE_ORDER.slice(0, idx).reverse() : []),
-              ]
-              for (const tier of fallbackTiers) {
-                const rows = await fetchCompetitorRows(tier)
-                if (rows && rows.length > 0) { compRows = rows; break }
-              }
-            }
-
-            // 3. Last resort — any storage
-            if (!compRows || compRows.length === 0) {
-              compRows = await fetchCompetitorRows(undefined)
+              compRows = anyCondRows && anyCondRows.length > 0 ? anyCondRows : null
             }
 
             if (compRows && compRows.length > 0) {
@@ -999,29 +984,10 @@ export class PricingService {
         { allowNoRows: true, retries: 2 }
       ) || []
 
-      // Storage-tier fallback: when no data for exact storage, try nearby tiers
-      if (allCompetitorRows.length === 0) {
-        const STORAGE_ORDER = ['64GB', '128GB', '256GB', '512GB', '1TB', '2TB']
-        const idx = STORAGE_ORDER.indexOf(normalizedInput.storage)
-        const fallbackTiers = [
-          ...(idx >= 0 ? STORAGE_ORDER.slice(idx + 1) : []),
-          ...(idx > 0 ? STORAGE_ORDER.slice(0, idx).reverse() : []),
-        ]
-        for (const tier of fallbackTiers) {
-          const rows = await this.runPricingRead<CompetitorPrice[]>(
-            `competitor_prices storage fallback ${tier}`,
-            () => supabase
-              .from('competitor_prices')
-              .select('*')
-              .eq('device_id', normalizedInput.device_id)
-              .eq('storage', tier)
-              .not('trade_in_price', 'is', null)
-              .gt('trade_in_price', 0),
-            { allowNoRows: true, retries: 1 }
-          ) || []
-          if (rows.length > 0) { allCompetitorRows = rows; break }
-        }
-      }
+      // NEVER fall back to a different storage tier for the competitor data shown to users.
+      // Showing 512GB prices for a 128GB device is factually wrong.
+      // If no exact-storage data exists, run the scraper (Admin → Pricing → Run Scraper).
+      // allCompetitorRows already contains only exact-storage rows from the query above.
 
       // Select one row per approved competitor. Each competitor gets its own
       // exact-condition preference, then falls back independently to its freshest
