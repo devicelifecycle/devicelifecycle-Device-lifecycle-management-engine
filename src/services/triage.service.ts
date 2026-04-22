@@ -113,11 +113,28 @@ export class TriageService {
       triageInsertPayload.order_item_id = resolvedOrderItemId
     }
 
-    const { data: triageResult, error: triageError } = await supabase
+    let triageInsertResult = await supabase
       .from('triage_results')
       .insert(triageInsertPayload as never)
       .select()
       .single()
+
+    // Compatibility guard: some deployed DBs don't have triage_results.order_item_id yet.
+    // Retry without that field instead of failing the full triage submission.
+    if (triageInsertResult.error && 'order_item_id' in triageInsertPayload) {
+      const message = triageInsertResult.error.message || ''
+      if (message.includes('order_item_id') && message.includes('triage_results')) {
+        delete triageInsertPayload.order_item_id
+        triageInsertResult = await supabase
+          .from('triage_results')
+          .insert(triageInsertPayload as never)
+          .select()
+          .single()
+      }
+    }
+
+    const triageResult = triageInsertResult.data
+    const triageError = triageInsertResult.error
 
     if (triageError) {
       throw new Error(triageError.message)
