@@ -79,13 +79,16 @@ export class TriageService {
       throw new Error('IMEI record not found')
     }
 
+    const resolvedOrderItemId = await this.resolveOrderItemIdForTriage(
+      pricedImeiRecord,
+      supabase,
+    )
+
     // Calculate outcome
     const outcome = this.calculateTriageOutcome(input, pricedImeiRecord)
 
     // Create triage result
-    const { data: triageResult, error: triageError } = await supabase
-      .from('triage_results')
-      .insert({
+    const triageInsertPayload: Record<string, unknown> = {
         imei_record_id: input.imei_record_id,
         order_id: imeiRecord.order_id,
         physical_condition: input.physical_condition,
@@ -104,7 +107,15 @@ export class TriageService {
         notes: input.notes,
         triaged_by_id: input.triaged_by_id,
         triaged_at: new Date().toISOString(),
-      })
+      }
+
+    if (resolvedOrderItemId) {
+      triageInsertPayload.order_item_id = resolvedOrderItemId
+    }
+
+    const { data: triageResult, error: triageError } = await supabase
+      .from('triage_results')
+      .insert(triageInsertPayload as never)
       .select()
       .single()
 
@@ -578,6 +589,41 @@ export class TriageService {
       ...imeiRecord,
       quoted_price: fallbackQuotedPrice ?? undefined,
     }
+  }
+
+  private static async resolveOrderItemIdForTriage(
+    imeiRecord: IMEIRecord,
+    supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  ): Promise<string | undefined> {
+    if (imeiRecord.order_item_id) return imeiRecord.order_item_id
+    if (!imeiRecord.order_id) return undefined
+
+    // Prefer exact device match in the same order when IMEI record linkage is missing.
+    if (imeiRecord.device_id) {
+      const { data: matchingItem } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('order_id', imeiRecord.order_id)
+        .eq('device_id', imeiRecord.device_id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if ((matchingItem as { id?: string } | null)?.id) {
+        return (matchingItem as { id: string }).id
+      }
+    }
+
+    // Fallback to any item in the order to preserve triage submission continuity.
+    const { data: anyItem } = await supabase
+      .from('order_items')
+      .select('id')
+      .eq('order_id', imeiRecord.order_id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    return (anyItem as { id?: string } | null)?.id
   }
 
   private static async syncOrderStatusAfterTriage(

@@ -263,6 +263,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
     console.error('Error submitting triage:', error)
-    return NextResponse.json({ error: 'Failed to submit triage' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Failed to submit triage'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
