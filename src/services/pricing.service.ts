@@ -1198,6 +1198,7 @@ export class PricingService {
       let beatPricingApplied = false
       let weightedAvgUsed = false
       let goRecellFairFloorApplied = false
+      let goRecellFloorSuppressedAsAnomaly = false
 
       const approvedPricingBlend = buildApprovedTradeInPricingBlend(filteredCompetitors)
       const goRecellPrice = approvedPricingBlend.goRecellPrice
@@ -1251,6 +1252,19 @@ export class PricingService {
         } else if (normalizedInput.condition === 'fair' && goRecellBrokenPrice > 0) {
           floorPrice = goRecellBrokenPrice; floorLabel = 'broken'
         }
+
+        // Ignore inconsistent ladder data (for example fair > good), which can
+        // incorrectly force inflated quotes via the floor path.
+        if (floorPrice > 0) {
+          if (normalizedInput.condition === 'good' && goRecellGoodPrice > 0 && floorPrice > goRecellGoodPrice) {
+            floorPrice = 0
+            goRecellFloorSuppressedAsAnomaly = true
+          } else if (normalizedInput.condition === 'fair' && goRecellFairPrice > 0 && floorPrice > goRecellFairPrice) {
+            floorPrice = 0
+            goRecellFloorSuppressedAsAnomaly = true
+          }
+        }
+
         if (floorPrice > 0 && tradePrice < floorPrice) {
           tradePrice = round2(floorPrice)
           goRecellFairFloorApplied = true
@@ -1330,6 +1344,8 @@ export class PricingService {
             : normalizedInput.condition === 'fair' ? 'broken'
             : 'fair'
           reasoning += ` GoRecell ${condLabel}-condition floor applied at $${round2(condFloor)}.`
+        } else if (goRecellFloorSuppressedAsAnomaly) {
+          reasoning += ' GoRecell floor skipped due to inconsistent condition ladder data.'
         }
       } else if (beatPricingApplied) {
         const beatDesc = beatPercent > 0 ? `${beatPercent}%` : `$${beatAmount}`
