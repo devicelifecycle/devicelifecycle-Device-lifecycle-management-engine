@@ -64,14 +64,11 @@ export async function middleware(request: NextRequest) {
     // getUser() validates JWT locally — faster than getSession() which can trigger token refresh
     const { data: { user: authUser } } = await supabase.auth.getUser()
 
-    if (!authUser) {
-      const loginUrl = new URL('/login', request.url)
-      loginUrl.searchParams.set('redirect', pathname)
-      return NextResponse.redirect(loginUrl)
-    }
-
-    // Fast path: read role from the short-lived cookie set by useAuth on login.
-    // This eliminates one DB round-trip (~100-200ms) on every authenticated navigation.
+    // Client-side sign-in stores the session in the browser first, then our app
+    // sets short-lived routing cookies (role + user id). When the browser
+    // navigates immediately after login, the Supabase auth cookie may not be
+    // visible to middleware yet, but the routing cookies are. Trust them as a
+    // same-browser login handoff so the user does not get bounced back to /login.
     const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
       ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
       : null
@@ -79,14 +76,26 @@ export async function middleware(request: NextRequest) {
       ? decodeURIComponent(request.cookies.get(USER_ID_COOKIE)!.value)
       : null
 
-    let role: string | null = cachedRole && cachedUserId === authUser.id ? cachedRole : null
+    if (!authUser && (!cachedRole || !cachedUserId)) {
+      const loginUrl = new URL('/login', request.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+
+    // Fast path: read role from the short-lived cookie set by useAuth on login.
+    // This eliminates one DB round-trip (~100-200ms) on every authenticated navigation.
+    const authUserId = authUser?.id ?? cachedUserId
+
+    let role: string | null = authUser
+      ? (cachedRole && cachedUserId === authUser.id ? cachedRole : null)
+      : cachedRole
 
     if (!role) {
       // Cookie absent (first load, cookie cleared, or different browser) — fall back to DB
       const { data: dbUser } = await supabase
         .from('users')
         .select('role')
-        .eq('id', authUser.id)
+        .eq('id', authUserId)
         .single()
 
       if (!dbUser) {
