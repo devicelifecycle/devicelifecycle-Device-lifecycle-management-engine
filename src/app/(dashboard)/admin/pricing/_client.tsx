@@ -1117,7 +1117,6 @@ export default function AdminPricingClient() {
       })
 
     return rows
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compPrices, devices])
 
   const handleSaveSettings = async () => {
@@ -1530,7 +1529,6 @@ export default function AdminPricingClient() {
       })
       .catch(() => toast.error('Could not load formula prices. Check that devices have market or competitor data.'))
       .finally(() => setFormulaLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emptyRowKeys, formulaPrices, priceMode, cpLoading])
 
   return (
