@@ -107,7 +107,7 @@ function mapCondition(ourCond?: string): string {
   if (c === 'excellent' || c === 'new' || c === 'like_new') return 'Like New'
   if (c === 'good') return 'Good'
   if (c === 'fair') return 'Fair'
-  if (c === 'poor' || c === 'defective') return 'Defective'
+  if (c === 'poor' || c === 'broken' || c === 'defective' || c === 'recycle') return 'Defective'
   return 'Good'
 }
 
