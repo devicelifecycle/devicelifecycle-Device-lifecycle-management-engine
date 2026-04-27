@@ -1,5 +1,5 @@
 // ============================================================================
-// MIDDLEWARE
+// PROXY
 // ============================================================================
 
 import { NextResponse } from 'next/server'
@@ -30,7 +30,7 @@ const roleRoutes: [string, string[]][] = [
   ['/reports', ['admin', 'coe_manager']],
 ]
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Allow public routes (exact match for '/', prefix match for others)
@@ -118,7 +118,7 @@ export async function middleware(request: NextRequest) {
 
     return response
   } catch (error) {
-    // AbortError happens when browser navigates away before middleware completes — ignore it
+    // AbortError happens when browser navigates away before proxy completes — ignore it
     if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('aborted'))) {
       return NextResponse.next()
     }
