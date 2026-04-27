@@ -261,6 +261,7 @@ export default function AdminPricingClient() {
     cpo_markup_percent: '',
     enterprise_margin_percent: '',
     beat_competitor_percent: '',
+    beat_competitor_amount: '',
   })
   const [calcResult, setCalcResult] = useState<PriceCalculationResultV2 | null>(null)
   const [calculating, setCalculating] = useState(false)
@@ -997,7 +998,9 @@ export default function AdminPricingClient() {
             : {}),
           ...(calcForm.beat_competitor_percent && !Number.isNaN(parseFloat(calcForm.beat_competitor_percent)) && parseFloat(calcForm.beat_competitor_percent) > 0
             ? { beat_competitor_percent: parseFloat(calcForm.beat_competitor_percent) }
-            : {}),
+            : calcForm.beat_competitor_amount && !Number.isNaN(parseFloat(calcForm.beat_competitor_amount)) && parseFloat(calcForm.beat_competitor_amount) > 0
+              ? { beat_competitor_amount: parseFloat(calcForm.beat_competitor_amount) }
+              : {}),
         }),
       })
       if (!res.ok) throw new Error()
@@ -2101,6 +2104,19 @@ export default function AdminPricingClient() {
                       placeholder={settingsForm.beat_competitor_percent || '0'}
                       value={calcForm.beat_competitor_percent}
                       onChange={e => setCalcForm(f => ({ ...f, beat_competitor_percent: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="calc-beat-amount">Beat competitors ($)</Label>
+                    <Input
+                      id="calc-beat-amount"
+                      type="number"
+                      min="0"
+                      max="200"
+                      step="1"
+                      placeholder={settingsForm.beat_competitor_amount || '12'}
+                      value={calcForm.beat_competitor_amount}
+                      onChange={e => setCalcForm(f => ({ ...f, beat_competitor_amount: e.target.value }))}
                     />
                   </div>
                 </div>
