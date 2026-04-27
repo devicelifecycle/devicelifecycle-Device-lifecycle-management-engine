@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveComparablePricingDeviceId } from '@/lib/pricing-device-resolution'
 import { normalizeCompetitorName } from '@/lib/utils'
+import { normalizeCompetitorConditionInput } from '@/lib/validations'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from './types'
 import { scrapeGoRecell, scrapeGoRecellFullCatalog } from './adapters/gorecell'
@@ -118,7 +119,7 @@ function dedupeScrapedPrices(prices: ScrapedPrice[]): ScrapedPrice[] {
       (price.make || '').toLowerCase(),
       normalizeModelKey(price.model),
       normalizeStorageKey(price.storage),
-      normalizeCompetitorCondition(price.condition),
+      normalizeCompetitorConditionInput(price.condition),
     ].join('|')
 
     const existing = map.get(key)
@@ -407,14 +408,6 @@ function inferCategory(make: string, model: string): string {
   if (m.includes('ipad') || m.includes('tab') || m.includes('tablet')) return 'tablet'
   if (m.includes('macbook') || m.includes('mac ') || m.includes('imac') || m.includes('laptop')) return 'laptop'
   return 'phone'
-}
-
-function normalizeCompetitorCondition(input?: string): 'excellent' | 'good' | 'fair' | 'broken' {
-  const value = (input || '').toLowerCase().trim()
-  if (value === 'excellent' || value === 'new') return 'excellent'
-  if (value === 'fair') return 'fair'
-  if (value === 'broken' || value === 'poor') return 'broken'
-  return 'good'
 }
 
 /** Category-aware outlier thresholds — laptops/tablets have higher legitimate prices */
@@ -719,7 +712,7 @@ export async function runScraperPipeline(
       device_id: deviceId,
       storage: normalizeStorageForDb(p.storage).slice(0, 50),
       competitor_name: normalizeCompetitorName(p.competitor_name).slice(0, 100),
-      condition: normalizeCompetitorCondition(p.condition),
+      condition: normalizeCompetitorConditionInput(p.condition),
       trade_in_price: tradeIn,
       sell_price: sell,
       source: 'scraped',
