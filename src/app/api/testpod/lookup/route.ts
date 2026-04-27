@@ -61,8 +61,6 @@ function parseDiagnostics(results: Array<{ headerKey: string; status: string; fu
 
   // FMI / MDM / Jailbreak / Erasure flags
   const flags: Record<string, boolean | string> = {}
-  if (map['FMIStatus'] !== undefined || true) {/* handled below from top-level */ }
-
   // Checklist auto-fill — true = passed
   const checklist: Record<string, boolean> = {
     power_on: true, // if device was tested, it powered on

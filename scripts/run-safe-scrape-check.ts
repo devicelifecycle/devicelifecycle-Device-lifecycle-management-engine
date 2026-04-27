@@ -24,7 +24,7 @@ type AppleMismatchRow = {
   device: {
     make: string | null
     model: string | null
-  } | null
+  }[] | null
 }
 
 async function main() {
@@ -70,7 +70,7 @@ async function main() {
   }
 
   const appleNonApple = (appleRows ?? []).filter((row: AppleMismatchRow) => {
-    const make = (row.device?.make || '').toLowerCase().trim()
+    const make = (row.device?.[0]?.make || '').toLowerCase().trim()
     return make !== 'apple'
   })
 
@@ -93,8 +93,8 @@ async function main() {
       apple_trade_in_non_apple_rows: appleNonApple.length,
       sample_non_apple_rows: appleNonApple.slice(0, 10).map((row) => ({
         competitor_name: row.competitor_name,
-        make: row.device?.make,
-        model: row.device?.model,
+        make: row.device?.[0]?.make,
+        model: row.device?.[0]?.model,
       })),
     },
   }

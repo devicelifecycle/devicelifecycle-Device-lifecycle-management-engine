@@ -442,7 +442,6 @@ export default function OrderDetailClient() {
       fetchMarketContext(order.items)
     }
   // fetchMarketContext is not stable across renders; re-run only when order changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id, isCustomer, isVendor])
 
   // Reconstruct depreciation schedule when items have buyback but no schedule (e.g. page refresh)

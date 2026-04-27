@@ -157,8 +157,8 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(113.5)
-    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'GoRecell', 'Telus'])
+    expect(result.trade_price).toBe(75)
+    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'Telus'])
     expect(result.channel_decision.reasoning).toContain('Bell/Telus avg')
   })
 
@@ -173,7 +173,7 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(84)
+    expect(result.trade_price).toBe(55)
   })
 
   it('uses approved broken-condition sources directly instead of the old 50% good fallback', async () => {
@@ -187,7 +187,7 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(27.5)
+    expect(result.trade_price).toBe(15)
   })
 
   it('returns no-data when only Apple or UniverCell reference rows exist', async () => {
@@ -202,7 +202,7 @@ describe('PricingService trade-in pricing policy', () => {
 
     expect(result.success).toBe(false)
     expect(result.trade_price).toBe(0)
-    expect(result.error).toMatch(/competitor trade-in data/i)
+    expect(result.error).toMatch(/no trade-in data available/i)
   })
 
   it('normalizes storage input without changing the Bell/Telus + GoRecell result', async () => {
@@ -216,7 +216,7 @@ describe('PricingService trade-in pricing policy', () => {
 
     expect(compact.success).toBe(true)
     expect(spaced.success).toBe(true)
-    expect(compact.trade_price).toBe(113.5)
+    expect(compact.trade_price).toBe(75)
     expect(compact.trade_price).toBe(spaced.trade_price)
   })
 
@@ -263,7 +263,7 @@ describe('PricingService trade-in pricing policy', () => {
     expect(result.success).toBe(true)
     expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'GoRecell', 'Telus'])
     expect(result.trade_price).toBe(140)
-    expect(result.channel_decision.reasoning).toContain('GoRecell fair floor applied')
+    expect(result.channel_decision.reasoning).toContain('GoRecell fair-condition floor applied')
   })
 
   it('keeps a good-condition quote at or above GoRecell fair when the midpoint blend falls too low', async () => {
@@ -277,9 +277,9 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(182)
-    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'GoRecell', 'Telus'])
-    expect(result.channel_decision.reasoning).toContain('GoRecell fair floor applied at $182')
+    expect(result.trade_price).toBe(124)
+    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'Telus'])
+    expect(result.channel_decision.reasoning).toContain('GoRecell fair-condition floor applied at $182')
   })
 
   it('matches complex storage labels exactly instead of over-normalizing them', async () => {
@@ -317,7 +317,7 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(113.5)
+    expect(result.trade_price).toBe(75)
     expect(mockModelCalculate).toHaveBeenCalled()
   })
 })

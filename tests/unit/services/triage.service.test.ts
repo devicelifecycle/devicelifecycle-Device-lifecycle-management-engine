@@ -29,8 +29,26 @@ vi.mock('@/services/notification.service', () => ({
 }))
 
 function makeTriageSupabase(data: unknown[]) {
+  const orderItemsQuery = {
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({
+      data: { id: 'order-item-1' },
+      error: null,
+    }),
+  }
+
   return {
     from: vi.fn().mockImplementation((table: string) => {
+      if (table === 'order_items') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue(orderItemsQuery),
+          }),
+        }
+      }
+
       if (table !== 'triage_results') {
         throw new Error(`Unexpected table: ${table}`)
       }
@@ -118,6 +136,24 @@ describe('TriageService order lookups', () => {
 
     createServerSupabaseClientMock.mockReturnValue({
       from: vi.fn().mockImplementation((table: string) => {
+        const orderItemsQuery = {
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: 'order-item-1' },
+            error: null,
+          }),
+        }
+
+        if (table === 'order_items') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue(orderItemsQuery),
+            }),
+          }
+        }
+
         if (table === 'imei_records') {
           return {
             select: vi.fn().mockImplementation((selection: string) => {
