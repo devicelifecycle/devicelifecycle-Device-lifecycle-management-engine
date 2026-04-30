@@ -65,7 +65,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
     const docType = isQuote ? 'Quote' : 'Invoice'
-    const filename = `${order.order_number}-${docType}.pdf`
+    const safeOrderNum = (order.order_number || '').replace(/[^a-zA-Z0-9._-]/g, '_')
+    const filename = `${safeOrderNum}-${docType}.pdf`
 
     const pdfBuffer = generateOrderPDF({
       order_number: order.order_number,
