@@ -109,6 +109,69 @@ export class EmailService {
   }
 
   /**
+   * Send an email with file attachments (PDF, Excel, etc.).
+   * Supports Gmail SMTP and Resend. Attachments are { filename, content (Buffer) }.
+   */
+  static async sendEmailWithAttachments(
+    to: string | string[],
+    subject: string,
+    html: string,
+    attachments: Array<{ filename: string; content: Buffer; contentType: string }>
+  ): Promise<boolean> {
+    const toList = Array.isArray(to) ? to : [to]
+    const from = getFromEmail()
+
+    const gmail = getGmailTransporter()
+    if (gmail) {
+      try {
+        const fromEmail = process.env.GMAIL_FROM_EMAIL || `${APP_NAME} <${process.env.GMAIL_USER}>`
+        await gmail.sendMail({
+          from: fromEmail,
+          to: toList,
+          subject,
+          html,
+          attachments: attachments.map(a => ({
+            filename: a.filename,
+            content: a.content,
+            contentType: a.contentType,
+          })),
+        })
+        return true
+      } catch (err) {
+        console.error('[EmailService] Gmail attachment error:', err)
+        return false
+      }
+    }
+
+    const resend = getResendClient()
+    if (!resend) {
+      console.warn('[EmailService] No email provider configured for attachments')
+      return false
+    }
+
+    try {
+      const { error } = await resend.emails.send({
+        from,
+        to: toList,
+        subject,
+        html,
+        attachments: attachments.map(a => ({
+          filename: a.filename,
+          content: a.content,
+        })),
+      })
+      if (error) {
+        console.error('[EmailService] Resend attachment error:', error)
+        return false
+      }
+      return true
+    } catch (err) {
+      console.error('[EmailService] Failed to send email with attachments:', err)
+      return false
+    }
+  }
+
+  /**
    * Send an SMS through Twilio only.
    * Phone number should be digits only (e.g., "4165551234").
    */

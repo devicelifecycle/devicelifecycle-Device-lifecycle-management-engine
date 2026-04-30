@@ -153,6 +153,7 @@ export default function OrderDetailClient() {
   const [isRepricingMismatches, setIsRepricingMismatches] = useState(false)
   const [isSendingMismatchNotice, setIsSendingMismatchNotice] = useState(false)
   const [isSendingQuote, setIsSendingQuote] = useState(false)
+  const [isSendingQuoteDirect, setIsSendingQuoteDirect] = useState(false)
   const [isNotifyingPriceChange, setIsNotifyingPriceChange] = useState(false)
   const [isGeneratingPostTriageQuote, setIsGeneratingPostTriageQuote] = useState(false)
   const [suggestingItemId, setSuggestingItemId] = useState<string | null>(null)
@@ -916,6 +917,21 @@ export default function OrderDetailClient() {
       toast.error(msg)
     } finally {
       setIsSendingQuote(false)
+    }
+  }
+
+  const handleSendQuoteDirect = async () => {
+    if (!order) return
+    setIsSendingQuoteDirect(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/send-quote-email`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to send quote')
+      toast.success('Quote with PDF & Excel sent directly to customer')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to send quote email')
+    } finally {
+      setIsSendingQuoteDirect(false)
     }
   }
 
@@ -2479,12 +2495,28 @@ export default function OrderDetailClient() {
                 onClick={() => {
                   const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
                   window.open(`/api/orders/${order.id}/pdf`, '_blank')
-                  toast.success(`${isQuote ? 'Quote' : 'Invoice'} download started`)
+                  toast.success(`${isQuote ? 'Quote' : 'Invoice'} PDF download started`)
                 }}
               >
                 <span className="flex items-center gap-2">
                   <FileDown className="h-4 w-4" />
-                  {['draft', 'submitted', 'quoted'].includes(order.status) ? 'Download Quote' : 'Download Invoice'}
+                  {['draft', 'submitted', 'quoted'].includes(order.status) ? 'Download Quote (PDF)' : 'Download Invoice (PDF)'}
+                </span>
+              </Button>
+
+              {/* Download Excel */}
+              <Button
+                variant="outline"
+                className="w-full justify-between"
+                onClick={() => {
+                  const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
+                  window.open(`/api/orders/${order.id}/excel`, '_blank')
+                  toast.success(`${isQuote ? 'Quote' : 'Invoice'} Excel download started`)
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <FileDown className="h-4 w-4" />
+                  {['draft', 'submitted', 'quoted'].includes(order.status) ? 'Download Quote (Excel)' : 'Download Invoice (Excel)'}
                 </span>
               </Button>
 
@@ -2534,6 +2566,22 @@ export default function OrderDetailClient() {
                   {!hasPricesForQuote && (
                     <span className="text-xs font-normal opacity-75">Set pricing first</span>
                   )}
+                </Button>
+              )}
+
+              {/* Send Quote Directly — PDF + Excel email to customer */}
+              {canSendQuote && ['draft', 'submitted', 'quoted'].includes(order.status) && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  disabled={!hasPricesForQuote || isSendingQuoteDirect}
+                  title={!hasPricesForQuote ? 'Set pricing first' : 'Send PDF + Excel directly to customer email'}
+                  onClick={handleSendQuoteDirect}
+                >
+                  <span className="flex items-center gap-2">
+                    {isSendingQuoteDirect ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    {isSendingQuoteDirect ? 'Sending...' : 'Email Quote to Customer (PDF + Excel)'}
+                  </span>
                 </Button>
               )}
 
@@ -2602,8 +2650,7 @@ export default function OrderDetailClient() {
                   </p>
                   {availableTransitions.map(nextStatus => {
                     const nextConfig = ORDER_STATUS_CONFIG[nextStatus]
-                    const isDestructive = nextStatus === 'cancelled' || nextStatus === 'rejected'
-                    const isApproval = isCustomer && ['accepted', 'submitted'].includes(nextStatus)
+                    const isSuccess = nextStatus === 'accepted'
                     const label = isCustomer
                       ? (['accepted', 'submitted'].includes(nextStatus) ? 'Approve' : ['rejected', 'cancelled'].includes(nextStatus) ? 'Disapprove' : nextConfig?.label || snakeToTitle(nextStatus))
                       : isVendor
@@ -2612,7 +2659,7 @@ export default function OrderDetailClient() {
                     return (
                       <Button
                         key={nextStatus}
-                        variant={isDestructive ? 'destructive' : isApproval ? 'success' : 'outline'}
+                        variant={isSuccess ? 'success' : 'outline'}
                         className="w-full justify-between"
                         disabled={isTransitioning}
                         onClick={() => setTransitionTarget(nextStatus)}
