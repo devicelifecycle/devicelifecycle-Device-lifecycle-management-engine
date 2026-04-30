@@ -98,7 +98,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     : 'U'
 
   return (
-    <aside className="sidebar-surface flex h-full w-[260px] flex-col overflow-hidden">
+    <aside className="sidebar-surface flex h-full w-[260px] flex-col overflow-hidden border-r border-white/[0.10]">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-[18px]">
         <div className="liquid-glass-strong flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white">
@@ -117,7 +117,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {filteredSections.map((section) => (
           <div key={section.title}>
-            <p className="mb-1.5 px-2 font-body text-[9px] font-semibold uppercase tracking-[0.2em] text-white/25">
+            <p className="mb-1.5 px-2 font-body text-[9px] font-semibold uppercase tracking-[0.2em] text-white/50">
               {section.title}
             </p>
             <div className="space-y-0.5">
@@ -132,7 +132,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         'group relative flex items-center gap-3 rounded-xl px-3 py-2 font-body text-sm transition-all duration-200',
                         isActive
                           ? 'liquid-glass text-white'
-                          : 'text-white/40 hover:text-white/75'
+                          : 'text-white/65 hover:text-white/90'
                       )}
                     >
                       {/* Active left accent */}
@@ -142,10 +142,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                       <item.icon
                         className={cn(
                           'h-[14px] w-[14px] shrink-0 transition-colors',
-                          isActive ? 'text-primary' : 'text-white/30 group-hover:text-white/60'
+                          isActive ? 'text-primary' : 'text-white/50 group-hover:text-white/80'
                         )}
                       />
-                      <span className={cn('flex-1 truncate text-[13px]', isActive ? 'font-medium' : 'font-light')}>
+                      <span className={cn('flex-1 truncate text-[13px]', isActive ? 'font-semibold' : 'font-normal')}>
                         {item.title}
                       </span>
                     </div>
