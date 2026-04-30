@@ -12,6 +12,15 @@ import * as XLSX from 'xlsx'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 function formatCurrency(n?: number | null): string {
   if (n == null) return '—'
   return `$${n.toFixed(2)}`
@@ -86,14 +95,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
     const customerEmail = order.customer?.contact_email
-    const customerName = order.customer?.contact_name || order.customer?.company_name || 'Valued Customer'
+    const customerName = escapeHtml(order.customer?.contact_name || order.customer?.company_name || 'Valued Customer')
     if (!customerEmail) {
       return NextResponse.json({ error: 'No customer email on file' }, { status: 400 })
     }
 
     const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
     const docType = isQuote ? 'Quote' : 'Invoice'
-    const filenameBase = `${order.order_number}-${docType}`
+    const safeOrderNum = (order.order_number || '').replace(/[^a-zA-Z0-9._-]/g, '_')
+    const filenameBase = `${safeOrderNum}-${docType}`
 
     // Generate PDF
     const pdfBuffer = generateOrderPDF({
@@ -134,14 +144,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const quotedTotal = order.quoted_amount ?? order.total_amount ?? 0
     const totalFormatted = quotedTotal > 0 ? `$${quotedTotal.toFixed(2)}` : 'See attached'
 
+    const safeOrderNumHtml = escapeHtml(order.order_number || '')
+    const safeTotalFormatted = escapeHtml(totalFormatted)
     const html = `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
-  <h2 style="color:#111">Your ${docType} — Order ${order.order_number}</h2>
+  <h2 style="color:#111">Your ${docType} — Order ${safeOrderNumHtml}</h2>
   <p>Hi ${customerName},</p>
-  <p>Please find your <strong>${docType.toLowerCase()}</strong> for order <strong>${order.order_number}</strong> attached as a PDF and Excel file.</p>
+  <p>Please find your <strong>${docType.toLowerCase()}</strong> for order <strong>${safeOrderNumHtml}</strong> attached as a PDF and Excel file.</p>
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
-    <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Order Number</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${order.order_number}</td></tr>
-    <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Total Amount</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${totalFormatted}</td></tr>
+    <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Order Number</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeOrderNumHtml}</td></tr>
+    <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Total Amount</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeTotalFormatted}</td></tr>
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Date</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${formatDate(order.quoted_at || order.created_at)}</td></tr>
   </table>
   <p>If you have any questions, please contact our team.</p>

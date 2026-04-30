@@ -32,10 +32,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const { role, organization_id } = profile
-    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(role)) {
-      if (role === 'customer' && order.customer?.organization_id !== organization_id) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-      }
+    const isInternalRole = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(role)
+    const isOwnCustomer = role === 'customer' && order.customer?.organization_id === organization_id
+    if (!isInternalRole && !isOwnCustomer) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
     const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
@@ -87,7 +87,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     XLSX.utils.book_append_sheet(wb, ws2, 'Line Items')
 
     const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }) as Buffer
-    const filename = `${order.order_number}-${docType}.xlsx`
+    const safeOrderNum = (order.order_number || '').replace(/[^a-zA-Z0-9._-]/g, '_')
+    const filename = `${safeOrderNum}-${docType}.xlsx`
 
     return new NextResponse(new Uint8Array(buf), {
       status: 200,
