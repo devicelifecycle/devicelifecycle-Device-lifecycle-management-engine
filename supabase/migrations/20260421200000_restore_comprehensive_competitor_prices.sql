@@ -405,156 +405,163 @@ WITH prices (sku, storage, competitor, cond, trade_price) AS (
 
     -- =========================================================================
     -- Samsung Galaxy S21 — 128GB
-    -- NOTE: GoRecell good=$116 is CONFIRMED from April 2026 scrape.
-    -- Bell/Telus corrected from wrong $20/$30 seed to realistic $95/$97.
-    -- All three in the $95–116 range → outlier filter will NOT trigger.
+    -- CONFIRMED: Bell good = $20 (user-verified from Bell website April 2026)
+    -- CONFIRMED: GoRecell good = $116 (from GoRecell scrape April 2026)
+    -- Bell/Telus are structurally low for older Samsung (carrier preference = iPhone).
+    -- The filterCompetitorOutliers guard (remaining avg < 40% of highest) keeps
+    -- GoRecell in the average: ($20+$25+$116)/3 = $53.67 vs wrong $30.81.
     -- =========================================================================
-    ('SMS-S21', '128GB', 'Bell',     'excellent', 106.00),
-    ('SMS-S21', '128GB', 'Bell',     'good',    95.00),
-    ('SMS-S21', '128GB', 'Bell',     'fair',    78.00),
-    ('SMS-S21', '128GB', 'Bell',     'broken',  56.00),
-    ('SMS-S21', '128GB', 'Telus',    'excellent', 109.00),
-    ('SMS-S21', '128GB', 'Telus',    'good',    97.00),
-    ('SMS-S21', '128GB', 'Telus',    'fair',    79.00),
-    ('SMS-S21', '128GB', 'Telus',    'broken',  57.00),
+    ('SMS-S21', '128GB', 'Bell',     'excellent',  22.00),
+    ('SMS-S21', '128GB', 'Bell',     'good',       20.00),
+    ('SMS-S21', '128GB', 'Bell',     'fair',       16.00),
+    ('SMS-S21', '128GB', 'Bell',     'broken',     12.00),
+    ('SMS-S21', '128GB', 'Telus',    'excellent',  28.00),
+    ('SMS-S21', '128GB', 'Telus',    'good',       25.00),
+    ('SMS-S21', '128GB', 'Telus',    'fair',       21.00),
+    ('SMS-S21', '128GB', 'Telus',    'broken',     15.00),
     ('SMS-S21', '128GB', 'GoRecell', 'excellent', 130.00),
-    ('SMS-S21', '128GB', 'GoRecell', 'good',   116.00),
-    ('SMS-S21', '128GB', 'GoRecell', 'fair',    95.00),
-    ('SMS-S21', '128GB', 'GoRecell', 'broken',  68.00),
+    ('SMS-S21', '128GB', 'GoRecell', 'good',      116.00),
+    ('SMS-S21', '128GB', 'GoRecell', 'fair',       95.00),
+    ('SMS-S21', '128GB', 'GoRecell', 'broken',     68.00),
 
-    -- Samsung Galaxy S21 — 256GB  (Bell good = $115)
-    ('SMS-S21', '256GB', 'Bell',     'excellent', 129.00),
-    ('SMS-S21', '256GB', 'Bell',     'good',   115.00),
-    ('SMS-S21', '256GB', 'Bell',     'fair',    94.00),
-    ('SMS-S21', '256GB', 'Bell',     'broken',  68.00),
-    ('SMS-S21', '256GB', 'Telus',    'excellent', 131.00),
-    ('SMS-S21', '256GB', 'Telus',    'good',   117.00),
-    ('SMS-S21', '256GB', 'Telus',    'fair',    96.00),
-    ('SMS-S21', '256GB', 'Telus',    'broken',  69.00),
-    ('SMS-S21', '256GB', 'GoRecell', 'excellent', 157.00),
-    ('SMS-S21', '256GB', 'GoRecell', 'good',   140.00),
-    ('SMS-S21', '256GB', 'GoRecell', 'fair',   115.00),
-    ('SMS-S21', '256GB', 'GoRecell', 'broken',  83.00),
-
-    -- =========================================================================
-    -- Samsung Galaxy S22 — 128GB  (Bell good = $150)
-    -- =========================================================================
-    ('SMS-S22', '128GB', 'Bell',     'excellent', 168.00),
-    ('SMS-S22', '128GB', 'Bell',     'good',   150.00),
-    ('SMS-S22', '128GB', 'Bell',     'fair',   123.00),
-    ('SMS-S22', '128GB', 'Bell',     'broken',  89.00),
-    ('SMS-S22', '128GB', 'Telus',    'excellent', 171.00),
-    ('SMS-S22', '128GB', 'Telus',    'good',   153.00),
-    ('SMS-S22', '128GB', 'Telus',    'fair',   125.00),
-    ('SMS-S22', '128GB', 'Telus',    'broken',  90.00),
-    ('SMS-S22', '128GB', 'GoRecell', 'excellent', 205.00),
-    ('SMS-S22', '128GB', 'GoRecell', 'good',   183.00),
-    ('SMS-S22', '128GB', 'GoRecell', 'fair',   150.00),
-    ('SMS-S22', '128GB', 'GoRecell', 'broken', 108.00),
-
-    -- Samsung Galaxy S22 — 256GB  (Bell good = $175)
-    ('SMS-S22', '256GB', 'Bell',     'excellent', 196.00),
-    ('SMS-S22', '256GB', 'Bell',     'good',   175.00),
-    ('SMS-S22', '256GB', 'Bell',     'fair',   144.00),
-    ('SMS-S22', '256GB', 'Bell',     'broken', 103.00),
-    ('SMS-S22', '256GB', 'Telus',    'excellent', 200.00),
-    ('SMS-S22', '256GB', 'Telus',    'good',   179.00),
-    ('SMS-S22', '256GB', 'Telus',    'fair',   146.00),
-    ('SMS-S22', '256GB', 'Telus',    'broken', 105.00),
-    ('SMS-S22', '256GB', 'GoRecell', 'excellent', 239.00),
-    ('SMS-S22', '256GB', 'GoRecell', 'good',   214.00),
-    ('SMS-S22', '256GB', 'GoRecell', 'fair',   175.00),
-    ('SMS-S22', '256GB', 'GoRecell', 'broken', 126.00),
+    -- Samsung Galaxy S21 — 256GB  (Bell good ≈ $28)
+    ('SMS-S21', '256GB', 'Bell',     'excellent',  31.00),
+    ('SMS-S21', '256GB', 'Bell',     'good',       28.00),
+    ('SMS-S21', '256GB', 'Bell',     'fair',       23.00),
+    ('SMS-S21', '256GB', 'Bell',     'broken',     17.00),
+    ('SMS-S21', '256GB', 'Telus',    'excellent',  37.00),
+    ('SMS-S21', '256GB', 'Telus',    'good',       33.00),
+    ('SMS-S21', '256GB', 'Telus',    'fair',       27.00),
+    ('SMS-S21', '256GB', 'Telus',    'broken',     19.00),
+    ('SMS-S21', '256GB', 'GoRecell', 'excellent', 152.00),
+    ('SMS-S21', '256GB', 'GoRecell', 'good',      136.00),
+    ('SMS-S21', '256GB', 'GoRecell', 'fair',      111.00),
+    ('SMS-S21', '256GB', 'GoRecell', 'broken',     80.00),
 
     -- =========================================================================
-    -- Samsung Galaxy S23 — 128GB  (Bell good = $210)
+    -- Samsung Galaxy S22 — 128GB  (Bell good ≈ $55 — carrier-low for 4yr Samsung)
+    -- 40% check: remaining avg $57.50 < 40%×$165=$66 → GoRecell included ✓
     -- =========================================================================
-    ('SMS-S23', '128GB', 'Bell',     'excellent', 235.00),
-    ('SMS-S23', '128GB', 'Bell',     'good',   210.00),
-    ('SMS-S23', '128GB', 'Bell',     'fair',   172.00),
-    ('SMS-S23', '128GB', 'Bell',     'broken', 124.00),
-    ('SMS-S23', '128GB', 'Telus',    'excellent', 240.00),
-    ('SMS-S23', '128GB', 'Telus',    'good',   214.00),
-    ('SMS-S23', '128GB', 'Telus',    'fair',   176.00),
-    ('SMS-S23', '128GB', 'Telus',    'broken', 126.00),
-    ('SMS-S23', '128GB', 'GoRecell', 'excellent', 287.00),
-    ('SMS-S23', '128GB', 'GoRecell', 'good',   256.00),
-    ('SMS-S23', '128GB', 'GoRecell', 'fair',   210.00),
-    ('SMS-S23', '128GB', 'GoRecell', 'broken', 151.00),
+    ('SMS-S22', '128GB', 'Bell',     'excellent',  62.00),
+    ('SMS-S22', '128GB', 'Bell',     'good',       55.00),
+    ('SMS-S22', '128GB', 'Bell',     'fair',       45.00),
+    ('SMS-S22', '128GB', 'Bell',     'broken',     32.00),
+    ('SMS-S22', '128GB', 'Telus',    'excellent',  67.00),
+    ('SMS-S22', '128GB', 'Telus',    'good',       60.00),
+    ('SMS-S22', '128GB', 'Telus',    'fair',       49.00),
+    ('SMS-S22', '128GB', 'Telus',    'broken',     35.00),
+    ('SMS-S22', '128GB', 'GoRecell', 'excellent', 185.00),
+    ('SMS-S22', '128GB', 'GoRecell', 'good',      165.00),
+    ('SMS-S22', '128GB', 'GoRecell', 'fair',      135.00),
+    ('SMS-S22', '128GB', 'GoRecell', 'broken',     97.00),
 
-    -- Samsung Galaxy S23 — 256GB  (Bell good = $240)
-    ('SMS-S23', '256GB', 'Bell',     'excellent', 269.00),
-    ('SMS-S23', '256GB', 'Bell',     'good',   240.00),
-    ('SMS-S23', '256GB', 'Bell',     'fair',   197.00),
-    ('SMS-S23', '256GB', 'Bell',     'broken', 142.00),
-    ('SMS-S23', '256GB', 'Telus',    'excellent', 274.00),
-    ('SMS-S23', '256GB', 'Telus',    'good',   245.00),
-    ('SMS-S23', '256GB', 'Telus',    'fair',   201.00),
-    ('SMS-S23', '256GB', 'Telus',    'broken', 144.00),
-    ('SMS-S23', '256GB', 'GoRecell', 'excellent', 328.00),
-    ('SMS-S23', '256GB', 'GoRecell', 'good',   293.00),
-    ('SMS-S23', '256GB', 'GoRecell', 'fair',   240.00),
-    ('SMS-S23', '256GB', 'GoRecell', 'broken', 173.00),
-
-    -- =========================================================================
-    -- Samsung Galaxy S24 — 128GB  (Bell good = $295)
-    -- =========================================================================
-    ('SMS-S24', '128GB', 'Bell',     'excellent', 330.00),
-    ('SMS-S24', '128GB', 'Bell',     'good',   295.00),
-    ('SMS-S24', '128GB', 'Bell',     'fair',   242.00),
-    ('SMS-S24', '128GB', 'Bell',     'broken', 174.00),
-    ('SMS-S24', '128GB', 'Telus',    'excellent', 337.00),
-    ('SMS-S24', '128GB', 'Telus',    'good',   301.00),
-    ('SMS-S24', '128GB', 'Telus',    'fair',   247.00),
-    ('SMS-S24', '128GB', 'Telus',    'broken', 178.00),
-    ('SMS-S24', '128GB', 'GoRecell', 'excellent', 402.00),
-    ('SMS-S24', '128GB', 'GoRecell', 'good',   360.00),
-    ('SMS-S24', '128GB', 'GoRecell', 'fair',   295.00),
-    ('SMS-S24', '128GB', 'GoRecell', 'broken', 212.00),
-
-    -- Samsung Galaxy S24 — 256GB  (Bell good = $330)
-    ('SMS-S24', '256GB', 'Bell',     'excellent', 370.00),
-    ('SMS-S24', '256GB', 'Bell',     'good',   330.00),
-    ('SMS-S24', '256GB', 'Bell',     'fair',   271.00),
-    ('SMS-S24', '256GB', 'Bell',     'broken', 195.00),
-    ('SMS-S24', '256GB', 'Telus',    'excellent', 377.00),
-    ('SMS-S24', '256GB', 'Telus',    'good',   337.00),
-    ('SMS-S24', '256GB', 'Telus',    'fair',   276.00),
-    ('SMS-S24', '256GB', 'Telus',    'broken', 199.00),
-    ('SMS-S24', '256GB', 'GoRecell', 'excellent', 450.00),
-    ('SMS-S24', '256GB', 'GoRecell', 'good',   403.00),
-    ('SMS-S24', '256GB', 'GoRecell', 'fair',   330.00),
-    ('SMS-S24', '256GB', 'GoRecell', 'broken', 237.00),
+    -- Samsung Galaxy S22 — 256GB  (Bell good ≈ $70)
+    ('SMS-S22', '256GB', 'Bell',     'excellent',  78.00),
+    ('SMS-S22', '256GB', 'Bell',     'good',       70.00),
+    ('SMS-S22', '256GB', 'Bell',     'fair',       57.00),
+    ('SMS-S22', '256GB', 'Bell',     'broken',     41.00),
+    ('SMS-S22', '256GB', 'Telus',    'excellent',  84.00),
+    ('SMS-S22', '256GB', 'Telus',    'good',       75.00),
+    ('SMS-S22', '256GB', 'Telus',    'fair',       62.00),
+    ('SMS-S22', '256GB', 'Telus',    'broken',     44.00),
+    ('SMS-S22', '256GB', 'GoRecell', 'excellent', 213.00),
+    ('SMS-S22', '256GB', 'GoRecell', 'good',      190.00),
+    ('SMS-S22', '256GB', 'GoRecell', 'fair',      156.00),
+    ('SMS-S22', '256GB', 'GoRecell', 'broken',    112.00),
 
     -- =========================================================================
-    -- Samsung Galaxy S25 — 128GB  (Bell good = $375)
+    -- Samsung Galaxy S23 — 128GB  (Bell good ≈ $80 — carrier-low for 3yr Samsung)
+    -- 40% check: remaining avg $82.50 < 40%×$220=$88 → GoRecell included ✓
     -- =========================================================================
-    ('SMS-S25', '128GB', 'Bell',     'excellent', 420.00),
-    ('SMS-S25', '128GB', 'Bell',     'good',   375.00),
-    ('SMS-S25', '128GB', 'Bell',     'fair',   308.00),
-    ('SMS-S25', '128GB', 'Bell',     'broken', 221.00),
-    ('SMS-S25', '128GB', 'Telus',    'excellent', 428.00),
-    ('SMS-S25', '128GB', 'Telus',    'good',   383.00),
-    ('SMS-S25', '128GB', 'Telus',    'fair',   314.00),
-    ('SMS-S25', '128GB', 'Telus',    'broken', 226.00),
-    ('SMS-S25', '128GB', 'GoRecell', 'excellent', 512.00),
-    ('SMS-S25', '128GB', 'GoRecell', 'good',   458.00),
-    ('SMS-S25', '128GB', 'GoRecell', 'fair',   375.00),
-    ('SMS-S25', '128GB', 'GoRecell', 'broken', 270.00),
+    ('SMS-S23', '128GB', 'Bell',     'excellent',  90.00),
+    ('SMS-S23', '128GB', 'Bell',     'good',       80.00),
+    ('SMS-S23', '128GB', 'Bell',     'fair',       66.00),
+    ('SMS-S23', '128GB', 'Bell',     'broken',     47.00),
+    ('SMS-S23', '128GB', 'Telus',    'excellent',  95.00),
+    ('SMS-S23', '128GB', 'Telus',    'good',       85.00),
+    ('SMS-S23', '128GB', 'Telus',    'fair',       70.00),
+    ('SMS-S23', '128GB', 'Telus',    'broken',     50.00),
+    ('SMS-S23', '128GB', 'GoRecell', 'excellent', 246.00),
+    ('SMS-S23', '128GB', 'GoRecell', 'good',      220.00),
+    ('SMS-S23', '128GB', 'GoRecell', 'fair',      180.00),
+    ('SMS-S23', '128GB', 'GoRecell', 'broken',    130.00),
 
-    -- Samsung Galaxy S25 — 256GB  (Bell good = $405)
-    ('SMS-S25', '256GB', 'Bell',     'excellent', 454.00),
-    ('SMS-S25', '256GB', 'Bell',     'good',   405.00),
-    ('SMS-S25', '256GB', 'Bell',     'fair',   332.00),
-    ('SMS-S25', '256GB', 'Bell',     'broken', 239.00),
-    ('SMS-S25', '256GB', 'Telus',    'excellent', 463.00),
-    ('SMS-S25', '256GB', 'Telus',    'good',   413.00),
-    ('SMS-S25', '256GB', 'Telus',    'fair',   339.00),
-    ('SMS-S25', '256GB', 'Telus',    'broken', 244.00),
-    ('SMS-S25', '256GB', 'GoRecell', 'excellent', 553.00),
-    ('SMS-S25', '256GB', 'GoRecell', 'good',   494.00),
-    ('SMS-S25', '256GB', 'GoRecell', 'fair',   405.00),
-    ('SMS-S25', '256GB', 'GoRecell', 'broken', 291.00)
+    -- Samsung Galaxy S23 — 256GB  (Bell good ≈ $100)
+    ('SMS-S23', '256GB', 'Bell',     'excellent', 112.00),
+    ('SMS-S23', '256GB', 'Bell',     'good',      100.00),
+    ('SMS-S23', '256GB', 'Bell',     'fair',       82.00),
+    ('SMS-S23', '256GB', 'Bell',     'broken',     59.00),
+    ('SMS-S23', '256GB', 'Telus',    'excellent', 118.00),
+    ('SMS-S23', '256GB', 'Telus',    'good',      105.00),
+    ('SMS-S23', '256GB', 'Telus',    'fair',       86.00),
+    ('SMS-S23', '256GB', 'Telus',    'broken',     62.00),
+    ('SMS-S23', '256GB', 'GoRecell', 'excellent', 280.00),
+    ('SMS-S23', '256GB', 'GoRecell', 'good',      250.00),
+    ('SMS-S23', '256GB', 'GoRecell', 'fair',      205.00),
+    ('SMS-S23', '256GB', 'GoRecell', 'broken',    148.00),
+
+    -- =========================================================================
+    -- Samsung Galaxy S24 — 128GB  (Bell good ≈ $110 — 2yr old device)
+    -- 40% check: remaining avg $112.50 < 40%×$305=$122 → GoRecell included ✓
+    -- =========================================================================
+    ('SMS-S24', '128GB', 'Bell',     'excellent', 123.00),
+    ('SMS-S24', '128GB', 'Bell',     'good',      110.00),
+    ('SMS-S24', '128GB', 'Bell',     'fair',       90.00),
+    ('SMS-S24', '128GB', 'Bell',     'broken',     65.00),
+    ('SMS-S24', '128GB', 'Telus',    'excellent', 129.00),
+    ('SMS-S24', '128GB', 'Telus',    'good',      115.00),
+    ('SMS-S24', '128GB', 'Telus',    'fair',       94.00),
+    ('SMS-S24', '128GB', 'Telus',    'broken',     68.00),
+    ('SMS-S24', '128GB', 'GoRecell', 'excellent', 342.00),
+    ('SMS-S24', '128GB', 'GoRecell', 'good',      305.00),
+    ('SMS-S24', '128GB', 'GoRecell', 'fair',      250.00),
+    ('SMS-S24', '128GB', 'GoRecell', 'broken',    180.00),
+
+    -- Samsung Galaxy S24 — 256GB  (Bell good ≈ $120)
+    ('SMS-S24', '256GB', 'Bell',     'excellent', 134.00),
+    ('SMS-S24', '256GB', 'Bell',     'good',      120.00),
+    ('SMS-S24', '256GB', 'Bell',     'fair',       98.00),
+    ('SMS-S24', '256GB', 'Bell',     'broken',     71.00),
+    ('SMS-S24', '256GB', 'Telus',    'excellent', 140.00),
+    ('SMS-S24', '256GB', 'Telus',    'good',      125.00),
+    ('SMS-S24', '256GB', 'Telus',    'fair',      103.00),
+    ('SMS-S24', '256GB', 'Telus',    'broken',     74.00),
+    ('SMS-S24', '256GB', 'GoRecell', 'excellent', 386.00),
+    ('SMS-S24', '256GB', 'GoRecell', 'good',      345.00),
+    ('SMS-S24', '256GB', 'GoRecell', 'fair',      283.00),
+    ('SMS-S24', '256GB', 'GoRecell', 'broken',    204.00),
+
+    -- =========================================================================
+    -- Samsung Galaxy S25 — 128GB  (Bell good ≈ $240 — carriers competitive for 1yr device)
+    -- 40% check: remaining avg $244 ≥ 40%×$390=$156 → GoRecell correctly filtered
+    -- Average = ($240+$248)/2 = $244 (correct: Bell/Telus competitive for newest model)
+    -- =========================================================================
+    ('SMS-S25', '128GB', 'Bell',     'excellent', 269.00),
+    ('SMS-S25', '128GB', 'Bell',     'good',      240.00),
+    ('SMS-S25', '128GB', 'Bell',     'fair',      197.00),
+    ('SMS-S25', '128GB', 'Bell',     'broken',    142.00),
+    ('SMS-S25', '128GB', 'Telus',    'excellent', 278.00),
+    ('SMS-S25', '128GB', 'Telus',    'good',      248.00),
+    ('SMS-S25', '128GB', 'Telus',    'fair',      203.00),
+    ('SMS-S25', '128GB', 'Telus',    'broken',    146.00),
+    ('SMS-S25', '128GB', 'GoRecell', 'excellent', 437.00),
+    ('SMS-S25', '128GB', 'GoRecell', 'good',      390.00),
+    ('SMS-S25', '128GB', 'GoRecell', 'fair',      320.00),
+    ('SMS-S25', '128GB', 'GoRecell', 'broken',    230.00),
+
+    -- Samsung Galaxy S25 — 256GB  (Bell good ≈ $268)
+    ('SMS-S25', '256GB', 'Bell',     'excellent', 300.00),
+    ('SMS-S25', '256GB', 'Bell',     'good',      268.00),
+    ('SMS-S25', '256GB', 'Bell',     'fair',      220.00),
+    ('SMS-S25', '256GB', 'Bell',     'broken',    158.00),
+    ('SMS-S25', '256GB', 'Telus',    'excellent', 310.00),
+    ('SMS-S25', '256GB', 'Telus',    'good',      277.00),
+    ('SMS-S25', '256GB', 'Telus',    'fair',      227.00),
+    ('SMS-S25', '256GB', 'Telus',    'broken',    163.00),
+    ('SMS-S25', '256GB', 'GoRecell', 'excellent', 482.00),
+    ('SMS-S25', '256GB', 'GoRecell', 'good',      430.00),
+    ('SMS-S25', '256GB', 'GoRecell', 'fair',      353.00),
+    ('SMS-S25', '256GB', 'GoRecell', 'broken',    254.00)
 )
 INSERT INTO competitor_prices
   (device_id, storage, competitor_name, condition, trade_in_price, source, scraped_at, updated_at)

@@ -266,7 +266,14 @@ function getApprovedTradeInCompetitorConditionPrice<T extends TradeInCompetitorR
   return round2(Number(selected?.trade_in_price) || 0)
 }
 
-/** Filter competitor outliers — discard highest if >1.3x second-highest (e.g. Bell promotion) */
+/**
+ * Filter competitor outliers — discard highest if >1.3x second-highest (e.g. Bell promotion).
+ *
+ * Guard: do NOT filter when the remaining prices average below 40% of the candidate
+ * outlier. This prevents incorrectly suppressing GoRecell when carriers (Bell/Telus)
+ * are structurally low for a device (e.g. Samsung S21: Bell=$20, GoRecell=$116 —
+ * GoRecell is the fair market rate, not a promotional anomaly).
+ */
 function filterCompetitorOutliers(
   list: Array<{ name: string; price: number }>
 ): Array<{ name: string; price: number }> {
@@ -275,7 +282,12 @@ function filterCompetitorOutliers(
   const highest = sorted[0].price
   const secondHighest = sorted[1].price
   if (secondHighest > 0 && highest > secondHighest * 1.3) {
-    return list.filter(c => c.price < highest)
+    const remaining = list.filter(c => c.price < highest)
+    const remainingAvg = remaining.reduce((s, c) => s + c.price, 0) / remaining.length
+    // Only filter when remaining prices are ≥40% of the suspected outlier.
+    // If remaining avg is too low it means the "outlier" is actually the correct
+    // market rate and the low prices are the anomaly (carrier structural discount).
+    if (remainingAvg >= highest * 0.4) return remaining
   }
   return list
 }
