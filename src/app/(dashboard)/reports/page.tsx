@@ -11,7 +11,7 @@ import {
 import {
   ShoppingCart, DollarSign, TrendingUp, TrendingDown,
   Package, AlertTriangle, CheckCircle2, Clock, BarChart3,
-  RefreshCw, Loader2,
+  RefreshCw, Loader2, FileSearch, ArrowRightLeft,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,44 @@ import { ORDER_STATUS_CONFIG } from '@/lib/constants'
 
 interface DailyPoint { date: string; count: number; revenue: number }
 interface TopDevice { make: string; model: string; count: number; total: number }
+
+interface ReconciliationItem {
+  id: string
+  order_number: string
+  order_type: string
+  order_status: string
+  counterparty: string
+  counterparty_label: string
+  device: string
+  storage: string
+  quantity: number
+  claimed_condition: string
+  actual_condition: string
+  condition_changed: boolean
+  claimed_value: number
+  coe_value: number
+  price_adjustment: number
+  mismatch_severity: string
+  approval_status: string
+  created_at: string
+}
+
+interface ReconciliationData {
+  period_days: number
+  summary: {
+    total_exceptions: number
+    condition_mismatches: number
+    pending: number
+    resolved: number
+    total_value_adjustment: number
+    by_type: {
+      trade_in: { count: number; total_adjustment: number; pending: number; approved: number }
+      cpo: { count: number; total_adjustment: number; pending: number; approved: number }
+    }
+    by_severity: { minor: number; moderate: number; major: number }
+  }
+  items: ReconciliationItem[]
+}
 
 interface ReportData {
   period_days: number
@@ -62,6 +100,9 @@ export default function ReportsPage() {
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('30')
+  const [recon, setRecon] = useState<ReconciliationData | null>(null)
+  const [reconLoading, setReconLoading] = useState(true)
+  const [reconType, setReconType] = useState<'all' | 'trade_in' | 'cpo'>('all')
 
   const load = useCallback(async (days: string) => {
     setLoading(true)
@@ -73,7 +114,18 @@ export default function ReportsPage() {
     }
   }, [])
 
+  const loadRecon = useCallback(async (days: string, type: string) => {
+    setReconLoading(true)
+    try {
+      const res = await fetch(`/api/reports/reconciliation?days=${days}&order_type=${type}`)
+      if (res.ok) setRecon(await res.json())
+    } finally {
+      setReconLoading(false)
+    }
+  }, [])
+
   useEffect(() => { load(period) }, [load, period])
+  useEffect(() => { loadRecon(period, reconType) }, [loadRecon, period, reconType])
 
   // Format date label for chart — show "Apr 10" style
   const fmtDay = (d: string) => {
@@ -383,6 +435,229 @@ export default function ReportsPage() {
           </div>
         </>
       )}
+
+      {/* ── Discrepancy Reconciliation Report ──────────────────────────────── */}
+      <div className="pt-2 border-t">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <ArrowRightLeft className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h2 className="text-lg font-semibold">Discrepancy Reconciliation</h2>
+              <p className="text-xs text-muted-foreground">
+                Customer Trade-In vs COE assessed value · Vendor CPO price vs COE assessment
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={reconType} onValueChange={v => setReconType(v as typeof reconType)}>
+              <SelectTrigger className="w-36 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="trade_in">Trade-In Only</SelectItem>
+                <SelectItem value="cpo">CPO Only</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => loadRecon(period, reconType)} disabled={reconLoading}>
+              {reconLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+
+        {reconLoading && !recon && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl skeleton-3d" />)}
+          </div>
+        )}
+
+        {recon && (
+          <>
+            {/* Summary KPIs */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Exceptions</p>
+                  <p className="text-2xl font-bold mt-1">{recon.summary.total_exceptions}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{recon.summary.condition_mismatches} condition mismatches</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Value Adjustment</p>
+                  <p className={`text-2xl font-bold mt-1 ${recon.summary.total_value_adjustment < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(Math.abs(recon.summary.total_value_adjustment))}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {recon.summary.total_value_adjustment < 0 ? 'Net reduction from claims' : 'Net increase vs claims'}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pending Review</p>
+                  <p className={`text-2xl font-bold mt-1 ${recon.summary.pending > 0 ? 'text-amber-600' : ''}`}>
+                    {recon.summary.pending}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{recon.summary.resolved} resolved</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">By Severity</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="destructive" className="text-xs">{recon.summary.by_severity.major} Major</Badge>
+                    <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800">{recon.summary.by_severity.moderate} Mod</Badge>
+                    <Badge variant="secondary" className="text-xs">{recon.summary.by_severity.minor} Minor</Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Trade-In vs CPO split */}
+            {reconType === 'all' && (
+              <div className="grid gap-4 sm:grid-cols-2 mb-6">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Trade-In: Customer vs COE</CardTitle>
+                    <CardDescription className="text-xs">Claimed condition/value vs COE triage result</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Exceptions</span>
+                      <span className="font-medium">{recon.summary.by_type.trade_in.count}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Value Adjustment</span>
+                      <span className={`font-medium tabular-nums ${recon.summary.by_type.trade_in.total_adjustment < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {recon.summary.by_type.trade_in.total_adjustment >= 0 ? '+' : ''}{formatCurrency(recon.summary.by_type.trade_in.total_adjustment)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Pending</span>
+                      <Badge variant={recon.summary.by_type.trade_in.pending > 0 ? 'secondary' : 'outline'} className="text-xs">
+                        {recon.summary.by_type.trade_in.pending}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">CPO: Vendor vs COE</CardTitle>
+                    <CardDescription className="text-xs">Vendor bid price vs COE assessed value</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Exceptions</span>
+                      <span className="font-medium">{recon.summary.by_type.cpo.count}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Value Adjustment</span>
+                      <span className={`font-medium tabular-nums ${recon.summary.by_type.cpo.total_adjustment < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {recon.summary.by_type.cpo.total_adjustment >= 0 ? '+' : ''}{formatCurrency(recon.summary.by_type.cpo.total_adjustment)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Pending</span>
+                      <Badge variant={recon.summary.by_type.cpo.pending > 0 ? 'secondary' : 'outline'} className="text-xs">
+                        {recon.summary.by_type.cpo.pending}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Line-item table */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <FileSearch className="h-4 w-4 text-muted-foreground" />
+                  Exception Line Items
+                </CardTitle>
+                <CardDescription className="text-xs">Each row = one device exception with claimed vs COE values</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {recon.items.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground">
+                    No discrepancies found for this period and filter.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b text-muted-foreground">
+                          <th className="text-left py-2 px-2 font-medium">Order</th>
+                          <th className="text-left py-2 px-2 font-medium">Type</th>
+                          <th className="text-left py-2 px-2 font-medium">Counterparty</th>
+                          <th className="text-left py-2 px-2 font-medium">Device</th>
+                          <th className="text-left py-2 px-2 font-medium">Claimed Cond.</th>
+                          <th className="text-left py-2 px-2 font-medium">COE Cond.</th>
+                          <th className="text-right py-2 px-2 font-medium">Claimed $</th>
+                          <th className="text-right py-2 px-2 font-medium">COE $</th>
+                          <th className="text-right py-2 px-2 font-medium">Δ Adj.</th>
+                          <th className="text-left py-2 px-2 font-medium">Severity</th>
+                          <th className="text-left py-2 px-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recon.items.map(item => (
+                          <tr key={item.id} className="border-b hover:bg-muted/30 transition-colors">
+                            <td className="py-2 px-2 font-medium text-blue-600">{item.order_number}</td>
+                            <td className="py-2 px-2">
+                              <Badge variant="outline" className="text-xs">
+                                {item.order_type === 'trade_in' ? 'Trade-In' : 'CPO'}
+                              </Badge>
+                            </td>
+                            <td className="py-2 px-2 max-w-[120px] truncate" title={item.counterparty}>
+                              <span className="text-muted-foreground text-[10px] block">{item.counterparty_label}</span>
+                              {item.counterparty}
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="block font-medium">{item.device}</span>
+                              {item.storage && <span className="text-muted-foreground">{item.storage}</span>}
+                            </td>
+                            <td className="py-2 px-2 capitalize">{item.claimed_condition.replace(/_/g, ' ')}</td>
+                            <td className="py-2 px-2 capitalize">
+                              <span className={item.condition_changed ? 'text-amber-700 font-medium' : ''}>
+                                {item.actual_condition.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(item.claimed_value)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(item.coe_value)}</td>
+                            <td className={`py-2 px-2 text-right tabular-nums font-medium ${item.price_adjustment < 0 ? 'text-red-600' : item.price_adjustment > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                              {item.price_adjustment === 0 ? '—' : `${item.price_adjustment > 0 ? '+' : ''}${formatCurrency(item.price_adjustment)}`}
+                            </td>
+                            <td className="py-2 px-2">
+                              <Badge
+                                variant="secondary"
+                                className={`text-[10px] ${item.mismatch_severity === 'major' ? 'bg-red-100 text-red-800' : item.mismatch_severity === 'moderate' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}
+                              >
+                                {item.mismatch_severity}
+                              </Badge>
+                            </td>
+                            <td className="py-2 px-2">
+                              <Badge
+                                variant="secondary"
+                                className={`text-[10px] ${item.approval_status === 'admin_approved' || item.approval_status === 'overridden' ? 'bg-green-100 text-green-800' : item.approval_status === 'rejected' ? 'bg-gray-100 text-gray-600' : item.approval_status === 'coe_approved' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}
+                              >
+                                {item.approval_status.replace(/_/g, ' ')}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {recon.items.length >= 500 && (
+                      <p className="text-xs text-muted-foreground mt-2 text-center">Showing most recent 500 exceptions. Narrow period or filter to see all.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
     </div>
   )
 }
