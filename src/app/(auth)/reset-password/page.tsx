@@ -4,21 +4,20 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
-import { Loader2, CheckCircle2, Eye, EyeOff, Package } from 'lucide-react'
+import { Loader2, CheckCircle2, Eye, EyeOff, Package, KeyRound } from 'lucide-react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-
-// Module-level singleton — one client per page, not one per render
-const supabase = createBrowserSupabaseClient()
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 
 // Password must be 12+ chars, with uppercase, lowercase, number, and special char
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/
+
+type SessionState = 'checking' | 'valid' | 'invalid'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -28,41 +27,65 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isValidSession, setIsValidSession] = useState(false)
-  const [sessionChecked, setSessionChecked] = useState(false)
+  const [sessionState, setSessionState] = useState<SessionState>('checking')
+  // Supabase client is created lazily inside the component — never at module scope —
+  // so a misconfigured env in production doesn't crash the module on load.
+  const supabaseRef = useRef<ReturnType<typeof createBrowserSupabaseClient> | null>(null)
+
+  function getSupabase() {
+    if (!supabaseRef.current) {
+      supabaseRef.current = createBrowserSupabaseClient()
+    }
+    return supabaseRef.current
+  }
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setIsValidSession(true)
-        setSessionChecked(true)
-      } else if (event === 'SIGNED_IN' && session) {
-        setIsValidSession(true)
-        setSessionChecked(true)
-      } else if (event === 'INITIAL_SESSION') {
-        // Only mark checked here if there's already a valid session in storage;
-        // otherwise wait — PASSWORD_RECOVERY fires after the hash is processed.
-        if (session) {
-          setIsValidSession(true)
-          setSessionChecked(true)
+    let cancelled = false
+
+    const supabase = getSupabase()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event: AuthChangeEvent, session: Session | null) => {
+        if (cancelled) return
+        if (event === 'PASSWORD_RECOVERY') {
+          setSessionState('valid')
+        } else if (event === 'SIGNED_IN' && session) {
+          setSessionState('valid')
+        } else if (event === 'INITIAL_SESSION') {
+          if (session) {
+            setSessionState('valid')
+          }
+          // If INITIAL_SESSION fires with no session, wait for PASSWORD_RECOVERY
+          // (which fires slightly after for PKCE recovery links)
         }
       }
-    })
+    )
 
-    // Fallback: if no auth event fires within 3 s (e.g. no hash in URL), mark invalid.
-    const fallbackTimer = window.setTimeout(() => { setSessionChecked(true) }, 3000)
+    // Fallback: if no auth event resolves in 5 s (slow network, no recovery token),
+    // mark the session as invalid and redirect to forgot-password.
+    const fallbackTimer = window.setTimeout(() => {
+      if (!cancelled) setSessionState(prev => prev === 'checking' ? 'invalid' : prev)
+    }, 5000)
 
     return () => {
+      cancelled = true
       subscription.unsubscribe()
       window.clearTimeout(fallbackTimer)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Redirect if session check resolves as invalid
+  useEffect(() => {
+    if (sessionState === 'invalid') {
+      router.replace('/forgot-password?reason=expired')
+    }
+  }, [sessionState, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    if (!isValidSession) {
+    if (sessionState !== 'valid') {
       setError('Invalid or expired reset link. Please request a new password reset.')
       return
     }
@@ -80,23 +103,16 @@ export default function ResetPasswordPage() {
     setIsLoading(true)
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password,
-      })
+      const supabase = getSupabase()
+      const { error: updateError } = await supabase.auth.updateUser({ password })
+      if (updateError) throw updateError
 
-      if (updateError) {
-        throw updateError
-      }
-
-      // Send confirmation email before signing out (fire-and-forget)
+      // Fire-and-forget confirmation email
       fetch('/api/users/password-change-confirmation', { method: 'POST' }).catch(() => {})
 
       await supabase.auth.signOut()
-
       setSuccess(true)
-      setTimeout(() => {
-        router.push('/login')
-      }, 3000)
+      setTimeout(() => router.push('/login'), 3000)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to reset password')
     } finally {
@@ -104,16 +120,11 @@ export default function ResetPasswordPage() {
     }
   }
 
-  useEffect(() => {
-    if (sessionChecked && !isValidSession) {
-      router.replace('/forgot-password')
-    }
-  }, [sessionChecked, isValidSession, router])
-
+  // ── Success state ────────────────────────────────────────────────────────
   if (success) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#120f0d] bg-mesh cinematic-grain px-4">
-        <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in bg-card">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md shadow-xl animate-fade-in">
           <CardContent className="pt-8 pb-6 text-center space-y-4">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-green-500/10">
               <CheckCircle2 className="h-7 w-7 text-green-600" />
@@ -121,7 +132,7 @@ export default function ResetPasswordPage() {
             <div>
               <h2 className="text-xl font-bold">Password Updated</h2>
               <p className="text-sm text-muted-foreground mt-2">
-                Your password has been successfully reset. Redirecting to sign in...
+                Your password has been successfully reset. Redirecting to sign in&hellip;
               </p>
             </div>
             <Link href="/login" className="block">
@@ -133,20 +144,41 @@ export default function ResetPasswordPage() {
     )
   }
 
+  // ── Checking / loading state ─────────────────────────────────────────────
+  if (sessionState === 'checking') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md shadow-xl animate-fade-in">
+          <CardContent className="pt-10 pb-8 text-center space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
+              <KeyRound className="h-7 w-7 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold">Verifying Reset Link</h2>
+              <p className="text-sm text-muted-foreground">
+                Please wait while we verify your password reset link&hellip;
+              </p>
+            </div>
+            <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // ── Form (session is valid) ──────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#120f0d] bg-mesh cinematic-grain px-4">
-      <Link href="/" className="mb-8 flex items-center gap-3">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+      <Link href="/" className="mb-8 flex items-center gap-3 text-foreground">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
           <Package className="h-6 w-6" />
         </div>
         <span className="text-xl font-bold tracking-tight">DLM Engine</span>
       </Link>
-      <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in bg-card">
+      <Card className="w-full max-w-md shadow-xl animate-fade-in">
         <CardHeader className="text-center pb-2">
           <CardTitle className="text-2xl font-bold">Set New Password</CardTitle>
-          <CardDescription>
-            Enter your new password below
-          </CardDescription>
+          <CardDescription>Enter your new password below</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -170,6 +202,7 @@ export default function ResetPasswordPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={12}
+                  autoComplete="new-password"
                   className="h-11 pr-10"
                 />
                 <button
@@ -182,7 +215,7 @@ export default function ResetPasswordPage() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Must be at least 12 characters with uppercase, lowercase, number, and special character
+                12+ characters — uppercase, lowercase, number, and special character
               </p>
             </div>
 
@@ -197,6 +230,7 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                autoComplete="new-password"
                 className="h-11"
               />
             </div>
