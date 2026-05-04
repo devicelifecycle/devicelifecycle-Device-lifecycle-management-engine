@@ -71,8 +71,7 @@ export default function ResetPasswordPage() {
       subscription.unsubscribe()
       window.clearTimeout(fallbackTimer)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // intentional: runs once on mount only — supabase client is stable
 
   // Redirect if session check resolves as invalid
   useEffect(() => {

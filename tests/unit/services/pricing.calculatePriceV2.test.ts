@@ -187,7 +187,8 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(15)
+    // policyReferencePrice = (bellTelusAvg + goRecellPrice) / 2 = (15 + 40) / 2 = 27.5
+    expect(result.trade_price).toBe(27.5)
   })
 
   it('returns no-data when only Apple or UniverCell reference rows exist', async () => {

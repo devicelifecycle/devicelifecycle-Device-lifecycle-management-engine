@@ -48,8 +48,8 @@ describe('middleware order access rules', () => {
       response: NextResponse.next(),
     })
 
-    const { middleware } = await import('@/middleware')
-    const response = await middleware(
+    const { proxy } = await import('@/proxy')
+    const response = await proxy(
       new NextRequest('http://localhost:3000/orders/550e8400-e29b-41d4-a716-446655440000')
     )
 
@@ -66,8 +66,8 @@ describe('middleware order access rules', () => {
       response: NextResponse.next(),
     })
 
-    const { middleware } = await import('@/middleware')
-    const response = await middleware(
+    const { proxy } = await import('@/proxy')
+    const response = await proxy(
       new NextRequest('http://localhost:3000/orders/550e8400-e29b-41d4-a716-446655440000/pdf')
     )
 
@@ -84,8 +84,8 @@ describe('middleware order access rules', () => {
       response: NextResponse.next(),
     })
 
-    const { middleware } = await import('@/middleware')
-    const response = await middleware(new NextRequest('http://localhost:3000/orders'))
+    const { proxy } = await import('@/proxy')
+    const response = await proxy(new NextRequest('http://localhost:3000/orders'))
 
     expect(response.status).toBeGreaterThanOrEqual(300)
     expect(response.status).toBeLessThan(400)
