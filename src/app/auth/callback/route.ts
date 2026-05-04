@@ -76,8 +76,14 @@ export async function GET(request: NextRequest) {
     if (!error) {
       return NextResponse.redirect(new URL(safeNext, request.url))
     }
+
+    // Code exchange failed (e.g. PKCE verifier missing from different device/browser).
+    // If this looks like a password-reset callback, send user to request a new link.
+    if (safeNext === '/reset-password' || safeNext.startsWith('/reset-password')) {
+      return NextResponse.redirect(new URL('/forgot-password?reason=expired', request.url))
+    }
   }
 
-  // If no code or exchange failed, redirect to login with error
-  return NextResponse.redirect(new URL('/login?error=auth_callback_failed', request.url))
+  // No code provided or non-recovery callback failed → login
+  return NextResponse.redirect(new URL('/login', request.url))
 }

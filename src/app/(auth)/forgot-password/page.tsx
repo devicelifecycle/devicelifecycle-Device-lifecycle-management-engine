@@ -8,7 +8,6 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Loader2, Mail, ArrowLeft, Package } from 'lucide-react'
-import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
@@ -35,26 +34,20 @@ function ForgotPasswordForm() {
     const input = email.trim()
 
     try {
-      if (input.includes('@')) {
-        // Real email — use PKCE via Supabase client
-        const supabase = createBrowserSupabaseClient()
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(input, {
-          redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-        })
-        if (resetError) throw resetError
-      } else {
-        // Login ID — use server API to look up notification_email
-        const res = await fetch('/api/auth/forgot-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: input,
-            redirectTo: `${window.location.origin}/reset-password`,
-          }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok && data.error) throw new Error(data.error)
-      }
+      // Always use the server API route for both real emails and Login IDs.
+      // The API uses Supabase admin generateLink (implicit flow) + our own
+      // email service (Gmail/Resend), which is cross-device compatible and
+      // does not rely on Supabase's rate-limited built-in SMTP.
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: input,
+          redirectTo: `${window.location.origin}/reset-password`,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok && data.error) throw new Error(data.error)
       setSuccess(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to send reset email')
