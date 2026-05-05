@@ -313,7 +313,9 @@ def _run_scraping(page: Any, mode: str, devices: list[dict[str, Any]], start: fl
         print(json.dumps(_result(success=False, error="Unable to initialize Bell session", duration_ms=duration_ms)))
         return 1
 
-    products = _fetch_catalog_products(page, session_id, use_browser)
+    # ws1-bell is a public API — call via urllib (no CORS restriction) rather than
+    # browser evaluate() which would be blocked as cross-origin from bell.ca.
+    products = _fetch_catalog_products(page, session_id, use_browser=False)
     if not products:
         duration_ms = int((time.time() - start) * 1000)
         print(json.dumps(_result(success=False, error="Bell catalog returned no products", duration_ms=duration_ms)))
@@ -328,7 +330,7 @@ def _run_scraping(page: Any, mode: str, devices: list[dict[str, Any]], start: fl
             if not product_code:
                 continue
             if product_code not in value_cache:
-                value_cache[product_code] = _fetch_buyback_value(page, session_id, product_code, use_browser)
+                value_cache[product_code] = _fetch_buyback_value(page, session_id, product_code, use_browser=False)
             trade_value = value_cache.get(product_code)
             if trade_value is None:
                 time.sleep(0.08)
@@ -390,7 +392,7 @@ def _run_scraping(page: Any, mode: str, devices: list[dict[str, Any]], start: fl
             product_code = str(matched.get("product_code", "")).strip()
             if product_code:
                 if product_code not in value_cache:
-                    value_cache[product_code] = _fetch_buyback_value(page, session_id, product_code, use_browser)
+                    value_cache[product_code] = _fetch_buyback_value(page, session_id, product_code, use_browser=False)
                 trade_price = value_cache.get(product_code)
 
         if trade_price is None:
@@ -450,19 +452,11 @@ def main() -> int:
 
             # Access the underlying Playwright page for evaluate() (browser-context fetch)
             browser_page = getattr(page, '_page', None) or getattr(page, 'page', None)
-            if browser_page is None:
-                if hasattr(page, 'evaluate'):
-                    browser_page = page
-                else:
-                    duration_ms = int((time.time() - start) * 1000)
-                    print(json.dumps(_result(
-                        success=False,
-                        error="StealthyFetcher page does not support evaluate()",
-                        duration_ms=duration_ms,
-                    )))
-                    return 1
-
-            return _run_scraping(browser_page, mode, devices, start, use_browser=True)
+            if browser_page is None and hasattr(page, 'evaluate'):
+                browser_page = page
+            if browser_page is not None:
+                return _run_scraping(browser_page, mode, devices, start, use_browser=True)
+            # StealthyFetcher returned a static response — fall through to patchright
 
         # --- Fallback: raw patchright ---
         try:

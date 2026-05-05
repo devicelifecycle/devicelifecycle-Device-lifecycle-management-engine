@@ -250,15 +250,12 @@ def main() -> int:
             # Playwright page object to run evaluate() for API calls.
             # Access the internal browser page for JS execution.
             browser_page = getattr(page, '_page', None) or getattr(page, 'page', None)
-            if browser_page is None:
-                # Fallback: use the page object directly if it supports evaluate
-                if not hasattr(page, 'evaluate'):
-                    duration_ms = int((time.time() - start) * 1000)
-                    print(json.dumps(_result(success=False, error="StealthyFetcher page object does not support evaluate()", duration_ms=duration_ms)))
-                    return 1
+            if browser_page is None and hasattr(page, 'evaluate'):
                 browser_page = page
+            # If browser_page is still None, StealthyFetcher returned a static response —
+            # fall through to patchright fallback below.
 
-            if mode == "discovery":
+            if browser_page is not None and mode == "discovery":
                 all_entries, seen_keys, prices = [], set(), []
                 for seed in DISCOVERY_SEEDS:
                     entries = _fetch_catalog_via_stealth(browser_page, seed)
@@ -292,52 +289,60 @@ def main() -> int:
                 print(json.dumps(_result(prices=prices, success=success, error=None if success else "No Telus catalog prices discovered", duration_ms=duration_ms)))
                 return 0 if success else 1
 
-            # Targeted mode
-            prices, errors = [], []
-            catalog_by_make: dict[str, list[dict[str, Any]]] = {}
+            # Targeted mode (only when StealthyFetcher provided a live browser page)
+            if browser_page is not None:
+                prices, errors = [], []
+                catalog_by_make: dict[str, list[dict[str, Any]]] = {}
 
-            for device in devices:
-                make = str(device.get("make", "")).strip()
-                if not make:
-                    errors.append("Device is missing make")
-                    continue
+                for device in devices:
+                    make = str(device.get("make", "")).strip()
+                    if not make:
+                        errors.append("Device is missing make")
+                        continue
 
-                if make.lower() not in catalog_by_make:
-                    catalog_by_make[make.lower()] = _fetch_catalog_via_stealth(browser_page, make)
+                    if make.lower() not in catalog_by_make:
+                        catalog_by_make[make.lower()] = _fetch_catalog_via_stealth(browser_page, make)
 
-                entries = catalog_by_make.get(make.lower(), [])
-                matched = _select_best_entry(device, entries)
-                trade_price = None
-                if isinstance(matched, dict):
-                    try:
-                        market_value = float(matched.get("marketValueAmt"))
-                        if market_value > 0:
-                            trade_price = market_value
-                    except Exception:
-                        pass
+                    entries = catalog_by_make.get(make.lower(), [])
+                    matched = _select_best_entry(device, entries)
+                    trade_price = None
+                    if isinstance(matched, dict):
+                        try:
+                            market_value = float(matched.get("marketValueAmt"))
+                            if market_value > 0:
+                                trade_price = market_value
+                        except Exception:
+                            pass
 
-                if trade_price is None:
-                    errors.append(f"{make} {device.get('model', '')} {device.get('storage', '')}: no match")
+                    if trade_price is None:
+                        errors.append(f"{make} {device.get('model', '')} {device.get('storage', '')}: no match")
 
-                condition = str(device.get("condition") or "good")
-                prices.append({
-                    "competitor_name": "Telus",
-                    "make": make,
-                    "model": str(device.get("model", "")),
-                    "storage": str(device.get("storage", "")),
-                    "trade_in_price": _convert_condition_price(trade_price, "good", condition),
-                    "sell_price": None,
-                    "condition": condition,
-                    "scraped_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "raw": {"matched": trade_price is not None, "source": "scrapling-stealth"},
-                })
+                    condition = str(device.get("condition") or "good")
+                    prices.append({
+                        "competitor_name": "Telus",
+                        "make": make,
+                        "model": str(device.get("model", "")),
+                        "storage": str(device.get("storage", "")),
+                        "trade_in_price": _convert_condition_price(trade_price, "good", condition),
+                        "sell_price": None,
+                        "condition": condition,
+                        "scraped_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        "raw": {"matched": trade_price is not None, "source": "scrapling-stealth"},
+                    })
 
-            duration_ms = int((time.time() - start) * 1000)
-            success = any(p.get("trade_in_price") is not None for p in prices)
-            print(json.dumps(_result(prices=prices, success=success, error=None if success else (" | ".join(errors) if errors else "No Telus matches"), duration_ms=duration_ms)))
-            return 0 if success else 1
+                duration_ms = int((time.time() - start) * 1000)
+                success = any(p.get("trade_in_price") is not None for p in prices)
+                print(json.dumps(_result(prices=prices, success=success, error=None if success else (" | ".join(errors) if errors else "No Telus matches"), duration_ms=duration_ms)))
+                return 0 if success else 1
+            # StealthyFetcher returned a static response — fall through to patchright
 
         # --- Fallback: raw patchright path (same as before but with Cloudflare wait) ---
+        try:
+            from patchright.sync_api import sync_playwright  # type: ignore
+        except ImportError as exc:
+            duration_ms = int((time.time() - start) * 1000)
+            print(json.dumps(_result(success=False, error=f"Neither scrapling nor patchright available: {exc}", duration_ms=duration_ms)))
+            return 1
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             ctx = browser.new_context(
