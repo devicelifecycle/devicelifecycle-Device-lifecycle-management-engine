@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
           orderNumber: order.order_number,
           orderId: order.id,
           orderType: orderData.type,
-          itemCount: orderData.items.length,
+          itemCount: orderData.items.reduce((sum, item) => sum + (item.quantity || 1), 0),
         })
       }
 

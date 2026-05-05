@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -28,7 +27,6 @@ import { formatCurrency } from '@/lib/utils'
 import {
   CPO_CSV_HEADERS,
   CPO_CSV_SAMPLE,
-  buildCsvContent,
   buildXlsxTemplateBlob,
 } from '@/lib/csv-templates'
 import type { Device, DeviceCondition } from '@/types'
@@ -41,21 +39,31 @@ interface CSVRow {
   notes: string
 }
 
-// CPO orders are always 'good' condition — no condition selection needed
-const CPO_CONDITION: DeviceCondition = 'good'
+// CPO condition options — user-facing labels mapped to DeviceCondition
+const CPO_CONDITIONS = [
+  { label: 'Brand New', value: 'new' as DeviceCondition, description: 'Factory sealed, never activated' },
+  { label: 'New',       value: 'excellent' as DeviceCondition, description: 'New or open-box, like new' },
+  { label: 'CPO A',     value: 'good' as DeviceCondition, description: 'Certified pre-owned, grade A' },
+] as const
+
+type CpoConditionValue = typeof CPO_CONDITIONS[number]['value']
 
 interface CpoCompetitorPrice {
   name: string
   sell_price: number
 }
 
-interface ItemPrice {
-  engine_cpo_price: number    // CPO price from engine
-  manual_price: string        // user override (empty = use engine)
+interface ConditionPriceEntry {
+  price: number
   loading: boolean
   error: string | null
   source: string
-  cpo_competitors: CpoCompetitorPrice[]
+  competitors: CpoCompetitorPrice[]
+}
+
+interface ItemPrice {
+  manual_price: string  // user override applied to the primary condition
+  conditionPrices: Partial<Record<CpoConditionValue, ConditionPriceEntry>>
 }
 
 interface LineItem {
@@ -64,6 +72,7 @@ interface LineItem {
   quantity: number
   storage: string
   notes: string
+  selectedConditions: DeviceCondition[]
 }
 
 function getStorageOptionsForDevice(device?: Device): string[] {
@@ -117,24 +126,26 @@ export default function NewCPOOrderPage() {
     }
   }, [isCustomer, router])
 
-  const lookupPrice = useCallback(async (index: number, deviceId: string, storage: string, beatModeArg?: 'amount' | 'percent', beatValArg?: string) => {
+  const lookupPrice = useCallback(async (
+    index: number,
+    deviceId: string,
+    storage: string,
+    conditions: DeviceCondition[],
+    beatModeArg?: 'amount' | 'percent',
+    beatValArg?: string,
+  ) => {
     if (!isInternal) return
-    if (!deviceId || !storage) {
+    if (!deviceId || !storage || conditions.length === 0) {
       delete latestLookupRequestRef.current[index]
       setItemPrices(prev => ({
         ...prev,
-        [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: '', cpo_competitors: [] },
+        [index]: { manual_price: prev[index]?.manual_price ?? '', conditionPrices: {} },
       }))
       return
     }
 
     const requestId = nextLookupRequestIdRef.current++
     latestLookupRequestRef.current[index] = requestId
-
-    setItemPrices(prev => ({
-      ...prev,
-      [index]: { engine_cpo_price: 0, manual_price: '', loading: true, error: null, source: '', cpo_competitors: [] },
-    }))
 
     const effectiveBeatMode = beatModeArg ?? beatMode
     const effectiveBeatVal = beatValArg ?? beatOverride
@@ -145,48 +156,86 @@ export default function NewCPOOrderPage() {
       else beatBody.beat_competitor_amount = beatNum
     }
 
-    try {
-      const res = await fetch('/api/pricing/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition: CPO_CONDITION, ...beatBody }),
-      })
+    // Mark all selected conditions as loading
+    setItemPrices(prev => {
+      const existing = prev[index] ?? { manual_price: '', conditionPrices: {} }
+      const conditionPrices = { ...existing.conditionPrices }
+      for (const cond of conditions) {
+        conditionPrices[cond as CpoConditionValue] = { price: 0, loading: true, error: null, source: '', competitors: [] }
+      }
+      return { ...prev, [index]: { ...existing, conditionPrices } }
+    })
 
-      if (res.ok) {
-        const data = await res.json()
-        if (data.success && data.cpo_price > 0) {
-          if (latestLookupRequestRef.current[index] !== requestId) return
-          setItemPrices(prev => ({
+    // Fetch price for each selected condition in parallel
+    await Promise.all(conditions.map(async (condition) => {
+      try {
+        const res = await fetch('/api/pricing/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition, ...beatBody }),
+        })
+        if (latestLookupRequestRef.current[index] !== requestId) return
+
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success && data.cpo_price > 0) {
+            setItemPrices(prev => {
+              const existing = prev[index] ?? { manual_price: '', conditionPrices: {} }
+              return {
+                ...prev,
+                [index]: {
+                  ...existing,
+                  conditionPrices: {
+                    ...existing.conditionPrices,
+                    [condition]: {
+                      price: data.cpo_price,
+                      loading: false,
+                      error: null,
+                      source: data.price_source || 'Engine V2',
+                      competitors: (data.cpo_competitors || []) as CpoCompetitorPrice[],
+                    },
+                  },
+                },
+              }
+            })
+            return
+          }
+        }
+
+        setItemPrices(prev => {
+          const existing = prev[index] ?? { manual_price: '', conditionPrices: {} }
+          return {
             ...prev,
             [index]: {
-              engine_cpo_price: data.cpo_price,
-              manual_price: '',
-              loading: false,
-              error: null,
-              source: data.price_source || 'Pricing Engine V2',
-              cpo_competitors: (data.cpo_competitors || []) as CpoCompetitorPrice[],
+              ...existing,
+              conditionPrices: {
+                ...existing.conditionPrices,
+                [condition]: { price: 0, loading: false, error: 'No price data', source: '', competitors: [] },
+              },
             },
-          }))
-          return
-        }
+          }
+        })
+      } catch {
+        if (latestLookupRequestRef.current[index] !== requestId) return
+        setItemPrices(prev => {
+          const existing = prev[index] ?? { manual_price: '', conditionPrices: {} }
+          return {
+            ...prev,
+            [index]: {
+              ...existing,
+              conditionPrices: {
+                ...existing.conditionPrices,
+                [condition]: { price: 0, loading: false, error: 'Lookup failed', source: '', competitors: [] },
+              },
+            },
+          }
+        })
       }
-
-      if (latestLookupRequestRef.current[index] !== requestId) return
-      setItemPrices(prev => ({
-        ...prev,
-        [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: 'No price data', source: '', cpo_competitors: [] },
-      }))
-    } catch {
-      if (latestLookupRequestRef.current[index] !== requestId) return
-      setItemPrices(prev => ({
-        ...prev,
-        [index]: { engine_cpo_price: 0, manual_price: '', loading: false, error: 'Lookup failed', source: '', cpo_competitors: [] },
-      }))
-    }
+    }))
   }, [isInternal, beatMode, beatOverride])
 
   const addItem = () => {
-    setItems([...items, { device_id: '', device_label: '', quantity: 1, storage: '', notes: '' }])
+    setItems([...items, { device_id: '', device_label: '', quantity: 1, storage: '', notes: '', selectedConditions: ['good'] }])
   }
 
   const removeItem = (index: number) => {
@@ -204,7 +253,7 @@ export default function NewCPOOrderPage() {
     })
   }
 
-  const updateItem = (index: number, field: string, value: string | number) => {
+  const updateItem = (index: number, field: string, value: string | number | DeviceCondition[]) => {
     const newItems = items.map((item, i) => {
       if (i !== index) return item
       if (field === 'device_id') {
@@ -222,27 +271,42 @@ export default function NewCPOOrderPage() {
     })
     setItems(newItems)
 
-    if (isInternal && ['device_id', 'storage'].includes(field)) {
+    if (isInternal && ['device_id', 'storage', 'selectedConditions'].includes(field)) {
       const updated = newItems[index]
-      if (updated) lookupPrice(index, updated.device_id, updated.storage)
+      if (updated) lookupPrice(index, updated.device_id, updated.storage, updated.selectedConditions)
     }
+  }
+
+  const toggleCondition = (index: number, condition: DeviceCondition) => {
+    const item = items[index]
+    const current = item.selectedConditions
+    const next = current.includes(condition)
+      ? current.filter(c => c !== condition)
+      : [...current, condition]
+    // Always keep at least one condition selected
+    if (next.length === 0) return
+    updateItem(index, 'selectedConditions', next)
   }
 
   const updateManualPrice = (index: number, val: string) => {
     setItemPrices(prev => ({
       ...prev,
       [index]: {
-        ...(prev[index] || { engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: 'manual', cpo_competitors: [] }),
+        ...(prev[index] || { manual_price: '', conditionPrices: {} }),
         manual_price: val,
       },
     }))
   }
 
+  const getPrimaryCondition = (item: LineItem): DeviceCondition =>
+    item.selectedConditions[0] ?? 'good'
+
   const getFinalPrice = (i: number) => {
     const p = itemPrices[i]
     if (!p) return 0
     if (p.manual_price !== '' && !Number.isNaN(parseFloat(p.manual_price))) return parseFloat(p.manual_price)
-    return p.engine_cpo_price
+    const primaryCond = getPrimaryCondition(items[i]) as CpoConditionValue
+    return p.conditionPrices[primaryCond]?.price ?? 0
   }
 
   if (isCustomer) {
@@ -330,7 +394,7 @@ export default function NewCPOOrderPage() {
           device_id: device?.id || '',
           quantity: parseInt(row.quantity) || 1,
           storage: row.storage || '128GB',
-          condition: CPO_CONDITION,
+          condition: 'good' as DeviceCondition,
           notes: row.notes || '',
           _row: row,
         }
@@ -349,13 +413,21 @@ export default function NewCPOOrderPage() {
     } else {
       if (items.length === 0) { toast.error('Please add at least one item'); return }
       if (items.some(i => !i.device_id)) { toast.error('Please select a device for all items'); return }
-      orderItems = items.map(i => ({
-        device_id: i.device_id,
-        quantity: i.quantity,
-        storage: i.storage || '128GB',
-        condition: CPO_CONDITION,
-        notes: i.notes,
-      }))
+      // Expand each item into one order item per selected condition
+      orderItems = items.flatMap(i => {
+        const conditions = i.selectedConditions.length > 0 ? i.selectedConditions : ['good' as DeviceCondition]
+        const isMulti = conditions.length > 1
+        return conditions.map(condition => {
+          const condLabel = CPO_CONDITIONS.find(c => c.value === condition)?.label ?? condition
+          return {
+            device_id: i.device_id,
+            quantity: i.quantity,
+            storage: i.storage || '128GB',
+            condition,
+            notes: isMulti ? `Comparison: ${condLabel}${i.notes ? ` — ${i.notes}` : ''}` : i.notes,
+          }
+        })
+      })
     }
 
     try {
@@ -432,18 +504,40 @@ export default function NewCPOOrderPage() {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                              <Label className="text-xs">Qty</Label>
-                              <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Condition</Label>
-                              <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
-                                CPO (Good)
-                              </div>
-                            </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Qty</Label>
+                            <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} />
                           </div>
+                        </div>
+                        {/* Condition multi-select */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Condition <span className="text-muted-foreground font-normal">(select one or more for comparison)</span></Label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {CPO_CONDITIONS.map(opt => {
+                              const selected = item.selectedConditions.includes(opt.value)
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  title={opt.description}
+                                  onClick={() => toggleCondition(index, opt.value)}
+                                  className={[
+                                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border transition-colors',
+                                    selected
+                                      ? 'bg-primary text-primary-foreground border-primary'
+                                      : 'bg-muted/40 text-muted-foreground border-border hover:border-primary/50 hover:text-foreground',
+                                  ].join(' ')}
+                                >
+                                  {opt.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          {item.selectedConditions.length > 1 && (
+                            <p className="text-[11px] text-blue-600 dark:text-blue-400">
+                              Will create {item.selectedConditions.length} comparison items on submit
+                            </p>
+                          )}
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div className="space-y-1">
@@ -461,18 +555,24 @@ export default function NewCPOOrderPage() {
                           </div>
                         </div>
                         {/* Inline price indicator for internal staff */}
-                        {isInternal && (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {price?.loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                            {price?.engine_cpo_price > 0 && !price.loading && (
-                              <>
-                                <span className="font-medium text-foreground">CPO Price: {formatCurrency(price.engine_cpo_price)} <span className="font-normal text-muted-foreground">/ unit ({price.source})</span></span>
-                                {price.source === 'Pricing Table' && price.cpo_competitors.length === 0 && (
-                                  <span className="text-amber-600 dark:text-amber-400" title="No competitor prices found — using internal formula">⚠ internal estimate</span>
-                                )}
-                              </>
-                            )}
-                            {price?.error && <span className="text-muted-foreground">No price data — enter manually</span>}
+                        {isInternal && price && (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                            {item.selectedConditions.map(cond => {
+                              const cp = price.conditionPrices[cond as CpoConditionValue]
+                              const condLabel = CPO_CONDITIONS.find(c => c.value === cond)?.label ?? cond
+                              if (!cp) return null
+                              return (
+                                <span key={cond} className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">{condLabel}:</span>
+                                  {cp.loading
+                                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                                    : cp.price > 0
+                                      ? <span className="font-medium text-foreground">{formatCurrency(cp.price)}/unit</span>
+                                      : <span className="text-muted-foreground">no data</span>
+                                  }
+                                </span>
+                              )
+                            })}
                           </div>
                         )}
                       </div>
@@ -545,11 +645,14 @@ export default function NewCPOOrderPage() {
         </Card>
 
         {/* Quote Summary — internal staff only, manual tab */}
-        {isInternal && tab === 'manual' && items.some((_, i) => (itemPrices[i]?.engine_cpo_price ?? 0) > 0) && (
+        {isInternal && tab === 'manual' && items.some((_, i) => {
+          const cp = itemPrices[i]?.conditionPrices
+          return cp && Object.values(cp).some(e => (e?.price ?? 0) > 0)
+        }) && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Quote Summary</CardTitle>
-              <CardDescription>CPO sell pricing for this order. Competitor sell prices shown for internal reference only.</CardDescription>
+              <CardDescription>CPO sell pricing by condition. Competitor sell prices shown for internal reference only.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Beat by control */}
@@ -596,7 +699,7 @@ export default function NewCPOOrderPage() {
                     onClick={() => {
                       items.forEach((item, i) => {
                         if (item.device_id && item.storage) {
-                          lookupPrice(i, item.device_id, item.storage, beatMode, beatOverride)
+                          lookupPrice(i, item.device_id, item.storage, item.selectedConditions, beatMode, beatOverride)
                         }
                       })
                     }}
@@ -607,7 +710,7 @@ export default function NewCPOOrderPage() {
                     <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => {
                       setBeatOverride('')
                       items.forEach((item, i) => {
-                        if (item.device_id && item.storage) lookupPrice(i, item.device_id, item.storage, beatMode, '')
+                        if (item.device_id && item.storage) lookupPrice(i, item.device_id, item.storage, item.selectedConditions, beatMode, '')
                       })
                     }}>
                       Reset
@@ -620,6 +723,7 @@ export default function NewCPOOrderPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Device</TableHead>
+                      <TableHead>Condition</TableHead>
                       <TableHead>Storage</TableHead>
                       <TableHead className="text-right">Qty</TableHead>
                       <TableHead className="text-right text-muted-foreground">Engine CPO</TableHead>
@@ -629,55 +733,81 @@ export default function NewCPOOrderPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items.map((item, i) => {
-                      const price = itemPrices[i]
-                      if (!price || price.engine_cpo_price <= 0) return null
-                      const isManual = price.manual_price !== '' && !Number.isNaN(parseFloat(price.manual_price))
+                    {items.flatMap((item, i) => {
+                      const priceEntry = itemPrices[i]
+                      if (!priceEntry) return []
+                      const isManual = priceEntry.manual_price !== '' && !Number.isNaN(parseFloat(priceEntry.manual_price))
+                      const primaryCond = getPrimaryCondition(item) as CpoConditionValue
                       const finalUnit = getFinalPrice(i)
-                      return (
-                        <TableRow key={i}>
-                          <TableCell className="font-medium whitespace-nowrap">{item.device_label || '—'}</TableCell>
-                          <TableCell className="text-xs">{item.storage}</TableCell>
-                          <TableCell className="text-right text-xs">{item.quantity}</TableCell>
-                          <TableCell className="text-right font-mono text-xs text-muted-foreground">{formatCurrency(price.engine_cpo_price)}</TableCell>
-                          {/* Competitor sell prices — internal only */}
-                          <TableCell className="bg-amber-50/40 min-w-[160px]">
-                            {price.cpo_competitors.length > 0 ? (
-                              <div className="space-y-0.5">
-                                {price.cpo_competitors.map(c => (
-                                  <div key={c.name} className="flex items-center justify-between gap-2 text-[11px]">
-                                    <span className="text-muted-foreground truncate max-w-[90px]">{c.name}</span>
-                                    <span className="font-mono font-medium text-amber-800">{formatCurrency(c.sell_price)}</span>
+
+                      return item.selectedConditions.map(cond => {
+                        const cp = priceEntry.conditionPrices[cond as CpoConditionValue]
+                        if (!cp || cp.price <= 0) return null
+                        const condLabel = CPO_CONDITIONS.find(c => c.value === cond)?.label ?? cond
+                        const isPrimary = cond === primaryCond
+                        return (
+                          <TableRow key={`${i}-${cond}`}>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              {item.device_label || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <span className={[
+                                'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                                cond === 'new' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400' :
+                                cond === 'excellent' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400' :
+                                'bg-muted text-muted-foreground',
+                              ].join(' ')}>{condLabel}</span>
+                            </TableCell>
+                            <TableCell className="text-xs">{item.storage}</TableCell>
+                            <TableCell className="text-right text-xs">{item.quantity}</TableCell>
+                            <TableCell className="text-right font-mono text-xs text-muted-foreground">{formatCurrency(cp.price)}</TableCell>
+                            {/* Competitor sell prices — internal only */}
+                            <TableCell className="bg-amber-50/40 min-w-[160px]">
+                              {cp.competitors.length > 0 ? (
+                                <div className="space-y-0.5">
+                                  {cp.competitors.map(c => (
+                                    <div key={c.name} className="flex items-center justify-between gap-2 text-[11px]">
+                                      <span className="text-muted-foreground truncate max-w-[90px]">{c.name}</span>
+                                      <span className="font-mono font-medium text-amber-800">{formatCurrency(c.sell_price)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">No data</span>
+                              )}
+                            </TableCell>
+                            {/* Editable final CPO quote price (only for primary condition) */}
+                            <TableCell className="text-right">
+                              {isPrimary ? (
+                                <>
+                                  <div className="relative w-28 ml-auto">
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      placeholder={String(cp.price)}
+                                      value={priceEntry.manual_price}
+                                      onChange={e => updateManualPrice(i, e.target.value)}
+                                      className="text-right font-mono font-semibold h-8 pr-1"
+                                    />
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">No data</span>
-                            )}
-                          </TableCell>
-                          {/* Editable final CPO quote price */}
-                          <TableCell className="text-right">
-                            <div className="relative w-28 ml-auto">
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder={String(price.engine_cpo_price)}
-                                value={price.manual_price}
-                                onChange={e => updateManualPrice(i, e.target.value)}
-                                className="text-right font-mono font-semibold h-8 pr-1"
-                              />
-                            </div>
-                            {isManual && (
-                              <div className="text-[10px] text-blue-600 text-right mt-0.5">manual · engine: {formatCurrency(price.engine_cpo_price)}</div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-medium">{formatCurrency(finalUnit * item.quantity)}</TableCell>
-                        </TableRow>
-                      )
+                                  {isManual && (
+                                    <div className="text-[10px] text-blue-600 text-right mt-0.5">manual · engine: {formatCurrency(cp.price)}</div>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-xs text-muted-foreground font-mono">{formatCurrency(cp.price)}</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-medium">
+                              {isPrimary ? formatCurrency(finalUnit * item.quantity) : formatCurrency(cp.price * item.quantity)}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
                     })}
                     <TableRow className="border-t-2">
-                      <TableCell colSpan={6} className="text-right font-semibold">Grand Total (CPO)</TableCell>
+                      <TableCell colSpan={7} className="text-right font-semibold">Grand Total (primary conditions)</TableCell>
                       <TableCell className="text-right font-mono font-bold text-lg">
                         {formatCurrency(items.reduce((sum, item, i) => sum + getFinalPrice(i) * item.quantity, 0))}
                       </TableCell>
@@ -686,7 +816,7 @@ export default function NewCPOOrderPage() {
                 </Table>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                Competitor sell prices are for internal reference only — not visible to the customer. Edit the <span className="font-medium">Our CPO Quote</span> column to override the engine price per item.
+                Competitor sell prices are for internal reference only — not visible to the customer. Edit <span className="font-medium">Our CPO Quote</span> to override the engine price for the primary condition.
               </p>
             </CardContent>
           </Card>
