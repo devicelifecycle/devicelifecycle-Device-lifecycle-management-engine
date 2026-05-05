@@ -31,10 +31,9 @@ export default function VendorsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const debouncedSearch = useDebounce(search)
   const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null)
-  const [deleting, setDeleting] = useState(false)
 
   const isActiveFilter = statusFilter === 'all' ? undefined : statusFilter === 'active'
-  const { vendors, total, isLoading, totalPages, error } = useVendors({
+  const { vendors, total, isLoading, totalPages, error, remove, isDeleting } = useVendors({
     search: debouncedSearch,
     page,
     is_active: isActiveFilter,
@@ -42,18 +41,13 @@ export default function VendorsPage() {
 
   const handleDeleteVendor = async () => {
     if (!deleteTarget) return
-    setDeleting(true)
     try {
-      const res = await fetch(`/api/vendors/${deleteTarget.id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to delete vendor')
-      }
+      await remove(deleteTarget.id)
       toast.success(`${deleteTarget.company_name} deleted`)
       setDeleteTarget(null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to delete vendor')
-    } finally { setDeleting(false) }
+    }
   }
 
   const stats = useMemo(() => {
@@ -254,13 +248,13 @@ export default function VendorsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleDeleteVendor}
-              disabled={deleting}
+              disabled={isDeleting}
             >
-              {deleting ? 'Deleting...' : 'Delete Vendor'}
+              {isDeleting ? 'Deleting...' : 'Delete Vendor'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

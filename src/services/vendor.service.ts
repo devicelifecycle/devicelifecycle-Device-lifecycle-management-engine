@@ -122,10 +122,9 @@ export class VendorService {
   static async getVendorOrders(vendorId: string, limit = 50) {
     const supabase = await createServerSupabaseClient()
 
-    // Vendors must NOT see customer/organization info
     const { data, error } = await supabase
       .from('orders')
-      .select('id, order_number, type, status, total_quantity, created_at, updated_at, items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))')
+      .select('id, order_number, type, status, total_quantity, total_amount, created_at, updated_at, customer:customers(id, company_name), items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))')
       .eq('vendor_id', vendorId)
       .order('created_at', { ascending: false })
       .limit(limit)
@@ -272,11 +271,11 @@ export class VendorService {
     // Notify vendor users that they have been assigned to this order
     try {
       const srClient = createServiceRoleClient()
-      const { data: vendor } = await srClient
-        .from('vendors')
-        .select('contact_email, contact_name, contact_phone, organization_id')
-        .eq('id', vendorId)
-        .single()
+      const [{ data: vendor }, { data: orderRecord }] = await Promise.all([
+        srClient.from('vendors').select('contact_email, contact_name, contact_phone, organization_id').eq('id', vendorId).single(),
+        srClient.from('orders').select('order_number').eq('id', orderId).single(),
+      ])
+      const orderLabel = orderRecord?.order_number || orderId
 
       // In-app notification to all active users in vendor's organization
       if (vendor?.organization_id) {
@@ -290,7 +289,7 @@ export class VendorService {
             user_id: u.id,
             type: 'in_app',
             title: 'New Order Assignment',
-            message: `You have been assigned to fulfil Order #${orderId}. Quantity: ${quantity} unit${quantity !== 1 ? 's' : ''} at $${unitPrice}/unit.`,
+            message: `You have been assigned to fulfil Order #${orderLabel}. Quantity: ${quantity} unit${quantity !== 1 ? 's' : ''} at $${unitPrice}/unit.`,
             link: `/orders/${orderId}`,
             metadata: { order_id: orderId, vendor_id: vendorId },
           })
@@ -302,11 +301,11 @@ export class VendorService {
         ? undefined
         : vendor?.contact_email
       if (effectiveEmail) {
-        const subject = `New Order Assignment — Order #${orderId}`
+        const subject = `New Order Assignment — Order #${orderLabel}`
         const html = `<p>Hi ${vendor?.contact_name || 'Vendor'},</p>
 <p>You have been assigned to fulfil an order.</p>
 <ul>
-  <li><strong>Order:</strong> #${orderId}</li>
+  <li><strong>Order:</strong> #${orderLabel}</li>
   <li><strong>Quantity:</strong> ${quantity} unit${quantity !== 1 ? 's' : ''}</li>
   <li><strong>Unit Price:</strong> $${unitPrice}</li>
   <li><strong>Total:</strong> $${(quantity * unitPrice).toFixed(2)}</li>
@@ -612,7 +611,7 @@ export class VendorService {
           .select('setting_value')
           .eq('setting_key', 'cpo_markup_percent')
           .single()
-        markup = settings?.setting_value ? Number(settings.setting_value) : 15 // default 15%
+        markup = settings?.setting_value ? Number(settings.setting_value) : 18 // match pricing service default
       }
 
       // Calculate customer price with markup
