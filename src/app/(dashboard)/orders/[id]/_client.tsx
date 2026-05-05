@@ -221,7 +221,7 @@ export default function OrderDetailClient() {
   const [acceptBidDialogOpen, setAcceptBidDialogOpen] = useState(false)
   const [rejectBidDialogOpen, setRejectBidDialogOpen] = useState(false)
   const [selectedBid, setSelectedBid] = useState<VendorBid | null>(null)
-  const [bidMarkupPercent, setBidMarkupPercent] = useState('15')
+  const [bidMarkupPercent, setBidMarkupPercent] = useState('18')
   const [isBidActionLoading, setIsBidActionLoading] = useState(false)
 
   // Customer exception approval
@@ -1234,7 +1234,7 @@ export default function OrderDetailClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'accepted',
-          cpo_markup_percent: parseFloat(bidMarkupPercent) || 15,
+          cpo_markup_percent: parseFloat(bidMarkupPercent) || 18,
         }),
       })
       const payload = await res.json()
