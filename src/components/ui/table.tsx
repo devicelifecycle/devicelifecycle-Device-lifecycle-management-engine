@@ -5,7 +5,7 @@ const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto rounded-[1.35rem] border border-white/[0.08] bg-white/[0.025] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+  <div className="relative w-full overflow-auto rounded-[1.35rem] border border-border dark:border-white/[0.08] bg-card/50 dark:bg-white/[0.025] shadow-sm dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
     <table
       ref={ref}
       className={cn('w-full caption-bottom text-sm', className)}
@@ -22,7 +22,7 @@ const TableHeader = React.forwardRef<
   <thead
     ref={ref}
     className={cn(
-      '[&_tr]:border-b [&_tr]:bg-white/[0.04] [&_tr]:border-white/[0.08]',
+      '[&_tr]:border-b [&_tr]:bg-muted/50 dark:[&_tr]:bg-white/[0.04] [&_tr]:border-border dark:[&_tr]:border-white/[0.08]',
       'sticky top-0 z-10 backdrop-blur-sm',
       className
     )}
@@ -62,9 +62,9 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      'border-b border-white/[0.05] transition-colors duration-150',
-      'hover:bg-white/[0.06]',
-      'even:bg-white/[0.015]',
+      'border-b border-border/60 dark:border-white/[0.05] transition-colors duration-150',
+      'hover:bg-muted/60 dark:hover:bg-white/[0.06]',
+      'even:bg-muted/20 dark:even:bg-white/[0.015]',
       'data-[state=selected]:bg-primary/10',
       className
     )}

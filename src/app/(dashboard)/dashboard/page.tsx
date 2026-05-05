@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import { useTheme } from 'next-themes'
 import {
   Activity,
   AlertTriangle,
@@ -72,6 +73,8 @@ function usePipeline(orders: Array<{ status: string }>) {
 }
 
 function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
   const { orders, total } = useOrders({ page_size: 500 })
   const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
   const slaAlerts = orders.filter((order) => order.is_sla_breached).length
@@ -103,10 +106,10 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
             <div className="space-y-4">
               <span className="eyebrow-label">Command Center</span>
               <div className="space-y-3">
-                <h1 className="editorial-title max-w-3xl text-4xl text-stone-100 sm:text-5xl lg:text-6xl">
+                <h1 className="editorial-title max-w-3xl text-4xl text-foreground sm:text-5xl lg:text-6xl">
                   A sharper operating view for every <span className="brand-gradient">device journey</span>.
                 </h1>
-                <p className="max-w-2xl text-base leading-7 text-stone-400 sm:text-lg">
+                <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
                   Welcome back, {user?.full_name || 'Operator'}. This workspace surfaces order flow, pricing pressure,
                   SLA risk, and fulfillment movement in one place.
                 </p>
@@ -136,8 +139,8 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
                     <action.icon className="h-5 w-5" />
                   </div>
-                  <p className="mb-1 text-base font-semibold text-stone-100">{action.label}</p>
-                  <p className="text-sm leading-6 text-stone-400">{action.description}</p>
+                  <p className="mb-1 text-base font-semibold text-foreground">{action.label}</p>
+                  <p className="text-sm leading-6 text-muted-foreground">{action.description}</p>
                 </div>
               </Link>
             ))}
@@ -156,8 +159,8 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           >
             <div className="mb-8 flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm uppercase tracking-[0.18em] text-stone-500">{stat.label}</p>
-                <div className="mt-3 text-4xl font-semibold text-stone-50">
+                <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">{stat.label}</p>
+                <div className="mt-3 text-4xl font-semibold text-foreground">
                   {typeof stat.value === 'number' ? <AnimatedCounter value={stat.value} /> : stat.value}
                 </div>
               </div>
@@ -171,10 +174,10 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
           <CardHeader>
-            <CardTitle className="text-2xl text-stone-100">Order Momentum</CardTitle>
-            <CardDescription className="text-stone-400">Volume over the last seven days.</CardDescription>
+            <CardTitle className="text-2xl text-foreground">Order Momentum</CardTitle>
+            <CardDescription className="text-muted-foreground">Volume over the last seven days.</CardDescription>
           </CardHeader>
           <CardContent className="h-[260px] sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -185,40 +188,40 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                     <stop offset="100%" stopColor="#d17843" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="rgba(255,255,255,0.07)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: '#a8a29e', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#a8a29e', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <CartesianGrid stroke={isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'} vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: isDark ? '#a8a29e' : '#78716c', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: isDark ? '#a8a29e' : '#78716c', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{
-                    background: 'rgba(18,14,12,0.95)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: isDark ? 'rgba(18,14,12,0.95)' : '#fff',
+                    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e7e5e4',
                     borderRadius: '18px',
-                    color: '#f5f5f4',
+                    color: isDark ? '#f5f5f4' : '#1c1917',
                   }}
                 />
-                <Area type="monotone" dataKey="orders" stroke="#f3d5af" strokeWidth={2.5} fill="url(#momentumFill)" />
+                <Area type="monotone" dataKey="orders" stroke="#d17843" strokeWidth={2.5} fill="url(#momentumFill)" />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
           <CardHeader>
-            <CardTitle className="text-2xl text-stone-100">Pipeline Weight</CardTitle>
-            <CardDescription className="text-stone-400">Where operational effort is concentrated now.</CardDescription>
+            <CardTitle className="text-2xl text-foreground">Pipeline Weight</CardTitle>
+            <CardDescription className="text-muted-foreground">Where operational effort is concentrated now.</CardDescription>
           </CardHeader>
           <CardContent className="h-[260px] sm:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineData}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: '#a8a29e', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#a8a29e', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <CartesianGrid stroke={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'} vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: isDark ? '#a8a29e' : '#78716c', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: isDark ? '#a8a29e' : '#78716c', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{
-                    background: 'rgba(18,14,12,0.95)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: isDark ? 'rgba(18,14,12,0.95)' : '#fff',
+                    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e7e5e4',
                     borderRadius: '18px',
-                    color: '#f5f5f4',
+                    color: isDark ? '#f5f5f4' : '#1c1917',
                   }}
                 />
                 <Bar dataKey="count" radius={[10, 10, 0, 0]}>
@@ -233,11 +236,11 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
           <CardHeader className="flex-row items-end justify-between space-y-0">
             <div>
-              <CardTitle className="text-2xl text-stone-100">Recent Activity</CardTitle>
-              <CardDescription className="mt-2 text-stone-400">Latest orders and where they sit.</CardDescription>
+              <CardTitle className="text-2xl text-foreground">Recent Activity</CardTitle>
+              <CardDescription className="mt-2 text-muted-foreground">Latest orders and where they sit.</CardDescription>
             </div>
             <Link href="/orders" className="text-sm text-primary hover:text-primary/70">
               View all
@@ -245,17 +248,17 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           </CardHeader>
           <CardContent className="space-y-3">
             {recentOrders.length === 0 && (
-              <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center text-sm text-stone-500">
+              <div className="rounded-[1.4rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.02] px-5 py-10 text-center text-sm text-muted-foreground">
                 No recent orders yet.
               </div>
             )}
             {recentOrders.map((order) => (
               <Link key={order.id} href={`/orders/${order.id}`}>
-                <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-5 py-4 transition hover:bg-white/[0.05]">
+                <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] px-5 py-4 transition hover:bg-muted/60 dark:hover:bg-white/[0.05]">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="space-y-1">
-                      <p className="font-semibold text-stone-100">{order.order_number || 'Untitled Order'}</p>
-                      <p className="text-sm text-stone-400">
+                      <p className="font-semibold text-foreground">{order.order_number || 'Untitled Order'}</p>
+                      <p className="text-sm text-muted-foreground">
                         {order.type === 'cpo' ? 'CPO workflow' : 'Trade-in workflow'} · Updated{' '}
                         {formatRelativeTime(order.updated_at || order.created_at || new Date().toISOString())}
                       </p>
@@ -266,7 +269,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                         label={ORDER_STATUS_CONFIG[order.status as keyof typeof ORDER_STATUS_CONFIG]?.label}
                         dot
                       />
-                      <ArrowRight className="h-4 w-4 text-stone-500" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
                 </div>
@@ -275,32 +278,32 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           </CardContent>
         </Card>
 
-        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
           <CardHeader>
-            <CardTitle className="text-2xl text-stone-100">Operational Notes</CardTitle>
-            <CardDescription className="text-stone-400">A quick read of today’s posture.</CardDescription>
+            <CardTitle className="text-2xl text-foreground">Operational Notes</CardTitle>
+            <CardDescription className="text-muted-foreground">A quick read of today’s posture.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Queue</p>
-              <p className="text-lg font-semibold text-stone-100">{pendingOrders} orders need active handling.</p>
-              <p className="mt-2 text-sm leading-6 text-stone-400">
+            <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-muted/40 dark:bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">Queue</p>
+              <p className="text-lg font-semibold text-foreground">{pendingOrders} orders need active handling.</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Submitted, quoted, sourcing, receiving, and triage work are grouped into the active queue so the team can
                 prioritize throughput instead of scanning every status manually.
               </p>
             </div>
-            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Revenue Surface</p>
-              <p className="text-lg font-semibold text-stone-100">{formatCurrency(recentRevenue)} in visible order value.</p>
-              <p className="mt-2 text-sm leading-6 text-stone-400">
+            <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-muted/40 dark:bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">Revenue Surface</p>
+              <p className="text-lg font-semibold text-foreground">{formatCurrency(recentRevenue)} in visible order value.</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 This is drawn from the currently loaded order set and gives finance and sales a quick directional read on the
                 active book of business.
               </p>
             </div>
-            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">SLA Risk</p>
-              <p className="text-lg font-semibold text-stone-100">{slaAlerts} breached or at-risk orders flagged.</p>
-              <p className="mt-2 text-sm leading-6 text-stone-400">
+            <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-muted/40 dark:bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">SLA Risk</p>
+              <p className="text-lg font-semibold text-foreground">{slaAlerts} breached or at-risk orders flagged.</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Keep an eye on exceptions and triage if this number climbs. It’s usually the earliest signal that the system
                 needs operational rebalancing.
               </p>
@@ -340,10 +343,10 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           <div className="space-y-5">
             <span className="eyebrow-label">Customer Workspace</span>
             <div className="space-y-3">
-              <h1 className="editorial-title max-w-3xl text-4xl text-stone-100 sm:text-5xl">
+              <h1 className="editorial-title max-w-3xl text-4xl text-foreground sm:text-5xl">
                 Orders, quotes, and shipments in one view.
               </h1>
-              <p className="max-w-2xl text-base leading-7 text-stone-400 sm:text-lg">
+              <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
                 Welcome back, {user.full_name || 'Customer'}.
               </p>
             </div>
@@ -370,8 +373,8 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
                     <action.icon className="h-5 w-5" />
                   </div>
-                  <p className="mb-1 text-base font-semibold text-stone-100">{action.label}</p>
-                  <p className="text-sm leading-6 text-stone-400">{action.description}</p>
+                  <p className="mb-1 text-base font-semibold text-foreground">{action.label}</p>
+                  <p className="text-sm leading-6 text-muted-foreground">{action.description}</p>
                 </div>
               </Link>
             ))}
@@ -390,8 +393,8 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           >
             <div className="mb-8 flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm uppercase tracking-[0.18em] text-stone-500">{stat.label}</p>
-                <div className="mt-3 text-4xl font-semibold text-stone-50">
+                <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">{stat.label}</p>
+                <div className="mt-3 text-4xl font-semibold text-foreground">
                   {typeof stat.value === 'number' ? <AnimatedCounter value={stat.value} /> : stat.value}
                 </div>
               </div>
@@ -405,11 +408,11 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
           <CardHeader className="flex-row items-end justify-between space-y-0">
             <div>
-              <CardTitle className="text-2xl text-stone-100">Recent Orders</CardTitle>
-              <CardDescription className="mt-2 text-stone-400">Latest updates.</CardDescription>
+              <CardTitle className="text-2xl text-foreground">Recent Orders</CardTitle>
+              <CardDescription className="mt-2 text-muted-foreground">Latest updates.</CardDescription>
             </div>
             <Link href="/customer/orders" className="text-sm text-primary hover:text-primary/70">
               View all
@@ -417,20 +420,20 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           </CardHeader>
           <CardContent className="space-y-3">
             {isLoading && (
-              <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center text-sm text-stone-500">
+              <div className="rounded-[1.4rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.02] px-5 py-10 text-center text-sm text-muted-foreground">
                 Loading your orders...
               </div>
             )}
             {!isLoading && error && (
-              <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center text-sm text-stone-500">
+              <div className="rounded-[1.4rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.02] px-5 py-10 text-center text-sm text-muted-foreground">
                 Unable to load orders. Please refresh the page.
               </div>
             )}
             {!isLoading && !error && recentOrders.length === 0 && (
-              <div className="space-y-4 rounded-[1.4rem] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center">
+              <div className="space-y-4 rounded-[1.4rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.02] px-5 py-10 text-center">
                 <div>
-                  <p className="text-base font-semibold text-stone-100">No orders yet</p>
-                  <p className="mt-2 text-sm text-stone-500">
+                  <p className="text-base font-semibold text-foreground">No orders yet</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
                     Create your first order to get started.
                   </p>
                 </div>
@@ -446,11 +449,11 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
             )}
             {!isLoading && !error && recentOrders.map((order) => (
               <Link key={order.id} href={`/orders/${order.id}`}>
-                <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-5 py-4 transition hover:bg-white/[0.05]">
+                <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] px-5 py-4 transition hover:bg-muted/60 dark:hover:bg-white/[0.05]">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="space-y-1">
-                      <p className="font-semibold text-stone-100">{order.order_number || 'Untitled Order'}</p>
-                      <p className="text-sm text-stone-400">
+                      <p className="font-semibold text-foreground">{order.order_number || 'Untitled Order'}</p>
+                      <p className="text-sm text-muted-foreground">
                         {order.type === 'cpo' ? 'CPO' : 'Trade-In'} · Updated{' '}
                         {formatRelativeTime(order.updated_at || order.created_at || new Date().toISOString())}
                       </p>
@@ -461,7 +464,7 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                         label={CUSTOMER_STATUS_CONFIG[order.status as keyof typeof CUSTOMER_STATUS_CONFIG]?.label}
                         dot
                       />
-                      <ArrowRight className="h-4 w-4 text-stone-500" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
                 </div>
@@ -470,23 +473,23 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           </CardContent>
         </Card>
 
-        <Card className="surface-panel overflow-hidden border-white/8 bg-transparent text-stone-100">
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
           <CardHeader>
-            <CardTitle className="text-2xl text-stone-100">Overview</CardTitle>
-            <CardDescription className="text-stone-400">Current status.</CardDescription>
+            <CardTitle className="text-2xl text-foreground">Overview</CardTitle>
+            <CardDescription className="text-muted-foreground">Current status.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">In Progress</p>
-              <p className="text-lg font-semibold text-stone-100">{activeOrders} active order{activeOrders === 1 ? '' : 's'}.</p>
+            <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-muted/40 dark:bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">In Progress</p>
+              <p className="text-lg font-semibold text-foreground">{activeOrders} active order{activeOrders === 1 ? '' : 's'}.</p>
             </div>
-            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Visible Value</p>
-              <p className="text-lg font-semibold text-stone-100">{formatCurrency(visibleValue)}</p>
+            <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-muted/40 dark:bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">Visible Value</p>
+              <p className="text-lg font-semibold text-foreground">{formatCurrency(visibleValue)}</p>
             </div>
-            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.035] p-5">
-              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Next Action</p>
-              <p className="text-lg font-semibold text-stone-100">
+            <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-muted/40 dark:bg-white/[0.035] p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">Next Action</p>
+              <p className="text-lg font-semibold text-foreground">
                 {quotesReady > 0 ? `${quotesReady} quote${quotesReady === 1 ? ' is' : 's are'} ready.` : 'No quotes waiting.'}
               </p>
             </div>
@@ -512,7 +515,7 @@ export default function DashboardPage() {
 
   if (isInitializing || !user) {
     return (
-      <div className="surface-panel rounded-[1.75rem] px-6 py-12 text-center text-stone-400">
+      <div className="surface-panel rounded-[1.75rem] px-6 py-12 text-center text-muted-foreground">
         Loading your workspace...
       </div>
     )
@@ -524,7 +527,7 @@ export default function DashboardPage() {
 
   if (!isInternal) {
     return (
-      <div className="surface-panel rounded-[1.75rem] px-6 py-12 text-center text-stone-400">
+      <div className="surface-panel rounded-[1.75rem] px-6 py-12 text-center text-muted-foreground">
         Opening your workspace...
       </div>
     )

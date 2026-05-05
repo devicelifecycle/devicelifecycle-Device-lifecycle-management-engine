@@ -362,12 +362,12 @@ export default function OrdersPage() {
         clearFilters,
       })}
 
-      <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+      <Card className="surface-panel border-border dark:border-white/8 bg-transparent">
         <CardHeader className="space-y-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <CardTitle className="text-2xl text-stone-100">Filters and controls</CardTitle>
-              <CardDescription className="mt-2 text-stone-400">
+              <CardTitle className="text-2xl text-foreground">Filters and controls</CardTitle>
+              <CardDescription className="mt-2 text-muted-foreground">
                 Search the queue, narrow by status or type, and prepare bulk actions.
               </CardDescription>
             </div>
@@ -382,7 +382,7 @@ export default function OrdersPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_160px]">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search by order number, IMEI, or serial number..."
                 className="pl-11"
@@ -424,7 +424,7 @@ export default function OrdersPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className="rounded-[1.4rem] border border-white/8 bg-white/[0.04] px-4 py-4"
+                className="rounded-[1.4rem] border border-border dark:border-white/8 bg-muted/50 dark:bg-white/[0.04] px-4 py-4"
               >
                 <div className="flex flex-wrap items-center gap-3">
                   <Badge variant="secondary">{selectedIds.size} selected</Badge>
@@ -479,25 +479,25 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
 
-      <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+      <Card className="surface-panel border-border dark:border-white/8 bg-transparent">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <CardTitle className="text-2xl text-stone-100">Order index</CardTitle>
-            <CardDescription className="mt-2 text-stone-400">{total} total orders in the current view.</CardDescription>
+            <CardTitle className="text-2xl text-foreground">Order index</CardTitle>
+            <CardDescription className="mt-2 text-muted-foreground">{total} total orders in the current view.</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="h-16 rounded-[1rem] bg-white/[0.04] animate-pulse" />
+                <div key={index} className="h-16 rounded-[1rem] bg-muted dark:bg-white/[0.04] animate-pulse" />
               ))}
             </div>
           ) : orders.length === 0 ? (
-            <div className="rounded-[1.6rem] border border-dashed border-white/10 bg-white/[0.025] px-6 py-16 text-center">
-              <ShoppingCart className="mx-auto h-10 w-10 text-stone-600" />
-              <p className="mt-4 text-lg font-semibold text-stone-200">No orders match this view.</p>
-              <p className="mt-2 text-sm text-stone-500">
+            <div className="rounded-[1.6rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.025] px-6 py-16 text-center">
+              <ShoppingCart className="mx-auto h-10 w-10 text-muted-foreground" />
+              <p className="mt-4 text-lg font-semibold">No orders match this view.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
                 {canCreateTradeIn ? 'Create an order or relax the filters to bring the queue back into view.' : 'Orders will appear here when work is assigned.'}
               </p>
               {canCreateTradeIn && (
@@ -553,7 +553,7 @@ export default function OrdersPage() {
                         <TableCell>
                           <Badge variant="outline">{order.type === 'trade_in' ? 'Trade-In' : 'CPO'}</Badge>
                         </TableCell>
-                        <TableCell className="text-stone-300 whitespace-nowrap">
+                        <TableCell className="text-foreground whitespace-nowrap">
                           {order.type === 'trade_in' ? order.customer?.company_name : order.vendor?.company_name}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
@@ -563,7 +563,7 @@ export default function OrdersPage() {
                         <TableCell className="text-right tabular-nums font-medium whitespace-nowrap">
                           {formatCurrency(order.total_amount || 0)}
                         </TableCell>
-                        <TableCell className="text-stone-400 whitespace-nowrap">{formatRelativeTime(order.created_at)}</TableCell>
+                        <TableCell className="text-muted-foreground whitespace-nowrap">{formatRelativeTime(order.created_at)}</TableCell>
                       </TableRow>
                     )
                   })}
@@ -885,9 +885,9 @@ function organizationIdBanner({
   if (!customerIdFromUrl && !vendorIdFromUrl) return null
 
   return (
-    <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.04] px-5 py-4 text-sm text-stone-300">
+    <div className="rounded-[1.5rem] border border-border dark:border-white/8 bg-muted/50 dark:bg-white/[0.04] px-5 py-4 text-sm text-foreground">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-stone-500">Scoped view active.</span>
+        <span className="text-muted-foreground">Scoped view active.</span>
         {customerIdFromUrl ? <span>Showing orders for a selected customer.</span> : null}
         {vendorIdFromUrl ? <span>Showing orders for a selected vendor.</span> : null}
         <button className="ml-auto text-primary hover:text-primary/70" onClick={clearFilters}>

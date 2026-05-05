@@ -71,10 +71,10 @@ export default function VendorsPage() {
           title="Vendors"
           description="The vendor layer could not be loaded in this session."
         />
-        <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+        <Card className="surface-panel border-border dark:border-white/8 bg-transparent">
           <CardContent className="py-16 text-center">
             <p className="text-lg font-semibold text-red-400">Failed to load vendors</p>
-            <p className="mt-2 text-sm text-stone-500">
+            <p className="mt-2 text-sm text-muted-foreground">
               You may not have permission to view this page, or the connection to the backend failed.
             </p>
           </CardContent>
@@ -124,17 +124,17 @@ export default function VendorsPage() {
         ]}
       />
 
-      <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+      <Card className="surface-panel border-border dark:border-white/8 bg-transparent">
         <CardHeader>
-          <CardTitle className="text-2xl text-stone-100">Vendor directory</CardTitle>
-          <CardDescription className="mt-2 text-stone-400">
+          <CardTitle className="text-2xl">Vendor directory</CardTitle>
+          <CardDescription className="mt-2">
             Filter the vendor roster, inspect reliability signals, and open full vendor records.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search vendors..."
                 className="pl-11"
@@ -146,7 +146,7 @@ export default function VendorsPage() {
               />
             </div>
             <select
-              className="h-11 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 text-sm text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_12px_32px_-24px_rgba(0,0,0,0.45)]"
+              className="h-11 rounded-2xl border border-input dark:border-white/[0.08] bg-background dark:bg-white/[0.04] px-4 text-sm text-foreground shadow-sm dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_12px_32px_-24px_rgba(0,0,0,0.45)]"
               value={statusFilter}
               onChange={(event) => {
                 setStatusFilter(event.target.value as 'all' | 'active' | 'inactive')
@@ -162,14 +162,14 @@ export default function VendorsPage() {
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-16 rounded-[1rem] bg-white/[0.04] animate-pulse" />
+                <div key={index} className="h-16 rounded-[1rem] bg-muted dark:bg-white/[0.04] animate-pulse" />
               ))}
             </div>
           ) : vendors.length === 0 ? (
-            <div className="rounded-[1.6rem] border border-dashed border-white/10 bg-white/[0.025] px-6 py-16 text-center">
-              <Store className="mx-auto h-10 w-10 text-stone-600" />
-              <p className="mt-4 text-lg font-semibold text-stone-200">No vendors found.</p>
-              <p className="mt-2 text-sm text-stone-500">Add a vendor profile to activate the sourcing side of the system.</p>
+            <div className="rounded-[1.6rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.025] px-6 py-16 text-center">
+              <Store className="mx-auto h-10 w-10 text-muted-foreground" />
+              <p className="mt-4 text-lg font-semibold">No vendors found.</p>
+              <p className="mt-2 text-sm text-muted-foreground">Add a vendor profile to activate the sourcing side of the system.</p>
               {canCreate && (
                 <Link href="/vendors/new">
                   <Button className="mt-5">Add vendor</Button>
@@ -201,25 +201,25 @@ export default function VendorsPage() {
                         </Link>
                       </TableCell>
                       <TableCell>{vendor.contact_name}</TableCell>
-                      <TableCell className="text-stone-400">{vendor.contact_email}</TableCell>
-                      <TableCell className="text-stone-400">{vendor.contact_phone || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{vendor.contact_email}</TableCell>
+                      <TableCell className="text-muted-foreground">{vendor.contact_phone || '—'}</TableCell>
                       <TableCell>
                         {vendor.rating ? (
-                          <span className="inline-flex items-center gap-1 text-sm text-stone-200">
+                          <span className="inline-flex items-center gap-1 text-sm text-foreground">
                             <span className="text-amber-300">★</span>
                             {vendor.rating}/5
                           </span>
                         ) : (
-                          <span className="text-stone-500">—</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell>{vendor.warranty_period_days ? `${vendor.warranty_period_days}d` : <span className="text-stone-500">—</span>}</TableCell>
+                      <TableCell>{vendor.warranty_period_days ? `${vendor.warranty_period_days}d` : <span className="text-muted-foreground">—</span>}</TableCell>
                       <TableCell>
                         <Badge variant={vendor.is_active ? 'default' : 'secondary'}>
                           {vendor.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-stone-400">
+                      <TableCell className="text-muted-foreground">
                         {vendor.created_at ? new Date(vendor.created_at).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }) : '—'}
                       </TableCell>
                       {isAdmin && (

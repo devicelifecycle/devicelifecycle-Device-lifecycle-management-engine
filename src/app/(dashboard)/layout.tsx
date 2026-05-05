@@ -47,7 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Checking session, roles, and the operational canvas.
             </p>
           </div>
-          <div className="h-px w-full overflow-hidden bg-white/[0.08] rounded-full">
+          <div className="h-px w-full overflow-hidden bg-border rounded-full">
             <motion.div
               className="h-full rounded-full bg-gradient-to-r from-transparent via-primary/60 to-transparent"
               animate={{ x: ['-100%', '200%'] }}

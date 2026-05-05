@@ -28,8 +28,8 @@ export function PageHero({
         <div className="space-y-5">
           {eyebrow ? <span className="eyebrow-label">{eyebrow}</span> : null}
           <div className="space-y-3">
-            <h1 className="editorial-title text-4xl text-stone-100 sm:text-5xl">{title}</h1>
-            {description ? <p className="max-w-2xl text-base leading-7 text-stone-400">{description}</p> : null}
+            <h1 className="editorial-title text-4xl text-foreground sm:text-5xl">{title}</h1>
+            {description ? <p className="max-w-2xl text-base leading-7 text-muted-foreground">{description}</p> : null}
           </div>
         </div>
         <div className="space-y-4">
@@ -37,9 +37,9 @@ export function PageHero({
           {stats.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {stats.map((stat) => (
-                <div key={stat.label} className="rounded-[1.35rem] border border-white/8 bg-white/[0.04] px-4 py-4">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-stone-500">{stat.label}</p>
-                  <div className="mt-2 text-2xl font-semibold text-stone-100">{stat.value}</div>
+                <div key={stat.label} className="rounded-[1.35rem] border border-border dark:border-white/8 bg-muted/50 dark:bg-white/[0.04] px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{stat.label}</p>
+                  <div className="mt-2 text-2xl font-semibold text-foreground">{stat.value}</div>
                 </div>
               ))}
             </div>

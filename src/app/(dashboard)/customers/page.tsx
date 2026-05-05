@@ -101,9 +101,9 @@ export default function CustomersPage() {
       />
 
       {organizationId && (
-        <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.04] px-5 py-4 text-sm text-stone-300">
+        <div className="rounded-[1.5rem] border border-border dark:border-white/8 bg-muted/50 dark:bg-white/[0.04] px-5 py-4 text-sm text-foreground">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-stone-500">Scope active.</span>
+            <span className="text-muted-foreground">Scope active.</span>
             <span>Showing customers for one organization.</span>
             <Link href="/admin/organizations" className="text-primary hover:text-primary/70">
               View organizations
@@ -115,10 +115,10 @@ export default function CustomersPage() {
         </div>
       )}
 
-      <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+      <Card className="surface-panel border-border dark:border-white/8 bg-transparent">
         <CardHeader>
-          <CardTitle className="text-2xl text-stone-100">Customer index</CardTitle>
-          <CardDescription className="mt-2 text-stone-400">
+          <CardTitle className="text-2xl">Customer index</CardTitle>
+          <CardDescription className="mt-2">
             Search the book of accounts and jump into detailed customer views.
           </CardDescription>
         </CardHeader>
@@ -139,14 +139,14 @@ export default function CustomersPage() {
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-16 rounded-[1rem] bg-white/[0.04] animate-pulse" />
+                <div key={index} className="h-16 rounded-[1rem] bg-muted dark:bg-white/[0.04] animate-pulse" />
               ))}
             </div>
           ) : customers.length === 0 ? (
-            <div className="rounded-[1.6rem] border border-dashed border-white/10 bg-white/[0.025] px-6 py-16 text-center">
-              <Users className="mx-auto h-10 w-10 text-stone-600" />
-              <p className="mt-4 text-lg font-semibold text-stone-200">No customers found.</p>
-              <p className="mt-2 text-sm text-stone-500">Create a customer account to start building the customer-side operating view.</p>
+            <div className="rounded-[1.6rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.025] px-6 py-16 text-center">
+              <Users className="mx-auto h-10 w-10 text-muted-foreground" />
+              <p className="mt-4 text-lg font-semibold">No customers found.</p>
+              <p className="mt-2 text-sm text-muted-foreground">Create a customer account to start building the customer-side operating view.</p>
               {canCreate && (
                 <Link href="/customers/new">
                   <Button className="mt-5">Add customer</Button>
@@ -177,15 +177,15 @@ export default function CustomersPage() {
                         </Link>
                       </TableCell>
                       <TableCell>{customer.contact_name}</TableCell>
-                      <TableCell className="text-stone-400">{customer.contact_email}</TableCell>
-                      <TableCell className="text-stone-400">{customer.contact_phone || '—'}</TableCell>
-                      <TableCell className="text-stone-400">{customer.payment_terms || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{customer.contact_email}</TableCell>
+                      <TableCell className="text-muted-foreground">{customer.contact_phone || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{customer.payment_terms || '—'}</TableCell>
                       <TableCell>
                         <Badge variant={customer.is_active ? 'default' : 'secondary'}>
                           {customer.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-stone-400">{new Date(customer.created_at).toLocaleDateString('en-US', { timeZone: 'America/Toronto' })}</TableCell>
+                      <TableCell className="text-muted-foreground">{new Date(customer.created_at).toLocaleDateString('en-US', { timeZone: 'America/Toronto' })}</TableCell>
                       {canDelete && (
                         <TableCell className="text-right">
                           <DropdownMenu>
