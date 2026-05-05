@@ -653,7 +653,6 @@ export class PricingService {
           .maybeSingle()
         if (bo?.margin_percent != null) {
           settings.trade_in_profit_percent = bo.margin_percent as number
-          settings.enterprise_margin_percent = bo.margin_percent as number
           brandOverrideApplied = { make: bo.make as string, margin_percent: bo.margin_percent as number }
         }
       }
@@ -1301,8 +1300,14 @@ export class PricingService {
         tradePrice = clampedTradePrice
       }
 
-      // Step 9: Calculate margin vs C-stock
-      const marginPercent = safeNum(anchorPrice > 0 ? (anchorPrice - tradePrice) / anchorPrice : 0)
+      // Step 9: Calculate margin vs expected resale (sell-side anchor)
+      // anchorPrice = competitor trade-in avg, not a sell price — using it here would give ~0% margin.
+      // Use competitor sell prices when available; otherwise estimate from the CPO markup setting.
+      const resaleSellMarkup = (settings.cpo_markup_percent > 0 ? settings.cpo_markup_percent : 18) / 100
+      const resaleAnchor = rawCompetitorSellPrices.length > 0
+        ? Math.max(...rawCompetitorSellPrices)
+        : tradePrice * (1 + resaleSellMarkup)
+      const marginPercent = safeNum(resaleAnchor > 0 ? (resaleAnchor - tradePrice) / resaleAnchor : 0)
 
       // Step 10: Repair buffer
       const repairBuffer = mpNet > 0 ? mpNet - tradePrice : 0
