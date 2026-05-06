@@ -43,12 +43,43 @@ export async function GET(request: NextRequest) {
     const orderId = searchParams.get('order_id')
 
     if (isInternal) {
-      // Internal roles must supply order_id and can see all bids for that order
-      if (!orderId) {
-        return NextResponse.json({ error: 'order_id query parameter is required' }, { status: 400 })
+      if (orderId) {
+        // Scoped to one order (existing behaviour used by order detail page)
+        const bids = await VendorService.getOrderVendorBids(orderId)
+        return NextResponse.json({ data: bids })
       }
-      const bids = await VendorService.getOrderVendorBids(orderId)
-      return NextResponse.json({ data: bids })
+
+      // Global bids list (used by /bids overview page)
+      const status = searchParams.get('status') || undefined
+      const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+      const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('page_size') || '20', 10)))
+
+      const serviceRole = createServiceRoleClient()
+      let query = serviceRole
+        .from('vendor_bids')
+        .select(
+          '*, vendor:vendors(id, company_name, contact_email, contact_name), order:orders(id, order_number, type, status, total_quantity)',
+          { count: 'exact' }
+        )
+        .order('created_at', { ascending: false })
+
+      if (status && status !== 'all') {
+        query = query.eq('status', status)
+      }
+
+      const offset = (page - 1) * pageSize
+      query = query.range(offset, offset + pageSize - 1)
+
+      const { data, count, error: bidsErr } = await query
+      if (bidsErr) throw new Error(bidsErr.message)
+
+      return NextResponse.json({
+        data: data || [],
+        total: count || 0,
+        page,
+        page_size: pageSize,
+        total_pages: Math.ceil((count || 0) / pageSize),
+      })
     }
 
     // Vendor role: return only bids submitted by their own vendor record
