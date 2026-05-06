@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
-import { Gavel, CheckCircle, XCircle, X } from 'lucide-react'
+import { Gavel, CheckCircle, XCircle, X, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { useBids, type BidWithContext } from '@/hooks/useBids'
 import { useAuth } from '@/hooks/useAuth'
@@ -53,6 +53,33 @@ export default function BidsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkMarkup, setBulkMarkup] = useState('18')
   const [isBulkActing, setIsBulkActing] = useState(false)
+
+  // Competitor market rates for accept dialog
+  type MarketRate = { competitor_name: string; good_price?: number; fair_price?: number; price?: number }
+  const [marketRates, setMarketRates] = useState<MarketRate[] | null>(null)
+  const [marketLoading, setMarketLoading] = useState(false)
+
+  useEffect(() => {
+    if (!acceptTarget?.order?.id) { setMarketRates(null); return }
+    setMarketLoading(true)
+    setMarketRates(null)
+    // Fetch the full order to get device model, then look up competitor prices
+    fetch(`/api/orders/${acceptTarget.order.id}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(async (orderData) => {
+        const items: Array<{ device?: { name?: string; model?: string } }> = orderData?.order_items ?? orderData?.items ?? []
+        const deviceName = items[0]?.device?.name || items[0]?.device?.model || ''
+        if (!deviceName) return
+        const params = new URLSearchParams({ search: deviceName, condition: 'good' })
+        const res = await fetch(`/api/pricing/competitors?${params}`)
+        if (!res.ok) return
+        const json = await res.json()
+        const rates: MarketRate[] = (json.data || []).slice(0, 5)
+        setMarketRates(rates.length > 0 ? rates : null)
+      })
+      .catch(() => {})
+      .finally(() => setMarketLoading(false))
+  }, [acceptTarget?.order?.id])
 
   const { bids, total, totalPages, isLoading, error, updateBid, isUpdating } = useBids({
     status: statusFilter,
@@ -394,6 +421,37 @@ export default function BidsPage() {
                     </p>
                   )}
                 </div>
+
+                {/* Market rate context */}
+                {marketLoading && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                    <div className="h-3 w-3 animate-spin rounded-full border border-muted-foreground border-t-transparent" />
+                    Checking market rates…
+                  </div>
+                )}
+                {!marketLoading && marketRates && marketRates.length > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                      <p className="text-xs font-semibold text-foreground">Market Trade-In Rates</p>
+                    </div>
+                    {marketRates.map((r, i) => {
+                      const price = r.good_price ?? r.price
+                      return (
+                        <p key={i} className="text-xs text-muted-foreground flex justify-between">
+                          <span>{r.competitor_name}</span>
+                          <span className="font-medium text-foreground">{price != null ? formatCurrency(price) : '—'}</span>
+                        </p>
+                      )
+                    })}
+                    {acceptTarget && (
+                      <p className="text-xs border-t border-border pt-1.5 text-muted-foreground flex justify-between">
+                        <span>Vendor bid</span>
+                        <span className="font-semibold text-foreground">{formatCurrency(acceptTarget.unit_price)}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

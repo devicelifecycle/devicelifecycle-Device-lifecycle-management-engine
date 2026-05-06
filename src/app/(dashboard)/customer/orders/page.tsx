@@ -33,9 +33,9 @@ export default function CustomerOrdersPage() {
     setTransitioning(prev => ({ ...prev, [orderId]: true }))
     try {
       await fetch(`/api/orders/${orderId}/transition`, {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: action }),
+        body: JSON.stringify({ to_status: action }),
       })
       refetch?.()
     } finally {

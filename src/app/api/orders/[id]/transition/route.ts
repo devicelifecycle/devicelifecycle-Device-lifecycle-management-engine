@@ -17,6 +17,10 @@ type VendorShipment = {
   tracking_number?: string | null
 }
 
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return POST(request, { params })
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()

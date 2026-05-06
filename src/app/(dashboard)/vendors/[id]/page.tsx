@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, X, Save, ShoppingCart, MapPin } from 'lucide-react'
+import { ArrowLeft, Pencil, X, Save, ShoppingCart, MapPin, BarChart3, TrendingUp, CheckCircle2, XCircle, Clock, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { useVendor } from '@/hooks/useVendors'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,26 @@ import { ORDER_STATUS_CONFIG } from '@/lib/constants'
 import { formatDate, formatAddress, formatCurrency } from '@/lib/utils'
 import type { Order } from '@/types'
 
+interface VendorPerformance {
+  bids: {
+    total: number
+    accepted: number
+    rejected: number
+    pending: number
+    expired: number
+    win_rate_percent: number | null
+    avg_accepted_unit_price: number | null
+    avg_lead_time_days: number | null
+  }
+  orders: {
+    total: number
+    active: number
+    completed: number
+    total_fulfilled_value: number
+    total_devices_fulfilled: number
+  }
+}
+
 export default function VendorDetailPage() {
   const params = useParams()
   const { vendor, isLoading, update, isUpdating } = useVendor(params.id as string)
@@ -29,14 +49,21 @@ export default function VendorDetailPage() {
   const [form, setForm] = useState<Record<string, string>>({})
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
+  const [performance, setPerformance] = useState<VendorPerformance | null>(null)
+  const [perfLoading, setPerfLoading] = useState(false)
 
   useEffect(() => {
     if (!params.id) return
     setOrdersLoading(true)
+    setPerfLoading(true)
     fetch(`/api/vendors/${params.id}/orders?limit=50`)
       .then(res => res.ok ? res.json() : { data: [] })
       .then(json => { setOrders(json.data || []) })
       .finally(() => setOrdersLoading(false))
+    fetch(`/api/vendors/${params.id}/performance`)
+      .then(res => res.ok ? res.json() : null)
+      .then(json => { if (json) setPerformance(json) })
+      .finally(() => setPerfLoading(false))
   }, [params.id])
 
   const startEditing = () => {
@@ -149,6 +176,102 @@ export default function VendorDetailPage() {
           <CardContent><p className="text-sm whitespace-pre-wrap">{formatAddress(vendor.address as Record<string, unknown>)}</p></CardContent>
         </Card>
       )}
+
+      {/* Performance */}
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2">
+          <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-base">Performance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {perfLoading ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : !performance ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Performance data unavailable.</p>
+          ) : (
+            <div className="space-y-5">
+              {/* Bid stats */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Bidding</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                      <p className="text-xs text-muted-foreground">Win rate</p>
+                    </div>
+                    <p className="text-2xl font-bold text-foreground">
+                      {performance.bids.win_rate_percent != null ? `${performance.bids.win_rate_percent}%` : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{performance.bids.accepted} of {performance.bids.total} bids</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                      <p className="text-xs text-muted-foreground">Accepted</p>
+                    </div>
+                    <p className="text-2xl font-bold text-foreground">{performance.bids.accepted}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{performance.bids.rejected} rejected · {performance.bids.expired} expired</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="h-3.5 w-3.5 text-amber-500" />
+                      <p className="text-xs text-muted-foreground">Avg lead time</p>
+                    </div>
+                    <p className="text-2xl font-bold text-foreground">
+                      {performance.bids.avg_lead_time_days != null ? `${performance.bids.avg_lead_time_days}d` : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">promised on accepted bids</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">Avg unit price</p>
+                    </div>
+                    <p className="text-2xl font-bold text-foreground">
+                      {performance.bids.avg_accepted_unit_price != null ? formatCurrency(performance.bids.avg_accepted_unit_price) : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">on accepted bids</p>
+                  </div>
+                </div>
+              </div>
+              {/* Fulfillment stats */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Fulfillment</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      <p className="text-xs text-muted-foreground">Completed</p>
+                    </div>
+                    <p className="text-2xl font-bold text-foreground">{performance.orders.completed}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{performance.orders.active} active now</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Package className="h-3.5 w-3.5 text-primary" />
+                      <p className="text-xs text-muted-foreground">Devices fulfilled</p>
+                    </div>
+                    <p className="text-2xl font-bold text-foreground">{performance.orders.total_devices_fulfilled.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">units delivered/closed</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-4 sm:col-span-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                      <p className="text-xs text-muted-foreground">Total fulfilled value</p>
+                    </div>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(performance.orders.total_fulfilled_value)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">across {performance.orders.completed} completed orders</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Order Activity */}
       <Card>
