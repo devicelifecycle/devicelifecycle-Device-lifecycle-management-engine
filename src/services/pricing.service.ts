@@ -405,6 +405,20 @@ export class PricingService {
     priceSource = 'Data-Driven Model'
   ): PriceCalculationResultV2 {
     const tradePrice = round2(modelResult.trade_price ?? modelResult.final_price)
+    if (!tradePrice || tradePrice <= 0) {
+      return {
+        success: false,
+        trade_price: 0,
+        cpo_price: 0,
+        competitors: [],
+        channel_decision: { recommended_channel: 'marketplace', margin_percent: 0, margin_tier: 'red', notes: 'Model returned $0 trade price' },
+        confidence: 0,
+        price_date: new Date().toISOString(),
+        valid_for_hours: 0,
+        pricing_source: priceSource,
+        breakdown: {},
+      } as unknown as PriceCalculationResultV2
+    }
     // If model doesn't provide a CPO price, compute it as trade + 18% markup
     // so CPO sell price is always distinct from the trade-in buyback price.
     const cpoPrice = round2(modelResult.cpo_price && modelResult.cpo_price > tradePrice
@@ -735,12 +749,12 @@ export class PricingService {
       const staleDays = settings.price_staleness_days
       const staleCutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000)
       const extractFreshPrices = (
-        rows: Array<{ competitor_name?: string; trade_in_price?: number; updated_at?: string; scraped_at?: string }> | null
+        rows: Array<{ competitor_name?: string; trade_in_price?: number; updated_at?: string; scraped_at?: string; created_at?: string }> | null
       ): number[] =>
         (rows || [])
           .filter((c) => isApprovedTradeInPricingCompetitor(c.competitor_name))
           .filter((c) => {
-            const ts = c.updated_at || c.scraped_at
+            const ts = c.updated_at || c.scraped_at || c.created_at
             return ts && new Date(ts) > staleCutoff
           })
           .map((c) => Number(c.trade_in_price) || 0)
@@ -1222,7 +1236,15 @@ export class PricingService {
         weightedAvgUsed = true
       } else if (isBroken) {
         // Broken = 50% of good working trade price (Brian's rule)
-        tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
+        if (goodWorkingTradePrice > 0) {
+          tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
+        } else if (anchorPrice > 0) {
+          // No competitor data for good condition — fall back to anchor-based estimate
+          const baseAnchor = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
+          tradePrice = round2(baseAnchor * BROKEN_DEVICE_MULTIPLIER)
+        } else {
+          tradePrice = 0
+        }
       } else if (hasCompetitorData) {
         // Per-request beat override
         if (beatPercent > 0) {

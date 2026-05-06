@@ -578,8 +578,8 @@ export class OrderService {
         const expiryDays = 30
         updateData.quote_expires_at = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000).toISOString()
 
-        // Calculate quoted_amount from order_items if not already set
-        if (!order.quoted_amount) {
+        // Always recalculate quoted_amount + total_amount from order_items to keep them in sync
+        {
           const { data: orderItems } = await supabase
             .from('order_items')
             .select('unit_price, quantity')
@@ -590,8 +590,8 @@ export class OrderService {
               (sum, item) => sum + ((item.unit_price ?? 0) * (item.quantity ?? 1)),
               0
             )
-            updateData.quoted_amount = totalSum
-            if (!order.total_amount) {
+            if (totalSum > 0) {
+              updateData.quoted_amount = totalSum
               updateData.total_amount = totalSum
             }
           }
@@ -765,14 +765,18 @@ export class OrderService {
       0
     )
 
-    await pricingSupabase
-      .from('orders')
-      .update({
-        total_amount: totalAmount,
-        quoted_amount: totalAmount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', orderId)
+    if (totalAmount > 0) {
+      await pricingSupabase
+        .from('orders')
+        .update({
+          total_amount: totalAmount,
+          quoted_amount: totalAmount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+    } else {
+      console.warn(`[autoQuoteOrderItems] orderId=${orderId} computed $0 total — order totals not updated`)
+    }
   }
 
   /**

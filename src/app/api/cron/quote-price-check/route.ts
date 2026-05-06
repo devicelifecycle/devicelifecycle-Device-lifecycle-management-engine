@@ -71,9 +71,10 @@ export async function GET(request: NextRequest) {
     const REMINDER_DAYS_LEFT = [5, 10] as const
 
     for (const order of quotedOrders) {
-      // Check if quote has expired (30 days from quoted_at)
-      const expiresAt = order.quoted_at
-        ? new Date(new Date(order.quoted_at).getTime() + 30 * 24 * 60 * 60 * 1000)
+      // Check if quote has expired (30 days from quoted_at, fall back to created_at)
+      const quoteDate = order.quoted_at ?? (order as { created_at?: string }).created_at
+      const expiresAt = quoteDate
+        ? new Date(new Date(quoteDate).getTime() + 30 * 24 * 60 * 60 * 1000)
         : null
 
       if (expiresAt && now > expiresAt) {
@@ -148,7 +149,6 @@ export async function GET(request: NextRequest) {
           .eq('device_id', item.device_id)
           .eq('storage', item.storage || '128GB')
           .eq('condition', condition)
-          .neq('competitor_name', 'Bell')
           .gt('trade_in_price', 0)
 
         if (!comps || comps.length === 0) continue

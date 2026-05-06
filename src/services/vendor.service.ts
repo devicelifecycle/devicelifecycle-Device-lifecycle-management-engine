@@ -611,7 +611,8 @@ export class VendorService {
           .select('setting_value')
           .eq('setting_key', 'cpo_markup_percent')
           .single()
-        markup = settings?.setting_value ? Number(settings.setting_value) : 18 // match pricing service default
+        const parsed = parseFloat(String(settings?.setting_value ?? ''))
+        markup = Number.isFinite(parsed) && parsed >= 0 ? parsed : 18
       }
 
       // Calculate customer price with markup
@@ -640,6 +641,9 @@ export class VendorService {
           (sum, item) => sum + customerUnitPrice * item.quantity,
           0
         )
+        if (totalAmount <= 0) {
+          throw new Error('Cannot accept bid: order items sum to $0. Verify order items and bid quantities.')
+        }
         await supabase
           .from('orders')
           .update({
