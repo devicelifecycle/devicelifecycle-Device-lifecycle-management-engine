@@ -204,15 +204,17 @@ export class NotificationService {
     const { subject, message } = config
     const subjectText = subject(order.order_number)
     const messageText = message(order.order_number)
-    // customerMessage overrides messageText for customer recipients (e.g. 24hr shipping notice on accepted)
     const customerMessageText = config.customerMessage
       ? config.customerMessage(order.order_number)
+      : messageText
+    const vendorMessageText = config.vendorMessage
+      ? config.vendorMessage(order.order_number)
       : messageText
     const orderLink = `/orders/${order.id}`
 
     // Collect email recipients in parallel
     // isCustomer drives which message body to use when the config defines customerMessage
-    const emailTargets: Array<{ email: string; name: string; userId?: string; isCustomer?: boolean }> = []
+    const emailTargets: Array<{ email: string; name: string; userId?: string; isCustomer?: boolean; isVendor?: boolean }> = []
     const smsTargets: Array<{ phone: string; name: string }> = []
 
     const lookups: Promise<void>[] = []
@@ -265,7 +267,7 @@ export class NotificationService {
             .eq('id', order.vendor_id!)
             .single()
           if (vendor?.contact_email) {
-            emailTargets.push({ email: vendor.contact_email, name: vendor.contact_name || 'Vendor' })
+            emailTargets.push({ email: vendor.contact_email, name: vendor.contact_name || 'Vendor', isVendor: true })
           }
           if (vendor?.contact_phone) {
             smsTargets.push({ phone: vendor.contact_phone, name: vendor.contact_name || 'Vendor' })
@@ -281,7 +283,7 @@ export class NotificationService {
               const uu = u as { email?: string; notification_email?: string | null; full_name?: string; id: string }
               const effectiveEmail = uu.email?.endsWith('@login.local') ? uu.notification_email : uu.email
               if (effectiveEmail) {
-                emailTargets.push({ email: effectiveEmail, name: uu.full_name || 'User', userId: uu.id })
+                emailTargets.push({ email: effectiveEmail, name: uu.full_name || 'User', userId: uu.id, isVendor: true })
               }
             })
           }
@@ -294,7 +296,7 @@ export class NotificationService {
             .eq('is_active', true)
           for (const vendor of vendors || []) {
             if (vendor.contact_email) {
-              emailTargets.push({ email: vendor.contact_email, name: vendor.contact_name || 'Vendor' })
+              emailTargets.push({ email: vendor.contact_email, name: vendor.contact_name || 'Vendor', isVendor: true })
             }
             if (vendor.contact_phone) {
               smsTargets.push({ phone: vendor.contact_phone, name: vendor.contact_name || 'Vendor' })
@@ -310,7 +312,7 @@ export class NotificationService {
                 const uu = u as { email?: string; notification_email?: string | null; full_name?: string; id: string }
                 const effectiveEmail = uu.email?.endsWith('@login.local') ? uu.notification_email : uu.email
                 if (effectiveEmail) {
-                  emailTargets.push({ email: effectiveEmail, name: uu.full_name || 'User', userId: uu.id })
+                  emailTargets.push({ email: effectiveEmail, name: uu.full_name || 'User', userId: uu.id, isVendor: true })
                 }
               })
             }
@@ -375,7 +377,7 @@ export class NotificationService {
     const sends: Promise<void>[] = []
 
     for (const target of uniqueTargets) {
-      const bodyText = target.isCustomer ? customerMessageText : messageText
+      const bodyText = target.isCustomer ? customerMessageText : target.isVendor ? vendorMessageText : messageText
       sends.push(
         EmailService.sendOrderStatusEmail({
           to: target.email,

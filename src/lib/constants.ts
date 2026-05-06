@@ -646,6 +646,8 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
   message: (orderNumber: string) => string
   // customerMessage overrides message when sending to customer recipients
   customerMessage?: (orderNumber: string) => string
+  // vendorMessage overrides message when sending to vendor recipients
+  vendorMessage?: (orderNumber: string) => string
 }> = {
   submitted: {
     admin: true,
@@ -659,6 +661,7 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
   },
   accepted: {
     customer: true,
+    vendor: true,
     admin: true,
     assigned: true,
     subject: (n) => `Order #${n} Accepted`,
@@ -667,6 +670,17 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     // replaces the generic one when sending to customer recipients.
     customerMessage: (n) =>
       `Thank you for accepting the quote for order #${n}.\n\nOur team will send you shipping instructions — including a prepaid label — within 24 hours. Please have your devices ready to pack.\n\nIf you have any questions in the meantime, reply to this email or contact your account manager.`,
+    // Vendor needs to know the customer confirmed so they can begin fulfilment.
+    vendorMessage: (n) =>
+      `The customer has accepted the quote for order #${n}. Please begin sourcing and preparing the devices for shipment. Log in to update the order status as you progress.`,
+  },
+  sourced: {
+    vendor: true,
+    admin: true,
+    assigned: true,
+    subject: (n) => `Devices Sourced — Order #${n}`,
+    message: (n) => `All devices for order #${n} have been sourced and are ready for shipment to COE.`,
+    vendorMessage: (n) => `Devices for order #${n} have been marked as sourced. Please arrange shipment to the COE facility and update the tracking information in the portal.`,
   },
   rejected: {
     customer: true,
@@ -680,11 +694,12 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     subject: (n) => `Sourcing Request — Order #${n}`,
     message: (n) => `Order #${n} is now in sourcing. Please begin device procurement.`,
   },
-  sourced: {
-    admin: true,
-    assigned: true,
-    subject: (n) => `Devices Sourced — Order #${n}`,
-    message: (n) => `All devices for order #${n} have been sourced and are ready for shipment to COE.`,
+  shipped: {
+    customer: true,
+    vendor: true,
+    subject: (n) => `Order #${n} Shipped!`,
+    message: (n) => `Your order #${n} has shipped! You will receive tracking information shortly.`,
+    vendorMessage: (n) => `Order #${n} has been marked as shipped. Thank you — we will notify you once it is delivered and the order is closed.`,
   },
   shipped_to_coe: {
     admin: true,
@@ -711,11 +726,6 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     customer: true,
     subject: (n) => `Ready to Ship — Order #${n}`,
     message: (n) => `Great news! Order #${n} has passed quality check and is ready to ship.`,
-  },
-  shipped: {
-    customer: true,
-    subject: (n) => `Order #${n} Shipped!`,
-    message: (n) => `Your order #${n} has shipped! You will receive tracking information shortly.`,
   },
   delivered: {
     customer: true,
