@@ -52,6 +52,7 @@ const navSections: NavSection[] = [
       { title: 'My Orders', href: '/customer/orders', icon: ShoppingCart, roles: ['customer'] },
       { title: 'Requests', href: '/customer/requests', icon: FilePlus2, roles: ['customer'] },
       { title: 'Vendor Orders', href: '/vendor/orders', icon: Truck, roles: ['vendor'] },
+      { title: 'My Bids', href: '/vendor/bids', icon: Gavel, roles: ['vendor'] },
       { title: 'Customers', href: '/customers', icon: Users, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Vendors', href: '/vendors', icon: Building2, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Bids', href: '/bids', icon: Gavel, roles: ['admin', 'coe_manager', 'sales'] },
