@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
-import { Gavel, CheckCircle, XCircle } from 'lucide-react'
+import { Gavel, CheckCircle, XCircle, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useBids, type BidWithContext } from '@/hooks/useBids'
 import { useAuth } from '@/hooks/useAuth'
@@ -49,6 +49,11 @@ export default function BidsPage() {
   const [rejectTarget, setRejectTarget] = useState<BidWithContext | null>(null)
   const [markupPercent, setMarkupPercent] = useState('18')
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkMarkup, setBulkMarkup] = useState('18')
+  const [isBulkActing, setIsBulkActing] = useState(false)
+
   const { bids, total, totalPages, isLoading, error, updateBid, isUpdating } = useBids({
     status: statusFilter,
     page,
@@ -82,6 +87,66 @@ export default function BidsPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to reject bid')
     }
+  }
+
+  const pendingBids = bids.filter(b => b.status === 'pending')
+  const allPendingSelected = pendingBids.length > 0 && pendingBids.every(b => selectedIds.has(b.id))
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleSelectAll = useCallback(() => {
+    if (allPendingSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(pendingBids.map(b => b.id)))
+    }
+  }, [allPendingSelected, pendingBids])
+
+  async function handleBulkAccept() {
+    const markup = parseFloat(bulkMarkup)
+    if (isNaN(markup) || markup < 0) {
+      toast.error('Enter a valid markup percentage')
+      return
+    }
+    const targets = bids.filter(b => selectedIds.has(b.id) && b.status === 'pending')
+    if (targets.length === 0) return
+    setIsBulkActing(true)
+    let succeeded = 0
+    for (const bid of targets) {
+      try {
+        await updateBid({ id: bid.id, status: 'accepted', cpo_markup_percent: markup })
+        succeeded++
+      } catch {
+        toast.error(`Failed to accept bid for order #${bid.order?.order_number ?? bid.id.slice(0, 8)}`)
+      }
+    }
+    if (succeeded > 0) toast.success(`${succeeded} bid${succeeded === 1 ? '' : 's'} accepted`)
+    setSelectedIds(new Set())
+    setIsBulkActing(false)
+  }
+
+  async function handleBulkReject() {
+    const targets = bids.filter(b => selectedIds.has(b.id) && b.status === 'pending')
+    if (targets.length === 0) return
+    setIsBulkActing(true)
+    let succeeded = 0
+    for (const bid of targets) {
+      try {
+        await updateBid({ id: bid.id, status: 'rejected' })
+        succeeded++
+      } catch {
+        toast.error(`Failed to reject bid for order #${bid.order?.order_number ?? bid.id.slice(0, 8)}`)
+      }
+    }
+    if (succeeded > 0) toast.success(`${succeeded} bid${succeeded === 1 ? '' : 's'} rejected`)
+    setSelectedIds(new Set())
+    setIsBulkActing(false)
   }
 
   if (error) {
@@ -148,9 +213,63 @@ export default function BidsPage() {
             </div>
           ) : (
             <>
+              {/* Bulk action bar */}
+              {canAct && selectedIds.size > 0 && (
+                <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3">
+                  <span className="text-sm font-medium text-foreground">{selectedIds.size} selected</span>
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="bulk-markup" className="text-xs text-muted-foreground whitespace-nowrap">Markup %</Label>
+                    <Input
+                      id="bulk-markup"
+                      type="number"
+                      min="0"
+                      max="200"
+                      step="0.5"
+                      value={bulkMarkup}
+                      onChange={(e) => setBulkMarkup(e.target.value)}
+                      className="h-7 w-20 text-xs"
+                    />
+                  </div>
+                  <Button size="sm" className="h-7 px-3 text-xs" onClick={handleBulkAccept} disabled={isBulkActing}>
+                    <CheckCircle className="mr-1 h-3.5 w-3.5" />
+                    Accept selected
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-3 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
+                    onClick={handleBulkReject}
+                    disabled={isBulkActing}
+                  >
+                    <XCircle className="mr-1 h-3.5 w-3.5" />
+                    Reject selected
+                  </Button>
+                  <button
+                    className="ml-auto text-muted-foreground hover:text-foreground"
+                    onClick={() => setSelectedIds(new Set())}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {canAct && (
+                      <TableHead className="w-10">
+                        {pendingBids.length > 0 && (
+                          <input
+                            type="checkbox"
+                            className="rounded border-input accent-primary cursor-pointer"
+                            checked={allPendingSelected}
+                            onChange={toggleSelectAll}
+                            title="Select all pending"
+                          />
+                        )}
+                      </TableHead>
+                    )}
                     <TableHead>Order</TableHead>
                     <TableHead>Vendor</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
@@ -164,7 +283,19 @@ export default function BidsPage() {
                 </TableHeader>
                 <TableBody>
                   {bids.map((bid) => (
-                    <TableRow key={bid.id}>
+                    <TableRow key={bid.id} className={selectedIds.has(bid.id) ? 'bg-primary/5' : undefined}>
+                      {canAct && (
+                        <TableCell>
+                          {bid.status === 'pending' && (
+                            <input
+                              type="checkbox"
+                              className="rounded border-input accent-primary cursor-pointer"
+                              checked={selectedIds.has(bid.id)}
+                              onChange={() => toggleSelect(bid.id)}
+                            />
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell>
                         {bid.order ? (
                           <Link href={`/orders/${bid.order.id}`} className="font-medium text-primary hover:underline">
@@ -224,6 +355,7 @@ export default function BidsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
               <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
           )}
