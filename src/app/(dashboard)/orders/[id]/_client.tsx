@@ -2491,32 +2491,36 @@ export default function OrderDetailClient() {
               {/* Download PDF */}
               <Button
                 variant="outline"
-                className="w-full justify-between"
+                className="w-full justify-between overflow-hidden"
                 onClick={() => {
                   const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
                   window.open(`/api/orders/${order.id}/pdf`, '_blank')
                   toast.success(`${isQuote ? 'Quote' : 'Invoice'} PDF download started`)
                 }}
               >
-                <span className="flex items-center gap-2">
-                  <FileDown className="h-4 w-4" />
-                  {['draft', 'submitted', 'quoted'].includes(order.status) ? 'Download Quote (PDF)' : 'Download Invoice (PDF)'}
+                <span className="flex items-center gap-2 min-w-0">
+                  <FileDown className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {['draft', 'submitted', 'quoted'].includes(order.status) ? 'Download Quote (PDF)' : 'Download Invoice (PDF)'}
+                  </span>
                 </span>
               </Button>
 
               {/* Download Excel */}
               <Button
                 variant="outline"
-                className="w-full justify-between"
+                className="w-full justify-between overflow-hidden"
                 onClick={() => {
                   const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
                   window.open(`/api/orders/${order.id}/excel`, '_blank')
                   toast.success(`${isQuote ? 'Quote' : 'Invoice'} Excel download started`)
                 }}
               >
-                <span className="flex items-center gap-2">
-                  <FileDown className="h-4 w-4" />
-                  {['draft', 'submitted', 'quoted'].includes(order.status) ? 'Download Quote (Excel)' : 'Download Invoice (Excel)'}
+                <span className="flex items-center gap-2 min-w-0">
+                  <FileDown className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {['draft', 'submitted', 'quoted'].includes(order.status) ? 'Download Quote (Excel)' : 'Download Invoice (Excel)'}
+                  </span>
                 </span>
               </Button>
 
@@ -2525,24 +2529,24 @@ export default function OrderDetailClient() {
                 <>
                   <Button
                     variant="outline"
-                    className="w-full justify-between"
+                    className="w-full justify-between overflow-hidden"
                     onClick={() => handleOpenPricingDialog()}
                   >
-                    <span className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4" />
-                      Set Pricing
+                    <span className="flex items-center gap-2 min-w-0">
+                      <DollarSign className="h-4 w-4 shrink-0" />
+                      <span className="truncate">Set Pricing</span>
                     </span>
                   </Button>
                   {mismatchedItemCount > 0 && (
                     <Button
                       variant="outline"
-                      className="w-full justify-between"
+                      className="w-full justify-between overflow-hidden"
                       onClick={handleSendMismatchNotice}
                       disabled={isSendingMismatchNotice}
                     >
-                      <span className="flex items-center gap-2">
-                        {isSendingMismatchNotice ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-                        Send Mismatch Notice ({mismatchedItemCount})
+                      <span className="flex items-center gap-2 min-w-0">
+                        {isSendingMismatchNotice ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                        <span className="truncate">Send Mismatch Notice ({mismatchedItemCount})</span>
                       </span>
                     </Button>
                   )}
@@ -2573,14 +2577,16 @@ export default function OrderDetailClient() {
               {canSendQuote && ['draft', 'submitted', 'quoted'].includes(order.status) && (
                 <Button
                   variant="outline"
-                  className="w-full justify-between"
+                  className="w-full justify-between overflow-hidden"
                   disabled={!hasPricesForQuote || isSendingQuoteDirect}
                   title={!hasPricesForQuote ? 'Set pricing first' : 'Send PDF + Excel directly to customer email'}
                   onClick={handleSendQuoteDirect}
                 >
-                  <span className="flex items-center gap-2">
-                    {isSendingQuoteDirect ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    {isSendingQuoteDirect ? 'Sending...' : 'Email Quote to Customer (PDF + Excel)'}
+                  <span className="flex items-center gap-2 min-w-0">
+                    {isSendingQuoteDirect ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <Send className="h-4 w-4 shrink-0" />}
+                    <span className="truncate">
+                      {isSendingQuoteDirect ? 'Sending...' : 'Email Quote to Customer (PDF + Excel)'}
+                    </span>
                   </span>
                 </Button>
               )}
@@ -2591,17 +2597,19 @@ export default function OrderDetailClient() {
                   <Separator className="my-2" />
                   <Button
                     variant="outline"
-                    className="w-full justify-between"
+                    className="w-full justify-between overflow-hidden"
                     disabled={isNotifyingPriceChange}
                     onClick={handleNotifyPriceChange}
                   >
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 min-w-0">
                       {isNotifyingPriceChange ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                       ) : (
-                        <Send className="h-4 w-4" />
+                        <Send className="h-4 w-4 shrink-0" />
                       )}
-                      {isNotifyingPriceChange ? 'Sending...' : 'Notify Customer of Price Change'}
+                      <span className="truncate">
+                        {isNotifyingPriceChange ? 'Sending...' : 'Notify Customer of Price Change'}
+                      </span>
                     </span>
                   </Button>
                 </>
@@ -2612,12 +2620,12 @@ export default function OrderDetailClient() {
                 <>
                   <Separator className="my-2" />
                   <Link href={`/orders/${order.id}/split`}>
-                    <Button variant="outline" className="w-full justify-between">
-                      <span className="flex items-center gap-2">
-                        <GitBranch className="h-4 w-4" />
-                        Split Across Vendors
+                    <Button variant="outline" className="w-full justify-between overflow-hidden">
+                      <span className="flex items-center gap-2 min-w-0">
+                        <GitBranch className="h-4 w-4 shrink-0" />
+                        <span className="truncate">Split Across Vendors</span>
                       </span>
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-4 w-4 shrink-0" />
                     </Button>
                   </Link>
                 </>
@@ -2629,14 +2637,14 @@ export default function OrderDetailClient() {
                   <Separator className="my-2" />
                   <Button
                     variant="outline"
-                    className="w-full justify-between"
+                    className="w-full justify-between overflow-hidden"
                     onClick={openAssignVendorDialog}
                   >
-                    <span className="flex items-center gap-2">
-                      <UserPlus className="h-4 w-4" />
-                      Assign Vendor
+                    <span className="flex items-center gap-2 min-w-0">
+                      <UserPlus className="h-4 w-4 shrink-0" />
+                      <span className="truncate">Assign Vendor</span>
                     </span>
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-4 w-4 shrink-0" />
                   </Button>
                 </>
               )}
