@@ -494,9 +494,9 @@ export class EmailService {
 
     const nextSteps = isCPO
       ? [
-          { num: '1', text: '<strong>Pricing review</strong> — Our team sources competitive pricing from vendors and prepares a quote for your devices.' },
+          { num: '1', text: '<strong>Pricing review</strong> — Our team reviews your request and prepares a competitive quote for your devices.' },
           { num: '2', text: '<strong>Quote sent to you</strong> — You\'ll receive a quote with the per-device CPO pricing. Review it in the portal and accept or decline.' },
-          { num: '3', text: '<strong>Sourcing &amp; QC</strong> — Once accepted, our vendors source and inspect the devices to meet certified pre-owned standards.' },
+          { num: '3', text: '<strong>Sourcing &amp; QC</strong> — Once accepted, devices are sourced and inspected to meet certified pre-owned standards.' },
           { num: '4', text: '<strong>Shipment</strong> — Devices are shipped directly to you with tracking information provided in the portal.' },
         ]
       : [
