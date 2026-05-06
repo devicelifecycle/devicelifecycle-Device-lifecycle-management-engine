@@ -23,12 +23,14 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
+import { useDashboardCounts } from '@/hooks/useDashboardCounts'
 
 interface NavItem {
   title: string
   href: string
   icon: React.ElementType
   roles?: string[]
+  countKey?: 'pendingBids' | 'actionableOrders'
 }
 
 interface NavSection {
@@ -48,14 +50,14 @@ const navSections: NavSection[] = [
   {
     title: 'Workflow',
     items: [
-      { title: 'Orders', href: '/orders', icon: ShoppingCart, roles: ['admin', 'coe_manager', 'coe_tech', 'sales'] },
+      { title: 'Orders', href: '/orders', icon: ShoppingCart, roles: ['admin', 'coe_manager', 'coe_tech', 'sales'], countKey: 'actionableOrders' },
       { title: 'My Orders', href: '/customer/orders', icon: ShoppingCart, roles: ['customer'] },
       { title: 'Requests', href: '/customer/requests', icon: FilePlus2, roles: ['customer'] },
       { title: 'Vendor Orders', href: '/vendor/orders', icon: Truck, roles: ['vendor'] },
-      { title: 'My Bids', href: '/vendor/bids', icon: Gavel, roles: ['vendor'] },
+      { title: 'My Bids', href: '/vendor/bids', icon: Gavel, roles: ['vendor'], countKey: 'pendingBids' },
       { title: 'Customers', href: '/customers', icon: Users, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Vendors', href: '/vendors', icon: Building2, roles: ['admin', 'coe_manager', 'sales'] },
-      { title: 'Bids', href: '/bids', icon: Gavel, roles: ['admin', 'coe_manager', 'sales'] },
+      { title: 'Bids', href: '/bids', icon: Gavel, roles: ['admin', 'coe_manager', 'sales'], countKey: 'pendingBids' },
       { title: 'Devices', href: '/devices', icon: Package, roles: ['admin', 'coe_manager'] },
     ],
   },
@@ -84,6 +86,7 @@ const navSections: NavSection[] = [
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   const { user, hasRole, logout } = useAuth()
+  const counts = useDashboardCounts()
 
   const filteredSections = useMemo(
     () =>
@@ -151,6 +154,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                       <span className={cn('flex-1 truncate text-[13px]', isActive ? 'font-semibold' : 'font-normal')}>
                         {item.title}
                       </span>
+                      {item.countKey && (counts[item.countKey] ?? 0) > 0 && (
+                        <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground">
+                          {(counts[item.countKey] ?? 0) > 99 ? '99+' : counts[item.countKey]}
+                        </span>
+                      )}
                     </div>
                   </Link>
                 )
