@@ -490,6 +490,30 @@ export class EmailService {
     const orderUrl = getAppPath(`/orders/${orderId}`)
     const typeLabel = orderType === 'cpo' ? 'CPO (Certified Pre-Owned)' : 'Trade-In'
 
+    const isCPO = orderType === 'cpo'
+
+    const nextSteps = isCPO
+      ? [
+          { num: '1', text: '<strong>Pricing review</strong> — Our team sources competitive pricing from vendors and prepares a quote for your devices.' },
+          { num: '2', text: '<strong>Quote sent to you</strong> — You\'ll receive a quote with the per-device CPO pricing. Review it in the portal and accept or decline.' },
+          { num: '3', text: '<strong>Sourcing &amp; QC</strong> — Once accepted, our vendors source and inspect the devices to meet certified pre-owned standards.' },
+          { num: '4', text: '<strong>Shipment</strong> — Devices are shipped directly to you with tracking information provided in the portal.' },
+        ]
+      : [
+          { num: '1', text: '<strong>Device review</strong> — Our team evaluates your trade-in devices and determines the best pricing for each.' },
+          { num: '2', text: '<strong>Quote sent to you</strong> — You\'ll receive a quote with the trade-in value per device. Accept or decline directly in the portal.' },
+          { num: '3', text: '<strong>Shipping instructions</strong> — Once accepted, we\'ll email you prepaid shipping labels and instructions for sending your devices to us.' },
+          { num: '4', text: '<strong>Inspection &amp; payment</strong> — We inspect your devices upon arrival and process your payment or account credit within 2–3 business days.' },
+        ]
+
+    const nextStepsRows = nextSteps.map(s => `
+      <tr>
+        <td style="width:28px;padding:8px 8px 8px 0;vertical-align:top;">
+          <span style="display:inline-block;width:22px;height:22px;background:#18181b;border-radius:50%;text-align:center;line-height:22px;color:#fff;font-size:11px;font-weight:700;">${s.num}</span>
+        </td>
+        <td style="padding:8px 0;color:#3f3f46;font-size:14px;line-height:1.5;">${s.text}</td>
+      </tr>`).join('')
+
     const html = `
 <!DOCTYPE html>
 <html>
@@ -510,9 +534,9 @@ export class EmailService {
           <tr>
             <td style="padding:32px;">
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
-              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your order has been created successfully. Our team will review it and get back to you shortly.</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your <strong>${typeLabel}</strong> order has been received. Here's what happens next.</p>
 
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;background:#f4f4f5;border-radius:8px;width:100%;">
                 <tr>
                   <td style="padding:20px 24px;">
                     <p style="margin:0 0 8px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order Summary</p>
@@ -523,15 +547,20 @@ export class EmailService {
                 </tr>
               </table>
 
+              <p style="margin:0 0 12px;color:#18181b;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">What happens next</p>
+              <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 28px;">
+                ${nextStepsRows}
+              </table>
+
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
                   <td style="background:#18181b;border-radius:6px;">
-                    <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">View Order</a>
+                    <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">View Your Order</a>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive email updates as your order progresses through each stage.</p>
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive an email at each stage. If you have questions, reply to this email or log in to the portal and view your order.</p>
             </td>
           </tr>
           <tr>
