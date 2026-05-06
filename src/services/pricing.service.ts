@@ -1239,9 +1239,14 @@ export class PricingService {
         if (goodWorkingTradePrice > 0) {
           tradePrice = round2(goodWorkingTradePrice * BROKEN_DEVICE_MULTIPLIER)
         } else if (anchorPrice > 0) {
-          // No competitor data for good condition — fall back to anchor-based estimate
-          const baseAnchor = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
-          tradePrice = round2(baseAnchor * BROKEN_DEVICE_MULTIPLIER)
+          // No competitor data for good condition — derive good-working anchor then apply Brian's rule.
+          // Must use goodConditionMult here, NOT conditionMultiplier (which is the broken/poor multiplier).
+          const goodAnchorEstimate = anchorIsBaseNormalized
+            ? anchorPrice * goodConditionMult
+            : conditionMultiplier > 0
+              ? anchorPrice * (goodConditionMult / conditionMultiplier)
+              : anchorPrice
+          tradePrice = round2(goodAnchorEstimate * BROKEN_DEVICE_MULTIPLIER)
         } else {
           tradePrice = 0
         }

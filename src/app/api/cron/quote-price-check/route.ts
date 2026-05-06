@@ -51,12 +51,11 @@ export async function GET(request: NextRequest) {
     const { data: quotedOrders, error: ordersErr } = await supabase
       .from('orders')
       .select(`
-        id, order_number, type, status, quoted_at, customer_id,
+        id, order_number, type, status, quoted_at, created_at, customer_id,
         items:order_items(id, device_id, storage, claimed_condition, unit_price, quantity,
           device:device_catalog(id, make, model))
       `)
       .eq('status', 'quoted')
-      .not('quoted_at', 'is', null)
 
     if (ordersErr) throw ordersErr
     if (!quotedOrders || quotedOrders.length === 0) {
