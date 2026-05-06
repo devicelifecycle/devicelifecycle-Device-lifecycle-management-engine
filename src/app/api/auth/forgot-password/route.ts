@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const redirectTo = resolveTrustedAppRedirect(
       typeof body.redirectTo === 'string' ? body.redirectTo : null,
       request,
-      '/reset-password',
+      '/auth/callback?next=/reset-password',
     )
 
     const supabase = createServiceRoleClient()

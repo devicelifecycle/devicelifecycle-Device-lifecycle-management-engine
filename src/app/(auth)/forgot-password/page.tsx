@@ -43,7 +43,9 @@ function ForgotPasswordForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: input,
-          redirectTo: `${window.location.origin}/reset-password`,
+          // Must go through /auth/callback so the server exchanges the PKCE code
+          // and sets the cookie session before landing on /reset-password.
+          redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
         }),
       })
       const data = await res.json().catch(() => ({}))
