@@ -214,65 +214,99 @@ export default function VendorOrdersPage() {
                   <p className="mt-1 text-xs text-muted-foreground">Open CPO requests appear here once they are ready for vendor sourcing.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order #</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Quantity</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* Mobile cards */}
+                  <div className="sm:hidden space-y-3">
                     {openOrders.map((order) => {
                       const status = ORDER_STATUS_CONFIG[order.status as OrderStatus]
                       return (
-                        <TableRow key={order.id}>
-                          <TableCell className="whitespace-nowrap">
-                            <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
-                              {order.order_number}
-                            </Link>
-                            <p className="text-xs text-muted-foreground mt-0.5">Click for line items</p>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <Badge variant="secondary" className="text-[11px]">
-                              {status?.label || order.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums font-medium">
-                            {order.total_quantity ?? 0}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {formatRelativeTime(order.created_at)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedOrder(order)
-                                setBidForm({
-                                  quantity: String(order.total_quantity ?? 1),
-                                  unit_price: '',
-                                  lead_time_days: '',
-                                  warranty_days: '',
-                                  notes: '',
-                                })
-                                setBidDialogOpen(true)
-                              }}
-                            >
-                              <Send className="mr-1.5 h-3.5 w-3.5" />
-                              Submit Bid
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                        <div key={order.id} className="rounded-[1.2rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] p-4">
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                              <Link href={`/orders/${order.id}`} className="font-semibold text-primary hover:underline">
+                                {order.order_number}
+                              </Link>
+                              <p className="text-xs text-muted-foreground mt-0.5">{order.total_quantity ?? 0} units · {formatRelativeTime(order.created_at)}</p>
+                            </div>
+                            <Badge variant="secondary" className="text-[11px] shrink-0">{status?.label || order.status}</Badge>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            onClick={() => {
+                              setSelectedOrder(order)
+                              setBidForm({ quantity: String(order.total_quantity ?? 1), unit_price: '', lead_time_days: '', warranty_days: '', notes: '' })
+                              setBidDialogOpen(true)
+                            }}
+                          >
+                            <Send className="mr-1.5 h-3.5 w-3.5" />
+                            Submit Bid
+                          </Button>
+                        </div>
                       )
                     })}
-                  </TableBody>
-                </Table>
-                </div>
+                  </div>
+                  {/* Desktop table */}
+                  <div className="hidden sm:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order #</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {openOrders.map((order) => {
+                        const status = ORDER_STATUS_CONFIG[order.status as OrderStatus]
+                        return (
+                          <TableRow key={order.id}>
+                            <TableCell className="whitespace-nowrap">
+                              <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
+                                {order.order_number}
+                              </Link>
+                              <p className="text-xs text-muted-foreground mt-0.5">Click for line items</p>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge variant="secondary" className="text-[11px]">
+                                {status?.label || order.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums font-medium">
+                              {order.total_quantity ?? 0}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                              {formatRelativeTime(order.created_at)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedOrder(order)
+                                  setBidForm({
+                                    quantity: String(order.total_quantity ?? 1),
+                                    unit_price: '',
+                                    lead_time_days: '',
+                                    warranty_days: '',
+                                    notes: '',
+                                  })
+                                  setBidDialogOpen(true)
+                                }}
+                              >
+                                <Send className="mr-1.5 h-3.5 w-3.5" />
+                                Submit Bid
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                  </div>
+                </>
               )}
               <Pagination page={openOrdersPage} totalPages={openTotalPages} onPageChange={setOpenOrdersPage} />
             </CardContent>
@@ -311,59 +345,89 @@ export default function VendorOrdersPage() {
               <p className="mt-1 text-xs text-muted-foreground">Assigned work will appear here.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order #</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead>Updated</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile cards */}
+              <div className="sm:hidden space-y-3">
                 {orders.map((order) => {
                   const status = ORDER_STATUS_CONFIG[order.status as OrderStatus]
                   return (
-                    <TableRow key={order.id}>
-                      <TableCell className="whitespace-nowrap">
-                        <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
-                          {order.order_number}
-                        </Link>
-                        <p className="text-xs text-muted-foreground mt-0.5">Click to view full details</p>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[11px]">
-                          {order.type === 'trade_in' ? 'Trade-In' : 'CPO'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <Badge variant="secondary" className="text-[11px]">
-                          {status?.label || order.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">
-                        {order.total_quantity ?? 0}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatRelativeTime(order.updated_at || order.created_at)}
-                      </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <Button asChild size="sm" variant={order.status === 'sourced' ? 'default' : 'outline'}>
-                          <Link href={`/orders/${order.id}`}>
-                            <Truck className="mr-1.5 h-3.5 w-3.5" />
-                            {getVendorOrderActionLabel(order.status as OrderStatus)}
+                    <div key={order.id} className="rounded-[1.2rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] p-4">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                          <Link href={`/orders/${order.id}`} className="font-semibold text-primary hover:underline">
+                            {order.order_number}
                           </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {order.type === 'trade_in' ? 'Trade-In' : 'CPO'} · {order.total_quantity ?? 0} units · {formatRelativeTime(order.updated_at || order.created_at)}
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className="text-[11px] shrink-0">{status?.label || order.status}</Badge>
+                      </div>
+                      <Button asChild size="sm" variant={order.status === 'sourced' ? 'default' : 'outline'} className="w-full">
+                        <Link href={`/orders/${order.id}`}>
+                          <Truck className="mr-1.5 h-3.5 w-3.5" />
+                          {getVendorOrderActionLabel(order.status as OrderStatus)}
+                        </Link>
+                      </Button>
+                    </div>
                   )
                 })}
-              </TableBody>
-            </Table>
-            </div>
+              </div>
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead>Updated</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map((order) => {
+                    const status = ORDER_STATUS_CONFIG[order.status as OrderStatus]
+                    return (
+                      <TableRow key={order.id}>
+                        <TableCell className="whitespace-nowrap">
+                          <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
+                            {order.order_number}
+                          </Link>
+                          <p className="text-xs text-muted-foreground mt-0.5">Click to view full details</p>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[11px]">
+                            {order.type === 'trade_in' ? 'Trade-In' : 'CPO'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge variant="secondary" className="text-[11px]">
+                            {status?.label || order.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">
+                          {order.total_quantity ?? 0}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {formatRelativeTime(order.updated_at || order.created_at)}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <Button asChild size="sm" variant={order.status === 'sourced' ? 'default' : 'outline'}>
+                            <Link href={`/orders/${order.id}`}>
+                              <Truck className="mr-1.5 h-3.5 w-3.5" />
+                              {getVendorOrderActionLabel(order.status as OrderStatus)}
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+              </div>
+            </>
           )}
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </CardContent>
@@ -396,54 +460,88 @@ export default function VendorOrdersPage() {
                   <p className="mt-1 text-xs text-muted-foreground">Submit bids on open CPO orders to see them here.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Order #</TableHead>
-                        <TableHead className="text-right">Bid Amount</TableHead>
-                        <TableHead className="text-right">Lead Time</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Submitted</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {myBids.map((bid) => (
-                        <TableRow key={bid.id}>
-                          <TableCell className="whitespace-nowrap">
+                <>
+                  {/* Mobile cards */}
+                  <div className="sm:hidden space-y-3">
+                    {myBids.map((bid) => (
+                      <div key={bid.id} className="rounded-[1.2rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
                             {bid.order ? (
-                              <Link href={`/orders/${bid.order.id}`} className="font-medium text-primary hover:underline">
+                              <Link href={`/orders/${bid.order.id}`} className="font-semibold text-primary hover:underline">
                                 {bid.order.order_number}
                               </Link>
                             ) : (
-                              <span className="text-muted-foreground text-xs">{bid.order_id.slice(0, 8)}…</span>
+                              <span className="font-semibold text-muted-foreground text-xs">{bid.order_id.slice(0, 8)}…</span>
                             )}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums font-medium whitespace-nowrap">
-                            {formatCurrency(bid.total_price)}
-                            <p className="text-xs text-muted-foreground font-normal">
-                              {bid.quantity} × {formatCurrency(bid.unit_price)}
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {bid.quantity} × {formatCurrency(bid.unit_price)} · {bid.lead_time_days}d lead
                             </p>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums whitespace-nowrap">
-                            {bid.lead_time_days} day{bid.lead_time_days === 1 ? '' : 's'}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <Badge
-                              variant={bid.status === 'accepted' ? 'default' : bid.status === 'rejected' ? 'destructive' : 'secondary'}
-                              className="text-[11px]"
-                            >
-                              {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {formatRelativeTime(bid.created_at)}
-                          </TableCell>
+                            <p className="text-xs text-muted-foreground">{formatRelativeTime(bid.created_at)}</p>
+                          </div>
+                          <Badge
+                            variant={bid.status === 'accepted' ? 'default' : bid.status === 'rejected' ? 'destructive' : 'secondary'}
+                            className="text-[11px] shrink-0"
+                          >
+                            {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-border dark:border-white/8">
+                          <p className="text-sm font-semibold text-foreground">Total: {formatCurrency(bid.total_price)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop table */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Order #</TableHead>
+                          <TableHead className="text-right">Bid Amount</TableHead>
+                          <TableHead className="text-right">Lead Time</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Submitted</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {myBids.map((bid) => (
+                          <TableRow key={bid.id}>
+                            <TableCell className="whitespace-nowrap">
+                              {bid.order ? (
+                                <Link href={`/orders/${bid.order.id}`} className="font-medium text-primary hover:underline">
+                                  {bid.order.order_number}
+                                </Link>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">{bid.order_id.slice(0, 8)}…</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums font-medium whitespace-nowrap">
+                              {formatCurrency(bid.total_price)}
+                              <p className="text-xs text-muted-foreground font-normal">
+                                {bid.quantity} × {formatCurrency(bid.unit_price)}
+                              </p>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums whitespace-nowrap">
+                              {bid.lead_time_days} day{bid.lead_time_days === 1 ? '' : 's'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge
+                                variant={bid.status === 'accepted' ? 'default' : bid.status === 'rejected' ? 'destructive' : 'secondary'}
+                                className="text-[11px]"
+                              >
+                                {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                              {formatRelativeTime(bid.created_at)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

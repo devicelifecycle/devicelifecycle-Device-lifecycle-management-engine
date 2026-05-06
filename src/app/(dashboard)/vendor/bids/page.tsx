@@ -185,67 +185,113 @@ export default function VendorBidsPage() {
               )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Order</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Unit Price</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Lead Time</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Submitted</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile cards */}
+              <div className="sm:hidden space-y-3">
                 {filtered.map((bid) => (
-                  <TableRow key={bid.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <StatusIcon status={bid.status} />
-                        <Badge variant={STATUS_BADGE[bid.status] ?? 'secondary'} className="text-xs">
-                          {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {bid.order ? (
-                        <div>
-                          <Link href={`/orders/${bid.order.id}`} className="font-medium text-primary hover:underline">
+                  <div key={bid.id} className="rounded-[1.2rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="min-w-0">
+                        {bid.order ? (
+                          <Link href={`/orders/${bid.order.id}`} className="font-semibold text-primary hover:underline">
                             #{bid.order.order_number}
                           </Link>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {bid.order.total_quantity} units needed
+                        ) : (
+                          <span className="font-semibold text-muted-foreground text-xs">{bid.order_id.slice(0, 8)}…</span>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {bid.quantity} units · {formatCurrency(bid.unit_price)}/unit
+                          {bid.lead_time_days ? ` · ${bid.lead_time_days}d lead` : ''}
+                        </p>
+                        {bid.created_at && (
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(bid.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })}
                           </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <StatusIcon status={bid.status} />
+                          <Badge variant={STATUS_BADGE[bid.status] ?? 'secondary'} className="text-xs">
+                            {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
+                          </Badge>
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">{bid.order_id.slice(0, 8)}…</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{bid.quantity}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(bid.unit_price)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">
-                      {formatCurrency(bid.total_price ?? bid.unit_price * bid.quantity)}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {bid.lead_time_days ? `${bid.lead_time_days}d` : '—'}
-                    </TableCell>
-                    <TableCell>
-                      {bid.status === 'pending'
-                        ? <ExpiryCountdown expiresAt={bid.expires_at} />
-                        : <span className="text-muted-foreground text-xs">—</span>
-                      }
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {bid.created_at
-                        ? new Date(bid.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
-                        : '—'}
-                    </TableCell>
-                  </TableRow>
+                        {bid.status === 'pending' && <ExpiryCountdown expiresAt={bid.expires_at} />}
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-border dark:border-white/8">
+                      <p className="text-sm font-semibold text-foreground">
+                        Total: {formatCurrency(bid.total_price ?? bid.unit_price * bid.quantity)}
+                      </p>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Order</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Unit Price</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead>Lead Time</TableHead>
+                      <TableHead>Expires</TableHead>
+                      <TableHead>Submitted</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((bid) => (
+                      <TableRow key={bid.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <StatusIcon status={bid.status} />
+                            <Badge variant={STATUS_BADGE[bid.status] ?? 'secondary'} className="text-xs">
+                              {bid.status.charAt(0).toUpperCase() + bid.status.slice(1)}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {bid.order ? (
+                            <div>
+                              <Link href={`/orders/${bid.order.id}`} className="font-medium text-primary hover:underline">
+                                #{bid.order.order_number}
+                              </Link>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {bid.order.total_quantity} units needed
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">{bid.order_id.slice(0, 8)}…</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{bid.quantity}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(bid.unit_price)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">
+                          {formatCurrency(bid.total_price ?? bid.unit_price * bid.quantity)}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {bid.lead_time_days ? `${bid.lead_time_days}d` : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {bid.status === 'pending'
+                            ? <ExpiryCountdown expiresAt={bid.expires_at} />
+                            : <span className="text-muted-foreground text-xs">—</span>
+                          }
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {bid.created_at
+                            ? new Date(bid.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
