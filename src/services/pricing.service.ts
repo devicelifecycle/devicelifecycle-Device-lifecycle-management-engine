@@ -405,20 +405,6 @@ export class PricingService {
     priceSource = 'Data-Driven Model'
   ): PriceCalculationResultV2 {
     const tradePrice = round2(modelResult.trade_price ?? modelResult.final_price)
-    if (!tradePrice || tradePrice <= 0) {
-      return {
-        success: false,
-        trade_price: 0,
-        cpo_price: 0,
-        competitors: [],
-        channel_decision: { recommended_channel: 'marketplace', margin_percent: 0, margin_tier: 'red', notes: 'Model returned $0 trade price' },
-        confidence: 0,
-        price_date: new Date().toISOString(),
-        valid_for_hours: 0,
-        pricing_source: priceSource,
-        breakdown: {},
-      } as unknown as PriceCalculationResultV2
-    }
     // If model doesn't provide a CPO price, compute it as trade + 18% markup
     // so CPO sell price is always distinct from the trade-in buyback price.
     const cpoPrice = round2(modelResult.cpo_price && modelResult.cpo_price > tradePrice
