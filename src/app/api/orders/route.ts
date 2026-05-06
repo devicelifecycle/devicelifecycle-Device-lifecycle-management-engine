@@ -194,15 +194,20 @@ export async function POST(request: NextRequest) {
       }
     })().catch(err => console.error('Order confirmation email error:', err))
 
-    // Notify admins when an organization creates an order (fire-and-forget)
+    // Notify admins (in-app + email) when an order is created (fire-and-forget)
     ;(async () => {
       const svc = createServiceRoleClient()
-      const { data: admins } = await svc.from('users').select('id').eq('role', 'admin').eq('is_active', true)
+      const { data: admins } = await svc
+        .from('users')
+        .select('id, email, full_name')
+        .eq('role', 'admin')
+        .eq('is_active', true)
       const orderLink = `/orders/${order.id}`
-      const title = `New Order #${order.order_number} Created`
-      const message = `A new order #${order.order_number} has been created${order.status === 'submitted' ? ' and is awaiting pricing.' : '.'}`
+      const orderTypeLabel = orderData.type === 'cpo' ? 'CPO' : 'Trade-In'
+      const title = `New ${orderTypeLabel} Order #${order.order_number}`
+      const message = `A new ${orderTypeLabel} order #${order.order_number} has been created${order.status === 'submitted' ? ' and is awaiting pricing.' : '.'}`
       for (const admin of admins || []) {
-        await NotificationService.createNotification({
+        NotificationService.createNotification({
           user_id: admin.id,
           type: 'in_app',
           title,
@@ -210,8 +215,74 @@ export async function POST(request: NextRequest) {
           link: orderLink,
           metadata: { order_id: order.id, order_number: order.order_number, status: order.status, audience: 'admin' },
         }).catch(() => {})
+        if (admin.email) {
+          EmailService.sendOrderStatusEmail({
+            to: admin.email,
+            recipientName: admin.full_name || 'Admin',
+            orderNumber: order.order_number,
+            orderId: order.id,
+            fromStatus: 'new',
+            toStatus: order.status,
+            subject: title,
+            message,
+          }).catch(() => {})
+        }
       }
     })().catch(err => console.error('Admin order notification error:', err))
+
+    // Notify all active vendors (in-app + email) when a CPO order is created (fire-and-forget)
+    if (orderData.type === 'cpo') {
+      ;(async () => {
+        const svc = createServiceRoleClient()
+        const { data: vendors } = await svc
+          .from('vendors')
+          .select('id, company_name, contact_email, contact_name, contact_phone, organization_id')
+          .eq('is_active', true)
+        const orderLink = `/vendor/orders`
+        const title = `New CPO Order Available — #${order.order_number}`
+        const message = `A new CPO order #${order.order_number} is open for bidding. Log in to review the order and submit your bid.`
+        for (const vendor of vendors || []) {
+          // In-app to all users in this vendor's org
+          if (vendor.organization_id) {
+            const { data: vendorUsers } = await svc
+              .from('users')
+              .select('id')
+              .eq('organization_id', vendor.organization_id)
+              .eq('is_active', true)
+            for (const vu of vendorUsers || []) {
+              NotificationService.createNotification({
+                user_id: vu.id,
+                type: 'in_app',
+                title,
+                message,
+                link: orderLink,
+                metadata: { order_id: order.id, order_number: order.order_number, event: 'cpo_order_created' },
+              }).catch(() => {})
+            }
+          }
+          // Email to vendor contact
+          if (vendor.contact_email) {
+            EmailService.sendOrderStatusEmail({
+              to: vendor.contact_email,
+              recipientName: vendor.contact_name || vendor.company_name || 'Vendor',
+              orderNumber: order.order_number,
+              orderId: order.id,
+              fromStatus: 'new',
+              toStatus: 'open_for_bids',
+              subject: title,
+              message,
+            }).catch(() => {})
+          }
+          // SMS to vendor contact
+          if (vendor.contact_phone && EmailService.isTwilioConfigured()) {
+            EmailService.sendSMS(
+              vendor.contact_phone,
+              `[DLM] New CPO Order #${order.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
+            ).catch(() => {})
+          }
+        }
+      })().catch(err => console.error('Vendor CPO order notification error:', err))
+    }
 
     // Notify the customer org users (in-app) that their order was received (fire-and-forget)
     ;(async () => {
