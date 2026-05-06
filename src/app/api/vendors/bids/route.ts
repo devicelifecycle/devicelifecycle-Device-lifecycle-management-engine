@@ -9,6 +9,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { VendorService } from '@/services/vendor.service'
 import { NotificationService } from '@/services/notification.service'
+import { EmailService } from '@/services/email.service'
 import { submitVendorBidSchema } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
 
@@ -254,28 +255,87 @@ export async function POST(request: NextRequest) {
       notes: parsed.data.notes,
     })
 
-    // Notify all active admins (fire-and-forget)
-    void Promise.resolve(supabase
-      .from('users')
-      .select('id')
-      .eq('role', 'admin')
-      .eq('is_active', true))
-      .then(({ data: admins }) => {
-        if (admins) {
-          const orderLabel = order.order_number || parsed.data.order_id.slice(0, 8)
-          for (const admin of admins) {
-            NotificationService.createNotification({
-              user_id: admin.id,
-              type: 'in_app',
-              title: `New Vendor Bid — Order #${orderLabel}`,
-              message: `A vendor submitted a bid for ${parsed.data.quantity} units at $${parsed.data.unit_price}/unit.`,
-              link: `/orders/${parsed.data.order_id}`,
-              metadata: { audience: 'admin', order_id: parsed.data.order_id },
-            }).catch((err) => console.error('Failed to notify admin:', err))
+    // Notify all active admins + confirm to vendor (fire-and-forget)
+    const orderLabel = order.order_number || parsed.data.order_id.slice(0, 8)
+    const bidTitle = `New Vendor Bid — Order #${orderLabel}`
+    const bidMsg = `A vendor submitted a bid for ${parsed.data.quantity} units at $${parsed.data.unit_price}/unit. Total: $${(parsed.data.quantity * parsed.data.unit_price).toFixed(2)}.`
+
+    void (async () => {
+      try {
+        // Notify admins (in-app + email)
+        const { data: admins } = await supabase
+          .from('users')
+          .select('id, email, full_name')
+          .eq('role', 'admin')
+          .eq('is_active', true)
+
+        for (const admin of admins || []) {
+          NotificationService.createNotification({
+            user_id: admin.id,
+            type: 'in_app',
+            title: bidTitle,
+            message: bidMsg,
+            link: `/bids`,
+            metadata: { audience: 'admin', order_id: parsed.data.order_id },
+          }).catch((err) => console.error('Failed to notify admin:', err))
+
+          if (admin.email) {
+            EmailService.sendOrderStatusEmail({
+              to: admin.email,
+              recipientName: admin.full_name || 'Admin',
+              orderNumber: orderLabel,
+              orderId: parsed.data.order_id,
+              fromStatus: 'sourcing',
+              toStatus: 'Bid Received',
+              subject: bidTitle,
+              message: `${bidMsg} Review and respond at /bids.`,
+            }).catch((err) => console.error('Failed to email admin:', err))
           }
         }
-      })
-      .catch((err: unknown) => console.error('Failed to notify admins about bid:', err))
+
+        // Confirm receipt to vendor org users (in-app + email to contact)
+        const { data: vendorRecord } = await supabase
+          .from('vendors')
+          .select('id, contact_email, contact_name, contact_phone')
+          .eq('id', vendor.id)
+          .single()
+
+        const { data: vendorOrgUsers } = await supabase
+          .from('users')
+          .select('id')
+          .eq('organization_id', profile.organization_id)
+          .eq('is_active', true)
+
+        const vendorConfirmTitle = `Bid Submitted — Order #${orderLabel}`
+        const vendorConfirmMsg = `Your bid for ${parsed.data.quantity} units at $${parsed.data.unit_price}/unit has been received and is pending admin review.`
+
+        for (const vu of vendorOrgUsers || []) {
+          NotificationService.createNotification({
+            user_id: vu.id,
+            type: 'in_app',
+            title: vendorConfirmTitle,
+            message: vendorConfirmMsg,
+            link: `/vendor/bids`,
+            metadata: { order_id: parsed.data.order_id, bid_id: bid.id },
+          }).catch((err) => console.error('Failed to notify vendor user:', err))
+        }
+
+        if (vendorRecord?.contact_email) {
+          EmailService.sendOrderStatusEmail({
+            to: vendorRecord.contact_email,
+            recipientName: vendorRecord.contact_name || 'Vendor',
+            orderNumber: orderLabel,
+            orderId: parsed.data.order_id,
+            fromStatus: 'sourcing',
+            toStatus: 'Bid Submitted',
+            subject: vendorConfirmTitle,
+            message: vendorConfirmMsg,
+          }).catch((err) => console.error('Failed to email vendor confirmation:', err))
+        }
+      } catch (err) {
+        console.error('Failed to send bid notifications:', err)
+      }
+    })()
 
     return NextResponse.json({ data: bid }, { status: 201 })
   } catch (error) {

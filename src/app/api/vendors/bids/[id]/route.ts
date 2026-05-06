@@ -127,6 +127,65 @@ export async function PATCH(
     }
 
     // ──────────────────────────────────────────────────────────────
+    // REJECTION: Notify customer that sourcing is still in progress
+    // ──────────────────────────────────────────────────────────────
+    if (status === 'rejected' && order?.customer_id) {
+      try {
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('contact_email, contact_phone, contact_name, company_name, organization_id')
+          .eq('id', order.customer_id)
+          .single()
+
+        if (customer) {
+          const rejTitle = `Your Order is Being Sourced — #${orderLabel}`
+          const rejMsg = `We're continuing to find the best option for your CPO order #${orderLabel}. We'll notify you as soon as your quote is ready.`
+
+          if (customer.organization_id) {
+            const { data: custUsers } = await supabase
+              .from('users')
+              .select('id')
+              .eq('organization_id', customer.organization_id)
+              .eq('is_active', true)
+
+            for (const cu of custUsers || []) {
+              NotificationService.createNotification({
+                user_id: cu.id,
+                type: 'in_app',
+                title: rejTitle,
+                message: rejMsg,
+                link: `/orders/${order.id}`,
+                metadata: { order_id: order.id, order_number: orderLabel, type: 'sourcing_update' },
+              }).catch(() => {})
+            }
+          }
+
+          if (customer.contact_email) {
+            EmailService.sendOrderStatusEmail({
+              to: customer.contact_email,
+              recipientName: customer.contact_name || customer.company_name || 'Customer',
+              orderNumber: orderLabel,
+              orderId: order.id,
+              fromStatus: 'sourcing',
+              toStatus: 'sourcing',
+              subject: rejTitle,
+              message: rejMsg,
+            }).catch((err) => console.error('Failed to email customer (rejection):', err))
+          }
+
+          if (customer.contact_phone && EmailService.isTwilioConfigured()) {
+            EmailService.sendSMS(
+              customer.contact_phone,
+              `[DLM] ${rejTitle}. ${rejMsg}`.slice(0, 160)
+            ).catch((err) => console.error('Failed to SMS customer (rejection):', err))
+          }
+        }
+      } catch (err) {
+        console.error('Failed to notify customer of bid rejection:', err)
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // QUOTE 2: If bid ACCEPTED → auto-transition order to 'quoted'
     //          and send customer their quote with marked-up pricing
     // ──────────────────────────────────────────────────────────────
