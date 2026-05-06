@@ -10,7 +10,9 @@ import {
   AlertTriangle,
   ArrowRight,
   ClipboardCheck,
+  Clock,
   DollarSign,
+  Gavel,
   Package,
   Plus,
   ShoppingCart,
@@ -32,6 +34,9 @@ import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomerDashboard } from '@/hooks/useCustomerDashboard'
+import { useDashboardCounts } from '@/hooks/useDashboardCounts'
+import { useQuery } from '@tanstack/react-query'
+import type { VendorBid, Order } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AnimatedCounter } from '@/components/ui/motion'
@@ -76,6 +81,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
   const { orders, total } = useOrders({ page_size: 500 })
+  const counts = useDashboardCounts()
   const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
   const slaAlerts = orders.filter((order) => order.is_sla_breached).length
   const recentRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
@@ -147,6 +153,44 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           </div>
         </div>
       </section>
+
+      {/* Needs Attention strip — only shown when there is something to act on */}
+      {((counts.pendingBids ?? 0) > 0 || (counts.actionableOrders ?? 0) > 0) && (
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {(counts.pendingBids ?? 0) > 0 && (
+            <Link href="/bids">
+              <div className="flex items-center gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-5 py-4 transition hover:bg-amber-500/10">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+                  <Gavel className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">
+                    {counts.pendingBids} pending bid{counts.pendingBids === 1 ? '' : 's'} waiting
+                  </p>
+                  <p className="text-sm text-muted-foreground">Review and quote vendors → Bids</p>
+                </div>
+                <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+              </div>
+            </Link>
+          )}
+          {(counts.actionableOrders ?? 0) > 0 && (
+            <Link href="/orders">
+              <div className="flex items-center gap-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 px-5 py-4 transition hover:bg-blue-500/10">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-500">
+                  <ShoppingCart className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">
+                    {counts.actionableOrders} order{counts.actionableOrders === 1 ? '' : 's'} need attention
+                  </p>
+                  <p className="text-sm text-muted-foreground">Quoted or accepted, awaiting next step → Orders</p>
+                </div>
+                <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+              </div>
+            </Link>
+          )}
+        </section>
+      )}
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, index) => (
@@ -500,18 +544,180 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   )
 }
 
+type BidWithOrder = VendorBid & { order?: { id: string; order_number: string; status: string; total_quantity: number } }
+
+function VendorDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
+  const { data: bidsData } = useQuery<{ data: BidWithOrder[] }>({
+    queryKey: ['vendor-my-bids'],
+    queryFn: async () => {
+      const res = await fetch('/api/vendors/bids')
+      if (!res.ok) return { data: [] }
+      return res.json()
+    },
+    refetchInterval: 60_000,
+  })
+  const { orders: assignedOrders, total: assignedTotal } = useOrders({ page_size: 20 })
+
+  const allBids: BidWithOrder[] = bidsData?.data || []
+  const pendingBids = allBids.filter(b => b.status === 'pending')
+  const acceptedBids = allBids.filter(b => b.status === 'accepted')
+  const actionableOrders = assignedOrders.filter(o => ['accepted', 'sourcing', 'sourced'].includes(o.status))
+
+  const quickActions = [
+    { href: '/vendor/orders', label: 'Browse Open Orders', icon: Package, description: 'Find CPO orders to bid on' },
+    { href: '/vendor/bids', label: 'My Bids', icon: Gavel, description: 'Track all your submitted bids' },
+  ]
+
+  return (
+    <div className="relative space-y-8">
+      <section className="surface-panel relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8 lg:px-10">
+        <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
+        <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+          <div className="space-y-5">
+            <span className="eyebrow-label">Vendor Workspace</span>
+            <div className="space-y-3">
+              <h1 className="editorial-title max-w-3xl text-4xl text-foreground sm:text-5xl">
+                Your bids and fulfillment work in one place.
+              </h1>
+              <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+                Welcome back, {user.full_name || 'Vendor'}. Check pending bids, assigned orders, and open opportunities below.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/vendor/orders">
+                <Button size="lg"><Plus className="mr-2 h-4 w-4" />Browse Open Orders</Button>
+              </Link>
+              <Link href="/vendor/bids">
+                <Button size="lg" variant="outline"><Gavel className="mr-2 h-4 w-4" />My Bids</Button>
+              </Link>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            {quickActions.map((action) => (
+              <Link key={action.href} href={action.href}>
+                <div className="metric-tile h-full p-5 transition-transform duration-300 hover:-translate-y-1">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                    <action.icon className="h-5 w-5" />
+                  </div>
+                  <p className="mb-1 text-base font-semibold text-foreground">{action.label}</p>
+                  <p className="text-sm leading-6 text-muted-foreground">{action.description}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {[
+          { label: 'Pending Bids', value: pendingBids.length, icon: Gavel, tone: 'text-amber-400' },
+          { label: 'Accepted Bids', value: acceptedBids.length, icon: Activity, tone: 'text-emerald-400' },
+          { label: 'Orders Assigned', value: assignedTotal, icon: Truck, tone: 'text-primary' },
+        ].map((stat, index) => (
+          <motion.div key={stat.label} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }} className="metric-tile p-6">
+            <div className="mb-8 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">{stat.label}</p>
+                <div className="mt-3 text-4xl font-semibold text-foreground"><AnimatedCounter value={stat.value} /></div>
+              </div>
+              <div className={stat.tone}><stat.icon className="h-6 w-6" /></div>
+            </div>
+            <div className="h-px w-full copper-line opacity-60" />
+          </motion.div>
+        ))}
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
+          <CardHeader className="flex-row items-end justify-between space-y-0">
+            <div>
+              <CardTitle className="text-2xl text-foreground">Pending Bids</CardTitle>
+              <CardDescription className="mt-2 text-muted-foreground">Awaiting admin decision.</CardDescription>
+            </div>
+            <Link href="/vendor/bids" className="text-sm text-primary hover:text-primary/70">View all</Link>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendingBids.length === 0 ? (
+              <div className="rounded-[1.4rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.02] px-5 py-8 text-center text-sm text-muted-foreground">
+                No pending bids.
+              </div>
+            ) : pendingBids.slice(0, 5).map((bid) => {
+              const daysLeft = bid.expires_at ? Math.ceil((new Date(bid.expires_at).getTime() - Date.now()) / 86400000) : null
+              return (
+                <Link key={bid.id} href={bid.order ? `/orders/${bid.order.id}` : '/vendor/bids'}>
+                  <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] px-5 py-4 transition hover:bg-muted/60 dark:hover:bg-white/[0.05]">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {bid.order ? `#${bid.order.order_number}` : 'Order'}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          {bid.quantity} units · {new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(bid.unit_price)}/unit
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-right">
+                        {daysLeft !== null && daysLeft > 0 && (
+                          <span className={`flex items-center gap-1 text-xs font-medium ${daysLeft <= 3 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                            <Clock className="h-3 w-3" />
+                            {daysLeft}d left
+                          </span>
+                        )}
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
+          </CardContent>
+        </Card>
+
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
+          <CardHeader className="flex-row items-end justify-between space-y-0">
+            <div>
+              <CardTitle className="text-2xl text-foreground">Orders Needing Action</CardTitle>
+              <CardDescription className="mt-2 text-muted-foreground">Assigned orders with next steps.</CardDescription>
+            </div>
+            <Link href="/vendor/orders" className="text-sm text-primary hover:text-primary/70">View all</Link>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {actionableOrders.length === 0 ? (
+              <div className="rounded-[1.4rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.02] px-5 py-8 text-center text-sm text-muted-foreground">
+                No orders needing action right now.
+              </div>
+            ) : actionableOrders.slice(0, 5).map((order) => (
+              <Link key={order.id} href={`/orders/${order.id}`}>
+                <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] px-5 py-4 transition hover:bg-muted/60 dark:hover:bg-white/[0.05]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-foreground">{order.order_number}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5">{order.status.replace(/_/g, ' ')} · {order.total_quantity ?? 0} units</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const { user, isInitializing } = useAuth()
   const isInternal = user ? ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user.role) : false
   const isCustomer = user?.role === 'customer'
+  const isVendor = user?.role === 'vendor'
   const targetPath = getDefaultAppPathForRole(user?.role)
 
   useEffect(() => {
-    if (!isInitializing && user && !isInternal && !isCustomer) {
+    if (!isInitializing && user && !isInternal && !isCustomer && !isVendor) {
       router.replace(targetPath)
     }
-  }, [isCustomer, isInitializing, isInternal, router, targetPath, user])
+  }, [isCustomer, isInitializing, isInternal, isVendor, router, targetPath, user])
 
   if (isInitializing || !user) {
     return (
@@ -521,9 +727,8 @@ export default function DashboardPage() {
     )
   }
 
-  if (isCustomer) {
-    return <CustomerDashboard user={user} />
-  }
+  if (isCustomer) return <CustomerDashboard user={user} />
+  if (isVendor) return <VendorDashboard user={user} />
 
   if (!isInternal) {
     return (
