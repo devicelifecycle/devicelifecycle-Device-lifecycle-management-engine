@@ -119,11 +119,18 @@ function readTrustedCachedUser(): User | null {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 function useProvideAuth(): AuthContextValue {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    isLoading: false,
-    isInitializing: true,
-    isAuthenticated: false,
+  // Initialize synchronously from trusted cache so the dashboard layout
+  // skips its loading screen on every navigation after the first login.
+  // readTrustedCachedUser() is safe to call here — it checks typeof window
+  // internally and returns null during SSR.
+  const [state, setState] = useState<AuthState>(() => {
+    const cachedUser = readTrustedCachedUser()
+    return {
+      user: cachedUser,
+      isLoading: false,
+      isInitializing: !cachedUser,
+      isAuthenticated: !!cachedUser,
+    }
   })
   const router = useRouter()
   const mountedRef = useRef(true)
@@ -211,16 +218,6 @@ function useProvideAuth(): AuthContextValue {
   // Listen for auth changes + session expiry
   useEffect(() => {
     mountedRef.current = true
-
-    const cachedUser = readTrustedCachedUser()
-    if (cachedUser) {
-      setState((prev) => ({
-        user: cachedUser,
-        isLoading: prev.isLoading,
-        isInitializing: false,
-        isAuthenticated: true,
-      }))
-    }
 
     fetchUser()
 
