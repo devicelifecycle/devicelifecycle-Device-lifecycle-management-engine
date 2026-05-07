@@ -1399,6 +1399,21 @@ export default function OrderDetailClient() {
         </Card>
       )}
 
+      {/* Vendor waiting banner — their bid was accepted, waiting for customer to approve the quote */}
+      {isVendor && order.status === 'quoted' && (
+        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900/30 dark:bg-amber-950/20">
+          <CardContent className="py-4 flex items-start gap-3">
+            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium text-amber-800 dark:text-amber-200">Awaiting customer approval</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300/90 mt-0.5">
+                Your bid has been selected. The customer is reviewing the quote — you&apos;ll be notified once they approve and the order is ready to fulfill.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Device condition needs approval — customer can approve/reject inspected condition */}
       {isCustomer && exceptionsLoading && (
         <Card className="border-amber-200 bg-amber-50/30 dark:border-amber-900/30 dark:bg-amber-950/10">

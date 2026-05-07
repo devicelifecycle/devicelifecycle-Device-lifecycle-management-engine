@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!['accepted', 'sourcing'].includes(order.status || '')) {
+    if (!['submitted', 'pricing', 'priced', 'accepted', 'sourcing'].includes(order.status || '')) {
       return NextResponse.json(
         { error: 'This order is not open for vendor bidding' },
         { status: 400 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Search, Truck, Send, Inbox, FileText } from 'lucide-react'
+import { Search, Truck, Send, Inbox, FileText, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -30,6 +30,8 @@ import type { Order, OrderStatus, VendorBid } from '@/types'
 
 function getVendorOrderActionLabel(status: OrderStatus): string {
   switch (status) {
+    case 'quoted':
+      return 'Pending Customer Approval'
     case 'accepted':
       return 'Accept Job'
     case 'sourcing':
@@ -41,7 +43,7 @@ function getVendorOrderActionLabel(status: OrderStatus): string {
     case 'delivered':
       return 'Complete Fulfillment'
     default:
-      return 'Open Order'
+      return 'View Order'
   }
 }
 
@@ -365,9 +367,9 @@ export default function VendorOrdersPage() {
                         </div>
                         <Badge variant="secondary" className="text-[11px] shrink-0">{status?.label || order.status}</Badge>
                       </div>
-                      <Button asChild size="sm" variant={order.status === 'sourced' ? 'default' : 'outline'} className="w-full">
+                      <Button asChild size="sm" variant={order.status === 'sourced' ? 'default' : 'outline'} className={`w-full ${order.status === 'quoted' ? 'text-muted-foreground' : ''}`}>
                         <Link href={`/orders/${order.id}`}>
-                          <Truck className="mr-1.5 h-3.5 w-3.5" />
+                          {order.status === 'quoted' ? <Clock className="mr-1.5 h-3.5 w-3.5" /> : <Truck className="mr-1.5 h-3.5 w-3.5" />}
                           {getVendorOrderActionLabel(order.status as OrderStatus)}
                         </Link>
                       </Button>
@@ -416,9 +418,9 @@ export default function VendorOrdersPage() {
                           {formatRelativeTime(order.updated_at || order.created_at)}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
-                          <Button asChild size="sm" variant={order.status === 'sourced' ? 'default' : 'outline'}>
+                          <Button asChild size="sm" variant={order.status === 'sourced' ? 'default' : 'outline'} className={order.status === 'quoted' ? 'text-muted-foreground' : ''}>
                             <Link href={`/orders/${order.id}`}>
-                              <Truck className="mr-1.5 h-3.5 w-3.5" />
+                              {order.status === 'quoted' ? <Clock className="mr-1.5 h-3.5 w-3.5" /> : <Truck className="mr-1.5 h-3.5 w-3.5" />}
                               {getVendorOrderActionLabel(order.status as OrderStatus)}
                             </Link>
                           </Button>
