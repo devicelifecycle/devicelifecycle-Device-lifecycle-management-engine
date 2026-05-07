@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
-import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch } from 'lucide-react'
+import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { DEVICE_BRANDS } from '@/lib/constants'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -100,6 +101,22 @@ export default function DevicesPage() {
       toast.error('Failed to create device')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/devices/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete device')
+      toast.success('Device removed from catalog')
+      fetchDevices()
+    } catch {
+      toast.error('Failed to delete device')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -248,6 +265,7 @@ export default function DevicesPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Status</TableHead>
+                  {canCreate && <TableHead className="w-12" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -277,6 +295,34 @@ export default function DevicesPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground font-mono">{device.sku || '—'}</TableCell>
                       <TableCell><Badge variant={device.is_active ? 'default' : 'secondary'} className="text-[11px]">{device.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                      {canCreate && (
+                        <TableCell>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" disabled={deletingId === device.id}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete {device.make} {device.model}?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This permanently removes the device from the catalog. Orders that reference this device will not be affected, but it will no longer be selectable for new orders.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  onClick={() => handleDelete(device.id)}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}
