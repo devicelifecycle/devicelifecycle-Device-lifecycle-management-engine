@@ -79,26 +79,28 @@ export class VendorService {
   }
 
   /**
-   * Get CPO orders open for bidding — no vendor assigned, status in [accepted, sourcing].
+   * Get CPO orders open for bidding — no vendor assigned yet.
    * Broadcast to all vendors; any vendor can bid.
    */
   static async getOpenOrdersForBidding(params: { page?: number; page_size?: number }) {
     // Open CPO orders are intentionally visible to every vendor org for bidding.
     // Use the service-role client here so vendor RLS on `orders` does not hide
-    // unassigned sourcing orders from the vendor marketplace view.
+    // unassigned orders from the vendor marketplace view.
     const supabase = createServiceRoleClient()
     const page = params.page ?? 1
     const page_size = params.page_size ?? 20
     const from = (page - 1) * page_size
     const to = from + page_size - 1
 
-    // Vendors must NOT see customer/organization info — only order + device details
+    // Any CPO order without a vendor assigned is open for bidding.
+    // submitted → just created; pricing/priced → being quoted; accepted → quote approved, sourcing underway.
+    // vendor_id = null is the authoritative gate — status list just excludes terminal/draft states.
     const { data, error, count } = await supabase
       .from('orders')
       .select('id, order_number, type, status, total_quantity, created_at, updated_at, items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))', { count: 'exact' })
       .eq('type', 'cpo')
       .is('vendor_id', null)
-      .in('status', ['sourcing', 'accepted'])
+      .in('status', ['submitted', 'pricing', 'priced', 'accepted', 'sourcing'])
       .is('parent_order_id', null)
       .order('created_at', { ascending: false })
       .range(from, to)

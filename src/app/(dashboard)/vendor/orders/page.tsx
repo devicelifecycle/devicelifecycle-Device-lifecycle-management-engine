@@ -79,6 +79,7 @@ export default function VendorOrdersPage() {
   } = useQuery({
     queryKey: ['vendor-open-orders', openOrdersPage],
     queryFn: () => fetchOpenOrders(openOrdersPage),
+    staleTime: 30 * 1000,
   })
   const openOrders: Order[] = openData?.data || []
   const openTotal = openData?.total ?? 0
@@ -92,6 +93,7 @@ export default function VendorOrdersPage() {
     queryKey: ['vendor-my-bids'],
     queryFn: fetchMyBids,
     retry: 1,
+    staleTime: 30 * 1000,
   })
   const myBids: (VendorBid & { order?: { id: string; order_number: string; type: string; status: string; total_quantity: number; created_at: string } })[] = bidsData?.data || []
 
