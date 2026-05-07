@@ -188,8 +188,10 @@ export async function PATCH(
     // ──────────────────────────────────────────────────────────────
     // QUOTE 2: If bid ACCEPTED → auto-transition order to 'quoted'
     //          and send customer their quote with marked-up pricing
+    // CPO orders are in 'submitted' when bids arrive. The state machine
+    // allows submitted → quoted; sourcing → quoted is NOT a valid path.
     // ──────────────────────────────────────────────────────────────
-    if (status === 'accepted' && order && order.status === 'sourcing') {
+    if (status === 'accepted' && order && order.status === 'submitted') {
       try {
         // Transition order to 'quoted' — this sets quoted_at, quote_expires_at
         await OrderService.transitionOrder(order.id, 'quoted', user.id, 'Vendor bid accepted — quote generated for customer')

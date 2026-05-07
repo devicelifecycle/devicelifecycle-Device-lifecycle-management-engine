@@ -93,14 +93,15 @@ export class VendorService {
     const to = from + page_size - 1
 
     // Any CPO order without a vendor assigned is open for bidding.
-    // submitted → just created; pricing/priced → being quoted; accepted → quote approved, sourcing underway.
-    // vendor_id = null is the authoritative gate — status list just excludes terminal/draft states.
+    // 'submitted' = new orders waiting for bids; 'sourcing' = admin manually
+    // moved to sourcing without a vendor yet (edge case).
+    // vendor_id = null is the authoritative gate — status list just excludes terminal/draft/post-quote states.
     const { data, error, count } = await supabase
       .from('orders')
       .select('id, order_number, type, status, total_quantity, created_at, updated_at, items:order_items(id, quantity, storage, claimed_condition, device:device_catalog(make, model))', { count: 'exact' })
       .eq('type', 'cpo')
       .is('vendor_id', null)
-      .in('status', ['submitted', 'pricing', 'priced', 'accepted', 'sourcing'])
+      .in('status', ['submitted', 'sourcing'])
       .is('parent_order_id', null)
       .order('created_at', { ascending: false })
       .range(from, to)
