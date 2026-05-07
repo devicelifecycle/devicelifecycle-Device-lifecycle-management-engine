@@ -203,7 +203,7 @@ export default function NewOrderPage() {
       const all: Device[] = []
       let page = 1
       for (;;) {
-        const res = await fetch(`/api/devices?page_size=500&sort_by=make&sort_order=asc&page=${page}`)
+        const res = await fetch(`/api/devices?page_size=500&for_order_creation=1&sort_by=make&sort_order=asc&page=${page}`)
         if (!res.ok || cancelled) break
         const d = await res.json()
         const rows: Device[] = d.data || []
@@ -835,7 +835,7 @@ export default function NewOrderPage() {
                         {index > 0 && <Separator className="mb-3" />}
                         <div className="flex items-start gap-3">
                           <div className="flex-1 space-y-2">
-                            {/* Row 1: Type, Device, Qty, Condition/Certified, Storage */}
+                            {/* Row 1: Type, Device, Qty, Condition (trade-in only), Storage */}
                             <div className={`grid gap-2 ${isInternal ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
                               {/* Order Type Badge */}
                               {canCreateCpoOrder ? (
@@ -932,12 +932,7 @@ export default function NewOrderPage() {
                                 )}
                               </div>
                               <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
-                              {/* Condition dropdown only for Trade-In; CPO items are always "Certified" */}
-                              {item.order_type === 'cpo' ? (
-                                <div className="flex items-center h-10 px-3 rounded-md border bg-blue-50 border-blue-200">
-                                  <Badge className="bg-blue-600">Certified</Badge>
-                                </div>
-                              ) : (
+                              {item.order_type !== 'cpo' && (
                                 <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>
                                   <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
