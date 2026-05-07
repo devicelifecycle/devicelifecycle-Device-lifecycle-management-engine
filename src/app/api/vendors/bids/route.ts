@@ -155,12 +155,16 @@ export async function POST(request: NextRequest) {
     // Verify the user is a vendor
     const { data: profile } = await supabase
       .from('users')
-      .select('role, organization_id')
+      .select('role, organization_id, is_active')
       .eq('id', user.id)
       .single()
 
     if (!profile || profile.role !== 'vendor') {
       return NextResponse.json({ error: 'Only vendors can submit bids' }, { status: 403 })
+    }
+
+    if (!profile.is_active) {
+      return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
     }
 
     if (!profile.organization_id) {
@@ -208,7 +212,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!['submitted', 'pricing', 'priced', 'accepted', 'sourcing'].includes(order.status || '')) {
+    if (!['submitted', 'quoted', 'accepted', 'sourcing'].includes(order.status || '')) {
       return NextResponse.json(
         { error: 'This order is not open for vendor bidding' },
         { status: 400 }

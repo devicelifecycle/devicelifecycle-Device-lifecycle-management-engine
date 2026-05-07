@@ -88,12 +88,16 @@ export async function POST(request: NextRequest) {
     // Get user's role and organization
     const { data: profile } = await supabase
       .from('users')
-      .select('role, organization_id')
+      .select('role, organization_id, is_active')
       .eq('id', user.id)
       .single()
 
     if (!profile) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
+    }
+
+    if (!profile.is_active) {
+      return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
     }
 
     if (profile.role === 'vendor') {

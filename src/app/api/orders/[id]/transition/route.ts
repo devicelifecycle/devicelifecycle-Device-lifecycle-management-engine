@@ -34,12 +34,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data: profile } = await supabase
       .from('users')
-      .select('role, organization_id')
+      .select('role, organization_id, is_active')
       .eq('id', user.id)
       .single()
 
     if (!profile) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (!profile.is_active) {
+      return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
     }
 
     const body = await request.json()
