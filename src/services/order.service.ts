@@ -110,7 +110,13 @@ export class OrderService {
       query = query.or(`created_by_id.eq.${requester_id},assigned_to_id.eq.${requester_id}`)
     }
 
-    if (requester_role === 'customer' && requester_organization_id) {
+    if (requester_role === 'customer') {
+      // No org → no orders. Without this guard a customer with null organization_id
+      // would skip the filter entirely and see every order in the system.
+      if (!requester_organization_id) {
+        return { data: [], total: 0, page, page_size, total_pages: 0 }
+      }
+
       const { data: customers } = await supabase
         .from('customers')
         .select('id')
@@ -118,13 +124,7 @@ export class OrderService {
 
       const allowedCustomerIds = (customers || []).map((customer) => customer.id)
       if (allowedCustomerIds.length === 0) {
-        return {
-          data: [],
-          total: 0,
-          page,
-          page_size,
-          total_pages: 0,
-        }
+        return { data: [], total: 0, page, page_size, total_pages: 0 }
       }
       query = query.in('customer_id', allowedCustomerIds)
     }

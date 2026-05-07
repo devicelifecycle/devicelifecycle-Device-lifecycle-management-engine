@@ -77,7 +77,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const isOpenVendorBidOrder =
         order.type === 'cpo' &&
         !order.vendor_id &&
-        ['accepted', 'sourcing'].includes(order.status)
+        ['submitted', 'accepted', 'sourcing'].includes(order.status)
 
       if (isAssignedVendorOrder || isOpenVendorBidOrder) {
         return NextResponse.json(sanitizeOrderForVendor(order))
