@@ -230,8 +230,9 @@ export async function POST(request: NextRequest) {
       }
     })().catch(err => console.error('Admin order notification error:', err))
 
-    // Notify all active vendors (in-app + email) when a CPO order is created (fire-and-forget)
-    if (orderData.type === 'cpo') {
+    // Notify all active vendors (in-app + email) when a CPO order is open for bidding.
+    // Draft CPO orders (created by internal staff) are NOT yet open — notify on submission instead.
+    if (orderData.type === 'cpo' && order.status !== 'draft') {
       ;(async () => {
         const svc = createServiceRoleClient()
         const { data: vendors } = await svc

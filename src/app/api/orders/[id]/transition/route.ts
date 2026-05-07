@@ -4,9 +4,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
 import { NotificationService } from '@/services/notification.service'
+import { EmailService } from '@/services/email.service'
 import { orderTransitionSchema } from '@/lib/validations'
 import type { OrderStatus } from '@/types'
 export const dynamic = 'force-dynamic'
@@ -209,6 +211,58 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       currentOrder.status,
       newStatus
     ).catch(err => console.error('Notification error:', err))
+
+    // When a CPO order moves from draft → submitted it becomes open for vendor bidding.
+    // Broadcast to all active vendors so they know to log in and submit a bid.
+    if (currentOrder.type === 'cpo' && currentOrder.status === 'draft' && newStatus === 'submitted') {
+      ;(async () => {
+        const svc = createServiceRoleClient()
+        const { data: vendors } = await svc
+          .from('vendors')
+          .select('id, company_name, contact_email, contact_name, contact_phone, organization_id')
+          .eq('is_active', true)
+        const orderLink = `/vendor/orders`
+        const title = `New CPO Order Available — #${currentOrder.order_number}`
+        const message = `A new CPO order #${currentOrder.order_number} is open for bidding. Log in to review the order and submit your bid.`
+        for (const vendor of vendors || []) {
+          if (vendor.organization_id) {
+            const { data: vendorUsers } = await svc
+              .from('users')
+              .select('id')
+              .eq('organization_id', vendor.organization_id)
+              .eq('is_active', true)
+            for (const vu of vendorUsers || []) {
+              NotificationService.createNotification({
+                user_id: vu.id,
+                type: 'in_app',
+                title,
+                message,
+                link: orderLink,
+                metadata: { order_id: (await params).id, order_number: currentOrder.order_number, event: 'cpo_order_created' },
+              }).catch(() => {})
+            }
+          }
+          if (vendor.contact_email) {
+            EmailService.sendOrderStatusEmail({
+              to: vendor.contact_email,
+              recipientName: vendor.contact_name || vendor.company_name || 'Vendor',
+              orderNumber: currentOrder.order_number,
+              orderId: (await params).id,
+              fromStatus: 'draft',
+              toStatus: 'submitted',
+              subject: title,
+              message,
+            }).catch(() => {})
+          }
+          if (vendor.contact_phone && EmailService.isTwilioConfigured()) {
+            EmailService.sendSMS(
+              vendor.contact_phone,
+              `[DLM] New CPO Order #${currentOrder.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
+            ).catch(() => {})
+          }
+        }
+      })().catch(err => console.error('Vendor CPO bid notification error:', err))
+    }
 
     return NextResponse.json(updatedOrder)
   } catch (error) {
