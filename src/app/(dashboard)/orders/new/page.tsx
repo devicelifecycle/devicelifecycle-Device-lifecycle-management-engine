@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, Files } from 'lucide-react'
@@ -185,11 +186,35 @@ export default function NewOrderPage() {
   const latestLookupRequestRef = useRef<Record<number, number>>({})
   const nextLookupRequestIdRef = useRef(1)
 
+  // Device search state — one entry per line item
+  const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
+  const [deviceDropdownOpen, setDeviceDropdownOpen] = useState<Record<number, boolean>>({})
+  const [dropdownRects, setDropdownRects] = useState<Record<number, DOMRect>>({})
+  const [deviceSearchResults, setDeviceSearchResults] = useState<Record<number, Device[]>>({})
+  const deviceInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  const deviceSearchTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
 
   useEffect(() => {
-    fetch('/api/devices?page_size=150&sort_by=make&sort_order=asc').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    let cancelled = false
+    async function loadAll() {
+      const all: Device[] = []
+      let page = 1
+      for (;;) {
+        const res = await fetch(`/api/devices?page_size=500&sort_by=make&sort_order=asc&page=${page}`)
+        if (!res.ok || cancelled) break
+        const d = await res.json()
+        const rows: Device[] = d.data || []
+        all.push(...rows)
+        if (rows.length < 500) break
+        page++
+      }
+      if (!cancelled) setDevices(all)
+    }
+    loadAll().catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
   // For customer role: auto-set their org's customer (no selection needed)
@@ -252,6 +277,23 @@ export default function NewOrderPage() {
     }
   }, [isInternal])
 
+  // Server-side device search — fires when user types in the device search box
+  const searchDevices = useCallback((index: number, query: string) => {
+    clearTimeout(deviceSearchTimers.current[index])
+    if (!query) {
+      setDeviceSearchResults(prev => { const n = { ...prev }; delete n[index]; return n })
+      return
+    }
+    deviceSearchTimers.current[index] = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/devices?search=${encodeURIComponent(query)}&page_size=60&sort_by=make&sort_order=asc`)
+        if (!res.ok) return
+        const d = await res.json()
+        setDeviceSearchResults(prev => ({ ...prev, [index]: d.data || [] }))
+      } catch { /* silently ignore */ }
+    }, 200)
+  }, [])
+
   // Manual entry helpers
   const addItem = (orderType: 'trade_in' | 'cpo') => {
     if (orderType === 'cpo' && !canCreateCpoOrder) {
@@ -275,6 +317,16 @@ export default function NewOrderPage() {
   const removeItem = (i: number) => {
     setItems(items.filter((_, idx) => idx !== i))
     latestLookupRequestRef.current = {}
+    setDeviceSearches(prev => {
+      const next = { ...prev }
+      delete next[i]
+      const reindexed: Record<number, string> = {}
+      Object.keys(next).forEach(key => {
+        const k = parseInt(key)
+        reindexed[k > i ? k - 1 : k] = next[k]
+      })
+      return reindexed
+    })
     setItemPrices(prev => {
       const next = { ...prev }
       delete next[i]
@@ -813,12 +865,71 @@ export default function NewOrderPage() {
                                   Trade-In
                                 </div>
                               )}
-                              <Select value={item.device_id} onValueChange={v => updateItem(index, 'device_id', v)}>
-                                <SelectTrigger><SelectValue placeholder="Device" /></SelectTrigger>
-                                <SelectContent>
-                                  {devices.map(d => <SelectItem key={d.id} value={d.id}>{d.make} {d.model}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
+                              <div className="relative">
+                                <Input
+                                  ref={el => { deviceInputRefs.current[index] = el }}
+                                  placeholder="Search device..."
+                                  value={deviceSearches[index] !== undefined ? deviceSearches[index] : item.device_label}
+                                  onChange={e => {
+                                    setDeviceSearches(prev => ({ ...prev, [index]: e.target.value }))
+                                    searchDevices(index, e.target.value)
+                                    const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
+                                    if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
+                                    setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
+                                  }}
+                                  onFocus={() => {
+                                    const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
+                                    if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
+                                    setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
+                                  }}
+                                  onBlur={() => setTimeout(() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: false })), 150)}
+                                  autoComplete="off"
+                                />
+                                {deviceDropdownOpen[index] && dropdownRects[index] && createPortal(
+                                  <div
+                                    style={{
+                                      position: 'fixed',
+                                      top: dropdownRects[index].bottom + 4,
+                                      left: dropdownRects[index].left,
+                                      width: dropdownRects[index].width,
+                                      zIndex: 9999,
+                                    }}
+                                    className="max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg"
+                                  >
+                                    {(() => {
+                                      const q = (deviceSearches[index] || '').toLowerCase()
+                                      const serverResults = deviceSearchResults[index]
+                                      const fuzzyMatch = (device: Device) => {
+                                        if (!q) return true
+                                        const text = `${device.make} ${device.model}`.toLowerCase()
+                                        const tokens = q.trim().split(/\s+/).filter((s: string) => s)
+                                        return tokens.every((token: string) => text.includes(token))
+                                      }
+                                      const filtered = (serverResults !== undefined
+                                        ? serverResults
+                                        : q ? devices.filter(fuzzyMatch) : devices
+                                      ).slice(0, 50)
+                                      if (filtered.length === 0) return <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
+                                      return filtered.map(d => (
+                                        <button
+                                          key={d.id}
+                                          type="button"
+                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-accent ${d.id === item.device_id ? 'bg-accent font-medium' : ''}`}
+                                          onMouseDown={e => {
+                                            e.preventDefault()
+                                            updateItem(index, 'device_id', d.id)
+                                            setDeviceSearches(prev => ({ ...prev, [index]: `${d.make} ${d.model}` }))
+                                            setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+                                          }}
+                                        >
+                                          {d.make} {d.model}
+                                        </button>
+                                      ))
+                                    })()}
+                                  </div>,
+                                  document.body
+                                )}
+                              </div>
                               <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
                               {/* Condition dropdown only for Trade-In; CPO items are always "Certified" */}
                               {item.order_type === 'cpo' ? (
