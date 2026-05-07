@@ -51,11 +51,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isInitializing && isAuthenticated) {
-      setIsNavigating(true)
+      // login() already navigated and set loginHandledNavRef — skip overlay
       if (loginHandledNavRef.current) {
         loginHandledNavRef.current = false
         return
       }
+      // User landed on /login already authenticated (e.g. direct URL) — redirect silently
+      setIsNavigating(true)
       const redirect = searchParams.get('redirect')
       const dest =
         redirect && redirect.startsWith('/')

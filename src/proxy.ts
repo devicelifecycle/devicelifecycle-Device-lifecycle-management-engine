@@ -30,6 +30,22 @@ const roleRoutes: [string, string[]][] = [
   ['/reports', ['admin', 'coe_manager']],
 ]
 
+// Role-based route access check — shared by fast and slow paths
+function applyRoleRouting(pathname: string, role: string, request: NextRequest, response?: NextResponse): NextResponse {
+  for (const [route, allowedRoles] of roleRoutes) {
+    if (pathname.startsWith(route)) {
+      if (!allowedRoles.includes(role)) {
+        if (pathname.startsWith('/orders/new/cpo') && role === 'customer') {
+          return NextResponse.redirect(new URL('/orders/new', request.url))
+        }
+        return NextResponse.redirect(new URL('/', request.url))
+      }
+      break // most specific route matched
+    }
+  }
+  return response ?? NextResponse.next()
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -58,65 +74,46 @@ export async function proxy(request: NextRequest) {
   const ROLE_COOKIE = 'dlm_role'
   const USER_ID_COOKIE = 'dlm_uid'
 
+  const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
+    ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
+    : null
+  const cachedUserId = request.cookies.get(USER_ID_COOKIE)?.value
+    ? decodeURIComponent(request.cookies.get(USER_ID_COOKIE)!.value)
+    : null
+
+  // Fast path: routing cookies present — skip Supabase network round-trip entirely.
+  // These cookies are set by useAuth immediately after a successful login and expire
+  // in 8 hours. API routes independently validate the Supabase JWT, so this only
+  // bypasses the middleware routing check, not data-layer authorization.
+  if (cachedRole && cachedUserId) {
+    return applyRoleRouting(pathname, cachedRole, request)
+  }
+
+  // Slow path: no routing cookies — must verify session with Supabase Auth.
+  // Happens on first load, after cookie expiry, or in a fresh browser.
   try {
     const { supabase, response } = createMiddlewareSupabaseClient(request)
 
-    // getUser() validates JWT locally — faster than getSession() which can trigger token refresh
     const { data: { user: authUser } } = await supabase.auth.getUser()
 
-    // Client-side sign-in stores the session in the browser first, then our app
-    // sets short-lived routing cookies (role + user id). When the browser
-    // navigates immediately after login, the Supabase auth cookie may not be
-    // visible to middleware yet, but the routing cookies are. Trust them as a
-    // same-browser login handoff so the user does not get bounced back to /login.
-    const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
-      ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
-      : null
-    const cachedUserId = request.cookies.get(USER_ID_COOKIE)?.value
-      ? decodeURIComponent(request.cookies.get(USER_ID_COOKIE)!.value)
-      : null
-
-    if (!authUser && (!cachedRole || !cachedUserId)) {
+    if (!authUser) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('redirect', pathname)
       return NextResponse.redirect(loginUrl)
     }
 
-    // Fast path: read role from the short-lived cookie set by useAuth on login.
-    // This eliminates one DB round-trip (~100-200ms) on every authenticated navigation.
-    const authUserId = authUser?.id ?? cachedUserId
+    // Cookie absent — read role from DB
+    const { data: dbUser } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', authUser.id)
+      .single()
 
-    let role: string | null = authUser
-      ? (cachedRole && cachedUserId === authUser.id ? cachedRole : null)
-      : cachedRole
-
-    if (!role) {
-      // Cookie absent (first load, cookie cleared, or different browser) — fall back to DB
-      const { data: dbUser } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', authUserId)
-        .single()
-
-      if (!dbUser) {
-        return NextResponse.redirect(new URL('/login', request.url))
-      }
-      role = dbUser.role
+    if (!dbUser) {
+      return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    for (const [route, allowedRoles] of roleRoutes) {
-      if (pathname.startsWith(route)) {
-        if (!allowedRoles.includes(role ?? '')) {
-          if (pathname.startsWith('/orders/new/cpo') && role === 'customer') {
-            return NextResponse.redirect(new URL('/orders/new', request.url))
-          }
-          return NextResponse.redirect(new URL('/', request.url))
-        }
-        break // Most specific route matched — don't check broader routes
-      }
-    }
-
-    return response
+    return applyRoleRouting(pathname, dbUser.role, request, response)
   } catch (error) {
     // AbortError happens when browser navigates away before proxy completes — ignore it
     if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('aborted'))) {
