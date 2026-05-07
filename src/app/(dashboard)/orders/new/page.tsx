@@ -344,6 +344,7 @@ export default function NewOrderPage() {
       if (i !== index) return item
       if (field === 'device_id') {
         const dev = devices.find(d => d.id === value)
+          ?? Object.values(deviceSearchResults).flat().find(d => d.id === value)
         const storageOptions = getStorageOptionsForDevice(dev)
         const defaultStorage = storageOptions.includes('128GB') ? '128GB' : storageOptions[0] || ''
         return {
