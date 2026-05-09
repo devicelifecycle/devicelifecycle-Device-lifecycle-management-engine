@@ -80,7 +80,7 @@ function usePipeline(orders: Array<{ status: string }>) {
 function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
-  const { orders, total } = useOrders({ page_size: 500 })
+  const { orders, total } = useOrders({ page_size: 50 })
   const counts = useDashboardCounts()
   const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
   const slaAlerts = orders.filter((order) => order.is_sla_breached).length

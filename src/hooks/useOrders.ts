@@ -128,6 +128,7 @@ export function useOrders(filters: OrderFilters = {}) {
     queryKey: ['orders', filters],
     queryFn: () => fetchOrders(filters),
     refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: false,
   })
 
   // Mutation for creating orders

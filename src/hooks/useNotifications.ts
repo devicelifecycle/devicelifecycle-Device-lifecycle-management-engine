@@ -45,10 +45,10 @@ export function useNotifications() {
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
     refetchInterval: 15000,
-    refetchOnMount: 'always',
+    refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    staleTime: 0,
+    staleTime: 15 * 1000,
   })
 
   const markAsReadMutation = useMutation({
