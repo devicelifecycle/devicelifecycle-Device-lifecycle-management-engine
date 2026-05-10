@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
@@ -24,7 +24,7 @@ const STATS = [
   { value: '100%', label: 'Lifecycle coverage' },
 ]
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
@@ -410,5 +410,21 @@ export default function LoginPage() {
 
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="dark">
+          <div className="app-shell-bg grain-overlay relative flex min-h-screen items-center justify-center text-foreground">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </div>
+      }
+    >
+      <LoginPageInner />
+    </Suspense>
   )
 }
