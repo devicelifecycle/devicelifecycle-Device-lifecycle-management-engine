@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import sys
 import time
 from typing import Any
+
+_IMPERSONATE_AGENTS = ("chrome", "firefox", "edge")
 from urllib.parse import quote
 
 STORE_API = os.getenv("GORECELL_STORE_API", "https://gorecell.ca/wp-json/wc/store/v1/products")
@@ -82,10 +85,11 @@ def _validate_request(data: dict[str, Any]) -> tuple[str, list[dict[str, Any]], 
 
 
 def _fetch_with_scrapling(fetcher_cls: Any, url: str) -> Any:
+    agent = random.choice(_IMPERSONATE_AGENTS)
     if hasattr(fetcher_cls, "fetch"):
-        return fetcher_cls.fetch(url, impersonate='chrome')
+        return fetcher_cls.fetch(url, impersonate=agent)
     if hasattr(fetcher_cls, "get"):
-        return fetcher_cls.get(url, impersonate='chrome')
+        return fetcher_cls.get(url, impersonate=agent)
     raise AttributeError("Scrapling Fetcher does not expose fetch() or get()")
 
 
@@ -120,43 +124,59 @@ def _init_fetcher() -> bool:
         return False
 
 
+def _fetch_with_retry(fetch_fn, url: str, retries: int = 2, backoff: float = 1.5) -> Any:
+    """Call fetch_fn(url) up to `retries` times, waiting backoff*attempt seconds between tries."""
+    last_exc: Exception = RuntimeError("No attempts made")
+    for attempt in range(retries):
+        if attempt > 0:
+            time.sleep(backoff * attempt)
+        try:
+            return fetch_fn(url)
+        except Exception as exc:
+            last_exc = exc
+    raise last_exc
+
+
 def _fetch_json(url: str) -> Any:
     """Fetch JSON, using Scrapling Fetcher if available, else urllib."""
-    if _fetcher is not None:
-        page = _fetch_with_scrapling(_fetcher, url)
-        # Scrapling returns a Response whose body may be bytes; decode it before JSON parsing.
-        body_text = _get_page_text(page)
-        return json.loads(body_text)
+    def _do_fetch(u: str) -> Any:
+        if _fetcher is not None:
+            page = _fetch_with_scrapling(_fetcher, u)
+            body_text = _get_page_text(page)
+            return json.loads(body_text)
+        from urllib.request import Request, urlopen
+        request = Request(
+            u,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            },
+            method="GET",
+        )
+        with urlopen(request, timeout=45) as response:
+            return json.loads(response.read().decode("utf-8", errors="replace"))
 
-    from urllib.request import Request, urlopen
-    request = Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        },
-        method="GET",
-    )
-    with urlopen(request, timeout=45) as response:
-        return json.loads(response.read().decode("utf-8", errors="replace"))
+    return _fetch_with_retry(_do_fetch, url)
 
 
 def _fetch_page(url: str) -> Any:
     """Fetch HTML page, returning a Scrapling page object or raw HTML string."""
-    if _fetcher is not None:
-        return _fetch_with_scrapling(_fetcher, url)
+    def _do_fetch(u: str) -> Any:
+        if _fetcher is not None:
+            return _fetch_with_scrapling(_fetcher, u)
+        from urllib.request import Request, urlopen
+        request = Request(
+            u,
+            headers={
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            },
+            method="GET",
+        )
+        with urlopen(request, timeout=45) as response:
+            return response.read().decode("utf-8", errors="replace")
 
-    from urllib.request import Request, urlopen
-    request = Request(
-        url,
-        headers={
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        },
-        method="GET",
-    )
-    with urlopen(request, timeout=45) as response:
-        return response.read().decode("utf-8", errors="replace")
+    return _fetch_with_retry(_do_fetch, url)
 
 
 def _normalize_storage(value: str) -> str:

@@ -477,6 +477,8 @@ def main() -> int:
                 headless=True,
                 solve_cloudflare=True,
                 network_idle=True,
+                fake_human_interaction=True,
+                block_images=True,
             )
 
             # Scrapling may return a plain Response object for successful fetches.

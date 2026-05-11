@@ -13,10 +13,13 @@ from __future__ import annotations
 import html
 import json
 import os
+import random
 import re
 import sys
 import time
 from typing import Any
+
+_IMPERSONATE_AGENTS = ("chrome", "firefox", "edge")
 
 TRADE_IN_URL = os.getenv("APPLE_TRADE_IN_URL", "https://www.apple.com/ca/shop/trade-in")
 
@@ -84,10 +87,11 @@ def _parse_price(value: str) -> float | None:
 
 
 def _fetch_with_scrapling(fetcher_cls: Any, url: str) -> Any:
+    agent = random.choice(_IMPERSONATE_AGENTS)
     if hasattr(fetcher_cls, "fetch"):
-        return fetcher_cls.fetch(url, impersonate='chrome')
+        return fetcher_cls.fetch(url, impersonate=agent)
     if hasattr(fetcher_cls, "get"):
-        return fetcher_cls.get(url, impersonate='chrome')
+        return fetcher_cls.get(url, impersonate=agent)
     raise AttributeError("Scrapling Fetcher does not expose fetch() or get()")
 
 
@@ -234,16 +238,16 @@ def main() -> int:
         source_method = "scrapling"
 
         try:
-            from scrapling.fetchers import Fetcher  # type: ignore
+            from scrapling.fetchers import Fetcher, StealthyFetcher  # type: ignore
+
             page = _fetch_with_scrapling(Fetcher, TRADE_IN_URL)
             live_prices = _extract_prices_with_scrapling(page)
 
-            # If CSS selectors didn't find enough, also try raw HTML fallback
+            # Merge in regex results if CSS selectors didn't find enough
             if len(live_prices) < 3:
                 raw_html = _get_page_text(page)
                 if raw_html:
                     fallback_prices = _extract_prices_from_raw_html(raw_html)
-                    # Merge: add any prices not already found
                     existing_keys = {f"{p['name'].lower()}-{p['price']}" for p in live_prices}
                     for fp in fallback_prices:
                         key = f"{fp['name'].lower()}-{fp['price']}"
@@ -251,6 +255,26 @@ def main() -> int:
                             live_prices.append(fp)
                             existing_keys.add(key)
                     source_method = "scrapling+regex-fallback"
+
+            # If still too few prices, Apple may have bot protection — retry with StealthyFetcher
+            if len(live_prices) < 3:
+                try:
+                    stealth_page = StealthyFetcher.fetch(
+                        TRADE_IN_URL,
+                        headless=True,
+                        network_idle=True,
+                        block_images=True,
+                    )
+                    stealth_prices = _extract_prices_with_scrapling(stealth_page)
+                    if not stealth_prices:
+                        stealth_html = _get_page_text(stealth_page)
+                        if stealth_html:
+                            stealth_prices = _extract_prices_from_raw_html(stealth_html)
+                    if len(stealth_prices) > len(live_prices):
+                        live_prices = stealth_prices
+                        source_method = "scrapling-stealth-fallback"
+                except Exception:
+                    pass  # Fetcher result stays; StealthyFetcher failure is non-fatal
 
         except ImportError:
             # Fallback to urllib if scrapling not installed
