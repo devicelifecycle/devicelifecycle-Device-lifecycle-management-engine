@@ -84,6 +84,7 @@ export function useDevices(filters: DeviceFilters = {}) {
   const devicesQuery = useQuery({
     queryKey: ['devices', filters],
     queryFn: () => fetchDevices(filters),
+    staleTime: 30 * 1000,
   })
 
   const createMutation = useMutation({
@@ -135,6 +136,7 @@ export function useDevice(id: string | null) {
     queryKey: ['device', id],
     queryFn: () => (id ? fetchDeviceById(id) : null),
     enabled: !!id,
+    staleTime: 30 * 1000,
   })
 
   const updateMutation = useMutation({

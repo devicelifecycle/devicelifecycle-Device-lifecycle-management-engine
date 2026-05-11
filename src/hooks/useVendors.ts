@@ -84,6 +84,7 @@ export function useVendors(filters: VendorFilters = {}) {
   const vendorsQuery = useQuery({
     queryKey: ['vendors', filters],
     queryFn: () => fetchVendors(filters),
+    staleTime: 30 * 1000,
   })
 
   const createMutation = useMutation({
@@ -135,6 +136,7 @@ export function useVendor(id: string | null) {
     queryKey: ['vendor', id],
     queryFn: () => (id ? fetchVendorById(id) : null),
     enabled: !!id,
+    staleTime: 30 * 1000,
   })
 
   const updateMutation = useMutation({

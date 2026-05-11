@@ -27,6 +27,7 @@ export function useCustomerDashboard() {
   const query = useQuery({
     queryKey: ['customer-dashboard'],
     queryFn: fetchCustomerDashboard,
+    staleTime: 30 * 1000,
     refetchInterval: 30 * 1000,
     retry: 1,
   })

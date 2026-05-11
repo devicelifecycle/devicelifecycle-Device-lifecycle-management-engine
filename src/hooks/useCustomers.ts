@@ -91,6 +91,7 @@ export function useCustomers(filters: CustomerFilters = {}) {
     queryKey: ['customers', queryFilters],
     queryFn: () => fetchCustomers(queryFilters),
     enabled: enabled && canReadCustomers,
+    staleTime: 30 * 1000,
   })
 
   const createMutation = useMutation({
@@ -156,6 +157,7 @@ export function useMyCustomer() {
     queryKey: ['customers', 'me'],
     queryFn: fetchMyCustomer,
     enabled: !!isCustomer,
+    staleTime: 30 * 1000,
   })
   return {
     customer: query.data,
@@ -172,6 +174,7 @@ export function useCustomer(id: string | null) {
     queryKey: ['customer', id],
     queryFn: () => (id ? fetchCustomerById(id) : null),
     enabled: !!id,
+    staleTime: 30 * 1000,
   })
 
   const updateMutation = useMutation({

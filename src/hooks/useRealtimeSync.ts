@@ -25,7 +25,7 @@ const TABLE_KEY_MAP: Record<string, string[][]> = {
   vendors:          [['vendors'], ['vendor'], ['vendor-open-orders'], ['vendor-my-bids']],
   users:            [['users']],
   shipments:        [['shipments'], ['orders'], ['order']],
-  vendor_bids:      [['vendor-my-bids'], ['vendor-open-orders'], ['orders'], ['order']],
+  vendor_bids:      [['bids'], ['vendor-my-bids'], ['vendor-open-orders'], ['orders'], ['order']],
   competitor_prices:[['competitor_prices'], ['pricing']],
   notifications:    [['notifications']],
 }

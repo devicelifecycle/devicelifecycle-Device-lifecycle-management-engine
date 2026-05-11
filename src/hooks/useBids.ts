@@ -50,6 +50,7 @@ export function useBids(filters: BidFilters = {}) {
   const query = useQuery({
     queryKey: ['bids', filters],
     queryFn: () => fetchBids(filters),
+    staleTime: 30 * 1000,
   })
 
   const updateMutation = useMutation({

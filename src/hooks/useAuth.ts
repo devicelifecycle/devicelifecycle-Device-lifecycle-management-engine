@@ -299,7 +299,8 @@ function useProvideAuth(): AuthContextValue {
       // Serial loop was slow: wrong format = two full roundtrips back-to-back.
       type SignInResponse = Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
       type SignInData = SignInResponse['data']
-      const authData = await Promise.any(
+
+      const signInPromise = Promise.any(
         candidates.map(email => supabase.auth.signInWithPassword({ email, password })
           .then((res: SignInResponse): SignInData => {
             if (res.error) throw res.error
@@ -307,6 +308,14 @@ function useProvideAuth(): AuthContextValue {
           })
         )
       ).catch((): SignInData | null => null)
+
+      // 15s hard timeout — prevents the spinner hanging forever if Supabase
+      // is unreachable (e.g. network outage or DNS failure).
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Authentication timed out. Please check your connection and try again.')), 15000)
+      )
+
+      const authData = await Promise.race([signInPromise, timeoutPromise])
 
       if (!authData?.user) {
         throw new Error('Invalid login credentials')

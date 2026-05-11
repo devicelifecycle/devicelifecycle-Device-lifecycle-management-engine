@@ -99,7 +99,8 @@ export function useShipments(filters: ShipmentFilters = {}) {
   const shipmentsQuery = useQuery({
     queryKey,
     queryFn: () => fetchShipments(filters),
-    refetchInterval: 30000, // Refresh every 30s for tracking updates
+    staleTime: 30 * 1000,
+    refetchInterval: 30000,
   })
 
   const createMutation = useMutation({
@@ -151,6 +152,7 @@ export function useShipment(id: string | undefined) {
     queryKey: ['shipment', id],
     queryFn: () => fetchShipment(id!),
     enabled: !!id,
+    staleTime: 30 * 1000,
     refetchInterval: 30000,
   })
 
@@ -167,6 +169,7 @@ export function useOrderShipments(orderId: string | undefined) {
     queryKey: ['shipments', { order_id: orderId }],
     queryFn: () => fetchShipments({ order_id: orderId }),
     enabled: !!orderId,
+    staleTime: 30 * 1000,
     refetchInterval: 30000,
   })
 

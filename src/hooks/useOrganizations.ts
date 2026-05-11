@@ -75,6 +75,7 @@ export function useOrganizations(filters: OrganizationFilters = {}) {
   const organizationsQuery = useQuery({
     queryKey: ['organizations', filters],
     queryFn: () => fetchOrganizations(filters),
+    staleTime: 60 * 1000,
   })
 
   const createMutation = useMutation({
@@ -116,6 +117,7 @@ export function useOrganization(id: string | null) {
     queryKey: ['organization', id],
     queryFn: () => (id ? fetchOrganizationById(id) : null),
     enabled: !!id,
+    staleTime: 60 * 1000,
   })
 
   const updateMutation = useMutation({

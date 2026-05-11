@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
@@ -15,12 +16,10 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { authUser, profile } = auth
 
     const searchParams = request.nextUrl.searchParams
     const filters = {
@@ -42,27 +41,17 @@ export async function GET(request: NextRequest) {
     const validated = orderFiltersSchema.safeParse(filters)
     const safeFilters = validated.success ? validated.data : { ...filters, sort_by: undefined, sort_order: undefined }
 
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
-
     const scopedFilters = {
       ...safeFilters,
-      requester_id: user.id,
-      requester_role: profile?.role,
-      requester_organization_id: profile?.organization_id,
+      requester_id: authUser.id,
+      requester_role: profile.role,
+      requester_organization_id: profile.organization_id,
     }
 
     const result = await OrderService.getOrders(scopedFilters as Parameters<typeof OrderService.getOrders>[0])
 
     // Vendors only see fulfillment-safe order data.
-    if (profile?.role === 'vendor' && result.data?.length) {
+    if (profile.role === 'vendor' && result.data?.length) {
       result.data = sanitizeOrdersForVendor(result.data)
     }
 
