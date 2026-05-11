@@ -127,6 +127,7 @@ export function useOrders(filters: OrderFilters = {}) {
   const ordersQuery = useQuery({
     queryKey: ['orders', filters],
     queryFn: () => fetchOrders(filters),
+    staleTime: 30 * 1000,
     refetchInterval: 30 * 1000,
     refetchIntervalInBackground: false,
   })

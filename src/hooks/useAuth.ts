@@ -48,7 +48,11 @@ function readCachedUser(): User | null {
   if (typeof window === 'undefined') return null
 
   try {
-    const raw = window.sessionStorage.getItem(AUTH_CACHE_KEY)
+    // Use localStorage (persists across tab close/browser restart) so returning
+    // users don't see the full-screen "Loading DLM Engine" spinner every new tab.
+    // The cache is only trusted when the dlm_role + dlm_uid cookies also match
+    // (see readTrustedCachedUser), so stale profile data cannot be exploited.
+    const raw = window.localStorage.getItem(AUTH_CACHE_KEY)
     if (!raw) return null
 
     const parsed = JSON.parse(raw) as Partial<User> | null
@@ -68,11 +72,11 @@ function writeCachedUser(user: User | null) {
 
   try {
     if (!user) {
-      window.sessionStorage.removeItem(AUTH_CACHE_KEY)
+      window.localStorage.removeItem(AUTH_CACHE_KEY)
       return
     }
 
-    window.sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(user))
+    window.localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(user))
   } catch {
     // Ignore storage issues — auth should continue to work without the cache.
   }

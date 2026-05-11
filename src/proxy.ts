@@ -113,7 +113,14 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    return applyRoleRouting(pathname, dbUser.role, request, response)
+    // Stamp routing cookies server-side so the next navigation uses the fast path
+    // instead of paying another getUser() + DB round-trip. Not httpOnly so client
+    // JS can also read them for the AuthProvider fast-path cache check.
+    const routed = applyRoleRouting(pathname, dbUser.role, request, response)
+    const cookieOpts = { path: '/', maxAge: 28800, sameSite: 'lax' as const }
+    routed.cookies.set(ROLE_COOKIE, encodeURIComponent(dbUser.role), cookieOpts)
+    routed.cookies.set(USER_ID_COOKIE, encodeURIComponent(authUser.id), cookieOpts)
+    return routed
   } catch (error) {
     // AbortError happens when browser navigates away before proxy completes — ignore it
     if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('aborted'))) {
