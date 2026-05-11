@@ -48,6 +48,18 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${syne.variable} ${instrumentSerif.variable} ${barlow.variable} ${poppins.variable} ${sourceSerif.variable}`}>
       <head>
+        {/* Preconnect to Supabase so auth + DB calls skip the TLS handshake on first use */}
+        {(() => {
+          const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+          const origin = url.startsWith('https://') ? url.replace(/\/+$/, '').split('/').slice(0, 3).join('/') : ''
+          if (!origin || origin.includes('placeholder')) return null
+          return (
+            <>
+              <link rel="preconnect" href={origin} />
+              <link rel="dns-prefetch" href={origin} />
+            </>
+          )
+        })()}
         <script
           dangerouslySetInnerHTML={{
             __html: `

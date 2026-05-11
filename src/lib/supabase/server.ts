@@ -9,7 +9,6 @@ import { cookies } from 'next/headers'
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseUrl = rawUrl.startsWith('https://') ? rawUrl : 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 export async function createServerSupabaseClient() {
   try {
@@ -35,11 +34,8 @@ export async function createServerSupabaseClient() {
       }
     )
   } catch {
-    if (supabaseServiceRoleKey) {
-      return createClient(supabaseUrl, supabaseServiceRoleKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      })
-    }
+    // Never fall back to service-role — that would bypass RLS for unauthenticated
+    // requests. Use the anon key so RLS policies still apply.
     return createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     })
