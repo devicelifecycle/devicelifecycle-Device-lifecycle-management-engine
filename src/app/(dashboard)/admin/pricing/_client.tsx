@@ -474,7 +474,7 @@ export default function AdminPricingClient() {
     success: boolean
     baselines_upserted: number
     condition_multipliers_updated: boolean
-    sample_counts: { order_items: number; imei_records: number; sales_history: number; market_prices: number; competitor_prices: number; training_data: number }
+    sample_counts: { order_items: number; imei_records: number; sales_history: number; market_prices: number; competitor_prices: number; training_data: number; manual_prices: number }
     errors: string[]
     timestamp: string
     duration_ms: number
@@ -3019,12 +3019,12 @@ export default function AdminPricingClient() {
                         const totalSamples = Object.values(d.sample_counts || {}).reduce((a: number, b: unknown) => a + (typeof b === 'number' ? b : 0), 0)
                         toast.success(`Model trained! ${d.baselines_upserted} baselines from ${totalSamples} samples in ${(duration_ms/1000).toFixed(1)}s`)
                       } else {
-                        setTrainingResult({ success: false, baselines_upserted: 0, condition_multipliers_updated: false, sample_counts: { order_items: 0, imei_records: 0, sales_history: 0, market_prices: 0, competitor_prices: 0, training_data: 0 }, errors: [d.error || 'Training failed'], timestamp: new Date().toISOString(), duration_ms })
+                        setTrainingResult({ success: false, baselines_upserted: 0, condition_multipliers_updated: false, sample_counts: { order_items: 0, imei_records: 0, sales_history: 0, market_prices: 0, competitor_prices: 0, training_data: 0, manual_prices: 0 }, errors: [d.error || 'Training failed'], timestamp: new Date().toISOString(), duration_ms })
                         toast.error(d.error || 'Training failed')
                       }
                     } catch {
                       toast.dismiss(toastId)
-                      setTrainingResult({ success: false, baselines_upserted: 0, condition_multipliers_updated: false, sample_counts: { order_items: 0, imei_records: 0, sales_history: 0, market_prices: 0, competitor_prices: 0, training_data: 0 }, errors: ['Network error'], timestamp: new Date().toISOString(), duration_ms: Date.now() - startTime })
+                      setTrainingResult({ success: false, baselines_upserted: 0, condition_multipliers_updated: false, sample_counts: { order_items: 0, imei_records: 0, sales_history: 0, market_prices: 0, competitor_prices: 0, training_data: 0, manual_prices: 0 }, errors: ['Network error'], timestamp: new Date().toISOString(), duration_ms: Date.now() - startTime })
                       toast.error('Training failed — network error')
                     } finally {
                       setTrainingInProgress(false)
@@ -3127,11 +3127,11 @@ export default function AdminPricingClient() {
                         setTrainingResult({ ...d, success: true, duration_ms })
                         toast.success('Model trained successfully')
                       } else {
-                        setTrainingResult({ success: false, baselines_upserted: 0, condition_multipliers_updated: false, sample_counts: { order_items: 0, imei_records: 0, sales_history: 0, market_prices: 0, competitor_prices: 0, training_data: 0 }, errors: [d.error || 'Training failed'], timestamp: new Date().toISOString(), duration_ms })
+                        setTrainingResult({ success: false, baselines_upserted: 0, condition_multipliers_updated: false, sample_counts: { order_items: 0, imei_records: 0, sales_history: 0, market_prices: 0, competitor_prices: 0, training_data: 0, manual_prices: 0 }, errors: [d.error || 'Training failed'], timestamp: new Date().toISOString(), duration_ms })
                         toast.error(d.error || 'Training failed')
                       }
                     } catch {
-                      setTrainingResult({ success: false, baselines_upserted: 0, condition_multipliers_updated: false, sample_counts: { order_items: 0, imei_records: 0, sales_history: 0, market_prices: 0, competitor_prices: 0, training_data: 0 }, errors: ['Network error'], timestamp: new Date().toISOString(), duration_ms: Date.now() - startTime })
+                      setTrainingResult({ success: false, baselines_upserted: 0, condition_multipliers_updated: false, sample_counts: { order_items: 0, imei_records: 0, sales_history: 0, market_prices: 0, competitor_prices: 0, training_data: 0, manual_prices: 0 }, errors: ['Network error'], timestamp: new Date().toISOString(), duration_ms: Date.now() - startTime })
                       toast.error('Training failed — network error')
                     } finally {
                       setTrainingInProgress(false)
@@ -3152,7 +3152,7 @@ export default function AdminPricingClient() {
                   <RefreshCw className="h-5 w-5 animate-spin text-blue-500" />
                   <div>
                     <p className="text-sm font-medium">Training in progress...</p>
-                    <p className="text-xs text-muted-foreground">Aggregating data from 5 sources with weighted trust levels. This may take a few seconds.</p>
+                    <p className="text-xs text-muted-foreground">Aggregating data from 7 sources with weighted trust levels. Manual admin prices carry the highest weight. This may take a few seconds.</p>
                   </div>
                 </div>
               )}
@@ -3183,12 +3183,12 @@ export default function AdminPricingClient() {
                         <div className="rounded-md border bg-background px-3 py-2">
                           <p className="text-xs text-muted-foreground">Total Samples</p>
                           <p className="text-lg font-bold">
-                            {(trainingResult.sample_counts.order_items + trainingResult.sample_counts.imei_records + trainingResult.sample_counts.sales_history + trainingResult.sample_counts.market_prices + trainingResult.sample_counts.competitor_prices).toLocaleString()}
+                            {Object.values(trainingResult.sample_counts).reduce((a, b) => a + b, 0).toLocaleString()}
                           </p>
                         </div>
                         <div className="rounded-md border bg-background px-3 py-2">
                           <p className="text-xs text-muted-foreground">Data Sources</p>
-                          <p className="text-lg font-bold">{Object.values(trainingResult.sample_counts).filter(v => v > 0).length}/5</p>
+                          <p className="text-lg font-bold">{Object.values(trainingResult.sample_counts).filter(v => v > 0).length}/7</p>
                         </div>
                       </div>
                     )}
@@ -3211,6 +3211,9 @@ export default function AdminPricingClient() {
                           )}
                           {trainingResult.sample_counts.competitor_prices > 0 && (
                             <Badge variant="secondary" className="text-xs">Competitors: {trainingResult.sample_counts.competitor_prices}</Badge>
+                          )}
+                          {trainingResult.sample_counts.manual_prices > 0 && (
+                            <Badge variant="secondary" className="text-xs text-amber-700 bg-amber-100 dark:bg-amber-900/30">Manual: {trainingResult.sample_counts.manual_prices}</Badge>
                           )}
                           {Object.values(trainingResult.sample_counts).every(v => v === 0) && (
                             <span className="text-xs text-muted-foreground">No training data found in any source.</span>

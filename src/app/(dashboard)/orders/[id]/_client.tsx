@@ -190,6 +190,10 @@ export default function OrderDetailClient() {
   // Price suggests for Line Items table (per item)
   const [lineItemSuggestions, setLineItemSuggestions] = useState<Record<string, number>>({})
   const [lineItemSuggestionsLoading, setLineItemSuggestionsLoading] = useState(false)
+  // Last manual prices keyed by "deviceId|storage|condition"
+  const [lastManualPrices, setLastManualPrices] = useState<Record<string, { price: number; set_at: string }>>({})
+
+
   // Inline edit mode for Line Items
   const [isInlineEditing, setIsInlineEditing] = useState(false)
   const [inlineEditPrices, setInlineEditPrices] = useState<Record<string, string>>({})
@@ -427,6 +431,30 @@ export default function OrderDetailClient() {
   useEffect(() => {
     fetchLineItemSuggestions()
   }, [fetchLineItemSuggestions])
+
+  // Fetch last manual prices for all devices in this order
+  useEffect(() => {
+    if (!order?.items?.length || isCustomer || isVendor) return
+    const deviceIds = [...new Set(
+      order.items.map((i: OrderItem) => i.device_id).filter(Boolean)
+    )]
+    if (!deviceIds.length) return
+    fetch(`/api/pricing/manual-prices?device_ids=${deviceIds.join(',')}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (!json?.data) return
+        const map: Record<string, { price: number; set_at: string }> = {}
+        for (const row of json.data) {
+          map[`${row.device_id}|${row.storage}|${row.condition}`] = {
+            price: row.last_manual_price,
+            set_at: row.last_set_at,
+          }
+        }
+        setLastManualPrices(map)
+      })
+      .catch(() => {/* ignore */})
+  }, [order?.items, isCustomer, isVendor])
+
 
   // Sync editable depreciation rate when schedule or order loads
   useEffect(() => {
@@ -1318,11 +1346,13 @@ export default function OrderDetailClient() {
   const canVendorCreateShipment = isVendor && ['sourced', 'shipped'].includes(order.status)
   const showLineItemPrices = !isVendor
   const showLineItemSuggestions = !isCustomer && !isVendor && canSetPricing && !isCpoOrder
+  const showLastManualPrice = !isCustomer && !isVendor && canSetPricing
   const showLineItemPricingSource = !isCustomer && !isVendor && (((order.items ?? []).some((i: OrderItem) => i.pricing_metadata?.pricing_source)) || order.status === 'submitted' || order.status === 'quoted')
   const lineItemColSpan =
     3 +
     (showLineItemPrices ? 2 : 0) +
     (showLineItemSuggestions ? 1 : 0) +
+    (showLastManualPrice ? 1 : 0) +
     (showLineItemPricingSource ? 1 : 0)
   const availableTransitions = isCustomer
     ? rawTransitions.filter((s: OrderStatus) => customerAllowedTransitions.includes(s))
@@ -1648,6 +1678,9 @@ export default function OrderDetailClient() {
                       {showLineItemSuggestions && (
                         <TableHead className="w-36">Suggested</TableHead>
                       )}
+                      {showLastManualPrice && (
+                        <TableHead className="w-32">Last Manual</TableHead>
+                      )}
                       {showLineItemPricingSource && (
                         <TableHead className="w-24">Pricing</TableHead>
                       )}
@@ -1746,6 +1779,40 @@ export default function OrderDetailClient() {
                                 )}
                               </TableCell>
                             )}
+                            {showLastManualPrice && (() => {
+                              const storage = getStorageForItem(item)
+                              const cond = item.actual_condition || item.claimed_condition || 'good'
+                              const manualKey = `${item.device_id}|${storage}|${cond}`
+                              const manualEntry = lastManualPrices[manualKey]
+                              return (
+                                <TableCell>
+                                  {manualEntry ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-mono text-amber-600 dark:text-amber-400">
+                                        {formatCurrency(manualEntry.price)}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-1.5 text-xs"
+                                        title={`Last set ${new Date(manualEntry.set_at).toLocaleDateString()}`}
+                                        onClick={() => {
+                                          if (isInlineEditing) {
+                                            setInlineEditPrices(prev => ({ ...prev, [item.id]: manualEntry.price.toFixed(2) }))
+                                          } else {
+                                            handleOpenPricingDialog({ [item.id]: manualEntry.price.toFixed(2) })
+                                          }
+                                        }}
+                                      >
+                                        Use
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                              )
+                            })()}
                             {showLineItemPricingSource && (
                               <TableCell>
                                 {item.pricing_metadata?.pricing_source === 'auto' ? (

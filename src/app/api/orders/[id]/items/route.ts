@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { bulkUpdateOrderItemPricesSchema, addOrderItemSchema } from '@/lib/validations'
 import { safeErrorMessage, isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -240,6 +241,44 @@ export async function PATCH(
         { status: 500 }
       )
     }
+
+    // Upsert last manual prices for items that have a device_id (fire-and-forget)
+    void (async () => {
+      try {
+        const manualItems = items.filter(i => i.unit_price > 0 && (i.pricing_metadata?.pricing_source === 'manual' || !i.pricing_metadata?.pricing_source))
+        if (!manualItems.length) return
+        const itemIds = manualItems.map(i => i.id)
+        const serviceRole = createServiceRoleClient()
+        const { data: rows } = await serviceRole
+          .from('order_items')
+          .select('id, device_id, storage, claimed_condition, actual_condition')
+          .in('id', itemIds)
+          .not('device_id', 'is', null)
+        if (!rows?.length) return
+        const priceMap = new Map(manualItems.map(i => [i.id, i.unit_price]))
+        const now = new Date().toISOString()
+        const orderId = (await params).id
+        const upserts = rows
+          .filter(r => r.device_id)
+          .map(r => ({
+            device_id: r.device_id,
+            storage: r.storage || '128GB',
+            condition: r.actual_condition || r.claimed_condition || 'good',
+            last_manual_price: priceMap.get(r.id) ?? 0,
+            last_set_at: now,
+            last_order_id: orderId,
+            updated_at: now,
+          }))
+          .filter(u => u.last_manual_price > 0)
+        if (upserts.length) {
+          await serviceRole
+            .from('device_last_manual_prices')
+            .upsert(upserts, { onConflict: 'device_id,storage,condition' })
+        }
+      } catch (e) {
+        console.error('Failed to upsert last manual prices:', e)
+      }
+    })()
 
     // Calculate and update order total
     const { data: orderItems } = await supabase

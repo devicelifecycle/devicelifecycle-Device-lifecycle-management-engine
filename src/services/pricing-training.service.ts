@@ -68,6 +68,7 @@ export interface TrainingResult {
     market_prices: number
     competitor_prices: number
     training_data: number
+    manual_prices: number
   }
   errors: string[]
 }
@@ -157,6 +158,7 @@ export class PricingTrainingService {
       market_prices: 0,
       competitor_prices: 0,
       training_data: 0,
+      manual_prices: 0,
     }
 
     // Key: "device_id|storage|condition" -> weighted price entries
@@ -477,6 +479,35 @@ export class PricingTrainingService {
     }
 
     // ------------------------------------------------------------------
+    // SOURCE 7: Admin-set manual prices (highest trust — real decisions)
+    // These represent explicit admin judgement on what a device is worth.
+    // Weight 1.1 overrides all external signals when present.
+    // ------------------------------------------------------------------
+    try {
+      const manualPrices = await this.fetchAllRows<{
+        device_id: string
+        storage: string | null
+        condition: string | null
+        last_manual_price: number
+        last_set_at: string | null
+      }>(
+        'device_last_manual_prices',
+        'device_id, storage, condition, last_manual_price, last_set_at'
+      )
+
+      for (const mp of manualPrices) {
+        const price = Number(mp.last_manual_price) || 0
+        if (price <= 0) continue
+        const storage = mp.storage || '128GB'
+        const cond = normalizeTrainingCondition(mp.condition || 'good')
+        addPrice(mp.device_id, storage, cond, price, 1.1, 'admin_manual', mp.last_set_at)
+        sampleCounts.manual_prices++
+      }
+    } catch (e) {
+      errors.push(`manual_prices: ${e instanceof Error ? e.message : 'Unknown'}`)
+    }
+
+    // ------------------------------------------------------------------
     // COMPUTE WEIGHTED BASELINES
     // ------------------------------------------------------------------
     const nowIso = new Date().toISOString()
@@ -566,7 +597,7 @@ export class PricingTrainingService {
     return {
       baselines_upserted: baselinesUpserted,
       condition_multipliers_updated: multipliersUpdated,
-      data_sources_used: ['order_items', 'imei_records', 'sales_history', 'market_prices', 'competitor_prices', 'training_data'],
+      data_sources_used: ['order_items', 'imei_records', 'sales_history', 'market_prices', 'competitor_prices', 'training_data', 'admin_manual'],
       sample_counts: sampleCounts,
       errors,
     }
