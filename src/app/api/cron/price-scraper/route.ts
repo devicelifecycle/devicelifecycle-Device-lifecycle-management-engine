@@ -206,17 +206,19 @@ export async function GET(request: NextRequest) {
 
     // Notify admins once after the final provider run (post=1 / apple).
     // Per-provider runs (post=0) skip notification to avoid 5 pings per day.
-    if (runPost && (result.total_upserted > 0 || failedScrapers.length > 0)) {
+    // Always send when runPost=true so admins get a daily confirmation even
+    // when no prices changed. Awaited to ensure delivery before function exits.
+    if (runPost) {
       try {
         const { NotificationService } = await import('@/services/notification.service')
-        NotificationService.sendPriceUpdateNotification({
+        await NotificationService.sendPriceUpdateNotification({
           source: 'scraper',
           total_updated: result.total_upserted,
           total_new: result.devices_created ?? 0,
           failed_scrapers: failedScrapers.length > 0 ? failedScrapers : undefined,
-        }).catch(err => console.error('Price notification error:', err))
+        })
       } catch (notifyErr) {
-        console.warn('Price notification import failed:', notifyErr)
+        console.warn('Price notification failed:', notifyErr)
       }
     }
 

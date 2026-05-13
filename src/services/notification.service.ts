@@ -763,14 +763,14 @@ export class NotificationService {
     try {
       const supabase = createServiceRoleClient()
 
-      // Find all active admins and COE managers
+      // Fetch active admins/COE managers WITH email so we can send to them
       const { data: users } = await supabase
         .from('users')
-        .select('id, role')
+        .select('id, role, email, full_name, notification_email')
         .eq('is_active', true)
 
       const admins = (users || []).filter(
-        (user) => user.role === 'admin' || user.role === 'coe_manager'
+        (user) => (user as { role?: string }).role === 'admin' || (user as { role?: string }).role === 'coe_manager'
       )
 
       if (!admins || admins.length === 0) return
@@ -790,24 +790,85 @@ export class NotificationService {
       if (input.details) parts.push(input.details)
       const message = parts.length > 0 ? parts.join(' · ') : 'Competitor prices have been refreshed'
 
-      // Notify each admin
+      const hasFailures = (input.failed_scrapers?.length ?? 0) > 0
+      const pricingUrl = process.env.NEXT_PUBLIC_SITE_URL ? `${process.env.NEXT_PUBLIC_SITE_URL}/admin/pricing` : '/admin/pricing'
+      const appName = process.env.NEXT_PUBLIC_APP_NAME || 'DLM Engine'
+
+      const emailHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
+        <tr><td style="background:#18181b;padding:24px 32px;">
+          <h1 style="margin:0;color:#fff;font-size:20px;font-weight:600;">${appName}</h1>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 8px;color:#3f3f46;font-size:15px;font-weight:600;">${title}</p>
+          <p style="margin:0 0 24px;color:#3f3f46;font-size:14px;">${message}</p>
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;">
+            <tr><td style="padding:16px 20px;">
+              ${input.total_updated > 0 ? `<p style="margin:0 0 4px;color:#18181b;font-size:14px;">✓ <strong>${input.total_updated}</strong> competitor prices refreshed</p>` : ''}
+              ${(input.total_new ?? 0) > 0 ? `<p style="margin:0 0 4px;color:#18181b;font-size:14px;">✓ <strong>${input.total_new}</strong> new devices added to catalog</p>` : ''}
+              ${hasFailures ? `<p style="margin:0;color:#dc2626;font-size:14px;">✗ Failed scrapers: ${input.failed_scrapers!.join(', ')}</p>` : ''}
+            </td></tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            <tr><td style="background:#18181b;border-radius:6px;">
+              <a href="${pricingUrl}" style="display:inline-block;padding:12px 24px;color:#fff;text-decoration:none;font-size:14px;font-weight:500;">View Pricing Dashboard</a>
+            </td></tr>
+          </table>
+          <p style="margin:0;color:#a1a1aa;font-size:12px;">Automated daily scraper — ${new Date().toUTCString()}</p>
+        </td></tr>
+        <tr><td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+          <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${appName}. All rights reserved.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+      const emailSends: Promise<void>[] = []
+
       for (const admin of admins) {
-        await this.createNotification({
-          user_id: admin.id,
-          type: 'in_app',
-          title,
-          message,
-          link: '/admin/pricing',
-          metadata: {
-            audience: 'admin',
-            source: input.source,
-            total_updated: input.total_updated,
-            total_new: input.total_new,
-            failed_scrapers: input.failed_scrapers,
-            timestamp: new Date().toISOString(),
-          },
-        })
+        const a = admin as { id: string; email?: string; full_name?: string; notification_email?: string | null }
+
+        // Create in-app notification
+        emailSends.push(
+          this.createNotification({
+            user_id: a.id,
+            type: 'in_app',
+            title,
+            message,
+            link: '/admin/pricing',
+            metadata: {
+              audience: 'admin',
+              source: input.source,
+              total_updated: input.total_updated,
+              total_new: input.total_new,
+              failed_scrapers: input.failed_scrapers,
+              timestamp: new Date().toISOString(),
+            },
+          }).then(() => {}).catch(() => {})
+        )
+
+        // Also send email directly — createNotification only emails when type='email',
+        // but this is an admin alert that must always go to their inbox.
+        const effectiveEmail = a.email?.endsWith('@login.local') ? a.notification_email : a.email
+        if (effectiveEmail) {
+          emailSends.push(
+            EmailService.sendEmail(effectiveEmail, title, emailHtml)
+              .then(sent => {
+                if (!sent) console.warn(`[PriceUpdateNotification] Email delivery returned false for ${effectiveEmail}`)
+              })
+              .catch(err => console.error(`[PriceUpdateNotification] Email failed for ${effectiveEmail}:`, err))
+          )
+        }
       }
+
+      await Promise.all(emailSends)
     } catch (err) {
       console.error('Failed to send price update notification:', err)
     }
