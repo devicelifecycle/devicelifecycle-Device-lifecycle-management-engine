@@ -184,10 +184,11 @@ def _extract_prices_from_raw_html(raw_html: str) -> list[dict[str, Any]]:
         if price is not None:
             _add_entry(results, seen, device_name, price)
 
-    # "Up to $X" patterns
+    # "Up to $X" patterns — normalize &nbsp; so "Pro&nbsp;Max" matches Pro\s*Max
+    normalized_html = raw_html.replace("&nbsp;", " ")
     for device_pattern in DEVICE_PATTERNS:
         combined_pattern = re.compile(device_pattern + r"[^$]*?Up\s+to\s+\$([\d,]+)", re.IGNORECASE | re.DOTALL)
-        for match in combined_pattern.finditer(raw_html):
+        for match in combined_pattern.finditer(normalized_html):
             name = re.sub(r"\s+", " ", html.unescape(match.group(1))).strip()
             price = _parse_price(match.group(2))
             if price is not None:
@@ -210,16 +211,16 @@ def _match_device_to_prices(device: dict[str, Any], live_prices: list[dict[str, 
     model = str(device.get("model", ""))
     model_lower = model.lower()
 
-    # Exact or substring match
+    # Exact match — prevents cross-variant price contamination
     for item in live_prices:
-        name_lower = str(item["name"]).lower()
-        if name_lower == model_lower or model_lower in name_lower or name_lower in model_lower:
+        if str(item["name"]).lower() == model_lower:
             return float(item["price"]), "live"
 
-    # Partial match (longest name wins for specificity)
+    # Fuzzy: longest scraped name that the device model starts with wins.
+    # e.g. "iPhone 16 Pro Max" → longest startsWith match beats "iPhone 16 Pro" and "iPhone 16".
     partials = [
         item for item in live_prices
-        if model_lower in str(item["name"]).lower() or str(item["name"]).lower() in model_lower
+        if model_lower.startswith(str(item["name"]).lower())
     ]
     partials.sort(key=lambda item: len(str(item["name"])), reverse=True)
     if partials:

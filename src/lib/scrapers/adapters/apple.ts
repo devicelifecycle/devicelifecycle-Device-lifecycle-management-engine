@@ -48,25 +48,20 @@ async function scrapeAppleTypeScript(devices: DeviceToScrape[]): Promise<Scraper
       let tradePrice: number | null = null
       let source = 'none'
 
-      // Try exact match first
-      const exact = livePrices.find(item => {
-        const nameLower = item.name.toLowerCase()
-        return nameLower === modelLower || nameLower.includes(modelLower) || modelLower.includes(nameLower)
-      })
+      // Exact match only — avoids "iPhone 16 Pro" matching "iPhone 16 Pro Max" via substring
+      const exact = livePrices.find(item => item.name.toLowerCase() === modelLower)
       if (exact) {
         tradePrice = exact.price
         source = 'live'
       }
 
-      // Try fuzzy partial match (e.g., "iPhone 15" base model matches "iPhone 15")
+      // Fuzzy: find the longest scraped name that the device model starts with.
+      // e.g. "iPhone 16 Pro Max" device → longest startsWith match wins ("iPhone 16 Pro Max"
+      // beats "iPhone 16 Pro" and "iPhone 16"). Prevents cross-variant price contamination.
       if (tradePrice == null) {
         const partial = livePrices
-          .filter(item => {
-            const nameLower = item.name.toLowerCase()
-            return modelLower.includes(nameLower) || nameLower.includes(modelLower)
-          })
+          .filter(item => modelLower.startsWith(item.name.toLowerCase()))
           .sort((a, b) => b.name.length - a.name.length)
-
         if (partial.length > 0) {
           tradePrice = partial[0].price
           source = 'live-partial'
@@ -136,7 +131,8 @@ function extractLivePrices($: $Root, html: string): AppleTradeInEntry[] {
   })
 
   // Strategy 2: Regex scan for "DeviceName ... Up to $X" in raw HTML
-  // Handles cases where Cheerio table parsing misses something
+  // Normalize &nbsp; first so "Pro&nbsp;Max" matches the Pro\s*Max pattern
+  const normalizedHtml = html.replace(/&nbsp;/g, ' ')
   const devicePatterns = [
     /(iPhone\s+\d+\s*(?:Pro\s*Max|Pro|Plus|e)?)[^$]*?Up\s+to\s+\$([\d,]+)/gi,
     /(iPad\s+(?:Pro|Air|mini)?)[^$]*?Up\s+to\s+\$([\d,]+)/gi,
@@ -148,7 +144,7 @@ function extractLivePrices($: $Root, html: string): AppleTradeInEntry[] {
 
   for (const pattern of devicePatterns) {
     let match
-    while ((match = pattern.exec(html)) !== null) {
+    while ((match = pattern.exec(normalizedHtml)) !== null) {
       const name = match[1].replace(/\u00a0/g, ' ').trim()
       const price = parsePrice(match[2])
       if (price != null) {
