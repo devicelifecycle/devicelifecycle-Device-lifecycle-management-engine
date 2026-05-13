@@ -365,8 +365,11 @@ def _find_best_storage_match(query_data: dict[str, Any], storage: str) -> float 
     return None if best is None else float(best["price"])
 
 
+_STORAGE_SIZE_RE = re.compile(r"\b(\d+)\s*(GB|TB)\b", re.IGNORECASE)
+_RAM_KEYWORD_RE = re.compile(r"^(RAM|Memory|DDR\d*|LPDDR\d*)\b", re.IGNORECASE)
+
+
 def _extract_all_storage_prices(query_data: dict[str, Any], condition: str) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
     condition_multiplier = 1.0
 
     for step in query_data.values():
@@ -387,6 +390,9 @@ def _extract_all_storage_prices(query_data: dict[str, Any], condition: str) -> l
                 except Exception:
                     condition_multiplier = 1
 
+    # Collect storage→price (lower price wins on duplicate storage key)
+    storage_map: dict[str, float] = {}
+
     for step in query_data.values():
         if not isinstance(step, dict):
             continue
@@ -404,13 +410,29 @@ def _extract_all_storage_prices(query_data: dict[str, Any], condition: str) -> l
                 continue
             if price <= 0:
                 continue
-            storage = str(rule.get("title", "")).strip() or "Unknown"
-            results.append({
-                "storage": storage,
-                "price": round(price * condition_multiplier, 2),
-            })
 
-    return results
+            rule_title = str(rule.get("title", "")).strip()
+
+            # Must contain a GB/TB value — skips chip names, accessories, etc.
+            m = _STORAGE_SIZE_RE.search(rule_title)
+            if not m:
+                continue
+
+            # Skip if the matched value is immediately followed by a RAM/memory keyword
+            # e.g. "16GB RAM" → skip; "4TB SSD" → keep; "16GB RAM 512GB SSD" → skip
+            after = rule_title[m.end():].strip()
+            if _RAM_KEYWORD_RE.match(after):
+                continue
+
+            # Extract only the numeric+unit portion — never the full compound title
+            storage = m.group(1) + m.group(2).upper()
+            final = round(price * condition_multiplier, 2)
+
+            existing = storage_map.get(storage)
+            if existing is None or final < existing:
+                storage_map[storage] = final
+
+    return [{"storage": s, "price": p} for s, p in storage_map.items()]
 
 
 def _infer_make(name: str) -> str:
