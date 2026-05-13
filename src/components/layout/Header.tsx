@@ -22,9 +22,14 @@ interface HeaderProps {
 export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick, onMenuClick }: HeaderProps) {
   const pathname = usePathname()
   const { unreadCount } = useNotifications()
-  const { user } = useAuth()
+  const { user, activeRole, switchRole } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
-  const notificationsHref = user?.role === 'customer' ? '/customer/notifications' : '/notifications'
+  const notificationsHref = activeRole === 'customer' ? '/customer/notifications' : '/notifications'
+  const hasSecondaryRole = !!user?.secondary_role
+  const otherRole = hasSecondaryRole
+    ? (activeRole === user!.role ? user!.secondary_role! : user!.role)
+    : null
+  const otherRoleLabel = otherRole === 'customer' ? 'Customer' : otherRole === 'vendor' ? 'Vendor' : ''
 
   const segments = pathname.split('/').filter(Boolean)
   const breadcrumbs = segments.map((segment, index) => {
@@ -117,6 +122,16 @@ export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick,
 
         {/* Right: actions pill */}
         <div className="topbar-actions flex items-center gap-0.5 rounded-full px-1 py-1">
+          {/* Dual-role switcher */}
+          {hasSecondaryRole && otherRole && (
+            <button
+              onClick={() => switchRole(otherRole as import('@/types').UserRole)}
+              className="mr-1 flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              title={`Switch to ${otherRoleLabel} View`}
+            >
+              Switch to {otherRoleLabel} View
+            </button>
+          )}
           {/* Theme toggle */}
           <button
             className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all"

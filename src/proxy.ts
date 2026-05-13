@@ -15,8 +15,10 @@ const roleRoutes: [string, string[]][] = [
   ['/coe', ['admin', 'coe_manager', 'coe_tech']],
   ['/customers/new', ['admin', 'coe_manager']],
   ['/vendors/new', ['admin', 'coe_manager']],
-  ['/customer/', ['customer']],
-  ['/vendor/', ['vendor']],
+  // Both portals are open to customer+vendor roles — data-level access is enforced
+  // by API routes using effectiveRole, so the route guard just needs to allow navigation.
+  ['/customer/', ['customer', 'vendor']],
+  ['/vendor/', ['vendor', 'customer']],
   ['/customers', ['admin', 'coe_manager', 'sales']],
   ['/vendors', ['admin', 'coe_manager', 'sales']],
   // CPO: internal only; trade-in: internal + customer
@@ -70,9 +72,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Cookie name must match the one set in useAuth.ts
+  // Cookie names must match those set in useAuth.ts
   const ROLE_COOKIE = 'dlm_role'
   const USER_ID_COOKIE = 'dlm_uid'
+  const ACTIVE_ROLE_COOKIE = 'dlm_active_role'
 
   const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
     ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
@@ -86,7 +89,13 @@ export async function proxy(request: NextRequest) {
   // in 8 hours. API routes independently validate the Supabase JWT, so this only
   // bypasses the middleware routing check, not data-layer authorization.
   if (cachedRole && cachedUserId) {
-    return applyRoleRouting(pathname, cachedRole, request)
+    // Use dlm_active_role (set by switchRole()) if present, otherwise primary role.
+    // The cookie value is not validated here — API routes enforce data-level access.
+    const activeRoleCookie = request.cookies.get(ACTIVE_ROLE_COOKIE)?.value
+      ? decodeURIComponent(request.cookies.get(ACTIVE_ROLE_COOKIE)!.value)
+      : null
+    const effectiveRole = activeRoleCookie || cachedRole
+    return applyRoleRouting(pathname, effectiveRole, request)
   }
 
   // Slow path: no routing cookies — must verify session with Supabase Auth.

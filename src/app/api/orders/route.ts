@@ -44,14 +44,14 @@ export async function GET(request: NextRequest) {
     const scopedFilters = {
       ...safeFilters,
       requester_id: authUser.id,
-      requester_role: profile.role,
+      requester_role: auth.effectiveRole,
       requester_organization_id: profile.organization_id,
     }
 
     const result = await OrderService.getOrders(scopedFilters as Parameters<typeof OrderService.getOrders>[0])
 
     // Vendors only see fulfillment-safe order data.
-    if (profile.role === 'vendor' && result.data?.length) {
+    if (auth.effectiveRole === 'vendor' && result.data?.length) {
       result.data = sanitizeOrdersForVendor(result.data)
     }
 

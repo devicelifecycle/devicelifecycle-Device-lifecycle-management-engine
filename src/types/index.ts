@@ -80,6 +80,7 @@ export interface User extends BaseEntity {
   email: string;
   full_name: string;
   role: UserRole;
+  secondary_role?: UserRole | null;
   organization_id?: string;
   phone?: string;
   avatar_url?: string;

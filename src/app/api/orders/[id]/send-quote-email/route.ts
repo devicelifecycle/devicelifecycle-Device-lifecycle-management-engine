@@ -144,8 +144,42 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const quotedTotal = order.quoted_amount ?? order.total_amount ?? 0
     const totalFormatted = quotedTotal > 0 ? `$${quotedTotal.toFixed(2)}` : 'See attached'
 
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '')
+    const orderUrl = `${siteUrl}/customer/orders/${order.id}`
+
     const safeOrderNumHtml = escapeHtml(order.order_number || '')
     const safeTotalFormatted = escapeHtml(totalFormatted)
+
+    const itemRows = (order.items || []).map(item => {
+      const device = item.device ? escapeHtml(`${item.device.make || ''} ${item.device.model || ''}`.trim()) : '—'
+      const storage = escapeHtml(item.storage || '—')
+      const condition = escapeHtml((item.claimed_condition || '—').replace(/_/g, ' '))
+      const qty = item.quantity ?? 1
+      const unit = item.unit_price ?? item.guaranteed_buyback_price ?? 0
+      const unitDisplay = unit > 0 ? `$${unit.toFixed(2)}` : '—'
+      return `<tr>
+        <td style="padding:6px 10px;border:1px solid #e0e0e0">${device}</td>
+        <td style="padding:6px 10px;border:1px solid #e0e0e0">${storage}</td>
+        <td style="padding:6px 10px;border:1px solid #e0e0e0">${condition}</td>
+        <td style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right">${qty}</td>
+        <td style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right">${unitDisplay}</td>
+      </tr>`
+    }).join('')
+
+    const lineItemsTable = itemRows ? `
+  <table style="border-collapse:collapse;width:100%;margin:16px 0;font-size:13px">
+    <thead>
+      <tr style="background:#f5f5f5">
+        <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:left">Device</th>
+        <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:left">Storage</th>
+        <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:left">Condition</th>
+        <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right">Qty</th>
+        <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right">Unit Price</th>
+      </tr>
+    </thead>
+    <tbody>${itemRows}</tbody>
+  </table>` : ''
+
     const html = `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
   <h2 style="color:#111">Your ${docType} — Order ${safeOrderNumHtml}</h2>
@@ -156,6 +190,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Total Amount</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeTotalFormatted}</td></tr>
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Date</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${formatDate(order.quoted_at || order.created_at)}</td></tr>
   </table>
+  ${lineItemsTable}
+  <div style="margin:24px 0;text-align:center">
+    <a href="${orderUrl}" style="display:inline-block;padding:14px 32px;background:#b65d2f;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">View &amp; Accept Quote in Portal</a>
+  </div>
+  <p style="color:#888;font-size:12px;margin-top:4px;text-align:center">Or copy this link: ${orderUrl}</p>
   <p>If you have any questions, please contact our team.</p>
   <p style="color:#888;font-size:12px;margin-top:32px">— DLM Engine</p>
 </div>`

@@ -14,6 +14,7 @@ interface AuthState {
   isLoading: boolean       // true only during login/logout actions
   isInitializing: boolean  // true while checking initial session
   isAuthenticated: boolean
+  activeRole: UserRole | null  // primary or secondary role currently in use
 }
 
 interface AuthContextValue extends AuthState {
@@ -27,11 +28,13 @@ interface AuthContextValue extends AuthState {
   enrollMfa: () => Promise<MfaEnrollData>
   unenrollMfa: (factorId: string) => Promise<void>
   getMfaFactors: () => Promise<MfaFactorsData>
+  switchRole: (targetRole: UserRole) => void
 }
 
 const AUTH_CACHE_KEY = '__dlm_auth_user'
 const ROLE_COOKIE = 'dlm_role'
 const USER_ID_COOKIE = 'dlm_uid'
+const ACTIVE_ROLE_COOKIE = 'dlm_active_role'
 
 // Module-level singleton — stable reference, never recreated
 const supabase = createBrowserSupabaseClient()
@@ -102,6 +105,15 @@ function clearRoutingCookies() {
   if (typeof document === 'undefined') return
   document.cookie = `${ROLE_COOKIE}=; path=/; max-age=0; SameSite=Lax`
   document.cookie = `${USER_ID_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+  document.cookie = `${ACTIVE_ROLE_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+}
+
+function getActiveRole(user: User): UserRole {
+  const cookie = readCookieValue(ACTIVE_ROLE_COOKIE)
+  if (cookie && (cookie === user.role || cookie === user.secondary_role)) {
+    return cookie as UserRole
+  }
+  return user.role
 }
 
 function readTrustedCachedUser(): User | null {
@@ -134,6 +146,7 @@ function useProvideAuth(): AuthContextValue {
       isLoading: false,
       isInitializing: !cachedUser,
       isAuthenticated: !!cachedUser,
+      activeRole: cachedUser ? getActiveRole(cachedUser) : null,
     }
   })
   const router = useRouter()
@@ -168,7 +181,7 @@ function useProvideAuth(): AuthContextValue {
 
       const { data: profile } = await supabase
         .from('users')
-        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
+        .select('id, email, full_name, role, secondary_role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
         .eq('id', authUser.id)
         .single()
 
@@ -179,7 +192,7 @@ function useProvideAuth(): AuthContextValue {
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
         clearRoutingCookies()
-        setState(prev => ({ ...prev, user: null, isInitializing: false, isAuthenticated: false }))
+        setState(prev => ({ ...prev, user: null, isInitializing: false, isAuthenticated: false, activeRole: null }))
         return
       }
 
@@ -187,7 +200,7 @@ function useProvideAuth(): AuthContextValue {
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
         clearRoutingCookies()
-        setState(prev => ({ ...prev, user: null, isInitializing: false, isAuthenticated: false }))
+        setState(prev => ({ ...prev, user: null, isInitializing: false, isAuthenticated: false, activeRole: null }))
         return
       }
 
@@ -198,6 +211,7 @@ function useProvideAuth(): AuthContextValue {
         user: profile as User,
         isInitializing: false,
         isAuthenticated: true,
+        activeRole: getActiveRole(profile as User),
       }))
     } catch (error) {
       if (isAbortError(error)) return
@@ -240,13 +254,13 @@ function useProvideAuth(): AuthContextValue {
           } else {
             writeCachedUser(null)
             clearRoutingCookies()
-            setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+            setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false, activeRole: null })
             router.push('/login?reason=session_expired')
           }
         } else if (event === 'SIGNED_OUT') {
           writeCachedUser(null)
           clearRoutingCookies()
-          setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+          setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false, activeRole: null })
         }
       }
     )
@@ -259,7 +273,7 @@ function useProvideAuth(): AuthContextValue {
         if (!session) {
           writeCachedUser(null)
           clearRoutingCookies()
-          setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+          setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false, activeRole: null })
           router.push('/login?reason=session_expired')
         }
       } catch (error) {
@@ -333,7 +347,7 @@ function useProvideAuth(): AuthContextValue {
       const cachedUser = readTrustedCachedUser()
       if (cachedUser && cachedUser.id === userId) {
         writeCachedUser(cachedUser)
-        setState({ user: cachedUser, isLoading: false, isInitializing: false, isAuthenticated: true })
+        setState({ user: cachedUser, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(cachedUser) })
         router.replace(getDefaultAppPathForRole(cachedUser.role))
         // Hydrate full profile in background — updates state without blocking nav
         fetchUser().catch(() => {})
@@ -344,7 +358,7 @@ function useProvideAuth(): AuthContextValue {
       const [profileResult, aalResult] = await Promise.all([
         supabase
           .from('users')
-          .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
+          .select('id, email, full_name, role, secondary_role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
           .eq('id', userId)
           .single(),
         supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
@@ -365,7 +379,7 @@ function useProvideAuth(): AuthContextValue {
       if (profile?.is_active) {
         writeCachedUser(profile)
         setRoutingCookies(profile.role, profile.id)
-        setState({ user: profile, isLoading: false, isInitializing: false, isAuthenticated: true })
+        setState({ user: profile, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(profile) })
         router.replace(getDefaultAppPathForRole(profile.role))
         return
       }
@@ -387,11 +401,23 @@ function useProvideAuth(): AuthContextValue {
   const logout = useCallback(() => {
     writeCachedUser(null)
     clearRoutingCookies()
-    setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false })
+    setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false, activeRole: null })
     router.replace('/login')
     // Fire-and-forget: revoke JWT after UI is already gone
     void supabase.auth.signOut().catch(() => {})
   }, [router])
+
+  // Switch between primary and secondary role — sets dlm_active_role cookie
+  // so both the proxy (routing) and require-auth (API data scoping) use it.
+  const switchRole = useCallback((targetRole: UserRole) => {
+    if (!state.user) return
+    const { role, secondary_role } = state.user
+    if (targetRole !== role && targetRole !== secondary_role) return
+    const attrs = '; path=/; max-age=28800; SameSite=Lax'
+    document.cookie = `${ACTIVE_ROLE_COOKIE}=${encodeURIComponent(targetRole)}${attrs}`
+    setState(prev => ({ ...prev, activeRole: targetRole }))
+    router.replace(getDefaultAppPathForRole(targetRole))
+  }, [state.user, router])
 
   // Check if user has a specific role
   const hasRole = useCallback((role: UserRole | UserRole[]) => {
@@ -422,7 +448,7 @@ function useProvideAuth(): AuthContextValue {
 
       const { data: profile } = await supabase
         .from('users')
-        .select('id, email, full_name, role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
+        .select('id, email, full_name, role, secondary_role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
         .eq('id', authUser.id)
         .single()
 
@@ -430,7 +456,7 @@ function useProvideAuth(): AuthContextValue {
       if (typedProfile?.is_active) {
         writeCachedUser(typedProfile)
         setRoutingCookies(typedProfile.role, typedProfile.id)
-        setState({ user: typedProfile, isLoading: false, isInitializing: false, isAuthenticated: true })
+        setState({ user: typedProfile, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(typedProfile) })
         router.replace(getDefaultAppPathForRole(typedProfile.role))
         return
       }
@@ -475,6 +501,7 @@ function useProvideAuth(): AuthContextValue {
     enrollMfa,
     unenrollMfa,
     getMfaFactors,
+    switchRole,
   }
 }
 

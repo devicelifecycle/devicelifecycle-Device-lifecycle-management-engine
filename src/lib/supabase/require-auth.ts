@@ -15,12 +15,14 @@
 // account is blocked even within the JWT window.
 
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient } from './server'
 import type { User } from '@supabase/supabase-js'
 
 export interface AuthProfile {
   id: string
   role: string
+  secondary_role: string | null
   organization_id: string | null
   is_active: boolean
 }
@@ -29,6 +31,8 @@ export interface AuthContext {
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>
   authUser: User
   profile: AuthProfile
+  /** The role currently in use — primary or secondary, validated against DB */
+  effectiveRole: string
 }
 
 /**
@@ -37,6 +41,9 @@ export interface AuthContext {
  *
  * Eliminates ~100–250 ms getUser() network call from every API route by
  * decoding the JWT from the Supabase httpOnly cookie locally.
+ *
+ * effectiveRole: reads dlm_active_role cookie and validates it against the DB
+ * role/secondary_role — falls back to primary role if cookie is absent or invalid.
  */
 export async function requireAuth(): Promise<AuthContext | null> {
   const supabase = await createServerSupabaseClient()
@@ -46,13 +53,23 @@ export async function requireAuth(): Promise<AuthContext | null> {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, role, organization_id, is_active')
+    .select('id, role, secondary_role, organization_id, is_active')
     .eq('id', session.user.id)
     .single()
 
   if (!profile || !profile.is_active) return null
 
-  return { supabase, authUser: session.user, profile: profile as AuthProfile }
+  const cookieStore = await cookies()
+  const activeRoleCookie = cookieStore.get('dlm_active_role')?.value
+    ? decodeURIComponent(cookieStore.get('dlm_active_role')!.value)
+    : null
+  const effectiveRole =
+    activeRoleCookie &&
+    (activeRoleCookie === profile.role || activeRoleCookie === profile.secondary_role)
+      ? activeRoleCookie
+      : profile.role
+
+  return { supabase, authUser: session.user, profile: profile as AuthProfile, effectiveRole }
 }
 
 export function unauthorized(message = 'Unauthorized') {

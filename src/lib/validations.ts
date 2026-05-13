@@ -139,6 +139,7 @@ export const createUserSchema = z
 export const updateUserSchema = z.object({
   full_name: z.string().min(2).optional(),
   role: z.enum(USER_ROLE_VALUES).optional(),
+  secondary_role: z.enum(USER_ROLE_VALUES).optional().nullable(),
   is_active: z.boolean().optional(),
   /** For Login ID users: real email for notifications, forgot-password */
   notification_email: z.string().email().optional().nullable(),

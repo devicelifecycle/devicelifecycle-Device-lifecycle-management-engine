@@ -3,26 +3,16 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { VendorService } from '@/services/vendor.service'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'vendor') {
+    if (auth.effectiveRole !== 'vendor') {
       return NextResponse.json({ error: 'Only vendors can view open orders' }, { status: 403 })
     }
 

@@ -117,9 +117,14 @@ export async function PATCH(
       updated_at: new Date().toISOString()
     }
 
-    // Non-admin users cannot change their own role
+    // Non-admin users cannot change their own role or secondary_role
     if (isSelf && currentProfile?.role !== 'admin') {
       delete updateData.role
+      delete updateData.secondary_role
+    }
+    // Only admins can set secondary_role on any user
+    if (currentProfile?.role !== 'admin') {
+      delete updateData.secondary_role
     }
 
     const { data: updatedUser, error } = await supabase

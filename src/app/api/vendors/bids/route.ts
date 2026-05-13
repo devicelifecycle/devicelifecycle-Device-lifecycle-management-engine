@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { VendorService } from '@/services/vendor.service'
 import { NotificationService } from '@/services/notification.service'
@@ -16,25 +16,13 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const { profile, supabase, effectiveRole } = auth
 
     const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)
-    const isVendor = profile.role === 'vendor'
+    const isVendor = effectiveRole === 'vendor'
 
     if (!isInternal && !isVendor) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -145,26 +133,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const authCtx = await requireAuth()
+    if (!authCtx) return unauthorized()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { profile, supabase, effectiveRole } = authCtx
 
-    // Verify the user is a vendor
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'vendor') {
+    // Verify the effective role is vendor
+    if (effectiveRole !== 'vendor') {
       return NextResponse.json({ error: 'Only vendors can submit bids' }, { status: 403 })
-    }
-
-    if (!profile.is_active) {
-      return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
     }
 
     if (!profile.organization_id) {

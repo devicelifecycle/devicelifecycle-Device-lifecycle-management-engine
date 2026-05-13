@@ -1,11 +1,11 @@
 // ============================================================================
 // MY CUSTOMER API ROUTE
 // Returns the customer record for the logged-in user's organization.
-// For customer role only — used when creating orders so they don't need to select a customer.
+// Accessible to users whose effective role is 'customer' (primary or secondary).
 // ============================================================================
 
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ensureCustomerProfileForOrganization } from '@/lib/customer-profile'
 
@@ -13,20 +13,12 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { effectiveRole, profile, supabase } = auth
 
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id, full_name, email, notification_email, phone')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'customer') {
+    if (effectiveRole !== 'customer') {
       return NextResponse.json({ error: 'Forbidden — customer role required' }, { status: 403 })
     }
 
@@ -37,11 +29,17 @@ export async function GET() {
       )
     }
 
+    const { data: userDetails } = await supabase
+      .from('users')
+      .select('full_name, email, notification_email, phone')
+      .eq('id', profile.id)
+      .single()
+
     const serviceRole = createServiceRoleClient()
     const customer = await ensureCustomerProfileForOrganization(
       serviceRole,
       profile.organization_id,
-      profile,
+      userDetails ?? {},
     )
 
     return NextResponse.json(customer)

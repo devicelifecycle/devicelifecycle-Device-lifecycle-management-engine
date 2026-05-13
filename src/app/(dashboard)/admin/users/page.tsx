@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [editForm, setEditForm] = useState({ full_name: '', role: '' as UserRole, notification_email: '', phone: '' })
+  const [editForm, setEditForm] = useState({ full_name: '', role: '' as UserRole, secondary_role: '' as UserRole | '', notification_email: '', phone: '' })
   const [saving, setSaving] = useState(false)
 
   // Deactivate state
@@ -112,7 +112,7 @@ export default function AdminUsersPage() {
 
   const handleOpenEdit = (user: User) => {
     setEditingUser(user)
-    setEditForm({ full_name: user.full_name, role: user.role, notification_email: user.notification_email ?? '', phone: user.phone ?? '' })
+    setEditForm({ full_name: user.full_name, role: user.role, secondary_role: user.secondary_role ?? '', notification_email: user.notification_email ?? '', phone: user.phone ?? '' })
     setEditDialogOpen(true)
   }
 
@@ -120,7 +120,12 @@ export default function AdminUsersPage() {
     if (!editingUser) return
     setSaving(true)
     try {
-      const payload: Record<string, unknown> = { full_name: editForm.full_name, role: editForm.role, phone: editForm.phone?.trim() || null }
+      const payload: Record<string, unknown> = {
+        full_name: editForm.full_name,
+        role: editForm.role,
+        secondary_role: editForm.secondary_role || null,
+        phone: editForm.phone?.trim() || null,
+      }
       if ((editingUser as { email?: string }).email?.endsWith('@login.local')) {
         payload.notification_email = editForm.notification_email?.trim() || null
       }
@@ -327,9 +332,16 @@ export default function AdminUsersPage() {
                     <TableCell className="font-medium">{u.full_name}</TableCell>
                     <TableCell className="font-mono text-sm">{u.email?.endsWith('@login.local') ? u.email.slice(0, -12) : u.email}</TableCell>
                     <TableCell>
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleColors[u.role] || ''}`}>
-                        {USER_ROLE_CONFIG[u.role]?.label || u.role}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleColors[u.role] || ''}`}>
+                          {USER_ROLE_CONFIG[u.role]?.label || u.role}
+                        </span>
+                        {u.secondary_role && (
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium opacity-70 ${roleColors[u.secondary_role] || ''}`}>
+                            +{USER_ROLE_CONFIG[u.secondary_role]?.label || u.secondary_role}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -394,13 +406,30 @@ export default function AdminUsersPage() {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v as UserRole }))}>
+              <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v as UserRole, secondary_role: '' }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {roles.map(r => <SelectItem key={r} value={r}>{USER_ROLE_CONFIG[r].label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+            {(editForm.role === 'customer' || editForm.role === 'vendor') && (
+              <div className="space-y-2">
+                <Label>Secondary Role <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Select
+                  value={editForm.secondary_role || 'none'}
+                  onValueChange={v => setEditForm(f => ({ ...f, secondary_role: v === 'none' ? '' : v as UserRole }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {editForm.role === 'customer' && <SelectItem value="vendor">Vendor</SelectItem>}
+                    {editForm.role === 'vendor' && <SelectItem value="customer">Customer</SelectItem>}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Grants access to both portals with a switch button in the header.</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Phone Number</Label>
               <Input type="tel" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 416 555 1234" />
