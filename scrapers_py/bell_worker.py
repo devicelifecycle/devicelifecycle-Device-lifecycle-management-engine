@@ -443,22 +443,23 @@ def main() -> int:
 
         if StealthyFetcher is not None:
             # --- Scrapling StealthyFetcher path (preferred) ---
-            page = StealthyFetcher.fetch(
-                BELL_TRADE_IN_URL,
-                headless=True,
-                solve_cloudflare=True,
-                network_idle=True,
-                fake_human_interaction=True,
-                block_images=True,
-            )
-
-            # Access the underlying Playwright page for evaluate() (browser-context fetch)
-            browser_page = getattr(page, '_page', None) or getattr(page, 'page', None)
-            if browser_page is None and hasattr(page, 'evaluate'):
-                browser_page = page
+            try:
+                page = StealthyFetcher.fetch(
+                    BELL_TRADE_IN_URL,
+                    headless=True,
+                    solve_cloudflare=True,
+                    network_idle=True,
+                    fake_human_interaction=True,
+                    block_images=True,
+                )
+                browser_page = getattr(page, '_page', None) or getattr(page, 'page', None)
+                if browser_page is None and hasattr(page, 'evaluate'):
+                    browser_page = page
+            except Exception:
+                browser_page = None
             if browser_page is not None:
                 return _run_scraping(browser_page, mode, devices, start, use_browser=True)
-            # StealthyFetcher returned a static response — fall through to patchright
+            # StealthyFetcher returned a static response or raised — fall through to patchright
 
         # --- Fallback: raw patchright ---
         try:

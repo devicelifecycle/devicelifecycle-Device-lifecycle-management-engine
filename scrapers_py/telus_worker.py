@@ -239,23 +239,23 @@ def main() -> int:
 
         if StealthyFetcher is not None:
             # --- Scrapling StealthyFetcher path (preferred) ---
-            page = StealthyFetcher.fetch(
-                TELUS_TRADE_IN_URL,
-                headless=True,
-                solve_cloudflare=True,
-                network_idle=True,
-                fake_human_interaction=True,
-                block_images=True,
-            )
-
-            # StealthyFetcher returns a parsed page — we need the underlying
-            # Playwright page object to run evaluate() for API calls.
-            # Access the internal browser page for JS execution.
-            browser_page = getattr(page, '_page', None) or getattr(page, 'page', None)
-            if browser_page is None and hasattr(page, 'evaluate'):
-                browser_page = page
-            # If browser_page is still None, StealthyFetcher returned a static response —
-            # fall through to patchright fallback below.
+            try:
+                page = StealthyFetcher.fetch(
+                    TELUS_TRADE_IN_URL,
+                    headless=True,
+                    solve_cloudflare=True,
+                    network_idle=True,
+                    fake_human_interaction=True,
+                    block_images=True,
+                )
+                # Access the underlying Playwright page for evaluate() calls.
+                browser_page = getattr(page, '_page', None) or getattr(page, 'page', None)
+                if browser_page is None and hasattr(page, 'evaluate'):
+                    browser_page = page
+            except Exception:
+                browser_page = None
+            # If browser_page is still None, StealthyFetcher returned a static response
+            # or raised — fall through to patchright fallback below.
 
             if browser_page is not None and mode == "discovery":
                 all_entries, seen_keys, prices = [], set(), []

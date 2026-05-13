@@ -472,20 +472,20 @@ def main() -> int:
 
         if StealthyFetcher is not None:
             # --- Scrapling StealthyFetcher path (preferred when it exposes a page object) ---
-            page = StealthyFetcher.fetch(
-                ACTION_URL,
-                headless=True,
-                solve_cloudflare=True,
-                network_idle=True,
-                fake_human_interaction=True,
-                block_images=True,
-            )
-
-            # Scrapling may return a plain Response object for successful fetches.
-            # In that case there is no page.evaluate(), so fall through to Patchright.
-            browser_page = getattr(page, "_page", None) or getattr(page, "page", None)
-            if browser_page is None and hasattr(page, "evaluate"):
-                browser_page = page
+            try:
+                page = StealthyFetcher.fetch(
+                    ACTION_URL,
+                    headless=True,
+                    solve_cloudflare=True,
+                    network_idle=True,
+                    fake_human_interaction=True,
+                    block_images=True,
+                )
+                browser_page = getattr(page, "_page", None) or getattr(page, "page", None)
+                if browser_page is None and hasattr(page, "evaluate"):
+                    browser_page = page
+            except Exception:
+                browser_page = None
 
             if browser_page is not None:
                 return _run_with_browser_page(browser_page, mode, devices, start)
