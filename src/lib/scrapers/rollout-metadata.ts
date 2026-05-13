@@ -4,7 +4,7 @@ import { getGoRecellScraperImpl } from './adapters/gorecell-scrapling'
 import { getTelusScraperImpl } from './adapters/telus-scrapling'
 import { getUniverCellScraperImpl } from './adapters/universal-scrapling'
 
-export type ScraperProviderId = 'apple' | 'bell' | 'gorecell' | 'telus' | 'univercell'
+export type ScraperProviderId = 'apple' | 'bell' | 'gorecell' | 'telus' | 'universal'
 export type ScraperConfiguredImpl = 'ts' | 'scrapling' | 'dual'
 export type ScraperPersistedImpl = 'ts' | 'scrapling'
 
@@ -46,7 +46,7 @@ export const SCRAPER_PROVIDERS: ScraperProviderMetadata[] = [
     getConfiguredImpl: getTelusScraperImpl,
   },
   {
-    id: 'univercell',
+    id: 'universal',
     name: 'UniverCell',
     envKey: 'SCRAPER_UNIVERCELL_IMPL',
     settingsPrefix: 'universal',

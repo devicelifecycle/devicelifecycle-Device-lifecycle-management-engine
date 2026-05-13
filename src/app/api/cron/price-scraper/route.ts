@@ -91,7 +91,10 @@ async function persistScraperRolloutHealth(
   const providerScope = SCRAPER_PROVIDERS.filter((provider) => !providerFilter || providerFilter.has(provider.id))
 
   for (const provider of providerScope) {
-    const providerResult = result.results.find((item) => item.competitor_name.toLowerCase() === provider.name.toLowerCase())
+    const providerResult = result.results.find((item) => {
+      const cn = item.competitor_name.toLowerCase()
+      return cn === provider.name.toLowerCase() || cn === provider.id
+    })
     const configuredImpl = provider.getConfiguredImpl()
     const persistedImpl = getPersistedScraperImplementation(provider.id)
 
