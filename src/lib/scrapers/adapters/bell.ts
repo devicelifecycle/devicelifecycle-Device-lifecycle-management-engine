@@ -22,6 +22,20 @@ function normalizeStorage(value: string): string {
   return value.toLowerCase().replace(/\s+/g, '')
 }
 
+/**
+ * Extract Cookie request header value from a response's Set-Cookie headers.
+ * Splits on `, cookieName=` boundary to avoid splitting date values inside attributes.
+ */
+function extractCookiesFromResponse(res: Response): string {
+  const raw = res.headers.get('set-cookie') || ''
+  if (!raw) return ''
+  return raw
+    .split(/,\s*(?=[a-zA-Z_][a-zA-Z0-9_-]*=)/)
+    .map(c => c.trim().split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ')
+}
+
 function parseBellPayload<T>(value: unknown): T | null {
   if (value == null) return null
   if (typeof value === 'object') return value as T
@@ -40,7 +54,7 @@ function parseBellPayload<T>(value: unknown): T | null {
   }
 }
 
-async function fetchBellSessionId(): Promise<string | null> {
+async function fetchBellSessionId(cookies?: string): Promise<string | null> {
   const loginUri = 'login?org_code={0}&entity_code={1}&username={2}&password={3}'
   const params = new URLSearchParams({
     key: 'TradeIn_SBE',
@@ -48,8 +62,17 @@ async function fetchBellSessionId(): Promise<string | null> {
     uri: loginUri,
   })
 
+  const extraHeaders: Record<string, string> = {
+    Referer: 'https://www.bell.ca/',
+    Origin: 'https://www.bell.ca',
+  }
+  if (cookies) extraHeaders.Cookie = cookies
+
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetchWithRetry(`${BELL_PROXY_AUTH_URL}?${params.toString()}`, { method: 'GET' })
+    const res = await fetchWithRetry(`${BELL_PROXY_AUTH_URL}?${params.toString()}`, {
+      method: 'GET',
+      headers: extraHeaders,
+    })
     if (!res.ok) {
       await throttle(200 * (attempt + 1))
       continue
@@ -181,17 +204,21 @@ async function scrapeBellTypeScript(devices: DeviceToScrape[]): Promise<ScraperR
   const now = new Date().toISOString()
 
   try {
-    const sessionId = await fetchBellSessionId()
+    // Fetch the trade-in page first to acquire Bell.ca session cookies.
+    // The CORS proxy endpoint requires these cookies to authenticate the request.
+    const pageRes = await fetchWithRetry(TRADE_IN_URL, { method: 'GET' })
+    const pageCookies = extractCookiesFromResponse(pageRes)
+    const pageHtml = pageRes.ok ? await pageRes.text() : ''
+
+    const sessionId = await fetchBellSessionId(pageCookies || undefined)
     const products = sessionId ? await fetchBellCatalogProducts(sessionId) : []
     const valueCache = new Map<string, number | null>()
 
     let allDomPrices: Array<{ price: number; context: string }> = []
-    if (products.length === 0) {
-      const res = await fetchWithRetry(TRADE_IN_URL, { method: 'GET' })
-      const html = await res.text()
-      const $ = cheerio.load(html)
+    if (products.length === 0 && pageHtml) {
+      const $ = cheerio.load(pageHtml)
       const domPrices = extractDomPrices($)
-      const htmlPrices = extractPricesFromHtml(html)
+      const htmlPrices = extractPricesFromHtml(pageHtml)
       allDomPrices = domPrices.length > 0 ? domPrices : htmlPrices
     }
 
@@ -263,13 +290,14 @@ async function scrapeBellFullCatalogTypeScript(limitProducts?: number): Promise<
 
   try {
     const pageRes = await fetchWithRetry(TRADE_IN_URL, { method: 'GET' })
-    const pageHtml = await pageRes.text()
+    const pageCookies = extractCookiesFromResponse(pageRes)
+    const pageHtml = pageRes.ok ? await pageRes.text() : ''
     const page$ = cheerio.load(pageHtml)
     const domPrices = extractDomPrices(page$)
     const htmlPrices = extractPricesFromHtml(pageHtml)
     const allDomPrices = domPrices.length > 0 ? domPrices : htmlPrices
 
-    const sessionId = await fetchBellSessionId()
+    const sessionId = await fetchBellSessionId(pageCookies || undefined)
     if (!sessionId) {
       return {
         competitor_name: 'Bell',
