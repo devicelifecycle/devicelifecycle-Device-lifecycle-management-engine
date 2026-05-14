@@ -209,10 +209,10 @@ export default function OrdersPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Order creation failed')
-      toast.success(`Draft order ${data.data?.order_number || ''} created`)
+      toast.success(`Draft order ${data?.order_number || ''} created`)
       setImportOpen(false)
       resetImportDialog()
-      if (data.data?.id) router.push(`/orders/${data.data.id}`)
+      if (data?.id) router.push(`/orders/${data.id}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create order')
     } finally {

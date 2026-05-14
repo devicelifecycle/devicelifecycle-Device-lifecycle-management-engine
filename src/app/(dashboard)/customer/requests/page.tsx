@@ -41,11 +41,11 @@ export default function CustomerRequestsPage() {
   const [customerId, setCustomerId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch own customer ID on mount (scoped to logged-in customer's org)
+  // Fetch own customer ID on mount — /me is scoped to the logged-in customer's org
   useEffect(() => {
-    fetch('/api/customers?page_size=1')
+    fetch('/api/customers/me')
       .then(r => r.json())
-      .then(d => { const first = d.data?.[0]; if (first?.id) setCustomerId(first.id) })
+      .then(d => { if (d?.id) setCustomerId(d.id) })
       .catch(() => {})
   }, [])
 
@@ -101,7 +101,7 @@ export default function CustomerRequestsPage() {
       setUploadFile(null)
       setParsedRows([])
       setParsedSummary(null)
-      if (data.data?.id) router.push(`/orders/${data.data.id}`)
+      if (data?.id) router.push(`/orders/${data.id}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Submission failed')
     } finally {
@@ -170,7 +170,7 @@ export default function CustomerRequestsPage() {
                 <span className="font-semibold">{parsedSummary.total_devices} devices detected</span>
                 {parsedSummary.total_value != null && <span> · Estimated value: {formatCurrency(parsedSummary.total_value)}</span>}
                 {matchedCount < parsedRows.length && (
-                  <span className="ml-1">· {parsedRows.length - matchedCount} SKU{parsedRows.length - matchedCount !== 1 ? 's' : ''} unrecognized (will be reviewed manually)</span>
+                  <span className="ml-1">· {parsedRows.length - matchedCount} SKU{parsedRows.length - matchedCount !== 1 ? 's' : ''} unrecognized — only matched devices will be submitted</span>
                 )}
               </div>
 
