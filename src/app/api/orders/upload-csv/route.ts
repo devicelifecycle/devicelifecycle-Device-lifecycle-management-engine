@@ -319,6 +319,7 @@ interface NormalizedRow {
   storage: string
   condition: string | null
   quantity: number
+  preresolved_device_id?: string | null  // device_id from parse step — skip re-matching when present
   imei?: string
   serial_number?: string
   colour?: string
@@ -455,12 +456,19 @@ export async function POST(request: NextRequest) {
       const rawPrice = sanitizeCsvCell(mapped.price || rawRow.price || rawRow.Price || rawRow['Unit Price'] || rawRow.unit_price || '')
       const parsedPrice = rawPrice ? parseFloat(rawPrice.replace(/[$,]/g, '')) : undefined
 
+      // Accept a pre-resolved device_id from the parse step so we don't re-match
+      // with the weaker ILIKE query and risk returning the wrong catalog entry.
+      const preresolvedId = rawRow.device_id && typeof rawRow.device_id === 'string' && rawRow.device_id !== 'null'
+        ? rawRow.device_id
+        : null
+
       normalizedRows.push({
         brand,
         model,
         storage: normalizeStorage(storage),
         condition: normalizedCondition,
         quantity: Math.max(1, quantity),
+        preresolved_device_id: preresolvedId,
         price: parsedPrice && !isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : undefined,
         imei: sanitizeCsvCell(mapped.imei || rawRow.imei || rawRow.IMEI || ''),
         serial_number: sanitizeCsvCell(mapped.serial_number || rawRow.serial_number || rawRow['Sample S/N'] || rawRow['S/N'] || rawRow.Serial || ''),
@@ -551,19 +559,23 @@ export async function POST(request: NextRequest) {
     // Look up devices and create order items
     const orderItems = []
     for (const row of normalizedRows) {
-      // Try to find matching device in catalog
       let deviceId: string | null = null
 
-      // First try exact make + model match
-      const { data: device } = await supabase
-        .from('device_catalog')
-        .select('id')
-        .ilike('make', row.brand)
-        .ilike('model', `%${row.model}%`)
-        .limit(1)
-        .single()
-
-      deviceId = device?.id || null
+      if (row.preresolved_device_id) {
+        // Parse step already matched the device — trust that result rather than
+        // re-running the weaker ILIKE substring query which can return a wrong row.
+        deviceId = row.preresolved_device_id
+      } else {
+        // No pre-resolved ID — fall back to exact make + model substring search.
+        const { data: device } = await supabase
+          .from('device_catalog')
+          .select('id')
+          .ilike('make', row.brand)
+          .ilike('model', row.model)  // exact match, not substring
+          .limit(1)
+          .single()
+        deviceId = device?.id || null
+      }
 
       // Build the order item
       const item: Record<string, unknown> = {

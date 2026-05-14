@@ -83,6 +83,9 @@ export default function CustomerRequestsPage() {
         storage: r.storage || '',
         condition: r.condition || 'good',
         quantity: String(r.quantity),
+        // Pass parse-step device_id so upload-csv skips its weaker ILIKE re-match
+        // and uses the deterministic exact/prefix match result from parse-trade-template.
+        ...(r.device_id ? { device_id: r.device_id } : {}),
         ...(r.imeis.length > 0 ? { imei: r.imeis.join(', ') } : {}),
         ...(r.serials.length > 0 ? { serial_number: r.serials.join(', ') } : {}),
       }))

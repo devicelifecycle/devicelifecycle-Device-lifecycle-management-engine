@@ -285,7 +285,7 @@ export default function OrdersPage() {
         [
           order.order_number,
           order.type === 'trade_in' ? 'Trade-In' : 'CPO',
-          `"${(order.type === 'trade_in' ? order.customer?.company_name : order.vendor?.company_name) || ''}"`,
+          `"${order.customer?.company_name || ''}"`,
           order.status,
           order.total_quantity,
           order.total_amount || 0,
