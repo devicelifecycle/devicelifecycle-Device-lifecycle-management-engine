@@ -2,12 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bell, ChevronRight, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
+import { Bell, ChevronRight, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun, User } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
 import { snakeToTitle } from '@/lib/utils'
+
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
 
 interface HeaderProps {
   /** Desktop: toggle the collapsible sidebar open/closed */
@@ -22,8 +25,38 @@ interface HeaderProps {
 export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick, onMenuClick }: HeaderProps) {
   const pathname = usePathname()
   const { unreadCount } = useNotifications()
-  const { user, activeRole, switchRole } = useAuth()
+  const { user, activeRole, switchRole, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
+  const [avatarOpen, setAvatarOpen] = useState(false)
+  const avatarRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setAvatarOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // 30-minute idle session timeout
+  useEffect(() => {
+    if (!user) return
+    let timer: ReturnType<typeof setTimeout>
+    const reset = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => logout(), IDLE_TIMEOUT_MS)
+    }
+    const events = ['mousemove', 'keydown', 'pointerdown', 'scroll', 'touchstart']
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }))
+    reset()
+    return () => {
+      clearTimeout(timer)
+      events.forEach(e => window.removeEventListener(e, reset))
+    }
+  }, [user, logout])
   const notificationsHref = activeRole === 'customer' ? '/customer/notifications' : '/notifications'
   const hasSecondaryRole = !!user?.secondary_role
   const otherRole = hasSecondaryRole
@@ -163,12 +196,35 @@ export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick,
             </button>
           </Link>
 
-          {/* Avatar */}
-          <Link href="/profile">
-            <div className="topbar-avatar ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-primary cursor-pointer transition-colors">
+          {/* Avatar dropdown */}
+          <div ref={avatarRef} className="relative ml-0.5">
+            <button
+              onClick={() => setAvatarOpen(o => !o)}
+              className="topbar-avatar flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-primary cursor-pointer transition-colors"
+              aria-label="Account menu"
+            >
               {initials}
-            </div>
-          </Link>
+            </button>
+            {avatarOpen && (
+              <div className="absolute right-0 top-9 z-50 min-w-[140px] rounded-lg border border-border bg-popover py-1 shadow-lg">
+                <Link
+                  href="/profile"
+                  onClick={() => setAvatarOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  Profile
+                </Link>
+                <button
+                  onClick={() => { setAvatarOpen(false); logout() }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

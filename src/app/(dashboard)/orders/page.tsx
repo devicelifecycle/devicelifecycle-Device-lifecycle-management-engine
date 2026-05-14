@@ -554,7 +554,7 @@ export default function OrdersPage() {
                           <Badge variant="outline">{order.type === 'trade_in' ? 'Trade-In' : 'CPO'}</Badge>
                         </TableCell>
                         <TableCell className="text-foreground whitespace-nowrap">
-                          {order.type === 'trade_in' ? order.customer?.company_name : order.vendor?.company_name}
+                          {order.customer?.company_name}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <StatusBadge status={order.status} label={statusConfig?.label} />

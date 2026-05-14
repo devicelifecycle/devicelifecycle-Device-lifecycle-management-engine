@@ -69,20 +69,20 @@ function buildShipToAddress(order: Order): Record<string, unknown> {
       email: customer.contact_email as string | undefined,
     }
   }
-  if (order.type === 'cpo' && order.vendor) {
-    const vendor = order.vendor as unknown as Record<string, unknown>
-    const addr = (vendor.address as Record<string, unknown>) || {}
+  if (order.type === 'cpo' && order.customer) {
+    const customer = order.customer as unknown as Record<string, unknown>
+    const shipping = (customer.shipping_address as Record<string, unknown>) || (customer.billing_address as Record<string, unknown>) || {}
     return {
-      name: (vendor.contact_name || vendor.company_name) as string || 'Vendor',
-      company: vendor.company_name as string | undefined,
-      street1: (addr.street1 || addr.line1 || addr.address1) as string || 'Unknown',
-      street2: (addr.street2 || addr.line2 || addr.address2) as string | undefined,
-      city: (addr.city as string) || 'Unknown',
-      state: (addr.state as string) || 'Unknown',
-      postal_code: (addr.postal_code || addr.zip_code || addr.zip) as string || '00000',
-      country: (addr.country as string) || 'US',
-      phone: vendor.contact_phone as string | undefined,
-      email: vendor.contact_email as string | undefined,
+      name: (customer.contact_name || customer.company_name) as string || 'Customer',
+      company: customer.company_name as string | undefined,
+      street1: (shipping.street1 || shipping.line1 || shipping.address1) as string || 'Unknown',
+      street2: (shipping.street2 || shipping.line2 || shipping.address2) as string | undefined,
+      city: (shipping.city as string) || 'Unknown',
+      state: (shipping.state as string) || 'Unknown',
+      postal_code: (shipping.postal_code || shipping.zip_code || shipping.zip) as string || '00000',
+      country: (shipping.country as string) || 'US',
+      phone: customer.contact_phone as string | undefined,
+      email: customer.contact_email as string | undefined,
     }
   }
   return { name: 'Unknown', street1: 'Unknown', city: 'Unknown', state: 'Unknown', postal_code: '00000', country: 'US' }
@@ -140,6 +140,7 @@ export default function OrderDetailClient() {
   const isCustomer = user?.role === 'customer'
   const isVendor = user?.role === 'vendor'
   const canSetPricingByRole = user?.role === 'admin' || user?.role === 'coe_manager'
+  const canEditItems = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role ?? '')
   const { order, isLoading, transition, isTransitioning, refetch } = useOrder(params.id as string)
   const isCpoOrder = order?.type === 'cpo'
   const canSetPricing = isCpoOrder ? user?.role === 'admin' : canSetPricingByRole
@@ -185,6 +186,7 @@ export default function OrderDetailClient() {
   // Market context: competitor prices for each device in pricing dialog
   const [marketContext, setMarketContext] = useState<Record<string, {
     loading: boolean
+    retrieved_at?: string
     conditions: { condition: string; avg_trade: number; avg_cpo: number; competitors: { name: string; trade: number | null; sell: number | null }[] }[]
   }>>({})
   // Price suggests for Line Items table (per item)
@@ -197,6 +199,11 @@ export default function OrderDetailClient() {
   // Inline edit mode for Line Items
   const [isInlineEditing, setIsInlineEditing] = useState(false)
   const [inlineEditPrices, setInlineEditPrices] = useState<Record<string, string>>({})
+  // Item property editing (device, qty, storage, condition)
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [editItemFields, setEditItemFields] = useState<{ quantity: string; storage: string; condition: string; notes: string }>({ quantity: '1', storage: '', condition: 'good', notes: '' })
+  const [isSavingItem, setIsSavingItem] = useState(false)
+  const [isDeletingItemId, setIsDeletingItemId] = useState<string | null>(null)
   // Create Shipment dialog
   const [shipmentDialogOpen, setShipmentDialogOpen] = useState(false)
   const [isCreatingShipment, setIsCreatingShipment] = useState(false)
@@ -306,7 +313,8 @@ export default function OrderDetailClient() {
               competitors,
             }
           }).sort((left, right) => competitorConditionOrder(left.condition) - competitorConditionOrder(right.condition))
-          setMarketContext(prev => ({ ...prev, [key]: { loading: false, conditions } }))
+          const retrieved_at = data.retrieved_at || allRows[0]?.scraped_at || allRows[0]?.updated_at || undefined
+          setMarketContext(prev => ({ ...prev, [key]: { loading: false, conditions, retrieved_at } }))
         } else {
           setMarketContext(prev => ({ ...prev, [key]: { loading: false, conditions: [] } }))
         }
@@ -656,6 +664,56 @@ export default function OrderDetailClient() {
       return false
     } finally {
       setSuggestingItemId(null)
+    }
+  }
+
+  const handleEditItem = (item: OrderItem) => {
+    setEditingItemId(item.id)
+    setEditItemFields({
+      quantity: String(item.quantity || 1),
+      storage: item.storage || '',
+      condition: item.claimed_condition || item.actual_condition || 'good',
+      notes: item.notes || '',
+    })
+  }
+
+  const handleSaveItem = async () => {
+    if (!editingItemId || !order?.id) return
+    setIsSavingItem(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/items/${editingItemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quantity: parseInt(editItemFields.quantity, 10) || 1,
+          storage: editItemFields.storage || undefined,
+          condition: editItemFields.condition,
+          notes: editItemFields.notes || undefined,
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save') }
+      toast.success('Item updated')
+      setEditingItemId(null)
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save item')
+    } finally {
+      setIsSavingItem(false)
+    }
+  }
+
+  const handleDeleteItem = async (itemId: string) => {
+    if (!order?.id) return
+    setIsDeletingItemId(itemId)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/items/${itemId}`, { method: 'DELETE' })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to delete') }
+      toast.success('Item removed')
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete item')
+    } finally {
+      setIsDeletingItemId(null)
     }
   }
 
@@ -1835,7 +1893,99 @@ export default function OrderDetailClient() {
                                 })()}
                               </TableCell>
                             )}
+                            {canEditItems && !isInlineEditing && (
+                              <TableCell className="w-[70px]">
+                                {editingItemId === item.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={handleSaveItem}
+                                      disabled={isSavingItem}
+                                      className="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+                                      title="Save changes"
+                                    >
+                                      {isSavingItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingItemId(null)}
+                                      className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                      title="Cancel"
+                                    >
+                                      <ChevronDown className="h-3.5 w-3.5 rotate-90" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditItem(item)}
+                                      className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                      title="Edit device / qty / condition"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteItem(item.id)}
+                                      disabled={isDeletingItemId === item.id}
+                                      className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                      title="Remove item"
+                                    >
+                                      {isDeletingItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                                    </button>
+                                  </div>
+                                )}
+                              </TableCell>
+                            )}
                           </TableRow>
+                          {editingItemId === item.id && (
+                            <TableRow className="bg-muted/30">
+                              <TableCell colSpan={lineItemColSpan + 1} className="py-2 px-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                                  <div>
+                                    <label className="text-xs text-muted-foreground mb-1 block">Quantity</label>
+                                    <input
+                                      type="number" min="1"
+                                      value={editItemFields.quantity}
+                                      onChange={e => setEditItemFields(f => ({ ...f, quantity: e.target.value }))}
+                                      className="w-full rounded border border-input bg-background px-2 py-1 text-sm"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-muted-foreground mb-1 block">Storage</label>
+                                    <input
+                                      type="text" placeholder="e.g. 256GB"
+                                      value={editItemFields.storage}
+                                      onChange={e => setEditItemFields(f => ({ ...f, storage: e.target.value }))}
+                                      className="w-full rounded border border-input bg-background px-2 py-1 text-sm"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-muted-foreground mb-1 block">Condition</label>
+                                    <select
+                                      value={editItemFields.condition}
+                                      onChange={e => setEditItemFields(f => ({ ...f, condition: e.target.value }))}
+                                      className="w-full rounded border border-input bg-background px-2 py-1 text-sm"
+                                    >
+                                      {['new','excellent','good','fair','poor','broken'].map(c => (
+                                        <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-muted-foreground mb-1 block">Notes</label>
+                                    <input
+                                      type="text"
+                                      value={editItemFields.notes}
+                                      onChange={e => setEditItemFields(f => ({ ...f, notes: e.target.value }))}
+                                      className="w-full rounded border border-input bg-background px-2 py-1 text-sm"
+                                    />
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
                           {isExpanded && (
                             <TableRow>
                               <TableCell colSpan={lineItemColSpan} className="bg-muted/30 py-3">
@@ -2808,12 +2958,28 @@ export default function OrderDetailClient() {
                           </div>
                           <div className="space-y-0.5">
                             {nearestCondData.competitors.filter(c => c.trade != null).map(c => (
-                              <div key={c.name} className="flex justify-between text-xs">
+                              <div key={c.name} className="flex items-center justify-between text-xs gap-2">
                                 <span className="text-amber-900/80 dark:text-amber-100/80">{c.name}</span>
-                                <span className="font-semibold text-amber-950 dark:text-amber-50">{formatCurrency(c.trade!)}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-semibold text-amber-950 dark:text-amber-50">{formatCurrency(c.trade!)}</span>
+                                  {isInlineEditing && item && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setInlineEditPrices(prev => ({ ...prev, [item.id]: c.trade!.toFixed(2) }))}
+                                      className="rounded px-1 py-0.5 text-[9px] font-bold uppercase bg-amber-700 text-white hover:bg-amber-800 transition-colors"
+                                    >
+                                      Use
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
+                          {ctx?.retrieved_at && (
+                            <p className="text-[10px] text-amber-700/70 dark:text-amber-300/60 pt-0.5">
+                              Prices as of {new Date(ctx.retrieved_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">

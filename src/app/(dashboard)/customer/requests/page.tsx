@@ -72,36 +72,34 @@ export default function CustomerRequestsPage() {
 
   async function handleSubmit() {
     if (!customerId) { toast.error('Customer profile not found. Please refresh and try again.'); return }
-    const matchedRows = parsedRows.filter(r => r.device_id)
-    if (matchedRows.length === 0) { toast.error('No recognizable devices found in your file.'); return }
+    if (parsedRows.length === 0) { toast.error('No devices found in your file.'); return }
     setSubmitting(true)
     try {
-      const res = await fetch('/api/orders', {
+      // Route ALL rows (matched + unmatched) through upload-csv so antiquated/unlisted
+      // devices are still submitted — COE team can manually identify and link them.
+      const rawRows = parsedRows.map(r => ({
+        make: r.make,
+        model: r.model,
+        storage: r.storage || '',
+        condition: r.condition || 'good',
+        quantity: String(r.quantity),
+        ...(r.imeis.length > 0 ? { imei: r.imeis.join(', ') } : {}),
+        ...(r.serials.length > 0 ? { serial_number: r.serials.join(', ') } : {}),
+      }))
+      const res = await fetch('/api/orders/upload-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'trade_in',
-          customer_id: customerId,
-          items: matchedRows.map(r => ({
-            device_id: r.device_id,
-            quantity: r.quantity,
-            storage: r.storage,
-            condition: r.condition,
-            notes: r.serials.length > 0
-              ? `Serials: ${r.serials.join(', ')}`
-              : r.imeis.length > 0
-                ? `IMEIs: ${r.imeis.join(', ')}`
-                : undefined,
-          })),
-        }),
+        body: JSON.stringify({ rows: rawRows, customer_id: customerId, order_type: 'trade_in' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Submission failed')
-      toast.success('Request submitted! We\'ll send your quote within 24 hours.')
+      const total = parsedRows.length
+      const matched = data.items_created ?? total
+      toast.success(`Request submitted — ${matched} of ${total} device${total !== 1 ? 's' : ''} processed. We'll send your quote within 24 hours.`)
       setUploadFile(null)
       setParsedRows([])
       setParsedSummary(null)
-      if (data?.id) router.push(`/orders/${data.id}`)
+      if (data.order?.id) router.push(`/orders/${data.order.id}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Submission failed')
     } finally {
@@ -196,9 +194,9 @@ export default function CustomerRequestsPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button variant="success" onClick={handleSubmit} disabled={submitting || matchedCount === 0}>
+                <Button variant="success" onClick={handleSubmit} disabled={submitting || parsedRows.length === 0}>
                   {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                  {submitting ? 'Submitting…' : `Submit Trade-In Request (${matchedCount} device${matchedCount !== 1 ? 's' : ''})`}
+                  {submitting ? 'Submitting…' : `Submit Trade-In Request (${parsedRows.length} device${parsedRows.length !== 1 ? 's' : ''})`}
                 </Button>
               </div>
             </div>

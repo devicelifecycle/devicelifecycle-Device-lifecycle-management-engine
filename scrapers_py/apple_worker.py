@@ -32,7 +32,7 @@ CONDITION_MULTIPLIERS = {
 
 DEVICE_PATTERNS = [
     r"(iPhone\s+\d+\s*(?:Pro\s*Max|Pro|Plus|e)?)",
-    r"(iPad\s+(?:Pro|Air|mini)?)",
+    r"(iPad\s+(?:Pro\s+(?:\d+(?:\.\d+)?[‑\-]?inch\s*)?(?:\(M\d+\)\s*)?|Air\s*(?:\(M\d+\)\s*)?|mini\s*(?:\d+\s*)?|\(\d+(?:th|st|nd|rd)\s+generation\)\s*)?)",
     r"(MacBook\s+(?:Pro|Air))",
     r"(iMac)",
     r"(Mac\s+(?:mini|Pro|Studio))",

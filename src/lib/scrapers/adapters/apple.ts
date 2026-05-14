@@ -135,7 +135,7 @@ function extractLivePrices($: $Root, html: string): AppleTradeInEntry[] {
   const normalizedHtml = html.replace(/&nbsp;/g, ' ')
   const devicePatterns = [
     /(iPhone\s+\d+\s*(?:Pro\s*Max|Pro|Plus|e)?)[^$]*?Up\s+to\s+\$([\d,]+)/gi,
-    /(iPad\s+(?:Pro|Air|mini)?)[^$]*?Up\s+to\s+\$([\d,]+)/gi,
+    /(iPad\s+(?:Pro\s+(?:\d+(?:\.\d+)?[‑\-]?inch\s*)?(?:\(M\d+\)\s*)?|Air\s*(?:\(M\d+\)\s*)?|mini\s*(?:\d+\s*)?|\(\d+(?:th|st|nd|rd)\s+generation\)\s*)?)[^$]*?Up\s+to\s+\$([\d,]+)/gi,
     /(MacBook\s+(?:Pro|Air))[^$]*?Up\s+to\s+\$([\d,]+)/gi,
     /(iMac)[^$]*?Up\s+to\s+\$([\d,]+)/gi,
     /(Mac\s+(?:mini|Pro|Studio))[^$]*?Up\s+to\s+\$([\d,]+)/gi,
