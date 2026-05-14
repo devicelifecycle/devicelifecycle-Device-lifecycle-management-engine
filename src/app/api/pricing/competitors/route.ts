@@ -42,10 +42,18 @@ export async function GET(request: NextRequest) {
       retrieved_at: row.scraped_at || row.updated_at || row.created_at,
     }))
 
+    // Use the most recent scraped_at from actual rows so "Prices as of" reflects
+    // when the data was actually scraped, not when this API request was made.
+    const latestScrapedAt = rowsWithRetrievalTime
+      .map(r => r.retrieved_at)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null
+
     return NextResponse.json({
       data: rowsWithRetrievalTime,
       total_count: rowsWithRetrievalTime.length,
-      retrieved_at: new Date().toISOString(),
+      retrieved_at: latestScrapedAt,
     })
   } catch (error) {
     console.error('Error fetching competitor prices:', error)
