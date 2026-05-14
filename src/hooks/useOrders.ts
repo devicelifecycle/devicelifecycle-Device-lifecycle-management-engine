@@ -208,6 +208,7 @@ export function useOrder(id: string | null) {
     queryKey: ['order', id],
     queryFn: () => (id ? fetchOrderById(id) : null),
     enabled: !!id,
+    staleTime: 30 * 1000,
   })
 
   const updateMutation = useMutation({

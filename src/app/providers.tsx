@@ -22,12 +22,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // staleTime: 0 — data is always stale so window-focus and remounts
-            // always trigger a background refetch. Combined with Realtime
-            // invalidation, every open browser sees changes instantly.
-            staleTime: 0,
-            // Keep cache 60s so navigating back is instant.
-            gcTime: 60 * 1000,
+            // 30s default staleTime — prevents spinner on remount when navigating
+            // between pages. Supabase Realtime subscriptions push invalidations for
+            // live data so a tight polling interval isn't needed here.
+            staleTime: 30 * 1000,
+            // Keep cache 5min so navigating back shows cached data instantly.
+            gcTime: 5 * 60 * 1000,
             refetchOnWindowFocus: true,
             refetchOnReconnect: true,
             refetchOnMount: true,
