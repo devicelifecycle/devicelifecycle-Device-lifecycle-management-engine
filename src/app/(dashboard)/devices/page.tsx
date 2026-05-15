@@ -46,6 +46,9 @@ export default function DevicesPage() {
     sku: '',
     storage_options: '',
     colors: '',
+    year: '',
+    cpu: '',
+    ram: '',
   })
 
   const fetchDevices = useCallback(async () => {
@@ -79,13 +82,19 @@ export default function DevicesPage() {
     try {
       const storageList = form.storage_options?.split(/[,;]/).map(s => s.trim()).filter(Boolean) || []
       const colorList = form.colors?.split(/[,;]/).map(c => c.trim()).filter(Boolean) || []
+      const specEntries: Record<string, unknown> = {}
+      if (storageList.length) specEntries.storage_options = storageList
+      if (colorList.length) specEntries.colors = colorList
+      if (form.year.trim()) specEntries.year = form.year.trim()
+      if (form.cpu.trim()) specEntries.cpu = form.cpu.trim()
+      if (form.ram.trim()) specEntries.ram = form.ram.trim()
       const body = {
         make: form.make,
         model: form.model,
         variant: form.variant || undefined,
         category: form.category || undefined,
         sku: form.sku || undefined,
-        specifications: (storageList.length || colorList.length) ? { storage_options: storageList, colors: colorList } : undefined,
+        specifications: Object.keys(specEntries).length ? specEntries : undefined,
       }
       const res = await fetch('/api/devices', {
         method: 'POST',
@@ -95,7 +104,7 @@ export default function DevicesPage() {
       if (!res.ok) throw new Error('Failed to create device')
       toast.success('Device added to catalog')
       setDialogOpen(false)
-      setForm({ make: '', model: '', variant: '', category: '', sku: '', storage_options: '', colors: '' })
+      setForm({ make: '', model: '', variant: '', category: '', sku: '', storage_options: '', colors: '', year: '', cpu: '', ram: '' })
       fetchDevices()
     } catch {
       toast.error('Failed to create device')
@@ -130,7 +139,7 @@ export default function DevicesPage() {
     other: { bg: 'bg-muted', text: 'text-muted-foreground' },
   }
 
-  const specs = (d: Device) => (d.specifications || {}) as { storage_options?: string[]; colors?: string[] }
+  const specs = (d: Device) => (d.specifications || {}) as { storage_options?: string[]; colors?: string[]; year?: string; cpu?: string; ram?: string }
 
   return (
     <div className="space-y-6">
@@ -193,6 +202,20 @@ export default function DevicesPage() {
                 <div className="space-y-2">
                   <Label>Colors (comma-separated)</Label>
                   <Input placeholder="e.g. Black, Silver, Blue" value={form.colors} onChange={e => setForm(f => ({ ...f, colors: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid gap-4 grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Year</Label>
+                  <Input placeholder="e.g. 2019" value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>CPU</Label>
+                  <Input placeholder="e.g. Intel i7" value={form.cpu} onChange={e => setForm(f => ({ ...f, cpu: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>RAM</Label>
+                  <Input placeholder="e.g. 16 GB" value={form.ram} onChange={e => setForm(f => ({ ...f, ram: e.target.value }))} />
                 </div>
               </div>
             </div>
@@ -260,8 +283,9 @@ export default function DevicesPage() {
                 <TableRow>
                   <TableHead>Make</TableHead>
                   <TableHead>Model</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead>CPU / RAM</TableHead>
                   <TableHead>Storage</TableHead>
-                  <TableHead>Colors</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Status</TableHead>
@@ -272,7 +296,7 @@ export default function DevicesPage() {
                 {devices.map(device => {
                   const s = specs(device)
                   const storageList = s.storage_options?.join(', ') || '—'
-                  const colorList = s.colors?.length ? (s.colors.length > 3 ? `${s.colors.slice(0, 3).join(', ')} +${s.colors.length - 3}` : s.colors.join(', ')) : '—'
+                  const cpuRam = [s.cpu, s.ram].filter(Boolean).join(' / ') || '—'
                   return (
                     <TableRow key={device.id}>
                       <TableCell>
@@ -283,9 +307,10 @@ export default function DevicesPage() {
                           {device.make}
                         </Link>
                       </TableCell>
-                      <TableCell className="font-medium">{device.model}</TableCell>
+                      <TableCell className="font-medium">{device.model}{device.variant ? <span className="ml-1 text-xs text-muted-foreground">({device.variant})</span> : null}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{s.year || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate" title={cpuRam}>{cpuRam}</TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[140px] truncate" title={storageList}>{storageList}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate" title={colorList}>{colorList}</TableCell>
                       <TableCell>
                         {device.category && (
                           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${(categoryColors[device.category] || categoryColors.other).bg} ${(categoryColors[device.category] || categoryColors.other).text}`}>
