@@ -79,7 +79,7 @@ function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrder
   return XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }) as Buffer
 }
 
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -144,7 +144,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const quotedTotal = order.quoted_amount ?? order.total_amount ?? 0
     const totalFormatted = quotedTotal > 0 ? `$${quotedTotal.toFixed(2)}` : 'See attached'
 
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '')
+    // Derive absolute URL from env var → request host fallback so email links
+    // are never relative (relative URLs are non-functional in email clients).
+    const envSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '')
+    const requestOrigin = `${req.nextUrl.protocol}//${req.nextUrl.host}`
+    const siteUrl = envSiteUrl || requestOrigin
     const orderUrl = `${siteUrl}/customer/orders/${order.id}`
 
     const safeOrderNumHtml = escapeHtml(order.order_number || '')

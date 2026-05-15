@@ -458,8 +458,12 @@ export async function POST(request: NextRequest) {
 
       // Accept a pre-resolved device_id from the parse step so we don't re-match
       // with the weaker ILIKE query and risk returning the wrong catalog entry.
-      const preresolvedId = rawRow.device_id && typeof rawRow.device_id === 'string' && rawRow.device_id !== 'null'
-        ? rawRow.device_id
+      // Validate UUID format before trusting the value so an invalid string doesn't
+      // cause a silent FK violation when inserting order_items.
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      const rawDeviceId = rawRow.device_id
+      const preresolvedId = rawDeviceId && typeof rawDeviceId === 'string' && UUID_RE.test(rawDeviceId)
+        ? rawDeviceId
         : null
 
       normalizedRows.push({

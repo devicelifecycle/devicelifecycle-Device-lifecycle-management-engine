@@ -60,9 +60,8 @@ export async function requireAuth(): Promise<AuthContext | null> {
   if (!profile || !profile.is_active) return null
 
   const cookieStore = await cookies()
-  const activeRoleCookie = cookieStore.get('dlm_active_role')?.value
-    ? decodeURIComponent(cookieStore.get('dlm_active_role')!.value)
-    : null
+  const activeRoleRaw = cookieStore.get('dlm_active_role')?.value
+  const activeRoleCookie = activeRoleRaw ? decodeURIComponent(activeRoleRaw) : null
   const effectiveRole =
     activeRoleCookie &&
     (activeRoleCookie === profile.role || activeRoleCookie === profile.secondary_role)
