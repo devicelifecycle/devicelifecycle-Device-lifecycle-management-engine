@@ -4,9 +4,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { DeviceService } from '@/services/device.service'
 import { createDeviceSchema } from '@/lib/validations'
+import { runScraperPipeline } from '@/lib/scrapers'
 import type { DeviceCategory } from '@/types'
+import type { Device } from '@/types'
 export const dynamic = 'force-dynamic'
 
 
@@ -85,6 +88,11 @@ export async function POST(request: NextRequest) {
     }
 
     const device = await DeviceService.createDevice(validationResult.data)
+
+    // Fire scraper for the new device in the background — do NOT await so the
+    // response is immediate. Only Apple-category devices have competitor prices.
+    void triggerScraperForDevice(device)
+
     return NextResponse.json(device, { status: 201 })
   } catch (error) {
     console.error('Error creating device:', error)
@@ -92,5 +100,27 @@ export async function POST(request: NextRequest) {
       { error: 'Failed to create device' },
       { status: 500 }
     )
+  }
+}
+
+async function triggerScraperForDevice(device: Device) {
+  try {
+    const specs = (device.specifications || {}) as { storage_options?: string[] }
+    const storageOptions = specs.storage_options?.length
+      ? specs.storage_options
+      : ['DEFAULT']
+
+    const devicesToScrape = storageOptions.map(storage => ({
+      make: device.make,
+      model: device.model,
+      storage,
+    }))
+
+    const serviceSupabase = createServiceRoleClient()
+    await runScraperPipeline(devicesToScrape, serviceSupabase, false)
+    console.log(`[device-catalog] Auto-scraped prices for ${device.make} ${device.model}`)
+  } catch (err) {
+    // Background task — log but never crash the request
+    console.error('[device-catalog] Auto-scrape failed:', err)
   }
 }
