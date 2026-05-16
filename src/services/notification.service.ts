@@ -349,10 +349,8 @@ export class NotificationService {
           .from('users')
           .select('id, email, full_name, notification_email, role')
           .eq('is_active', true)
-        const internalUsers = (data || []).filter((u) => {
-          const r = (u as { role?: string }).role
-          return r === 'admin' || r === 'coe_manager'
-        })
+          .in('role', ['admin', 'coe_manager'])
+        const internalUsers = data || []
         internalUsers.forEach(admin => {
           inAppUserIds.add((admin as { id: string }).id)
           const a = admin as { email?: string; notification_email?: string | null; full_name?: string; id: string }
@@ -626,23 +624,21 @@ export class NotificationService {
       }
       message += ' Our team will review and update you shortly.'
 
-      // Send in-app notification to all org users
-      for (const user of orgUsers) {
-        await this.createNotification({
-          user_id: user.id,
-          type: 'in_app',
-          title,
-          message,
-          link: `/orders/${input.order_id}`,
-          metadata: {
-            order_id: input.order_id,
-            order_number: input.order_number,
-            imei: input.imei,
-            exception_reason: input.exception_reason,
-            adjustment_amount: input.adjustment_amount,
-          },
-        })
-      }
+      // Send in-app notification to all org users — parallel to avoid O(n) sequential DB round-trips
+      await Promise.all(orgUsers.map(user => this.createNotification({
+        user_id: user.id,
+        type: 'in_app',
+        title,
+        message,
+        link: `/orders/${input.order_id}`,
+        metadata: {
+          order_id: input.order_id,
+          order_number: input.order_number,
+          imei: input.imei,
+          exception_reason: input.exception_reason,
+          adjustment_amount: input.adjustment_amount,
+        },
+      })))
 
       // Also send email to primary contact
       if (customer.contact_email) {

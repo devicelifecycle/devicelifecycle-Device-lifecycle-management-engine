@@ -419,12 +419,13 @@ function useProvideAuth(): AuthContextValue {
     router.replace(getDefaultAppPathForRole(targetRole))
   }, [state.user, router])
 
-  // Check if user has a specific role
+  // Check if user has a specific role — considers activeRole for dual-role users
   const hasRole = useCallback((role: UserRole | UserRole[]) => {
     if (!state.user) return false
     const roles = Array.isArray(role) ? role : [role]
-    return roles.includes(state.user.role)
-  }, [state.user])
+    // Check both the primary role and the currently active role (may differ for dual-role users)
+    return roles.includes(state.user.role) || (state.activeRole != null && roles.includes(state.activeRole))
+  }, [state.user, state.activeRole])
 
   // Check if user can access COE features
   const isCOEUser = useCallback(() => {
