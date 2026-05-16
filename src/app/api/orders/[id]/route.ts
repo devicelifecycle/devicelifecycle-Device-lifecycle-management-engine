@@ -33,12 +33,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Fetch current user's profile for authorization
     const { data: userProfile } = await supabase
       .from('users')
-      .select('role, organization_id')
+      .select('role, organization_id, is_active')
       .eq('id', user.id)
       .single()
 
-    if (!userProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
+    if (!userProfile || !userProfile.is_active) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Role-based authorization
@@ -108,12 +108,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Fetch current user's profile for authorization
     const { data: userProfile } = await supabase
       .from('users')
-      .select('role, organization_id')
+      .select('role, organization_id, is_active')
       .eq('id', user.id)
       .single()
 
-    if (!userProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
+    if (!userProfile || !userProfile.is_active) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Fetch the order for authorization check

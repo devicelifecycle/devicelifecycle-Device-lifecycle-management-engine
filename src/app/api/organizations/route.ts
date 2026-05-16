@@ -29,9 +29,9 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    // Customer/vendor can only see their own organization
-    if (profile && ['customer', 'vendor'].includes(profile.role)) {
-      if (!profile.organization_id) {
+    // Customer/vendor can only see their own organization (fail-closed if no profile)
+    if (!profile || ['customer', 'vendor'].includes(profile.role)) {
+      if (!profile?.organization_id) {
         return NextResponse.json({ data: [], total: 0, page: 1, page_size: 20, total_pages: 0 })
       }
       const org = await OrganizationService.getOrganizationById(profile.organization_id)

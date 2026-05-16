@@ -28,7 +28,11 @@ export async function GET(
       .eq('id', user.id)
       .single()
 
-    if (profile && ['customer', 'vendor'].includes(profile.role)) {
+    if (!profile) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (['customer', 'vendor'].includes(profile.role)) {
       if (profile.organization_id !== (await params).id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }

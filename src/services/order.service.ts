@@ -129,7 +129,13 @@ export class OrderService {
       query = query.in('customer_id', allowedCustomerIds)
     }
 
-    if (requester_role === 'vendor' && requester_organization_id) {
+    if (requester_role === 'vendor') {
+      // No org → no orders. Without this guard a vendor with null organization_id
+      // would skip the filter entirely and see every order in the system.
+      if (!requester_organization_id) {
+        return { data: [], total: 0, page, page_size, total_pages: 0 }
+      }
+
       const { data: vendors } = await supabase
         .from('vendors')
         .select('id')

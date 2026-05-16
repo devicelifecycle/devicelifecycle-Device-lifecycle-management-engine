@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
 
     const result = await DeviceService.getDevices(filters)
 
-    // Strip sensitive pricing fields for external roles
-    if (profile && ['customer', 'vendor'].includes(profile.role) && result.data) {
+    // Strip sensitive pricing fields for external roles (and ghost users with no profile)
+    if ((!profile || ['customer', 'vendor'].includes(profile.role)) && result.data) {
       result.data = (result.data as unknown as Record<string, unknown>[]).map(({ base_price: _bp, cost_price: _cp, internal_notes: _in, ...safe }) => safe) as unknown as typeof result.data
     }
 
