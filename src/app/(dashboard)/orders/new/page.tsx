@@ -185,6 +185,7 @@ export default function NewOrderPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const latestLookupRequestRef = useRef<Record<number, number>>({})
   const nextLookupRequestIdRef = useRef(1)
+  const submittedRef = useRef(false)
 
   // Device search state — one entry per line item
   const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
@@ -592,6 +593,7 @@ export default function NewOrderPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submittedRef.current) return
     const effectiveCustomerId = isCustomer ? myCustomer?.id : customerId
     if (!effectiveCustomerId) {
       toast.error(isCustomer ? 'Loading your organization...' : 'Please select a customer')
@@ -613,6 +615,7 @@ export default function NewOrderPage() {
       }
 
       try {
+        submittedRef.current = true
         const results: { id: string; type: string }[] = []
 
         for (const [orderType, csvRows] of [['trade_in', tradeInCsvRows], ['cpo', cpoCsvRows]] as const) {
@@ -658,13 +661,14 @@ export default function NewOrderPage() {
 
         if (results.length === 1) {
           toast.success(`${results[0].type} order created — ${allCsvRows.length} items`)
-          router.push(`/orders/${results[0].id}`)
+          router.replace(`/orders/${results[0].id}`)
         } else if (results.length > 1) {
           toast.success(`Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
-          router.push('/orders')
+          router.replace('/orders')
         }
         return
       } catch (err) {
+        submittedRef.current = false
         toast.error(err instanceof Error ? err.message : 'Failed to upload CSV')
         return
       }
@@ -700,6 +704,7 @@ export default function NewOrderPage() {
       return
     }
 
+    submittedRef.current = true
     try {
       const results: { id: string; type: string }[] = []
 
@@ -727,12 +732,13 @@ export default function NewOrderPage() {
 
       if (results.length === 1) {
         toast.success(isCustomer ? `${results[0].type} request submitted! Our team will send you a quote shortly.` : `${results[0].type} order created successfully`)
-        router.push(`/orders/${results[0].id}`)
+        router.replace(`/orders/${results[0].id}`)
       } else if (results.length === 2) {
         toast.success(isCustomer ? `${results.length} requests submitted! Our team will send you quotes shortly.` : `Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
-        router.push('/orders')
+        router.replace('/orders')
       }
     } catch (err) {
+      submittedRef.current = false
       toast.error(err instanceof Error ? err.message : 'Failed to create order')
     }
   }

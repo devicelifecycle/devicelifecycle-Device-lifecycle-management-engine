@@ -139,7 +139,7 @@ export default function OrderDetailClient() {
   const { user } = useAuth()
   const isCustomer = user?.role === 'customer'
   const isVendor = user?.role === 'vendor'
-  const canSetPricingByRole = user?.role === 'admin' || user?.role === 'coe_manager'
+  const canSetPricingByRole = user?.role === 'admin' || user?.role === 'coe_manager' || user?.role === 'sales'
   const canEditItems = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role ?? '')
   const { order, isLoading, transition, isTransitioning, refetch } = useOrder(params.id as string)
   const isCpoOrder = order?.type === 'cpo'

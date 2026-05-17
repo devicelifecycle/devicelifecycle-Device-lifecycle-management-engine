@@ -108,6 +108,7 @@ export default function NewTradeInPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const latestLookupRequestRef = useRef<Record<number, number>>({})
   const nextLookupRequestIdRef = useRef(1)
+  const submittedRef = useRef(false)
 
   // Device search state — one entry per line item
   const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
@@ -367,6 +368,7 @@ export default function NewTradeInPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submittedRef.current) return
     if (!customerId) {
       toast.error('Please select a customer')
       return
@@ -411,6 +413,7 @@ export default function NewTradeInPage() {
       }))
     }
 
+    submittedRef.current = true
     try {
       const result = await create({
         type: 'trade_in',
@@ -419,8 +422,9 @@ export default function NewTradeInPage() {
         notes,
       } as Record<string, unknown>)
       toast.success('Trade-in order created successfully')
-      router.push(`/orders/${result.id}`)
+      router.replace(`/orders/${result.id}`)
     } catch (err) {
+      submittedRef.current = false
       toast.error(err instanceof Error ? err.message : 'Failed to create order')
     }
   }

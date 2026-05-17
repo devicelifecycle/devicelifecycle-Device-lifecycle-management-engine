@@ -110,6 +110,7 @@ export default function NewCPOOrderPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const latestLookupRequestRef = useRef<Record<number, number>>({})
   const nextLookupRequestIdRef = useRef(1)
+  const submittedRef = useRef(false)
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
@@ -384,6 +385,7 @@ export default function NewCPOOrderPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submittedRef.current) return
     if (!customerId) { toast.error('Please select a customer'); return }
 
     let orderItems: { device_id: string; quantity: number; storage: string; condition: DeviceCondition; notes: string }[]
@@ -430,6 +432,7 @@ export default function NewCPOOrderPage() {
       })
     }
 
+    submittedRef.current = true
     try {
       const result = await create({
         type: 'cpo',
@@ -438,8 +441,9 @@ export default function NewCPOOrderPage() {
         notes,
       } as any)
       toast.success('CPO order created successfully')
-      router.push(`/orders/${result.id}`)
+      router.replace(`/orders/${result.id}`)
     } catch (err) {
+      submittedRef.current = false
       toast.error(err instanceof Error ? err.message : 'Failed to create order')
     }
   }
