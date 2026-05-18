@@ -22,6 +22,8 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import { formatCurrency } from '@/lib/utils'
 import {
@@ -198,6 +200,10 @@ export default function NewOrderPage() {
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
 
+  // Quick-add to catalog state (admin/coe_manager only)
+  const [quickAddDialog, setQuickAddDialog] = useState<{ index: number; make: string; model: string } | null>(null)
+  const [quickAddLoading, setQuickAddLoading] = useState(false)
+
   useEffect(() => {
     let cancelled = false
     async function loadAll() {
@@ -277,6 +283,34 @@ export default function NewOrderPage() {
       }))
     }
   }, [isInternal])
+
+  // Quick-add: create a device in the catalog and auto-select it (admin/coe_manager only)
+  const handleQuickAddDevice = async (make: string, model: string, index: number) => {
+    setQuickAddLoading(true)
+    try {
+      const res = await fetch('/api/devices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ make: make.trim(), model: model.trim(), category: 'smartphone' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to add device to catalog')
+        return
+      }
+      const newDevice: Device = data
+      setDevices(prev => [...prev, newDevice])
+      updateItem(index, 'device_id', newDevice.id)
+      setDeviceSearches(prev => ({ ...prev, [index]: `${newDevice.make} ${newDevice.model}` }))
+      setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+      setQuickAddDialog(null)
+      toast.success(`${newDevice.make} ${newDevice.model} added to catalog and selected`)
+    } catch {
+      toast.error('Failed to add device to catalog')
+    } finally {
+      setQuickAddLoading(false)
+    }
+  }
 
   // Server-side device search — fires when user types in the device search box
   const searchDevices = useCallback((index: number, query: string) => {
@@ -916,7 +950,31 @@ export default function NewOrderPage() {
                                         ? serverResults
                                         : q ? devices.filter(fuzzyMatch) : devices
                                       ).slice(0, 50)
-                                      if (filtered.length === 0) return <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
+                                      if (filtered.length === 0) {
+                                        const canQuickAdd = ['admin', 'coe_manager'].includes(user?.role || '')
+                                        return (
+                                          <div>
+                                            <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
+                                            {canQuickAdd && q && (
+                                              <button
+                                                type="button"
+                                                className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-accent border-t flex items-center gap-2"
+                                                onMouseDown={e => {
+                                                  e.preventDefault()
+                                                  const parts = q.trim().split(/\s+/)
+                                                  const parsedMake = parts.length > 1 ? parts[0] : ''
+                                                  const parsedModel = parts.length > 1 ? parts.slice(1).join(' ') : q
+                                                  setQuickAddDialog({ index, make: parsedMake, model: parsedModel })
+                                                  setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+                                                }}
+                                              >
+                                                <Plus className="h-3 w-3 shrink-0" />
+                                                Add &ldquo;{q}&rdquo; to catalog
+                                              </button>
+                                            )}
+                                          </div>
+                                        )
+                                      }
                                       return filtered.map(d => (
                                         <button
                                           key={d.id}
@@ -1335,6 +1393,48 @@ export default function NewOrderPage() {
           </Link>
         </div>
       </form>
+
+      {/* Quick-add device to catalog dialog (admin/coe_manager only) */}
+      <Dialog open={!!quickAddDialog} onOpenChange={open => { if (!open) setQuickAddDialog(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Device to Catalog</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="qa-make">Make / Brand</Label>
+              <Input
+                id="qa-make"
+                placeholder="e.g. Apple"
+                value={quickAddDialog?.make || ''}
+                onChange={e => setQuickAddDialog(s => s ? { ...s, make: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="qa-model">Model</Label>
+              <Input
+                id="qa-model"
+                placeholder="e.g. iPhone 12 Pro"
+                value={quickAddDialog?.model || ''}
+                onChange={e => setQuickAddDialog(s => s ? { ...s, model: e.target.value } : null)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Creates a smartphone entry. You can edit full specs in Admin → Device Catalog later.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQuickAddDialog(null)}>Cancel</Button>
+            <Button
+              disabled={quickAddLoading || !quickAddDialog?.make?.trim() || !quickAddDialog?.model?.trim()}
+              onClick={() => quickAddDialog && handleQuickAddDevice(quickAddDialog.make, quickAddDialog.model, quickAddDialog.index)}
+            >
+              {quickAddLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Add &amp; Select
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
