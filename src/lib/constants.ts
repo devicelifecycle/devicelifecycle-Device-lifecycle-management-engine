@@ -262,7 +262,7 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   quoted: ['accepted', 'rejected'],
   accepted: ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled', 'ready_to_ship'],
   rejected: [], // Terminal state
-  sourcing: ['sourced', 'cancelled'],
+  sourcing: ['sourced', 'quoted', 'cancelled'],
   sourced: ['shipped_to_coe', 'shipped', 'cancelled'],
   shipped_to_coe: ['received'],
   received: ['in_triage'],

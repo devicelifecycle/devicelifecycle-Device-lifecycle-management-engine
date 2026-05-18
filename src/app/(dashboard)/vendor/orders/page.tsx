@@ -6,7 +6,7 @@ import { Search, Truck, Send, Inbox, FileText, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -100,6 +100,7 @@ export default function VendorOrdersPage() {
   const myBids: (VendorBid & { order?: { id: string; order_number: string; type: string; status: string; total_quantity: number; created_at: string } })[] = bidsData?.data || []
 
   // Bid dialog state
+  const queryClient = useQueryClient()
   const [bidDialogOpen, setBidDialogOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [bidForm, setBidForm] = useState({
@@ -169,6 +170,7 @@ export default function VendorOrdersPage() {
       setBidDialogOpen(false)
       refetch()
       refetchOpen()
+      queryClient.invalidateQueries({ queryKey: ['vendor-my-bids'] })
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to submit bid')
     } finally {

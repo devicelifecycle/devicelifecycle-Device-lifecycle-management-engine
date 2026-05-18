@@ -219,6 +219,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // When a CPO order moves from draft → submitted it becomes open for vendor bidding.
     // Broadcast to all active vendors so they know to log in and submit a bid.
     if (currentOrder.type === 'cpo' && currentOrder.status === 'draft' && newStatus === 'submitted') {
+      const orderId = (await params).id
       ;(async () => {
         const svc = createServiceRoleClient()
         const { data: vendors } = await svc
@@ -228,43 +229,45 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const orderLink = `/vendor/orders`
         const title = `New CPO Order Available — #${currentOrder.order_number}`
         const message = `A new CPO order #${currentOrder.order_number} is open for bidding. Log in to review the order and submit your bid.`
-        for (const vendor of vendors || []) {
-          if (vendor.organization_id) {
-            const { data: vendorUsers } = await svc
-              .from('users')
-              .select('id')
-              .eq('organization_id', vendor.organization_id)
-              .eq('is_active', true)
-            for (const vu of vendorUsers || []) {
-              NotificationService.createNotification({
-                user_id: vu.id,
-                type: 'in_app',
-                title,
-                message,
-                link: orderLink,
-                metadata: { order_id: (await params).id, order_number: currentOrder.order_number, event: 'cpo_order_created' },
-              }).catch(() => {})
-            }
-          }
-          if (vendor.contact_email) {
-            EmailService.sendOrderStatusEmail({
-              to: vendor.contact_email,
-              recipientName: vendor.contact_name || vendor.company_name || 'Vendor',
-              orderNumber: currentOrder.order_number,
-              orderId: (await params).id,
-              fromStatus: 'draft',
-              toStatus: 'submitted',
-              subject: title,
+
+        // Batch: single query for all vendor org users instead of N per-org queries
+        const vendorOrgIds = (vendors || []).map(v => v.organization_id).filter(Boolean) as string[]
+        const { data: allVendorUsers } = vendorOrgIds.length
+          ? await svc.from('users').select('id').in('organization_id', vendorOrgIds).eq('is_active', true)
+          : { data: [] }
+
+        await Promise.all([
+          ...(allVendorUsers || []).map(vu =>
+            NotificationService.createNotification({
+              user_id: vu.id,
+              type: 'in_app',
+              title,
               message,
+              link: orderLink,
+              metadata: { order_id: orderId, order_number: currentOrder.order_number, event: 'cpo_order_created' },
             }).catch(() => {})
-          }
-          if (vendor.contact_phone && EmailService.isTwilioConfigured()) {
-            EmailService.sendSMS(
-              vendor.contact_phone,
-              `[DLM] New CPO Order #${currentOrder.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
-            ).catch(() => {})
-          }
-        }
+          ),
+          ...(vendors || []).flatMap(vendor => [
+            vendor.contact_email
+              ? EmailService.sendOrderStatusEmail({
+                  to: vendor.contact_email,
+                  recipientName: vendor.contact_name || vendor.company_name || 'Vendor',
+                  orderNumber: currentOrder.order_number,
+                  orderId,
+                  fromStatus: 'draft',
+                  toStatus: 'submitted',
+                  subject: title,
+                  message,
+                }).catch(() => {})
+              : null,
+            vendor.contact_phone && EmailService.isTwilioConfigured()
+              ? EmailService.sendSMS(
+                  vendor.contact_phone,
+                  `[DLM] New CPO Order #${currentOrder.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
+                ).catch(() => {})
+              : null,
+          ]).filter(Boolean),
+        ])
       })().catch(err => console.error('Vendor CPO bid notification error:', err))
     }
 

@@ -628,16 +628,15 @@ export class VendorService {
         .eq('order_id', bid.order_id)
 
       if (orderItems && orderItems.length > 0) {
-        // Update each item's unit_price
-        for (const item of orderItems) {
-          await supabase
-            .from('order_items')
-            .update({
-              unit_price: customerUnitPrice,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', item.id)
-        }
+        // Update all item prices in parallel
+        await Promise.all(
+          orderItems.map(item =>
+            supabase
+              .from('order_items')
+              .update({ unit_price: customerUnitPrice, updated_at: new Date().toISOString() })
+              .eq('id', item.id)
+          )
+        )
 
         // Recalculate order totals
         const totalAmount = orderItems.reduce(
@@ -647,7 +646,9 @@ export class VendorService {
         if (totalAmount <= 0) {
           throw new Error('Cannot accept bid: order items sum to $0. Verify order items and bid quantities.')
         }
-        await supabase
+
+        // Atomic guard: only assign vendor if not already taken (race condition protection)
+        const { data: updatedOrder } = await supabase
           .from('orders')
           .update({
             total_amount: Math.round(totalAmount * 100) / 100,
@@ -656,6 +657,17 @@ export class VendorService {
             updated_at: new Date().toISOString(),
           })
           .eq('id', bid.order_id)
+          .is('vendor_id', null)
+          .select('id')
+
+        if (!updatedOrder || updatedOrder.length === 0) {
+          // Another bid was accepted first — reject this one and surface the conflict
+          await supabase
+            .from('vendor_bids')
+            .update({ status: 'rejected', updated_at: new Date().toISOString() })
+            .eq('id', bidId)
+          throw new Error('Order was already assigned to another vendor')
+        }
       }
 
       // Reject all other pending bids for this order
