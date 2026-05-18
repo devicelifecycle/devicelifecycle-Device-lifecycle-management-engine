@@ -295,6 +295,7 @@ export class NotificationService {
             .from('vendors')
             .select('contact_email, contact_phone, contact_name, organization_id')
             .eq('is_active', true)
+
           for (const vendor of vendors || []) {
             if (vendor.contact_email) {
               emailTargets.push({ email: vendor.contact_email, name: vendor.contact_name || 'Vendor', isVendor: true })
@@ -302,21 +303,24 @@ export class NotificationService {
             if (vendor.contact_phone) {
               smsTargets.push({ phone: vendor.contact_phone, name: vendor.contact_name || 'Vendor' })
             }
-            if (vendor.organization_id) {
-              const { data: orgUsers } = await supabase
-                .from('users')
-                .select('id, email, full_name, notification_email')
-                .eq('organization_id', vendor.organization_id)
-                .eq('is_active', true)
-              ;(orgUsers || []).forEach(u => {
-                inAppUserIds.add(u.id)
-                const uu = u as { email?: string; notification_email?: string | null; full_name?: string; id: string }
-                const effectiveEmail = uu.email?.endsWith('@login.local') ? uu.notification_email : uu.email
-                if (effectiveEmail) {
-                  emailTargets.push({ email: effectiveEmail, name: uu.full_name || 'User', userId: uu.id, isVendor: true })
-                }
-              })
-            }
+          }
+
+          // Single batch query for all vendor org users instead of N per-org queries
+          const vendorOrgIds = (vendors || []).map(v => v.organization_id).filter(Boolean) as string[]
+          if (vendorOrgIds.length > 0) {
+            const { data: allVendorUsers } = await supabase
+              .from('users')
+              .select('id, email, full_name, notification_email')
+              .in('organization_id', vendorOrgIds)
+              .eq('is_active', true)
+            ;(allVendorUsers || []).forEach(u => {
+              inAppUserIds.add(u.id)
+              const uu = u as { email?: string; notification_email?: string | null; full_name?: string; id: string }
+              const effectiveEmail = uu.email?.endsWith('@login.local') ? uu.notification_email : uu.email
+              if (effectiveEmail) {
+                emailTargets.push({ email: effectiveEmail, name: uu.full_name || 'User', userId: uu.id, isVendor: true })
+              }
+            })
           }
         })())
       }
@@ -707,22 +711,20 @@ export class NotificationService {
         message += ` Notes: ${input.notes}`
       }
 
-      for (const user of orgUsers) {
-        await this.createNotification({
-          user_id: user.id,
-          type: 'in_app',
-          title,
-          message,
-          link: `/orders/${input.order_id}`,
-          metadata: {
-            order_id: input.order_id,
-            order_number: input.order_number,
-            imei: input.imei,
-            approved: input.approved,
-            new_price: input.new_price,
-          },
-        })
-      }
+      await Promise.all(orgUsers.map(user => this.createNotification({
+        user_id: user.id,
+        type: 'in_app',
+        title,
+        message,
+        link: `/orders/${input.order_id}`,
+        metadata: {
+          order_id: input.order_id,
+          order_number: input.order_number,
+          imei: input.imei,
+          approved: input.approved,
+          new_price: input.new_price,
+        },
+      })))
 
       if (customer.contact_email) {
         await EmailService.sendOrderStatusEmail({
