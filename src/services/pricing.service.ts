@@ -327,6 +327,16 @@ export interface PricingSettingsOverrides {
   demand_adjustment_enabled?: boolean
 }
 
+// In-process TTL cache for pricing settings.
+// Settings change only when an admin updates them (rare). Caching for 5 minutes
+// eliminates a DB round-trip from every price calculation, order quote, and batch.
+let _pricingSettingsCache: { value: PricingSettingsOverrides; expiresAt: number } | null = null
+const PRICING_SETTINGS_TTL = 5 * 60 * 1000 // 5 minutes
+
+export function invalidatePricingSettingsCache(): void {
+  _pricingSettingsCache = null
+}
+
 const DEFAULT_PRICING_SETTINGS: PricingSettingsOverrides = {
   channel_green_min: CHANNEL_DECISION_THRESHOLDS.GREEN_MIN,
   channel_yellow_min: CHANNEL_DECISION_THRESHOLDS.YELLOW_MIN,
@@ -567,6 +577,11 @@ export class PricingService {
   static async getPricingSettings(
     supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>
   ): Promise<PricingSettingsOverrides> {
+    // Return cached copy if still fresh — skips DB round-trip on warm server invocations.
+    // Only used when no explicit client is passed (i.e. not inside a scoped transaction).
+    if (!supabaseClient && _pricingSettingsCache && Date.now() < _pricingSettingsCache.expiresAt) {
+      return _pricingSettingsCache.value
+    }
     try {
       const supabase = supabaseClient || await createServerSupabaseClient()
       const { data, error } = await supabase
@@ -586,6 +601,9 @@ export class PricingService {
             if (!Number.isNaN(num)) (overrides as unknown as Record<string, number>)[key] = num
           }
         }
+      }
+      if (!supabaseClient) {
+        _pricingSettingsCache = { value: overrides, expiresAt: Date.now() + PRICING_SETTINGS_TTL }
       }
       return overrides
     } catch {

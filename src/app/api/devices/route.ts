@@ -3,46 +3,54 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { DeviceService } from '@/services/device.service'
 import { createDeviceSchema } from '@/lib/validations'
 import { runScraperPipeline } from '@/lib/scrapers'
+import { getDeviceCache, setDeviceCache, invalidateDeviceCatalogCache } from '@/lib/cache/device-cache'
 import type { DeviceCategory } from '@/types'
 import type { Device } from '@/types'
 export const dynamic = 'force-dynamic'
 
-
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { profile } = auth
 
     const searchParams = request.nextUrl.searchParams
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-    const isInternal = profile && ['admin', 'coe_manager', 'sales', 'coe_tech'].includes(profile.role)
+    const isInternal = ['admin', 'coe_manager', 'sales', 'coe_tech'].includes(profile.role)
     const forOrderCreation = searchParams.get('for_order_creation') === '1'
     const maxPageSize = isInternal ? 5000 : forOrderCreation ? 500 : 100
+    const search = searchParams.get('search') || undefined
     const filters = {
-      search: searchParams.get('search') || undefined,
+      search,
       category: (searchParams.get('category') as DeviceCategory) || undefined,
       make: searchParams.get('make') || undefined,
       page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
       page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '50'), 1), maxPageSize),
     }
 
-    const result = await DeviceService.getDevices(filters)
+    // Cache only unfiltered/non-searched requests — searches are per-user and too varied.
+    const cacheKey = search ? null : JSON.stringify({ ...filters, role: isInternal ? 'internal' : 'external' })
+    let result: Awaited<ReturnType<typeof DeviceService.getDevices>>
 
-    // Strip sensitive pricing fields for external roles (and ghost users with no profile)
-    if ((!profile || ['customer', 'vendor'].includes(profile.role)) && result.data) {
+    if (cacheKey) {
+      const cached = getDeviceCache(cacheKey)
+      if (cached) {
+        result = cached as typeof result
+      } else {
+        result = await DeviceService.getDevices(filters)
+        setDeviceCache(cacheKey, result)
+      }
+    } else {
+      result = await DeviceService.getDevices(filters)
+    }
+
+    // Strip sensitive pricing fields for external roles
+    if (['customer', 'vendor'].includes(profile.role) && result.data) {
       result.data = (result.data as unknown as Record<string, unknown>[]).map(({ base_price: _bp, cost_price: _cp, internal_notes: _in, ...safe }) => safe) as unknown as typeof result.data
     }
 
@@ -58,27 +66,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { profile } = auth
 
-    // Only admin/coe_manager can create devices
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
 
-    // Validate input
     const validationResult = createDeviceSchema.safeParse(body)
     if (!validationResult.success) {
       return NextResponse.json(
@@ -89,8 +87,10 @@ export async function POST(request: NextRequest) {
 
     const device = await DeviceService.createDevice(validationResult.data)
 
-    // Fire scraper for the new device in the background — do NOT await so the
-    // response is immediate. Only Apple-category devices have competitor prices.
+    // Bust cache so the new device appears immediately on next catalog load
+    invalidateDeviceCatalogCache()
+
+    // Fire scraper for the new device in the background
     void triggerScraperForDevice(device)
 
     return NextResponse.json(device, { status: 201 })
@@ -120,7 +120,6 @@ async function triggerScraperForDevice(device: Device) {
     await runScraperPipeline(devicesToScrape, serviceSupabase, false)
     console.log(`[device-catalog] Auto-scraped prices for ${device.make} ${device.model}`)
   } catch (err) {
-    // Background task — log but never crash the request
     console.error('[device-catalog] Auto-scrape failed:', err)
   }
 }

@@ -3,7 +3,8 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { invalidatePricingSettingsCache } from '@/services/pricing.service'
 import type { PricingSettingsOverrides } from '@/services/pricing.service'
 export const dynamic = 'force-dynamic'
 
@@ -43,12 +44,12 @@ const SETTING_BOUNDS: Record<string, { min: number; max: number }> = {
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
 
-    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-    if (!profile || ['customer', 'vendor'].includes(profile?.role)) {
+    const { supabase, profile } = auth
+
+    if (['customer', 'vendor'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -70,12 +71,12 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
 
-    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
+    const { supabase, profile } = auth
+
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -108,6 +109,9 @@ export async function PATCH(request: NextRequest) {
         .from('pricing_settings')
         .upsert({ setting_key: key, setting_value: strVal }, { onConflict: 'setting_key' })
     }
+
+    // Bust the in-process cache so next price calculation reads the new values
+    invalidatePricingSettingsCache()
 
     return NextResponse.json({ success: true })
   } catch (error) {
