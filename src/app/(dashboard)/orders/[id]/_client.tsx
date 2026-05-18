@@ -1372,10 +1372,14 @@ export default function OrderDetailClient() {
   }
 
   if (!order) {
+    const fallbackHref = getDefaultAppPathForRole(user?.role)
     return (
-      <div className="text-center py-20">
-        <p className="text-muted-foreground">Order not found</p>
-        <Link href={getDefaultAppPathForRole(user?.role)}><Button variant="outline" className="mt-4">Back</Button></Link>
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <p className="text-2xl font-bold">Order not found</p>
+        <p className="text-muted-foreground">This order doesn&apos;t exist or you don&apos;t have access to it.</p>
+        <Link href={fallbackHref}>
+          <Button variant="outline">Back to Orders</Button>
+        </Link>
       </div>
     )
   }
