@@ -21,6 +21,7 @@
     "audit:fuzzy-devices": "npx tsx scripts/audit-fuzzy-device-names.ts",
     "cleanup:fuzzy-device-aliases": "npx tsx scripts/cleanup-fuzzy-device-aliases.ts",
     "clear-orders": "node --env-file=.env.local scripts/clear-all-orders.mjs",
+    "deploy": "powershell -ExecutionPolicy Bypass -File deploy.ps1",
     "db:push": "supabase db push",
     "db:migrate": "supabase migration up",
     "db:reset": "./scripts/db-reset-clean.sh",
