@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
@@ -21,6 +22,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { STORAGE_OPTIONS } from '@/lib/constants'
 import { matchDeviceFromCsv } from '@/lib/device-match'
 import { formatCurrency } from '@/lib/utils'
@@ -117,8 +119,36 @@ export default function NewCPOOrderPage() {
   const [beatMode, setBeatMode] = useState<'amount' | 'percent'>('amount')
   const [beatOverride, setBeatOverride] = useState<string>('')
 
+  // Device search state — one entry per line item
+  const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
+  const [deviceDropdownOpen, setDeviceDropdownOpen] = useState<Record<number, boolean>>({})
+  const [dropdownRects, setDropdownRects] = useState<Record<number, DOMRect>>({})
+  const [deviceSearchResults, setDeviceSearchResults] = useState<Record<number, Device[]>>({})
+  const deviceInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  const deviceSearchTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+
+  // Quick-add to catalog state (admin/coe_manager only)
+  const [quickAddDialog, setQuickAddDialog] = useState<{ index: number; make: string; model: string } | null>(null)
+  const [quickAddLoading, setQuickAddLoading] = useState(false)
+
   useEffect(() => {
-    fetch('/api/devices?page_size=150&sort_by=make&sort_order=asc').then(r => r.json()).then(d => setDevices(d.data || [])).catch(() => {})
+    let cancelled = false
+    async function loadAll() {
+      const all: Device[] = []
+      let page = 1
+      for (;;) {
+        const res = await fetch(`/api/devices?page_size=500&for_order_creation=1&sort_by=make&sort_order=asc&page=${page}`)
+        if (!res.ok || cancelled) break
+        const d = await res.json()
+        const rows: Device[] = d.data || []
+        all.push(...rows)
+        if (rows.length < 500) break
+        page++
+      }
+      if (!cancelled) setDevices(all)
+    }
+    loadAll().catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -235,6 +265,49 @@ export default function NewCPOOrderPage() {
     }))
   }, [isInternal, beatMode, beatOverride])
 
+  const searchDevices = useCallback((index: number, query: string) => {
+    clearTimeout(deviceSearchTimers.current[index])
+    if (!query) {
+      setDeviceSearchResults(prev => { const n = { ...prev }; delete n[index]; return n })
+      return
+    }
+    deviceSearchTimers.current[index] = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/devices?search=${encodeURIComponent(query)}&page_size=60&sort_by=make&sort_order=asc`)
+        if (!res.ok) return
+        const d = await res.json()
+        setDeviceSearchResults(prev => ({ ...prev, [index]: d.data || [] }))
+      } catch { /* silently ignore */ }
+    }, 200)
+  }, [])
+
+  const handleQuickAddDevice = async (make: string, model: string, index: number) => {
+    setQuickAddLoading(true)
+    try {
+      const res = await fetch('/api/devices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ make: make.trim(), model: model.trim(), category: 'smartphone' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to add device to catalog')
+        return
+      }
+      const newDevice: Device = data
+      setDevices(prev => [...prev, newDevice])
+      updateItem(index, 'device_id', newDevice.id)
+      setDeviceSearches(prev => ({ ...prev, [index]: `${newDevice.make} ${newDevice.model}` }))
+      setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+      setQuickAddDialog(null)
+      toast.success(`${newDevice.make} ${newDevice.model} added to catalog and selected`)
+    } catch {
+      toast.error('Failed to add device to catalog')
+    } finally {
+      setQuickAddLoading(false)
+    }
+  }
+
   const addItem = () => {
     setItems([...items, { device_id: '', device_label: '', quantity: 1, storage: '', notes: '', selectedConditions: ['good'] }])
   }
@@ -242,6 +315,16 @@ export default function NewCPOOrderPage() {
   const removeItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index))
     latestLookupRequestRef.current = {}
+    setDeviceSearches(prev => {
+      const next = { ...prev }
+      delete next[index]
+      const reindexed: Record<number, string> = {}
+      Object.keys(next).forEach(key => {
+        const k = parseInt(key)
+        reindexed[k > index ? k - 1 : k] = next[k]
+      })
+      return reindexed
+    })
     setItemPrices(prev => {
       const next = { ...prev }
       delete next[index]
@@ -259,6 +342,7 @@ export default function NewCPOOrderPage() {
       if (i !== index) return item
       if (field === 'device_id') {
         const dev = devices.find(d => d.id === value)
+          ?? Object.values(deviceSearchResults).flat().find(d => d.id === value)
         const storageOptions = getStorageOptionsForDevice(dev)
         const defaultStorage = storageOptions.includes('128GB') ? '128GB' : storageOptions[0] || ''
         return {
@@ -501,12 +585,95 @@ export default function NewCPOOrderPage() {
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div className="space-y-1">
                             <Label className="text-xs">Device</Label>
-                            <Select value={item.device_id} onValueChange={v => updateItem(index, 'device_id', v)}>
-                              <SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger>
-                              <SelectContent>
-                                {devices.map(d => <SelectItem key={d.id} value={d.id}>{d.make} {d.model}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <div className="relative">
+                              <Input
+                                ref={el => { deviceInputRefs.current[index] = el }}
+                                placeholder="Search device..."
+                                value={deviceSearches[index] !== undefined ? deviceSearches[index] : item.device_label}
+                                onChange={e => {
+                                  setDeviceSearches(prev => ({ ...prev, [index]: e.target.value }))
+                                  searchDevices(index, e.target.value)
+                                  const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
+                                  if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
+                                  setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
+                                }}
+                                onFocus={() => {
+                                  const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
+                                  if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
+                                  setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
+                                }}
+                                onBlur={() => setTimeout(() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: false })), 150)}
+                                autoComplete="off"
+                              />
+                              {deviceDropdownOpen[index] && dropdownRects[index] && createPortal(
+                                <div
+                                  style={{
+                                    position: 'fixed',
+                                    top: dropdownRects[index].bottom + 4,
+                                    left: dropdownRects[index].left,
+                                    width: dropdownRects[index].width,
+                                    zIndex: 9999,
+                                  }}
+                                  className="max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg"
+                                >
+                                  {(() => {
+                                    const q = (deviceSearches[index] || '').toLowerCase()
+                                    const serverResults = deviceSearchResults[index]
+                                    const fuzzyMatch = (device: Device) => {
+                                      if (!q) return true
+                                      const text = `${device.make} ${device.model}`.toLowerCase()
+                                      const tokens = q.trim().split(/\s+/).filter((s: string) => s)
+                                      return tokens.every((token: string) => text.includes(token))
+                                    }
+                                    const filtered = (serverResults !== undefined
+                                      ? serverResults
+                                      : q ? devices.filter(fuzzyMatch) : devices
+                                    ).slice(0, 50)
+                                    if (filtered.length === 0) {
+                                      const canQuickAdd = ['admin', 'coe_manager'].includes(user?.role || '')
+                                      return (
+                                        <div>
+                                          <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
+                                          {canQuickAdd && q && (
+                                            <button
+                                              type="button"
+                                              className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-accent border-t flex items-center gap-2"
+                                              onMouseDown={e => {
+                                                e.preventDefault()
+                                                const parts = q.trim().split(/\s+/)
+                                                const parsedMake = parts.length > 1 ? parts[0] : ''
+                                                const parsedModel = parts.length > 1 ? parts.slice(1).join(' ') : q
+                                                setQuickAddDialog({ index, make: parsedMake, model: parsedModel })
+                                                setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+                                              }}
+                                            >
+                                              <Plus className="h-3 w-3 shrink-0" />
+                                              Add &ldquo;{q}&rdquo; to catalog
+                                            </button>
+                                          )}
+                                        </div>
+                                      )
+                                    }
+                                    return filtered.map(d => (
+                                      <button
+                                        key={d.id}
+                                        type="button"
+                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-accent ${d.id === item.device_id ? 'bg-accent font-medium' : ''}`}
+                                        onMouseDown={e => {
+                                          e.preventDefault()
+                                          updateItem(index, 'device_id', d.id)
+                                          setDeviceSearches(prev => ({ ...prev, [index]: `${d.make} ${d.model}` }))
+                                          setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+                                        }}
+                                      >
+                                        {d.make} {d.model}
+                                      </button>
+                                    ))
+                                  })()}
+                                </div>,
+                                document.body
+                              )}
+                            </div>
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Qty</Label>
@@ -840,6 +1007,48 @@ export default function NewCPOOrderPage() {
           <Link href="/orders"><Button variant="outline" type="button">Cancel</Button></Link>
         </div>
       </form>
+
+      {/* Quick-add device to catalog dialog (admin/coe_manager only) */}
+      <Dialog open={!!quickAddDialog} onOpenChange={open => { if (!open) setQuickAddDialog(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Device to Catalog</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="qa-make">Make / Brand</Label>
+              <Input
+                id="qa-make"
+                placeholder="e.g. Apple"
+                value={quickAddDialog?.make || ''}
+                onChange={e => setQuickAddDialog(s => s ? { ...s, make: e.target.value } : null)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="qa-model">Model</Label>
+              <Input
+                id="qa-model"
+                placeholder="e.g. iPhone 12 Pro"
+                value={quickAddDialog?.model || ''}
+                onChange={e => setQuickAddDialog(s => s ? { ...s, model: e.target.value } : null)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Creates a smartphone entry. Full specs can be edited in Admin → Device Catalog later.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQuickAddDialog(null)}>Cancel</Button>
+            <Button
+              disabled={quickAddLoading || !quickAddDialog?.make?.trim() || !quickAddDialog?.model?.trim()}
+              onClick={() => quickAddDialog && handleQuickAddDevice(quickAddDialog.make, quickAddDialog.model, quickAddDialog.index)}
+            >
+              {quickAddLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Add &amp; Select
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
