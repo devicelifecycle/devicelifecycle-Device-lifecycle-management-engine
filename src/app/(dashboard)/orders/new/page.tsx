@@ -142,6 +142,8 @@ interface ItemPrice {
   error: string | null
   source: string
   competitors: CompetitorPrice[]
+  last_manual_price: number | null   // last price a human set for this device+storage
+  last_manual_at: string | null      // when it was last set
 }
 
 // CPO orders are always 'good' condition
@@ -234,24 +236,45 @@ export default function NewOrderPage() {
     if (!isInternal) return
     if (!deviceId || !storage) {
       delete latestLookupRequestRef.current[index]
-      setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: '', competitors: [] } }))
+      setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: '', competitors: [], last_manual_price: null, last_manual_at: null } }))
       return
     }
 
     const requestId = nextLookupRequestIdRef.current++
     latestLookupRequestRef.current[index] = requestId
 
-    setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: true, error: null, source: '', competitors: [] } }))
+    setItemPrices(prev => ({ ...prev, [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: true, error: null, source: '', competitors: [], last_manual_price: null, last_manual_at: null } }))
 
     try {
-      const res = await fetch('/api/pricing/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition }),
-      })
+      const [priceRes, manualRes] = await Promise.all([
+        fetch('/api/pricing/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ version: 'v2', device_id: deviceId, storage, carrier: 'Unlocked', condition }),
+        }),
+        fetch(`/api/pricing/manual-prices?device_ids=${deviceId}`),
+      ])
 
-      if (res.ok) {
-        const data = await res.json()
+      if (latestLookupRequestRef.current[index] !== requestId) return
+
+      // Parse last manual price — newest entry for same storage wins
+      let lastManualPrice: number | null = null
+      let lastManualAt: string | null = null
+      if (manualRes.ok) {
+        const manualData = await manualRes.json()
+        const entries: Array<{ storage: string; condition: string; last_manual_price: number; last_set_at: string }> = manualData.data || []
+        const sameStorage = entries
+          .filter(e => e.storage === storage && (e.last_manual_price || 0) > 0)
+          .sort((a, b) => (b.last_set_at || '').localeCompare(a.last_set_at || ''))
+        const best = sameStorage[0] ?? entries.filter(e => (e.last_manual_price || 0) > 0).sort((a, b) => (b.last_set_at || '').localeCompare(a.last_set_at || ''))[0]
+        if (best) {
+          lastManualPrice = best.last_manual_price
+          lastManualAt = best.last_set_at
+        }
+      }
+
+      if (priceRes.ok) {
+        const data = await priceRes.json()
         if (data.success && (data.trade_price > 0 || data.cpo_price > 0)) {
           if (latestLookupRequestRef.current[index] !== requestId) return
           setItemPrices(prev => ({
@@ -264,6 +287,8 @@ export default function NewOrderPage() {
               error: null,
               source: data.price_source || 'Pricing Engine V2',
               competitors: (data.competitors || []) as CompetitorPrice[],
+              last_manual_price: lastManualPrice,
+              last_manual_at: lastManualAt,
             },
           }))
           return
@@ -273,13 +298,13 @@ export default function NewOrderPage() {
       if (latestLookupRequestRef.current[index] !== requestId) return
       setItemPrices(prev => ({
         ...prev,
-        [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: 'No price data', source: '', competitors: [] },
+        [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: 'No price data', source: '', competitors: [], last_manual_price: lastManualPrice, last_manual_at: lastManualAt },
       }))
     } catch {
       if (latestLookupRequestRef.current[index] !== requestId) return
       setItemPrices(prev => ({
         ...prev,
-        [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: 'Lookup failed', source: '', competitors: [] },
+        [index]: { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: 'Lookup failed', source: '', competitors: [], last_manual_price: null, last_manual_at: null },
       }))
     }
   }, [isInternal])
@@ -412,7 +437,7 @@ export default function NewOrderPage() {
     setItemPrices(prev => ({
       ...prev,
       [index]: {
-        ...(prev[index] || { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: 'manual', competitors: [] }),
+        ...(prev[index] || { engine_price: 0, engine_cpo_price: 0, manual_price: '', loading: false, error: null, source: 'manual', competitors: [], last_manual_price: null, last_manual_at: null }),
         manual_price: val,
       },
     }))
@@ -1029,6 +1054,11 @@ export default function NewOrderPage() {
                                         onChange={e => updateManualPrice(index, e.target.value)}
                                       />
                                       <span className="text-[10px] text-muted-foreground">{price.source}</span>
+                                      {price.last_manual_price != null && (
+                                        <span className="text-[10px] text-amber-600 font-medium">
+                                          Last manual: {formatCurrency(price.last_manual_price)}
+                                        </span>
+                                      )}
                                     </div>
                                   ) : price?.error ? (
                                     <span className="text-xs text-muted-foreground h-10 flex items-center">No price</span>
@@ -1261,7 +1291,8 @@ export default function NewOrderPage() {
                     <TableHead>Cond.</TableHead>
                     <TableHead>Storage</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right text-muted-foreground">Engine Price</TableHead>
+                    <TableHead className="text-right text-muted-foreground">Suggested</TableHead>
+                    <TableHead className="text-right text-amber-600">Last Manual</TableHead>
                     <TableHead className="text-right text-amber-700 bg-amber-50/60">Competitor Prices</TableHead>
                     <TableHead className="text-right">Our Quote</TableHead>
                     <TableHead className="text-right whitespace-nowrap">Total</TableHead>
@@ -1288,6 +1319,19 @@ export default function NewOrderPage() {
                         <TableCell className="text-xs">{item.storage}</TableCell>
                         <TableCell className="text-right text-xs">{item.quantity}</TableCell>
                         <TableCell className="text-right font-mono text-xs text-muted-foreground">{enginePrice > 0 ? formatCurrency(enginePrice) : '—'}</TableCell>
+                        {/* Last manual price */}
+                        <TableCell className="text-right">
+                          {price?.last_manual_price != null ? (
+                            <div>
+                              <span className="font-mono text-xs font-medium text-amber-700">{formatCurrency(price.last_manual_price)}</span>
+                              {price.last_manual_at && (
+                                <div className="text-[10px] text-muted-foreground">{new Date(price.last_manual_at).toLocaleDateString()}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         {/* Competitor prices — internal only */}
                         <TableCell className="bg-amber-50/40 min-w-[200px]">
                           {price?.competitors && price.competitors.length > 0 ? (() => {
@@ -1352,13 +1396,13 @@ export default function NewOrderPage() {
                   })}
                   {tradeInTotal > 0 && (
                     <TableRow className="border-t-2">
-                      <TableCell colSpan={8} className="text-right font-semibold">Trade-In Total</TableCell>
+                      <TableCell colSpan={9} className="text-right font-semibold">Trade-In Total</TableCell>
                       <TableCell className="text-right font-mono font-bold text-green-600">{formatCurrency(tradeInTotal)}</TableCell>
                     </TableRow>
                   )}
                   {cpoTotal > 0 && (
                     <TableRow className="border-t-2">
-                      <TableCell colSpan={8} className="text-right font-semibold">CPO Total</TableCell>
+                      <TableCell colSpan={9} className="text-right font-semibold">CPO Total</TableCell>
                       <TableCell className="text-right font-mono font-bold text-blue-600">{formatCurrency(cpoTotal)}</TableCell>
                     </TableRow>
                   )}

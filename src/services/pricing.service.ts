@@ -1728,7 +1728,19 @@ export class PricingService {
       return (right.updated_at || '').localeCompare(left.updated_at || '')
     })
 
-    return rows
+    // Deduplicate: keep only the newest row per device+storage+condition+competitor.
+    // Scraper creates new rows on each run rather than updating in place, so without
+    // deduplication the admin pricing matrix shows whichever row it encounters first
+    // instead of the latest scraped price (the Bell $95 vs $135 display bug).
+    const seen = new Set<string>()
+    const deduped = rows.filter(row => {
+      const key = `${row.device_id}|${row.storage || ''}|${row.condition || ''}|${(row.competitor_name || '').toLowerCase()}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    return deduped
   }
 
   static async createCompetitorPrice(input: Omit<CompetitorPrice, 'id' | 'created_at' | 'updated_at' | 'device'>): Promise<CompetitorPrice> {
