@@ -170,7 +170,7 @@ def _strip_brand(m: str) -> str:
 
 def _core_model(model: str) -> str:
     m = _norm(model)
-    m = re.sub(r'[″""'"\'`]', "", m)
+    m = re.sub("[\u2033\u201c\u201d\u2019\u2018'\"`]", "", m)
     m = _strip_brand(m)
     m = re.sub(r"\s*\([^)]*\)", "", m)
     m = m.replace("-inch", "")
