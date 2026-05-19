@@ -36,14 +36,14 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r scrapers_py/requirements_server.txt
-          pip install psycopg2-binary
 
       - name: Install Patchright browser (Chromium)
         run: python -m patchright install chromium --with-deps
 
       - name: Run scrapers
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}

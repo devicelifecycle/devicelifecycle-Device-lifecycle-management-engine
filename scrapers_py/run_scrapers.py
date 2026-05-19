@@ -3,10 +3,11 @@ GitHub Actions scraper orchestrator.
 Runs all 5 Scrapling workers, resolves device IDs, upserts prices, sends email.
 
 Required env vars:
-  SUPABASE_DB_URL  - postgres connection string (direct, not pooler)
-  GMAIL_USER       - sending Gmail address
-  GMAIL_APP_PASSWORD - Gmail app password
-  NEXT_PUBLIC_APP_URL - base URL for links in email (optional)
+  SUPABASE_URL             - e.g. https://xxx.supabase.co
+  SUPABASE_SERVICE_ROLE_KEY - service role JWT
+  GMAIL_USER               - sending Gmail address
+  GMAIL_APP_PASSWORD       - Gmail app password
+  NEXT_PUBLIC_APP_URL      - base URL for links in email (optional)
 """
 from __future__ import annotations
 
@@ -22,14 +23,14 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
 
-import psycopg2
-import psycopg2.extras
+from supabase import create_client, Client
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-DB_URL = os.environ["SUPABASE_DB_URL"]
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 GMAIL_USER = os.environ.get("GMAIL_USER", "")
 GMAIL_PASS = os.environ.get("GMAIL_APP_PASSWORD", "")
 APP_URL = os.environ.get("NEXT_PUBLIC_APP_URL", "").rstrip("/")
@@ -83,8 +84,7 @@ _CONDITION_MAP = {
 def normalize_condition(raw: str | None) -> str:
     if not raw:
         return "good"
-    key = raw.lower().strip()
-    return _CONDITION_MAP.get(key, "good")
+    return _CONDITION_MAP.get(raw.lower().strip(), "good")
 
 
 def normalize_storage(raw: str | None) -> str:
@@ -92,8 +92,8 @@ def normalize_storage(raw: str | None) -> str:
     if not s:
         return "128GB"
 
-    s_no_spaces = s.replace(" ", "")
-    if re.match(r"^(GOOD|FAIR|EXCELLENT|LIKENEW|BROKEN|POOR|NEW)$", s_no_spaces, re.IGNORECASE):
+    s_no_sp = s.replace(" ", "")
+    if re.match(r"^(GOOD|FAIR|EXCELLENT|LIKENEW|BROKEN|POOR|NEW)$", s_no_sp, re.IGNORECASE):
         return "DEFAULT"
 
     if re.search(r"RAM|SSD|CPU|GPU|CORE|INTEL|NVIDIA|ALUMINUM|CELLULAR|GPS|NVME|M\.2|EMMC", s, re.IGNORECASE):
@@ -103,11 +103,7 @@ def normalize_storage(raw: str | None) -> str:
         m = re.search(r"(\d+)\s*GB\s*(SSD|NVMe|M\.2|HDD|eMMC)", s, re.IGNORECASE)
         if m:
             gb = int(m.group(1))
-            if gb == 1024:
-                return "1TB"
-            if gb == 2048:
-                return "2TB"
-            return f"{gb}GB"
+            return "1TB" if gb == 1024 else ("2TB" if gb == 2048 else f"{gb}GB")
         m = re.search(r"(\d+)\s*TB(?!\s*RAM)", s, re.IGNORECASE)
         if m:
             return f"{m.group(1)}TB"
@@ -116,21 +112,14 @@ def normalize_storage(raw: str | None) -> str:
             return f"{m.group(1)}GB"
         return "DEFAULT"
 
-    s = re.sub(r"\(WIFI(?:\+CELLULAR)?\)", "", s, flags=re.IGNORECASE)
-    s = s.replace(" ", "")
-    if s == "1024GB":
-        return "1TB"
-    if s == "2048GB":
-        return "2TB"
-    if s == "4096GB":
-        return "4TB"
-    if s == "8192GB":
-        return "8TB"
+    s = re.sub(r"\(WIFI(?:\+CELLULAR)?\)", "", s, flags=re.IGNORECASE).replace(" ", "")
+    replacements = {"1024GB": "1TB", "2048GB": "2TB", "4096GB": "4TB", "8192GB": "8TB"}
+    s = replacements.get(s, s)
     return s[:50]
 
 
 def normalize_competitor_name(name: str) -> str:
-    aliases: dict[str, str] = {
+    aliases = {
         "apple trade-in": "Apple Trade-In",
         "bell": "Bell",
         "telus": "Telus",
@@ -142,7 +131,7 @@ def normalize_competitor_name(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Outlier thresholds (mirrors pipeline.ts getOutlierThresholds)
+# Outlier thresholds
 # ---------------------------------------------------------------------------
 
 
@@ -150,7 +139,7 @@ def get_outlier_thresholds(make: str, model: str) -> dict[str, int]:
     m = (make + " " + model).lower()
     if "watch" in m:
         return {"min_trade": 20, "max_trade": 1500, "min_sell": 50, "max_sell": 2500}
-    if "ipad" in m or "tab" in m or "tablet" in m:
+    if "ipad" in m or " tab" in m or "tablet" in m:
         return {"min_trade": 20, "max_trade": 2500, "min_sell": 50, "max_sell": 4000}
     if "macbook" in m or "mac " in m or "imac" in m or "laptop" in m:
         return {"min_trade": 50, "max_trade": 5000, "min_sell": 100, "max_sell": 8000}
@@ -168,7 +157,7 @@ _KNOWN_BRANDS = [
 ]
 
 
-def _norm_text(t: str) -> str:
+def _norm(t: str) -> str:
     return t.lower().strip()
 
 
@@ -180,21 +169,20 @@ def _strip_brand(m: str) -> str:
 
 
 def _core_model(model: str) -> str:
-    m = model.lower().strip()
-    m = re.sub(r'[″“”’"\'`]', "", m)
+    m = _norm(model)
+    m = re.sub(r'[″""'"\'`]', "", m)
     m = _strip_brand(m)
     m = re.sub(r"\s*\([^)]*\)", "", m)
     m = m.replace("-inch", "")
     m = re.sub(r"\b\d+(st|nd|rd|th)\s*(gen(eration)?)?\b", "", m, flags=re.IGNORECASE)
     m = re.sub(r"\s+20\d{2}$", "", m)
-    m = re.sub(r"\s+", " ", m).strip()
-    return m
+    return re.sub(r"\s+", " ", m).strip()
 
 
-def _storage_in_spec(spec: dict[str, Any], storage_norm: str) -> bool:
-    options: list[str] = spec.get("storage_options") or []
+def _storage_matches(spec: dict, storage_norm: str) -> bool:
+    options: list[str] = (spec or {}).get("storage_options") or []
     if not options:
-        return True  # no storage options = match any
+        return True
     alts = {storage_norm}
     if storage_norm == "1tb":
         alts.add("1024gb")
@@ -205,47 +193,40 @@ def _storage_in_spec(spec: dict[str, Any], storage_norm: str) -> bool:
     elif storage_norm == "2048gb":
         alts.add("2tb")
     for opt in options:
-        on = _norm_text(opt).replace(" ", "")
+        on = _norm(opt).replace(" ", "")
         if any(a == on or a in on or on in a for a in alts):
             return True
     return False
 
 
-def _resolve_device(catalog_by_make: dict[str, list[dict]], make: str, model: str, storage: str) -> str | None:
-    make_key = _norm_text(make)
-    rows = catalog_by_make.get(make_key, [])
+def resolve_device(catalog_by_make: dict[str, list[dict]], make: str, model: str, storage: str) -> str | None:
+    rows = catalog_by_make.get(_norm(make), [])
     if not rows:
         return None
 
-    model_norm = _norm_text(model)
-    storage_norm = _norm_text(normalize_storage(storage)).replace(" ", "")
+    model_norm = _norm(model)
+    storage_norm = _norm(normalize_storage(storage)).replace(" ", "")
 
     def storage_ok(row: dict) -> bool:
-        return _storage_in_spec(row.get("specifications") or {}, storage_norm)
+        return _storage_matches(row.get("specifications") or {}, storage_norm)
 
-    # Pass 1: exact model match
     for row in rows:
-        dm = _norm_text(row["model"])
-        if dm == model_norm and storage_ok(row):
+        if _norm(row["model"]) == model_norm and storage_ok(row):
             return row["id"]
 
-    # Pass 1.5: strip brand from scraped model
     model_no_brand = _strip_brand(model_norm)
-    if model_no_brand and model_no_brand != model_norm:
+    if model_no_brand != model_norm:
         for row in rows:
-            dm = _norm_text(row["model"])
-            if dm == model_no_brand and storage_ok(row):
+            if _norm(row["model"]) == model_no_brand and storage_ok(row):
                 return row["id"]
 
-    # Pass 2: prefix match (scraped name starts with catalog name)
     for row in rows:
-        dm = _norm_text(row["model"])
+        dm = _norm(row["model"])
         if model_norm.startswith(dm) or dm.startswith(model_norm):
-            next_c = model_norm[len(dm):len(dm) + 1] if len(model_norm) > len(dm) else ""
-            if next_c in ("", " ", "-") and storage_ok(row):
+            trail = model_norm[len(dm):len(dm) + 1] if len(model_norm) > len(dm) else ""
+            if trail in ("", " ", "-") and storage_ok(row):
                 return row["id"]
 
-    # Pass 3: core model match
     scraped_core = _core_model(model)
     if len(scraped_core) >= 5:
         for row in rows:
@@ -256,7 +237,7 @@ def _resolve_device(catalog_by_make: dict[str, list[dict]], make: str, model: st
 
 
 # ---------------------------------------------------------------------------
-# Run a single worker
+# Run a single worker subprocess
 # ---------------------------------------------------------------------------
 
 
@@ -264,10 +245,10 @@ def run_worker(name: str, cfg: dict, devices: list[dict]) -> dict[str, Any]:
     discovery = cfg["discovery"]
     payload = json.dumps({
         "mode": "discovery" if discovery else "targeted",
-        "devices": devices if not discovery else [],
+        "devices": [] if discovery else devices,
     })
 
-    print(f"  [{name}] launching worker (discovery={discovery}) …", flush=True)
+    print(f"  [{name}] launching (discovery={discovery}) …", flush=True)
     try:
         proc = subprocess.run(
             [PYTHON_BIN, cfg["script"]],
@@ -278,12 +259,11 @@ def run_worker(name: str, cfg: dict, devices: list[dict]) -> dict[str, Any]:
         )
     except subprocess.TimeoutExpired:
         return {"competitor_name": name, "prices": [], "success": False,
-                "error": f"Worker timed out after {WORKER_TIMEOUT}s", "duration_ms": WORKER_TIMEOUT * 1000}
+                "error": f"timed out after {WORKER_TIMEOUT}s", "duration_ms": WORKER_TIMEOUT * 1000}
     except Exception as exc:
         return {"competitor_name": name, "prices": [], "success": False,
                 "error": str(exc), "duration_ms": 0}
 
-    # Find last JSON object in stdout
     candidate = None
     for line in reversed(proc.stdout.strip().splitlines()):
         line = line.strip()
@@ -308,23 +288,20 @@ def run_worker(name: str, cfg: dict, devices: list[dict]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Upsert prices to Postgres
+# Upsert via supabase-py client
 # ---------------------------------------------------------------------------
 
 
 def upsert_prices(
-    conn: Any,
+    sb: Client,
     catalog_by_make: dict[str, list[dict]],
     all_prices: list[dict],
-    discovery: bool,
 ) -> tuple[int, int, list[str]]:
-    """Returns (upserted, devices_created, errors)."""
     upserted = 0
     devices_created = 0
     errors: list[str] = []
     now = datetime.now(timezone.utc).isoformat()
 
-    # Dedupe by conflict key, prefer higher trade_in_price
     seen: dict[str, dict] = {}
 
     for p in all_prices:
@@ -341,156 +318,129 @@ def upsert_prices(
         storage_db = normalize_storage(storage_raw)
         scraped_at = p.get("scraped_at") or now
 
-        thresholds = get_outlier_thresholds(make, model)
+        thr = get_outlier_thresholds(make, model)
         t_in = float(trade) if trade and float(trade) > 0 else None
         s_out = float(sell) if sell and float(sell) > 0 else None
 
-        if t_in is not None and (t_in < thresholds["min_trade"] or t_in > thresholds["max_trade"]):
+        if t_in is not None and (t_in < thr["min_trade"] or t_in > thr["max_trade"]):
             continue
-        if s_out is not None and (s_out < thresholds["min_sell"] or s_out > thresholds["max_sell"]):
+        if s_out is not None and (s_out < thr["min_sell"] or s_out > thr["max_sell"]):
             continue
         if t_in is None and s_out is None:
             continue
 
-        device_id = _resolve_device(catalog_by_make, make, model, storage_raw)
+        device_id = resolve_device(catalog_by_make, make, model, storage_raw)
 
-        if device_id is None and discovery:
-            # Create a minimal device_catalog entry
+        if device_id is None:
+            # Create new device_catalog entry
             device_id = str(uuid.uuid4())
             infer_cat = "phone"
             m_lower = (make + " " + model).lower()
             if "watch" in m_lower:
                 infer_cat = "watch"
-            elif "ipad" in m_lower or "tablet" in m_lower or " tab " in m_lower:
+            elif "ipad" in m_lower or "tablet" in m_lower:
                 infer_cat = "tablet"
             elif "macbook" in m_lower or "laptop" in m_lower:
                 infer_cat = "laptop"
 
             try:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO device_catalog (id, make, model, variant, category, specifications, is_active)
-                        VALUES (%s, %s, %s, %s, %s, %s, true)
-                        ON CONFLICT DO NOTHING
-                        """,
-                        (device_id, make, model, storage_db,
-                         infer_cat, json.dumps({"storage_options": [storage_raw]})),
-                    )
-                conn.commit()
-                # Re-add to in-memory catalog
-                make_key = _norm_text(make)
-                catalog_by_make.setdefault(make_key, []).append({
+                sb.table("device_catalog").upsert({
+                    "id": device_id,
+                    "make": make,
+                    "model": model,
+                    "variant": storage_db,
+                    "category": infer_cat,
+                    "specifications": {"storage_options": [storage_raw]},
+                    "is_active": True,
+                }, on_conflict="make,model,variant").execute()
+                # Add to in-memory map
+                catalog_by_make.setdefault(_norm(make), []).append({
                     "id": device_id, "make": make, "model": model,
                     "specifications": {"storage_options": [storage_raw]},
                 })
                 devices_created += 1
             except Exception as exc:
-                conn.rollback()
                 errors.append(f"Create device failed ({make} {model}): {exc}")
                 continue
-
-        if device_id is None:
-            continue
 
         key = f"{device_id}|{storage_db}|{competitor}|{condition}"
         existing = seen.get(key)
         if existing:
-            e_trade = existing.get("trade_in_price") or 0
-            if (t_in or 0) > e_trade:
-                seen[key] = {
-                    "device_id": device_id, "storage": storage_db, "competitor_name": competitor,
-                    "condition": condition, "trade_in_price": t_in, "sell_price": s_out,
-                    "source": "scraped", "scraped_at": scraped_at, "updated_at": now,
-                }
+            if (t_in or 0) > (existing.get("trade_in_price") or 0):
+                seen[key] = _make_row(device_id, storage_db, competitor, condition, t_in, s_out, scraped_at, now)
         else:
-            seen[key] = {
-                "device_id": device_id, "storage": storage_db, "competitor_name": competitor,
-                "condition": condition, "trade_in_price": t_in, "sell_price": s_out,
-                "source": "scraped", "scraped_at": scraped_at, "updated_at": now,
-            }
+            seen[key] = _make_row(device_id, storage_db, competitor, condition, t_in, s_out, scraped_at, now)
 
     rows = list(seen.values())
     if not rows:
         return 0, devices_created, errors
 
     BATCH = 100
-    with conn.cursor() as cur:
-        for i in range(0, len(rows), BATCH):
-            batch = rows[i : i + BATCH]
-            try:
-                psycopg2.extras.execute_values(
-                    cur,
-                    """
-                    INSERT INTO competitor_prices
-                      (device_id, storage, competitor_name, condition,
-                       trade_in_price, sell_price, source, scraped_at, updated_at)
-                    VALUES %s
-                    ON CONFLICT (device_id, storage, competitor_name, condition)
-                    DO UPDATE SET
-                      trade_in_price = EXCLUDED.trade_in_price,
-                      sell_price     = EXCLUDED.sell_price,
-                      source         = EXCLUDED.source,
-                      scraped_at     = EXCLUDED.scraped_at,
-                      updated_at     = EXCLUDED.updated_at
-                    """,
-                    [
-                        (
-                            r["device_id"], r["storage"], r["competitor_name"], r["condition"],
-                            r["trade_in_price"], r["sell_price"], r["source"],
-                            r["scraped_at"], r["updated_at"],
-                        )
-                        for r in batch
-                    ],
-                )
-                conn.commit()
-                upserted += len(batch)
-            except Exception as exc:
-                conn.rollback()
-                errors.append(f"Batch upsert failed: {exc}")
+    for i in range(0, len(rows), BATCH):
+        batch = rows[i : i + BATCH]
+        try:
+            sb.table("competitor_prices").upsert(
+                batch,
+                on_conflict="device_id,storage,competitor_name,condition",
+            ).execute()
+            upserted += len(batch)
+        except Exception as exc:
+            errors.append(f"Batch upsert failed (rows {i}–{i+len(batch)}): {exc}")
 
     return upserted, devices_created, errors
 
 
+def _make_row(device_id, storage, competitor, condition, t_in, s_out, scraped_at, now):
+    return {
+        "device_id": device_id,
+        "storage": storage,
+        "competitor_name": competitor,
+        "condition": condition,
+        "trade_in_price": t_in,
+        "sell_price": s_out,
+        "source": "scraped",
+        "scraped_at": scraped_at,
+        "updated_at": now,
+    }
+
+
 # ---------------------------------------------------------------------------
-# Delete stale competitor_prices rows (older than 35 days)
+# Delete stale rows (>35 days)
 # ---------------------------------------------------------------------------
 
 
-def delete_stale_prices(conn: Any) -> int:
+def delete_stale_prices(sb: Client) -> int:
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                DELETE FROM competitor_prices
-                WHERE updated_at < NOW() - INTERVAL '35 days'
-                  AND source = 'scraped'
-                """
-            )
-            count = cur.rowcount
-        conn.commit()
-        return count
+        cutoff = datetime.now(timezone.utc)
+        from datetime import timedelta
+        cutoff -= timedelta(days=35)
+        res = (
+            sb.table("competitor_prices")
+            .delete()
+            .eq("source", "scraped")
+            .lt("updated_at", cutoff.isoformat())
+            .execute()
+        )
+        return len(res.data) if res.data else 0
     except Exception as exc:
-        conn.rollback()
-        print(f"  [cleanup] stale row deletion failed: {exc}", flush=True)
+        print(f"  [cleanup] stale delete failed: {exc}", flush=True)
         return 0
 
 
 # ---------------------------------------------------------------------------
-# Email notification
+# Gmail notification
 # ---------------------------------------------------------------------------
 
 
-def send_email_notification(
+def send_notification(
     admin_emails: list[tuple[str, str]],
     total_upserted: int,
     devices_created: int,
     failed_scrapers: list[str],
-    errors: list[str],
     stale_deleted: int,
 ) -> None:
     if not GMAIL_USER or not GMAIL_PASS:
-        print("  [email] skipped — GMAIL_USER/GMAIL_APP_PASSWORD not set", flush=True)
+        print("  [email] skipped — GMAIL credentials not set", flush=True)
         return
     if not admin_emails:
         print("  [email] no admin recipients found", flush=True)
@@ -506,7 +456,7 @@ def send_email_notification(
         parts.append(f"{devices_created} new devices added")
     if failed_scrapers:
         parts.append(f"Failed: {', '.join(failed_scrapers)}")
-    message = " · ".join(parts) if parts else "Competitor prices have been refreshed"
+    message = " · ".join(parts) if parts else "Competitor prices refreshed"
 
     pricing_url = f"{APP_URL}/admin/pricing" if APP_URL else "#"
 
@@ -521,14 +471,14 @@ def send_email_notification(
           <h1 style="margin:0;color:#fff;font-size:20px;font-weight:600;">{APP_NAME}</h1>
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 8px;color:#3f3f46;font-size:15px;font-weight:600;">Pricing Updated — GitHub Actions Scraper</p>
+          <p style="margin:0 0 8px;color:#3f3f46;font-size:15px;font-weight:600;">{subject.replace('⚠ ', '')}</p>
           <p style="margin:0 0 24px;color:#71717a;font-size:14px;">{message}</p>
           <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;">
             <tr><td style="padding:16px 20px;">
               {"<p style='margin:0 0 4px;color:#18181b;font-size:14px;'>✓ <strong>" + str(total_upserted) + "</strong> competitor prices refreshed</p>" if total_upserted else ""}
-              {"<p style='margin:0 0 4px;color:#18181b;font-size:14px;'>✓ <strong>" + str(devices_created) + "</strong> new devices added to catalog</p>" if devices_created else ""}
-              {"<p style='margin:0 0 4px;color:#18181b;font-size:14px;'>✓ <strong>" + str(stale_deleted) + "</strong> stale price rows removed</p>" if stale_deleted else ""}
-              {"<p style='margin:0;color:#dc2626;font-size:14px;'>✗ Failed scrapers: " + ', '.join(failed_scrapers) + "</p>" if has_failures else ""}
+              {"<p style='margin:0 0 4px;color:#18181b;font-size:14px;'>✓ <strong>" + str(devices_created) + "</strong> new devices added</p>" if devices_created else ""}
+              {"<p style='margin:0 0 4px;color:#18181b;font-size:14px;'>✓ <strong>" + str(stale_deleted) + "</strong> stale rows removed</p>" if stale_deleted else ""}
+              {"<p style='margin:0;color:#dc2626;font-size:14px;'>✗ Failed: " + ', '.join(failed_scrapers) + "</p>" if has_failures else ""}
             </td></tr>
           </table>
           <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
@@ -536,7 +486,7 @@ def send_email_notification(
               <a href="{pricing_url}" style="display:inline-block;padding:12px 24px;color:#fff;text-decoration:none;font-size:14px;font-weight:500;">View Pricing Dashboard</a>
             </td></tr>
           </table>
-          <p style="margin:0;color:#a1a1aa;font-size:12px;">GitHub Actions daily scraper — {datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M UTC')}</p>
+          <p style="margin:0;color:#a1a1aa;font-size:12px;">GitHub Actions — {datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M UTC')}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -548,14 +498,14 @@ def send_email_notification(
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
             server.login(GMAIL_USER, GMAIL_PASS)
-            for email_addr, full_name in admin_emails:
+            for addr, name in admin_emails:
                 msg = MIMEMultipart("alternative")
                 msg["Subject"] = subject
                 msg["From"] = f"{APP_NAME} <{GMAIL_USER}>"
-                msg["To"] = f"{full_name} <{email_addr}>" if full_name else email_addr
+                msg["To"] = f"{name} <{addr}>" if name else addr
                 msg.attach(MIMEText(html, "html"))
-                server.sendmail(GMAIL_USER, email_addr, msg.as_string())
-                print(f"  [email] sent to {email_addr}", flush=True)
+                server.sendmail(GMAIL_USER, addr, msg.as_string())
+                print(f"  [email] sent to {addr}", flush=True)
     except Exception as exc:
         print(f"  [email] failed: {exc}", flush=True)
 
@@ -569,49 +519,53 @@ def main() -> int:
     start = datetime.now(timezone.utc)
     print(f"=== DLM Scraper run started at {start.isoformat()} ===", flush=True)
 
-    conn = psycopg2.connect(DB_URL)
-    psycopg2.extras.register_default_jsonb(conn)
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     # ---- Load device catalog ------------------------------------------------
     print("[1/4] Loading device catalog …", flush=True)
-    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(
-            "SELECT id, make, model, specifications FROM device_catalog WHERE is_active = true"
+    catalog_rows: list[dict] = []
+    page = 0
+    PAGE = 1000
+    while True:
+        res = (
+            sb.table("device_catalog")
+            .select("id, make, model, specifications")
+            .eq("is_active", True)
+            .range(page * PAGE, (page + 1) * PAGE - 1)
+            .execute()
         )
-        catalog_rows = cur.fetchall()
+        batch = res.data or []
+        catalog_rows.extend(batch)
+        if len(batch) < PAGE:
+            break
+        page += 1
 
     catalog_by_make: dict[str, list[dict]] = {}
     for row in catalog_rows:
-        key = _norm_text(row["make"])
-        catalog_by_make.setdefault(key, []).append(dict(row))
+        catalog_by_make.setdefault(_norm(row["make"]), []).append(row)
 
-    # Build devices list for Apple (targeted mode)
     apple_devices: list[dict] = []
     for row in catalog_rows:
         spec = row.get("specifications") or {}
-        storages: list[str] = spec.get("storage_options") or ["128GB"]
-        for s in storages[:3]:
+        for s in (spec.get("storage_options") or ["128GB"])[:3]:
             apple_devices.append({"make": row["make"], "model": row["model"], "storage": s})
 
-    print(f"  catalog: {len(catalog_rows)} entries, {len(apple_devices)} Apple device+storage combos", flush=True)
+    print(f"  catalog: {len(catalog_rows)} devices, {len(apple_devices)} Apple combos", flush=True)
 
     # ---- Fetch admin emails -------------------------------------------------
-    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(
-            """
-            SELECT email, full_name, notification_email
-            FROM users
-            WHERE is_active = true AND role IN ('admin', 'coe_manager')
-            """
-        )
-        admin_rows = cur.fetchall()
-
+    res = (
+        sb.table("users")
+        .select("email, full_name, notification_email, role")
+        .eq("is_active", True)
+        .in_("role", ["admin", "coe_manager"])
+        .execute()
+    )
     admin_emails: list[tuple[str, str]] = []
-    for u in admin_rows:
+    for u in (res.data or []):
         effective = (
-            u["notification_email"]
-            if (u["email"] or "").endswith("@login.local")
-            else u["email"]
+            u.get("notification_email")
+            if (u.get("email") or "").endswith("@login.local")
+            else u.get("email")
         )
         if effective and "@" in effective and not effective.endswith("@login.local"):
             admin_emails.append((effective, u.get("full_name") or ""))
@@ -619,57 +573,47 @@ def main() -> int:
     # ---- Run workers --------------------------------------------------------
     print("[2/4] Running scrapers …", flush=True)
     all_prices: list[dict] = []
-    worker_results: list[dict] = []
     failed_scrapers: list[str] = []
 
     for name, cfg in WORKERS.items():
         devices_input = apple_devices if name == "apple" else []
         result = run_worker(name, cfg, devices_input)
-        worker_results.append(result)
         prices = result.get("prices") or []
         all_prices.extend(prices)
         if not result.get("success"):
-            failed_scrapers.append(cfg["script"].split("/")[-1].replace("_worker.py", "").title())
+            label = name.replace("universal", "UniverCell").title()
+            failed_scrapers.append(label)
 
-    total_scraped = len(all_prices)
-    print(f"  scraped {total_scraped} price rows across {len(WORKERS)} scrapers", flush=True)
+    print(f"  total scraped price rows: {len(all_prices)}", flush=True)
 
     # ---- Upsert -------------------------------------------------------------
     print("[3/4] Upserting prices …", flush=True)
-    total_upserted, devices_created, errors = upsert_prices(conn, catalog_by_make, all_prices, discovery=True)
+    total_upserted, devices_created, errors = upsert_prices(sb, catalog_by_make, all_prices)
     print(f"  upserted={total_upserted}, new_devices={devices_created}, errors={len(errors)}", flush=True)
     for err in errors[:10]:
         print(f"  ERROR: {err}", flush=True)
 
     # ---- Stale cleanup ------------------------------------------------------
-    stale_deleted = delete_stale_prices(conn)
+    stale_deleted = delete_stale_prices(sb)
     if stale_deleted:
-        print(f"  deleted {stale_deleted} stale competitor_prices rows (>35 days)", flush=True)
+        print(f"  deleted {stale_deleted} stale rows (>35 days)", flush=True)
 
     # ---- Email --------------------------------------------------------------
     print("[4/4] Sending notification …", flush=True)
-    send_email_notification(admin_emails, total_upserted, devices_created, failed_scrapers, errors, stale_deleted)
-
-    conn.close()
+    send_notification(admin_emails, total_upserted, devices_created, failed_scrapers, stale_deleted)
 
     duration = (datetime.now(timezone.utc) - start).total_seconds()
     print(f"\n=== Done in {duration:.1f}s — upserted={total_upserted}, failed={failed_scrapers} ===", flush=True)
-
-    # Exit 1 if ALL scrapers failed, otherwise 0
-    all_failed = len(failed_scrapers) == len(WORKERS)
-    return 1 if all_failed else 0
+    return 1 if len(failed_scrapers) == len(WORKERS) else 0
 
 
 if __name__ == "__main__":
-    dry_run = "--dry-run" in sys.argv
-    if dry_run:
-        # Dry run: scrape and print counts, skip DB writes
-        print("=== DRY RUN mode ===", flush=True)
-        all_prices: list[dict] = []
-        for name, cfg in WORKERS.items():
-            result = run_worker(name, cfg, [])
-            prices = result.get("prices") or []
-            all_prices.extend(prices)
-        print(f"Total scraped price rows: {len(all_prices)}", flush=True)
+    if "--dry-run" in sys.argv:
+        print("=== DRY RUN ===", flush=True)
+        all_p: list[dict] = []
+        for n, c in WORKERS.items():
+            r = run_worker(n, c, [])
+            all_p.extend(r.get("prices") or [])
+        print(f"Total scraped: {len(all_p)} rows", flush=True)
         sys.exit(0)
     sys.exit(main())
