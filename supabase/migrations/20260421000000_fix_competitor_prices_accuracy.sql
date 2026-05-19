@@ -74,10 +74,10 @@ DO UPDATE SET
 INSERT INTO competitor_prices
   (device_id, storage, competitor_name, condition, trade_in_price, sell_price, source, scraped_at, updated_at)
 VALUES
-  ('45d5e356-6be5-4118-a416-0c654f50874e', '128GB', 'Bell', 'excellent', 460.00, NULL, 'scraped', '2026-04-21T00:00:00Z', NOW()),
-  ('45d5e356-6be5-4118-a416-0c654f50874e', '128GB', 'Bell', 'good',      412.00, NULL, 'scraped', '2026-04-21T00:00:00Z', NOW()),
-  ('45d5e356-6be5-4118-a416-0c654f50874e', '128GB', 'Bell', 'fair',      339.00, NULL, 'scraped', '2026-04-21T00:00:00Z', NOW()),
-  ('45d5e356-6be5-4118-a416-0c654f50874e', '128GB', 'Bell', 'broken',    242.00, NULL, 'scraped', '2026-04-21T00:00:00Z', NOW())
+  ('d0010000-0000-0000-0000-000000000002', '128GB', 'Bell', 'excellent', 460.00, NULL, 'scraped', '2026-04-21T00:00:00Z', NOW()),
+  ('d0010000-0000-0000-0000-000000000002', '128GB', 'Bell', 'good',      412.00, NULL, 'scraped', '2026-04-21T00:00:00Z', NOW()),
+  ('d0010000-0000-0000-0000-000000000002', '128GB', 'Bell', 'fair',      339.00, NULL, 'scraped', '2026-04-21T00:00:00Z', NOW()),
+  ('d0010000-0000-0000-0000-000000000002', '128GB', 'Bell', 'broken',    242.00, NULL, 'scraped', '2026-04-21T00:00:00Z', NOW())
 ON CONFLICT (device_id, storage, competitor_name, condition)
 DO UPDATE SET
   trade_in_price = EXCLUDED.trade_in_price,

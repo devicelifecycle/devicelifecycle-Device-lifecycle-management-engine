@@ -12,9 +12,12 @@ WHERE condition IS NULL;
 ALTER TABLE competitor_prices
 ALTER COLUMN condition SET DEFAULT 'good';
 
-ALTER TABLE competitor_prices
-ADD CONSTRAINT competitor_prices_condition_check
-CHECK (condition IN ('good', 'fair', 'broken'));
+DO $$ BEGIN
+  ALTER TABLE competitor_prices
+  ADD CONSTRAINT competitor_prices_condition_check
+  CHECK (condition IN ('good', 'fair', 'broken'));
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_competitor_prices_condition
   ON competitor_prices(condition);

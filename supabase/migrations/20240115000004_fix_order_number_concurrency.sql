@@ -51,8 +51,8 @@ begin
   from orders
   where order_number ~ 'ORD-[0-9]{4}-[0-9]+';
 
-  -- Set sequence to start after the highest existing number
-  perform setval('order_number_seq', max_existing_num);
+  -- Set sequence to start after the highest existing number (min 1 for empty DB)
+  perform setval('order_number_seq', greatest(max_existing_num, 1));
 
   raise notice 'Order number sequence initialized to %', max_existing_num;
 end;

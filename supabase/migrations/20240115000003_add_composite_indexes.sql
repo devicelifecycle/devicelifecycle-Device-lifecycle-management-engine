@@ -87,7 +87,7 @@ create index if not exists idx_shipments_order_direction
 -- Active shipments monitoring
 create index if not exists idx_shipments_status_date
   on shipments(status, estimated_delivery)
-  where status not in ('delivered', 'cancelled');
+  where status not in ('delivered', 'exception');
 
 -- ============================================================================
 -- NOTIFICATIONS
@@ -103,11 +103,11 @@ create index if not exists idx_notifications_user_unread
 
 -- Audit trail by entity
 create index if not exists idx_audit_logs_entity
-  on audit_logs(entity_type, entity_id, created_at desc);
+  on audit_logs(entity_type, entity_id, timestamp desc);
 
 -- User activity tracking
 create index if not exists idx_audit_logs_user_action
-  on audit_logs(user_id, action, created_at desc);
+  on audit_logs(user_id, action, timestamp desc);
 
 -- ============================================================================
 -- SLA TRACKING

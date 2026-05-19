@@ -83,7 +83,7 @@ CREATE TYPE shipment_status AS ENUM (
 -- ============================================================================
 
 CREATE TABLE organizations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   type VARCHAR(50) NOT NULL, -- 'customer', 'vendor', 'internal'
   address JSONB,
@@ -118,7 +118,7 @@ CREATE TABLE users (
 -- ============================================================================
 
 CREATE TABLE customers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID REFERENCES organizations(id),
   company_name VARCHAR(255) NOT NULL,
   contact_name VARCHAR(255) NOT NULL,
@@ -139,7 +139,7 @@ CREATE TABLE customers (
 -- ============================================================================
 
 CREATE TABLE vendors (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID REFERENCES organizations(id),
   company_name VARCHAR(255) NOT NULL,
   contact_name VARCHAR(255) NOT NULL,
@@ -160,7 +160,7 @@ CREATE TABLE vendors (
 -- ============================================================================
 
 CREATE TABLE device_catalog (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   make VARCHAR(100) NOT NULL,
   model VARCHAR(255) NOT NULL,
   variant VARCHAR(255), -- Storage, color, etc.
@@ -177,7 +177,7 @@ CREATE TABLE device_catalog (
 -- ============================================================================
 
 CREATE TABLE pricing_tables (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   device_id UUID REFERENCES device_catalog(id) ON DELETE CASCADE,
   condition device_condition NOT NULL,
   base_price DECIMAL(10, 2) NOT NULL,
@@ -198,7 +198,7 @@ CREATE TABLE pricing_tables (
 -- ============================================================================
 
 CREATE TABLE orders (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number VARCHAR(50) UNIQUE NOT NULL,
   type order_type NOT NULL,
   status order_status DEFAULT 'draft',
@@ -241,7 +241,7 @@ CREATE TABLE orders (
 -- ============================================================================
 
 CREATE TABLE order_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
   device_id UUID REFERENCES device_catalog(id),
   
@@ -263,7 +263,7 @@ CREATE TABLE order_items (
 -- ============================================================================
 
 CREATE TABLE imei_records (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   imei VARCHAR(20) NOT NULL,
   serial_number VARCHAR(100),
   
@@ -295,7 +295,7 @@ CREATE TABLE imei_records (
 -- ============================================================================
 
 CREATE TABLE triage_results (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   imei_record_id UUID REFERENCES imei_records(id) ON DELETE CASCADE,
   order_id UUID REFERENCES orders(id),
   
@@ -334,7 +334,7 @@ CREATE TABLE triage_results (
 -- ============================================================================
 
 CREATE TABLE shipments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID REFERENCES orders(id),
   
   direction VARCHAR(20) NOT NULL, -- 'inbound', 'outbound'
@@ -372,7 +372,7 @@ CREATE TABLE shipments (
 -- ============================================================================
 
 CREATE TABLE sla_rules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   description TEXT,
   
@@ -394,7 +394,7 @@ CREATE TABLE sla_rules (
 -- ============================================================================
 
 CREATE TABLE sla_breaches (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID REFERENCES orders(id),
   sla_rule_id UUID REFERENCES sla_rules(id),
   breached_at TIMESTAMPTZ NOT NULL,
@@ -409,7 +409,7 @@ CREATE TABLE sla_breaches (
 -- ============================================================================
 
 CREATE TABLE notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   type notification_type DEFAULT 'in_app',
   
@@ -431,7 +431,7 @@ CREATE TABLE notifications (
 -- ============================================================================
 
 CREATE TABLE audit_logs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id),
   action audit_action NOT NULL,
   
@@ -453,7 +453,7 @@ CREATE TABLE audit_logs (
 -- ============================================================================
 
 CREATE TABLE order_timeline (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
   event VARCHAR(255) NOT NULL,
   description TEXT,
@@ -468,7 +468,7 @@ CREATE TABLE order_timeline (
 -- ============================================================================
 
 CREATE TABLE vendor_bids (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
   vendor_id UUID REFERENCES vendors(id),
   quantity INTEGER NOT NULL DEFAULT 0,

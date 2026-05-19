@@ -43,7 +43,6 @@ BEGIN
     -- Re-point every child table that references device_catalog(id)
     UPDATE order_items       SET device_id = new_id WHERE device_id = old_id;
     UPDATE competitor_prices SET device_id = new_id WHERE device_id = old_id;
-    UPDATE pricing_rules     SET device_id = new_id WHERE device_id = old_id;
 
     -- Delete the stale SAM-* row
     DELETE FROM device_catalog WHERE id = old_id;
