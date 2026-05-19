@@ -192,12 +192,16 @@ export async function GET(request: NextRequest) {
 
     // Notify admins about CSV sync
     if (imported > 0) {
-      const { NotificationService } = await import('@/services/notification.service')
-      NotificationService.sendPriceUpdateNotification({
-        source: 'csv_sync',
-        total_updated: imported,
-        details: errors.length > 0 ? `${errors.length} rows had errors` : undefined,
-      }).catch(err => console.error('Price notification error:', err))
+      try {
+        const { NotificationService } = await import('@/services/notification.service')
+        await NotificationService.sendPriceUpdateNotification({
+          source: 'csv_sync',
+          total_updated: imported,
+          details: errors.length > 0 ? `${errors.length} rows had errors` : undefined,
+        })
+      } catch (err) {
+        console.error('Price notification error:', err)
+      }
     }
 
     return NextResponse.json({

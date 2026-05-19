@@ -73,13 +73,15 @@ export async function POST(request: NextRequest) {
 
     try {
       const { NotificationService } = await import('@/services/notification.service')
-      NotificationService.sendPriceUpdateNotification({
+      await NotificationService.sendPriceUpdateNotification({
         source: 'scraper',
         total_updated: result.total_upserted,
         total_new: result.devices_created ?? 0,
         failed_scrapers: result.results.filter(r => !r.success).map(r => r.competitor_name),
-      }).catch(err => console.error('Price notification error:', err))
-    } catch {}
+      })
+    } catch (err) {
+      console.error('Price notification error:', err)
+    }
 
     return NextResponse.json({
       success: true,

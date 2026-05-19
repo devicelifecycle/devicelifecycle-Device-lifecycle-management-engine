@@ -6,7 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { EmailService } from '@/services/email.service'
 import { ORDER_EMAIL_CONFIG } from '@/lib/constants'
-import { getSiteUrl } from '@/lib/utils'
+import { getAppUrl } from '@/lib/app-url'
 import type {
   Notification,
   NotificationType,
@@ -790,8 +790,7 @@ export class NotificationService {
       const message = parts.length > 0 ? parts.join(' · ') : 'Competitor prices have been refreshed'
 
       const hasFailures = (input.failed_scrapers?.length ?? 0) > 0
-      const siteUrl = getSiteUrl()
-      const pricingUrl = siteUrl ? `${siteUrl}/admin/pricing` : '/admin/pricing'
+      const pricingUrl = `${getAppUrl()}/admin/pricing`
       const appName = process.env.NEXT_PUBLIC_APP_NAME || 'DLM Engine'
 
       const emailHtml = `<!DOCTYPE html>

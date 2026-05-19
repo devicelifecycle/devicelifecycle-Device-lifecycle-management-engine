@@ -67,25 +67,24 @@ export class CompetitorBeatPricingModel implements IPricingModel {
       .gt('trade_in_price', 0)
 
     // Deduplicate: one row per competitor, prefer exact condition match then freshest
-    const byName = new Map<string, { price: number; condition: string }>()
+    const byName = new Map<string, { price: number; condition: string; ts: number }>()
     let highestCompetitor = 0
 
     for (const c of allRows || []) {
       const p = Number(c.trade_in_price) || 0
       if (p <= 0) continue
       const name = (c.competitor_name || 'Unknown').trim()
+      const currentTs = new Date((c.scraped_at || c.created_at) ?? 0).getTime()
       const existing = byName.get(name)
       if (!existing) {
-        byName.set(name, { price: p, condition: c.condition || 'good' })
+        byName.set(name, { price: p, condition: c.condition || 'good', ts: currentTs })
       } else {
         const existingIsExact = existing.condition === competitorCondition
         const currentIsExact = (c.condition || '') === competitorCondition
         if (currentIsExact && !existingIsExact) {
-          byName.set(name, { price: p, condition: c.condition || 'good' })
-        } else if (currentIsExact === existingIsExact) {
-          const existingTs = new Date((c.scraped_at || c.created_at) ?? 0).getTime()
-          const currentTs = new Date((c.scraped_at || c.created_at) ?? 0).getTime()
-          if (currentTs > existingTs) byName.set(name, { price: p, condition: c.condition || 'good' })
+          byName.set(name, { price: p, condition: c.condition || 'good', ts: currentTs })
+        } else if (currentIsExact === existingIsExact && currentTs > existing.ts) {
+          byName.set(name, { price: p, condition: c.condition || 'good', ts: currentTs })
         }
       }
       if (p > highestCompetitor) highestCompetitor = p
