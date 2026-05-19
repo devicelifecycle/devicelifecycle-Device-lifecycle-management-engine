@@ -283,7 +283,12 @@ def run_worker(name: str, cfg: dict, devices: list[dict]) -> dict[str, Any]:
                 "error": f"JSON parse error: {exc}", "duration_ms": 0}
 
     prices = result.get("prices") or []
+    err = result.get("error")
     print(f"  [{name}] done — success={result.get('success')}, prices={len(prices)}", flush=True)
+    if err:
+        print(f"  [{name}] error: {err}", flush=True)
+    if not result.get("success") and proc.stderr:
+        print(f"  [{name}] stderr: {proc.stderr[-800:].strip()}", flush=True)
     return result
 
 
