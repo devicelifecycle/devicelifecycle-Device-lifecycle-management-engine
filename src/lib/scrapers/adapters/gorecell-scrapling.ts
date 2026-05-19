@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from '../types'
-import { redactWorkerLogs } from './scrapling-worker-utils'
+import { callScraplingApiOrNull, redactWorkerLogs } from './scrapling-worker-utils'
 
 export type GoRecellScraperImpl = 'ts' | 'scrapling' | 'dual'
 
@@ -171,10 +171,19 @@ export async function runGoRecellScraplingWorker(
   options?: { discovery?: boolean; limitProducts?: number }
 ): Promise<ScraperResult> {
   const start = Date.now()
-  const workerPath = getWorkerScriptPath()
   const discovery = options?.discovery === true
   const timeoutMs = getWorkerTimeoutMs(discovery)
 
+  const apiResult = await callScraplingApiOrNull(
+    'gorecell',
+    { mode: discovery ? 'discovery' : 'targeted', devices, limit_products: options?.limitProducts },
+    timeoutMs,
+    COMPETITOR_NAME,
+    start,
+  )
+  if (apiResult !== null) return apiResult
+
+  const workerPath = getWorkerScriptPath()
   return new Promise((resolve) => {
     const child = spawn(getPythonBin(), [workerPath], {
       cwd: process.cwd(),

@@ -1,0 +1,5 @@
+# Scrapling workers + FastAPI HTTP server
+scrapling[fetchers]==0.4.2
+patchright>=1.0.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0

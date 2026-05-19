@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import type { DeviceToScrape, ScrapedPrice, ScraperResult } from '../types'
-import { redactWorkerLogs } from './scrapling-worker-utils'
+import { callScraplingApiOrNull, redactWorkerLogs } from './scrapling-worker-utils'
 
 export type UniverCellScraperImpl = 'ts' | 'scrapling' | 'dual'
 
@@ -214,9 +214,18 @@ export async function runUniverCellScraplingWorker(
   discovery = false
 ): Promise<ScraperResult> {
   const start = Date.now()
-  const workerPath = getWorkerScriptPath()
   const timeoutMs = getWorkerTimeoutMs(discovery)
 
+  const apiResult = await callScraplingApiOrNull(
+    'universal',
+    { mode: discovery ? 'discovery' : 'targeted', devices },
+    timeoutMs,
+    COMPETITOR_NAME,
+    start,
+  )
+  if (apiResult !== null) return apiResult
+
+  const workerPath = getWorkerScriptPath()
   return new Promise((resolve) => {
     const child = spawn(getPythonBin(), [workerPath], {
       cwd: process.cwd(),
