@@ -48,16 +48,6 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
           NEXT_PUBLIC_APP_NAME: ${{ vars.NEXT_PUBLIC_APP_NAME }}
-          # Optional overrides — set as secrets if targets change
-          APPLE_TRADE_IN_URL: ${{ secrets.APPLE_TRADE_IN_URL }}
-          BELL_TRADE_IN_URL: ${{ secrets.BELL_TRADE_IN_URL }}
-          BELL_PROXY_AUTH_URL: ${{ secrets.BELL_PROXY_AUTH_URL }}
-          BELL_TRADE_IN_BASE_ADDR: ${{ secrets.BELL_TRADE_IN_BASE_ADDR }}
-          TELUS_TRADE_IN_URL: ${{ secrets.TELUS_TRADE_IN_URL }}
-          TELUS_DEVICES_API_URL: ${{ secrets.TELUS_DEVICES_API_URL }}
-          UNIVERCELL_ACTION_URL: ${{ secrets.UNIVERCELL_ACTION_URL }}
-          GORECELL_STORE_API: ${{ secrets.GORECELL_STORE_API }}
-          GORECELL_PRODUCT_BASE: ${{ secrets.GORECELL_PRODUCT_BASE }}
           # Extend timeouts for GH Actions (slower network than local)
           SCRAPLING_WORKER_TIMEOUT_MS: "240000"
           # Tell workers no subprocess Python needed — they are the subprocess
