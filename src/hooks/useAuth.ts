@@ -118,17 +118,12 @@ function getActiveRole(user: User): UserRole {
 
 function readTrustedCachedUser(): User | null {
   const cachedUser = readCachedUser()
-  const cachedRole = readCookieValue(ROLE_COOKIE)
-  const cachedUserId = readCookieValue(USER_ID_COOKIE)
+  if (!cachedUser) return null
 
-  if (!cachedUser || !cachedRole || !cachedUserId) {
-    return null
-  }
-
-  if (cachedUser.id !== cachedUserId || cachedUser.role !== cachedRole) {
-    return null
-  }
-
+  // localStorage alone is enough to skip the spinner. The background fetchUser()
+  // call validates the actual Supabase session and clears/redirects if expired.
+  // Requiring cookies here caused the spinner to show whenever the 8h routing
+  // cookies expired (overnight) even though the Supabase JWT was still valid.
   return cachedUser
 }
 
