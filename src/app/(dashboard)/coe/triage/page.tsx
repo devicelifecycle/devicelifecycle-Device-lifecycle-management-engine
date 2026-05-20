@@ -234,6 +234,10 @@ export default function COETriagePage() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [isImporting, setIsImporting] = useState(false)
+  const [showCatalogWarning, setShowCatalogWarning] = useState(false)
+  const [fixingCatalogRow, setFixingCatalogRow] = useState<number | null>(null)
+  const [catalogFixSearch, setCatalogFixSearch] = useState('')
+  const [catalogFixResults, setCatalogFixResults] = useState<Device[]>([])
   const [importResult, setImportResult] = useState<{
     imported: number
     skipped: number
@@ -417,8 +421,19 @@ export default function COETriagePage() {
     } finally { setManualOrderLooking(false) }
   }
 
-  const handleBulkImport = async () => {
+  const handleBulkImport = () => {
     if (!uploadResult) return
+    // Warn before importing if some devices aren't in the catalog
+    if (uploadResult.not_in_catalog > 0 && !showCatalogWarning) {
+      setShowCatalogWarning(true)
+      return
+    }
+    doImport()
+  }
+
+  const doImport = async () => {
+    if (!uploadResult) return
+    setShowCatalogWarning(false)
     const linkedOrderId = uploadResult.order?.id ?? manualOrderId ?? null
     const importableStatuses: UploadMatchStatus[] = linkedOrderId
       ? ['matched', 'condition_mismatch']
@@ -1764,7 +1779,72 @@ export default function COETriagePage() {
                           {[row.brand, row.model].filter(Boolean).join(' ') || '—'}
                           {row.storage && <span className="text-muted-foreground ml-1">({row.storage})</span>}
                           {!row.device_id && row.brand && (
-                            <span className="ml-1 text-amber-600 text-[10px]">not in catalog</span>
+                            <div className="mt-1">
+                              {fixingCatalogRow === row.row ? (
+                                <div className="flex flex-col gap-1 min-w-[160px]">
+                                  <Input
+                                    autoFocus
+                                    className="h-6 text-[10px] px-1.5"
+                                    placeholder="Search catalog…"
+                                    value={catalogFixSearch}
+                                    onChange={async e => {
+                                      setCatalogFixSearch(e.target.value)
+                                      if (e.target.value.length > 1) {
+                                        const res = await fetch(`/api/devices?search=${encodeURIComponent(e.target.value)}&page_size=8`)
+                                        const d = res.ok ? await res.json() : { data: [] }
+                                        setCatalogFixResults(d.data || [])
+                                      } else {
+                                        setCatalogFixResults([])
+                                      }
+                                    }}
+                                  />
+                                  {catalogFixResults.length > 0 && (
+                                    <div className="rounded border bg-popover shadow-md z-50 max-h-40 overflow-y-auto">
+                                      {catalogFixResults.map(d => (
+                                        <button
+                                          key={d.id}
+                                          type="button"
+                                          className="w-full text-left px-2 py-1 text-[10px] hover:bg-muted"
+                                          onClick={() => {
+                                            setUploadResult(prev => {
+                                              if (!prev) return prev
+                                              const updated = prev.rows.map(r =>
+                                                r.row === row.row
+                                                  ? { ...r, device_id: d.id, match_status: 'catalog_matched' as UploadMatchStatus }
+                                                  : r
+                                              )
+                                              const stillMissing = updated.filter(r => !r.device_id && r.brand).length
+                                              const nowMatched = updated.filter(r => r.device_id).length
+                                              return {
+                                                ...prev,
+                                                rows: updated,
+                                                not_in_catalog: stillMissing,
+                                                catalog_matched: prev.catalog_matched + 1,
+                                                ready_to_import: prev.ready_to_import + 1,
+                                              }
+                                            })
+                                            setFixingCatalogRow(null)
+                                            setCatalogFixSearch('')
+                                            setCatalogFixResults([])
+                                          }}
+                                        >
+                                          {d.make} {d.model}{d.variant ? ` ${d.variant}` : ''}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <button type="button" className="text-[9px] text-muted-foreground hover:text-foreground" onClick={() => { setFixingCatalogRow(null); setCatalogFixSearch(''); setCatalogFixResults([]) }}>Cancel</button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="text-[10px] text-amber-600 underline hover:text-amber-700"
+                                  onClick={() => { setFixingCatalogRow(row.row); setCatalogFixSearch(''); setCatalogFixResults([]) }}
+                                >
+                                  not in catalog — Fix
+                                </button>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell className="text-xs">{row.color || '—'}</TableCell>
@@ -2056,7 +2136,73 @@ export default function COETriagePage() {
                             <TableCell className="text-xs font-medium whitespace-nowrap">
                               {[row.brand, row.model].filter(Boolean).join(' ') || '—'}
                               {row.storage && <span className="text-muted-foreground ml-1">({row.storage})</span>}
-                              {!row.device_id && row.brand && <span className="ml-1 text-amber-600 text-[10px]">not in catalog</span>}
+                              {!row.device_id && row.brand && (
+                                <div className="mt-1">
+                                  {fixingCatalogRow === row.row ? (
+                                    <div className="flex flex-col gap-1 min-w-[160px]">
+                                      <Input
+                                        autoFocus
+                                        className="h-6 text-[10px] px-1.5"
+                                        placeholder="Search catalog…"
+                                        value={catalogFixSearch}
+                                        onChange={async e => {
+                                          setCatalogFixSearch(e.target.value)
+                                          if (e.target.value.length > 1) {
+                                            const res = await fetch(`/api/devices?search=${encodeURIComponent(e.target.value)}&page_size=8`)
+                                            const d = res.ok ? await res.json() : { data: [] }
+                                            setCatalogFixResults(d.data || [])
+                                          } else {
+                                            setCatalogFixResults([])
+                                          }
+                                        }}
+                                      />
+                                      {catalogFixResults.length > 0 && (
+                                        <div className="rounded border bg-popover shadow-md z-50 max-h-40 overflow-y-auto">
+                                          {catalogFixResults.map(d => (
+                                            <button
+                                              key={d.id}
+                                              type="button"
+                                              className="w-full text-left px-2 py-1 text-[10px] hover:bg-muted"
+                                              onClick={() => {
+                                                setUploadResult(prev => {
+                                                  if (!prev) return prev
+                                                  const updated = prev.rows.map(r =>
+                                                    r.row === row.row
+                                                      ? { ...r, device_id: d.id, match_status: 'catalog_matched' as UploadMatchStatus }
+                                                      : r
+                                                  )
+                                                  const stillMissing = updated.filter(r => !r.device_id && r.brand).length
+                                                  return {
+                                                    ...prev,
+                                                    rows: updated,
+                                                    not_in_catalog: stillMissing,
+                                                    catalog_matched: prev.catalog_matched + 1,
+                                                    ready_to_import: prev.ready_to_import + 1,
+                                                  }
+                                                })
+                                                setFixingCatalogRow(null)
+                                                setCatalogFixSearch('')
+                                                setCatalogFixResults([])
+                                              }}
+                                            >
+                                              {d.make} {d.model}{d.variant ? ` ${d.variant}` : ''}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <button type="button" className="text-[9px] text-muted-foreground hover:text-foreground" onClick={() => { setFixingCatalogRow(null); setCatalogFixSearch(''); setCatalogFixResults([]) }}>Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="text-[10px] text-amber-600 underline hover:text-amber-700"
+                                      onClick={() => { setFixingCatalogRow(row.row); setCatalogFixSearch(''); setCatalogFixResults([]) }}
+                                    >
+                                      not in catalog — Fix
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="text-xs">{row.color || '—'}</TableCell>
                             <TableCell className="text-xs capitalize">
@@ -2214,6 +2360,30 @@ export default function COETriagePage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ── Catalog Warning Dialog ──────────────────────────────────────── */}
+      <Dialog open={showCatalogWarning} onOpenChange={setShowCatalogWarning}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Some devices aren't in the catalog
+            </DialogTitle>
+            <DialogDescription>
+              {uploadResult?.not_in_catalog ?? 0} device{(uploadResult?.not_in_catalog ?? 0) !== 1 ? 's' : ''} could not be matched to the catalog and will be skipped.
+              {' '}{uploadResult?.ready_to_import ?? 0} matched row{(uploadResult?.ready_to_import ?? 0) !== 1 ? 's' : ''} will be imported.
+              <br /><br />
+              To fix unmatched devices, close this dialog and use the &ldquo;Fix&rdquo; button on each unmatched row to assign a catalog entry.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCatalogWarning(false)}>Go Back &amp; Fix</Button>
+            <Button onClick={doImport} disabled={isImporting}>
+              {isImporting ? 'Importing...' : `Import ${uploadResult?.ready_to_import ?? 0} matched rows`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Triage Dialog ───────────────────────────────────────────────── */}
       <Dialog open={triageDialogOpen} onOpenChange={(open) => {

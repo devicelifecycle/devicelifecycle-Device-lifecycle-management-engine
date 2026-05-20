@@ -190,6 +190,7 @@ export default function NewOrderPage() {
   const latestLookupRequestRef = useRef<Record<number, number>>({})
   const nextLookupRequestIdRef = useRef(1)
   const submittedRef = useRef(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Device search state — one entry per line item
   const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
@@ -653,9 +654,11 @@ export default function NewOrderPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (submittedRef.current) return
+    setIsSubmitting(true)
     const effectiveCustomerId = isCustomer ? myCustomer?.id : customerId
     if (!effectiveCustomerId) {
       toast.error(isCustomer ? 'Loading your organization...' : 'Please select a customer')
+      setIsSubmitting(false)
       return
     }
 
@@ -670,6 +673,7 @@ export default function NewOrderPage() {
 
       if (!canCreateCpoOrder && cpoCsvRows.length > 0) {
         toast.error(cpoCreationBlockedMessage)
+        setIsSubmitting(false)
         return
       }
 
@@ -712,6 +716,8 @@ export default function NewOrderPage() {
             } else {
               toast.error(errMsg)
             }
+            submittedRef.current = false
+            setIsSubmitting(false)
             return
           }
 
@@ -728,17 +734,20 @@ export default function NewOrderPage() {
         return
       } catch (err) {
         submittedRef.current = false
+        setIsSubmitting(false)
         toast.error(err instanceof Error ? err.message : 'Failed to upload CSV')
         return
       }
     } else if (tab === 'csv') {
       toast.error('No CSV rows to submit')
+      setIsSubmitting(false)
       return
     } else {
-      if (items.length === 0) { toast.error('Please add at least one item'); return }
+      if (items.length === 0) { toast.error('Please add at least one item'); setIsSubmitting(false); return }
       const invalidItems = items.filter(i => !i.device_id)
       if (invalidItems.length > 0) {
         toast.error('Please select a device for all items')
+        setIsSubmitting(false)
         return
       }
       orderItems = items.map((i, idx) => ({
@@ -760,6 +769,7 @@ export default function NewOrderPage() {
 
     if (!canCreateCpoOrder && cpoItems.length > 0) {
       toast.error(cpoCreationBlockedMessage)
+      setIsSubmitting(false)
       return
     }
 
@@ -798,6 +808,7 @@ export default function NewOrderPage() {
       }
     } catch (err) {
       submittedRef.current = false
+      setIsSubmitting(false)
       toast.error(err instanceof Error ? err.message : 'Failed to create order')
     }
   }
@@ -1428,9 +1439,9 @@ export default function NewOrderPage() {
           <Button
             type="submit"
             variant="success"
-            disabled={isCreating || (isCustomer && (myCustomerLoading || !myCustomer || !!myCustomerError))}
+            disabled={isCreating || isSubmitting || (isCustomer && (myCustomerLoading || !myCustomer || !!myCustomerError))}
           >
-            {isCreating ? 'Creating...' : 'Create Order'}
+            {isCreating || isSubmitting ? 'Creating...' : 'Create Order'}
           </Button>
           <Link href={isCustomer ? '/customer/requests' : '/orders'}>
             <Button variant="outline" type="button">Cancel</Button>
