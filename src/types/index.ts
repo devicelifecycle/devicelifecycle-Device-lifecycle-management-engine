@@ -35,6 +35,7 @@ export type OrderStatus =
   | 'ready_to_ship'
   | 'shipped'
   | 'delivered'
+  | 'payment_sent'
   | 'closed'
   | 'cancelled';
 

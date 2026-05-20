@@ -1423,7 +1423,8 @@ export default function OrderDetailClient() {
     // 'sourcing' is only valid for CPO orders — hide it from trade-in / other types
       : rawTransitions.filter((s: OrderStatus) =>
         (s !== 'sourcing' || isCpoOrder) &&
-        !(order.status === 'sourced' && s === 'shipped')
+        !(order.status === 'sourced' && s === 'shipped') &&
+        !(s === 'payment_sent' && isCpoOrder)
       )
 
   // Build timeline from order timestamps
@@ -2899,6 +2900,8 @@ export default function OrderDetailClient() {
                       ? (['accepted', 'submitted'].includes(nextStatus) ? 'Approve' : ['rejected', 'cancelled'].includes(nextStatus) ? 'Disapprove' : nextConfig?.label || snakeToTitle(nextStatus))
                       : isVendor
                         ? getVendorTransitionLabel(nextStatus)
+                      : nextStatus === 'payment_sent'
+                        ? 'Mark Payment Sent'
                       : (nextConfig?.label || snakeToTitle(nextStatus))
                     return (
                       <Button

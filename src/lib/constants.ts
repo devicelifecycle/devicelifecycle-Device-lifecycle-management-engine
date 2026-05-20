@@ -104,6 +104,12 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatus, {
     bgColor: 'bg-green-100',
     description: 'Delivered to customer',
   },
+  payment_sent: {
+    label: 'Payment Sent',
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-100',
+    description: 'Payment issued to customer',
+  },
   closed: {
     label: 'Closed',
     color: 'text-gray-600',
@@ -144,6 +150,7 @@ export const CUSTOMER_STATUS_CONFIG: Record<OrderStatus, {
   ready_to_ship:  { label: 'Ready to Ship',   description: 'Your order is ready for dispatch',            color: 'text-amber-600',  bgColor: 'bg-amber-100' },
   shipped:        { label: 'Shipped',         description: 'Your order is on its way',                    color: 'text-blue-600',   bgColor: 'bg-blue-100' },
   delivered:      { label: 'Delivered',       description: 'Order delivered successfully',                color: 'text-green-600',  bgColor: 'bg-green-100' },
+  payment_sent:   { label: 'Payment Sent',    description: 'Your payment has been sent',                  color: 'text-emerald-600', bgColor: 'bg-emerald-100' },
   closed:         { label: 'Closed',          description: 'Order completed',                             color: 'text-gray-600',   bgColor: 'bg-gray-100' },
   cancelled:      { label: 'Cancelled',       description: 'Order was cancelled',                         color: 'text-red-600',    bgColor: 'bg-red-100' },
 }
@@ -270,7 +277,8 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   qc_complete: ['ready_to_ship', 'quoted'], // 'quoted' = post-triage quote for walk-in/unquoted orders
   ready_to_ship: ['shipped'],
   shipped: ['delivered'],
-  delivered: ['closed'],
+  delivered: ['payment_sent', 'closed'],
+  payment_sent: ['closed'],
   closed: [], // Terminal state
   cancelled: [], // Terminal state
 }
@@ -731,6 +739,11 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     customer: true,
     subject: (n) => `Order #${n} Delivered`,
     message: (n) => `Your order #${n} has been delivered. Thank you for your business!`,
+  },
+  payment_sent: {
+    customer: true,
+    subject: (n) => `Payment Sent — Order #${n}`,
+    message: (n) => `Great news! Your payment for order #${n} has been processed and sent. You should receive it within 1–2 business days. Thank you for trading with us.`,
   },
   cancelled: {
     customer: true,
