@@ -129,19 +129,22 @@ function readTrustedCachedUser(): User | null {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-function useProvideAuth(): AuthContextValue {
-  // Initialize synchronously from trusted cache so the dashboard layout
-  // skips its loading screen on every navigation after the first login.
-  // readTrustedCachedUser() is safe to call here — it checks typeof window
-  // internally and returns null during SSR.
+function useProvideAuth(initialUser?: User | null): AuthContextValue {
+  // Initialize synchronously from trusted cache (localStorage) or the server-provided
+  // profile so the dashboard layout never shows the "Loading DLM Engine" spinner.
+  // - localStorage hit → use it (existing fast path, no change)
+  // - Server provided user → use it (eliminates spinner on fresh browser)
+  // - Server said no session (null) → isInitializing:false, redirect immediately
+  // - Server data unavailable (undefined) → isInitializing:true (graceful fallback)
   const [state, setState] = useState<AuthState>(() => {
     const cachedUser = readTrustedCachedUser()
+    const user = cachedUser || (initialUser !== undefined ? initialUser : null)
     return {
-      user: cachedUser,
+      user,
       isLoading: false,
-      isInitializing: !cachedUser,
-      isAuthenticated: !!cachedUser,
-      activeRole: cachedUser ? getActiveRole(cachedUser) : null,
+      isInitializing: user === null && initialUser === undefined,
+      isAuthenticated: !!user,
+      activeRole: user ? getActiveRole(user) : null,
     }
   })
   const router = useRouter()
@@ -501,8 +504,8 @@ function useProvideAuth(): AuthContextValue {
   }
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const value = useProvideAuth()
+export function AuthProvider({ children, initialUser }: { children: React.ReactNode; initialUser?: User | null }) {
+  const value = useProvideAuth(initialUser)
   return createElement(AuthContext.Provider, { value }, children)
 }
 

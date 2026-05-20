@@ -434,58 +434,10 @@ def main() -> int:
     try:
         request = _load_request()
         mode, devices = _validate_request(request)
-
-        # Try Scrapling's StealthyFetcher first
-        try:
-            from scrapling.fetchers import StealthyFetcher  # type: ignore
-        except ImportError:
-            StealthyFetcher = None
-
-        if StealthyFetcher is not None:
-            # --- Scrapling StealthyFetcher path (preferred) ---
-            try:
-                page = StealthyFetcher.fetch(
-                    BELL_TRADE_IN_URL,
-                    headless=True,
-                    solve_cloudflare=True,
-                    network_idle=True,
-                    fake_human_interaction=True,
-                    block_images=True,
-                )
-                browser_page = getattr(page, '_page', None) or getattr(page, 'page', None)
-                if browser_page is None and hasattr(page, 'evaluate'):
-                    browser_page = page
-            except Exception:
-                browser_page = None
-            if browser_page is not None:
-                return _run_scraping(browser_page, mode, devices, start, use_browser=True)
-            # StealthyFetcher returned a static response or raised — fall through to patchright
-
-        # --- Fallback: raw patchright ---
-        try:
-            from patchright.sync_api import sync_playwright  # type: ignore
-        except ImportError as exc:
-            duration_ms = int((time.time() - start) * 1000)
-            print(json.dumps(_result(
-                success=False,
-                error=f"Neither scrapling nor patchright available: {exc}",
-                duration_ms=duration_ms,
-            )))
-            return 1
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            ctx = browser.new_context(
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            )
-            pg = ctx.new_page()
-            pg.goto(BELL_TRADE_IN_URL, wait_until="domcontentloaded", timeout=60_000)
-            pg.wait_for_timeout(3_000)
-
-            result = _run_scraping(pg, mode, devices, start, use_browser=True)
-            browser.close()
-            return result
-
+        # Bell's SBE GlobalCare APIs work via plain urllib — no browser needed.
+        # CorsProxyAuthenticate returns a session_id in ~0.3s, getCatalogProductsLite
+        # and getBuyBackProductsEstimate both work without any browser context.
+        return _run_scraping(None, mode, devices, start, use_browser=False)
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
         print(json.dumps(_result(success=False, error=str(exc), duration_ms=duration_ms)))

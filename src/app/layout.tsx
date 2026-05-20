@@ -9,6 +9,8 @@ import { Outfit, Syne, Instrument_Serif, Barlow, Poppins, Source_Serif_4 } from 
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from '@/components/ui/toaster'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import type { User } from '@/types'
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
 const syne = Syne({ subsets: ['latin'], variable: '--font-syne' })
@@ -40,11 +42,31 @@ export const metadata: Metadata = {
   description: 'Enterprise platform for ITAD device lifecycle management',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Fetch user profile server-side so AuthProvider starts with isInitializing:false,
+  // eliminating the "Loading DLM Engine" spinner even on a fresh browser with no cache.
+  let initialUser: User | null | undefined = undefined
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      initialUser = null
+    } else {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('id, email, full_name, role, secondary_role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
+        .eq('id', session.user.id)
+        .single()
+      initialUser = (profile?.is_active ? profile : null) as User | null
+    }
+  } catch {
+    // Proceed without server data — client auth handles the fallback
+  }
+
   return (
     <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${syne.variable} ${instrumentSerif.variable} ${barlow.variable} ${poppins.variable} ${sourceSerif.variable}`}>
       <head>
@@ -94,7 +116,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased text-foreground">
-        <Providers>
+        <Providers initialUser={initialUser}>
           {children}
           <Toaster />
         </Providers>

@@ -11,6 +11,7 @@ Required env vars:
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import re
@@ -59,6 +60,14 @@ WORKERS = {
         "script": os.path.join(SCRIPT_DIR, "gorecell_worker.py"),
         "discovery": True,
     },
+}
+
+WORKER_LABELS = {
+    "apple": "Apple",
+    "bell": "Bell",
+    "telus": "Telus",
+    "universal": "UniverCell",
+    "gorecell": "GoRecell",
 }
 
 PYTHON_BIN = os.environ.get("SCRAPLING_PYTHON_BIN", sys.executable)
@@ -575,19 +584,32 @@ def main() -> int:
         if effective and "@" in effective and not effective.endswith("@login.local"):
             admin_emails.append((effective, u.get("full_name") or ""))
 
-    # ---- Run workers --------------------------------------------------------
-    print("[2/4] Running scrapers …", flush=True)
+    # ---- Run workers in parallel --------------------------------------------
+    print("[2/4] Running scrapers in parallel …", flush=True)
     all_prices: list[dict] = []
     failed_scrapers: list[str] = []
 
-    for name, cfg in WORKERS.items():
-        devices_input = apple_devices if name == "apple" else []
-        result = run_worker(name, cfg, devices_input)
-        prices = result.get("prices") or []
-        all_prices.extend(prices)
-        if not result.get("success"):
-            label = name.replace("universal", "UniverCell").title()
-            failed_scrapers.append(label)
+    worker_tasks = [
+        (name, cfg, apple_devices if name == "apple" else [])
+        for name, cfg in WORKERS.items()
+    ]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(WORKERS)) as executor:
+        future_to_name = {
+            executor.submit(run_worker, name, cfg, devices): name
+            for name, cfg, devices in worker_tasks
+        }
+        for future in concurrent.futures.as_completed(future_to_name):
+            name = future_to_name[future]
+            try:
+                result = future.result()
+            except Exception as exc:
+                result = {"competitor_name": name, "prices": [], "success": False,
+                          "error": str(exc), "duration_ms": 0}
+            prices = result.get("prices") or []
+            all_prices.extend(prices)
+            if not result.get("success"):
+                failed_scrapers.append(WORKER_LABELS.get(name, name.title()))
 
     print(f"  total scraped price rows: {len(all_prices)}", flush=True)
 
@@ -614,11 +636,12 @@ def main() -> int:
 
 if __name__ == "__main__":
     if "--dry-run" in sys.argv:
-        print("=== DRY RUN ===", flush=True)
+        print("=== DRY RUN (parallel) ===", flush=True)
         all_p: list[dict] = []
-        for n, c in WORKERS.items():
-            r = run_worker(n, c, [])
-            all_p.extend(r.get("prices") or [])
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(WORKERS)) as ex:
+            futs = {ex.submit(run_worker, n, c, []): n for n, c in WORKERS.items()}
+            for f in concurrent.futures.as_completed(futs):
+                all_p.extend(f.result().get("prices") or [])
         print(f"Total scraped: {len(all_p)} rows", flush=True)
         sys.exit(0)
     sys.exit(main())

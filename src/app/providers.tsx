@@ -9,6 +9,7 @@ import { ThemeProvider } from 'next-themes'
 import { useState } from 'react'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
+import type { User } from '@/types'
 
 // Inner component so useRealtimeSync can access the QueryClient context
 function RealtimeSyncProvider({ children }: { children: React.ReactNode }) {
@@ -22,7 +23,7 @@ function ConditionalRealtimeProvider({ children }: { children: React.ReactNode }
   return <RealtimeSyncProvider>{children}</RealtimeSyncProvider>
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, initialUser }: { children: React.ReactNode; initialUser?: User | null }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -44,7 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <AuthProvider>
+    <AuthProvider initialUser={initialUser}>
       <QueryClientProvider client={queryClient}>
         <ConditionalRealtimeProvider>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
