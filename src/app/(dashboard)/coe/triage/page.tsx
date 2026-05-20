@@ -642,7 +642,7 @@ export default function COETriagePage() {
     const run = async () => {
       setRecentOrdersLoading(true)
       try {
-        const res = await fetch('/api/orders?page=1&page_size=15&sort_by=created_at&sort_order=desc')
+        const res = await fetch('/api/orders?page=1&page_size=50&sort_by=created_at&sort_order=desc')
         if (!res.ok) throw new Error('Failed to load recent orders')
         const data = await res.json()
         setRecentOrders((data.data || []) as OrderRefResult[])
@@ -1083,6 +1083,14 @@ export default function COETriagePage() {
           <TabsTrigger value="intake">
             <PackageSearch className="mr-1.5 h-4 w-4" />
             Order Intake
+          </TabsTrigger>
+          <TabsTrigger value="upload">
+            <Upload className="mr-1.5 h-4 w-4" />
+            Upload Devices
+          </TabsTrigger>
+          <TabsTrigger value="match">
+            <Search className="mr-1.5 h-4 w-4" />
+            Match with File/Order
           </TabsTrigger>
         </TabsList>
 
@@ -1901,6 +1909,309 @@ export default function COETriagePage() {
         </CardContent>
       </Card>
 
+        </TabsContent>
+
+        {/* ══ UPLOAD DEVICES TAB ════════════════════════════════════════════ */}
+        <TabsContent value="upload" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-muted-foreground" />
+                    Upload Device List (CSV / Excel)
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-1">
+                    Upload CSV or Excel (.xlsx) with IMEI, make, model, condition, and optionally <code>order_number</code> for auto-linking.
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="outline" size="sm" onClick={handleDownloadTriageTemplateCsv} className="flex items-center gap-1.5 text-xs shrink-0">
+                    <Download className="h-3.5 w-3.5" />CSV Template
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleDownloadTriageTemplateExcel} className="flex items-center gap-1.5 text-xs shrink-0">
+                    <FileSpreadsheet className="h-3.5 w-3.5" />Excel Template
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleDownloadTriageData} className="flex items-center gap-1.5 text-xs shrink-0">
+                    <Download className="h-3.5 w-3.5" />Export Queue
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Sample downloads include filled rows so you can demo order-linked matching and catalog-only imports immediately.
+              </p>
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept=".csv,.txt,.xlsx,.xls"
+                    className="sr-only"
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                  />
+                  <div className={`flex items-center gap-2 rounded-lg border border-dashed px-4 py-2.5 text-sm font-medium transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-pointer'}`}>
+                    {isUploading
+                      ? <><Loader2 className="h-4 w-4 animate-spin" />Processing...</>
+                      : <><Upload className="h-4 w-4" />Choose CSV or Excel file</>
+                    }
+                  </div>
+                </label>
+                {uploadResult && (
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-3.5 w-3.5" />{uploadResult.order_matched} order matched</span>
+                    {uploadResult.catalog_matched > 0 && (
+                      <span className="flex items-center gap-1 text-sky-700"><PackageSearch className="h-3.5 w-3.5" />{uploadResult.catalog_matched} catalog matched</span>
+                    )}
+                    {uploadResult.condition_mismatches > 0 && (
+                      <span className="flex items-center gap-1 text-amber-600"><AlertCircle className="h-3.5 w-3.5" />{uploadResult.condition_mismatches} condition mismatch{uploadResult.condition_mismatches !== 1 ? 'es' : ''}</span>
+                    )}
+                    {uploadResult.not_in_order > 0 && (
+                      <span className="flex items-center gap-1 text-muted-foreground"><XCircle className="h-3.5 w-3.5" />{uploadResult.not_in_order} not in order</span>
+                    )}
+                    {uploadResult.not_in_catalog > 0 && (
+                      <span className="flex items-center gap-1 text-rose-700"><XCircle className="h-3.5 w-3.5" />{uploadResult.not_in_catalog} not in catalog</span>
+                    )}
+                    <button onClick={() => { setUploadResult(null); setUploadError(''); setImportResult(null); setUploadedFile(null); setManualOrderId(null); setManualOrderRef('') }} className="text-muted-foreground hover:text-foreground">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+              </div>
+              {(!uploadResult?.order) && (
+                <div className="mt-3 flex items-center gap-2">
+                  <Input
+                    placeholder="Link to order number (e.g. PO-2026-0050)"
+                    value={manualOrderRef}
+                    onChange={e => { setManualOrderRef(e.target.value); setManualOrderId(null) }}
+                    onKeyDown={e => { if (e.key === 'Enter') lookupManualOrder(manualOrderRef) }}
+                    className="h-8 text-xs max-w-xs"
+                  />
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => lookupManualOrder(manualOrderRef)} disabled={manualOrderLooking || !manualOrderRef.trim()}>
+                    {manualOrderLooking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link Order'}
+                  </Button>
+                  {manualOrderId && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" />Linked</span>}
+                  {!manualOrderId && manualOrderRef && !manualOrderLooking && <span className="text-xs text-muted-foreground">Linking rematches the uploaded rows against that order.</span>}
+                  {!manualOrderRef && <span className="text-xs text-muted-foreground">Optional — link to an existing order</span>}
+                </div>
+              )}
+              {uploadResult && (
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      {uploadResult.detected_ref && (
+                        <p className="text-xs text-muted-foreground">
+                          Auto-detected: <span className="font-medium text-foreground">{uploadResult.detected_ref}</span>
+                          {uploadResult.order ? ` → ${uploadResult.order.order_number} (${uploadResult.order.status.replace(/_/g, ' ')})` : ' — order not found'}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {uploadResult.total} rows parsed — {uploadResult.ready_to_import} ready to import
+                      </p>
+                      {uploadOrderQuantityTrail && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Quantity trail: Order {uploadOrderQuantityTrail.ordered} · Received {uploadOrderQuantityTrail.received} · Mismatch found {uploadOrderQuantityTrail.mismatched}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {importResult && (
+                        <span className="text-xs text-green-700 font-medium">
+                          {importResult.imported} imported, {importResult.skipped} skipped{importResult.duplicate ? `, ${importResult.duplicate} duplicate` : ''}{importResult.failed ? `, ${importResult.failed} failed` : ''}{importResult.errors.length > 0 ? `, ${importResult.errors.length} errors` : ''}
+                        </span>
+                      )}
+                      <Button size="sm" onClick={handleBulkImport} disabled={isImporting || uploadResult.ready_to_import === 0}>
+                        {isImporting ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Importing...</> : <><Plus className="h-3.5 w-3.5 mr-1.5" />Import to Triage Queue</>}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs w-8">#</TableHead>
+                          <TableHead className="text-xs">IMEI / Serial</TableHead>
+                          <TableHead className="text-xs">Device</TableHead>
+                          <TableHead className="text-xs">Color</TableHead>
+                          <TableHead className="text-xs">Grade</TableHead>
+                          <TableHead className="text-xs text-center">Battery</TableHead>
+                          <TableHead className="text-xs">SIM / Carrier</TableHead>
+                          <TableHead className="text-xs">Notes</TableHead>
+                          <TableHead className="text-xs text-right">Device Cost</TableHead>
+                          <TableHead className="text-xs text-right">Repair Cost</TableHead>
+                          <TableHead className="text-xs text-right">Quoted Price</TableHead>
+                          <TableHead className="text-xs">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {uploadResult.rows.map(row => (
+                          <TableRow key={row.row}>
+                            <TableCell className="text-xs text-muted-foreground">{row.row}</TableCell>
+                            <TableCell className="text-xs font-mono whitespace-nowrap">
+                              <div>{row.imei || '—'}</div>
+                              {row.serial && row.serial !== row.imei && <div className="text-muted-foreground text-[10px]">{row.serial}</div>}
+                            </TableCell>
+                            <TableCell className="text-xs font-medium whitespace-nowrap">
+                              {[row.brand, row.model].filter(Boolean).join(' ') || '—'}
+                              {row.storage && <span className="text-muted-foreground ml-1">({row.storage})</span>}
+                              {!row.device_id && row.brand && <span className="ml-1 text-amber-600 text-[10px]">not in catalog</span>}
+                            </TableCell>
+                            <TableCell className="text-xs">{row.color || '—'}</TableCell>
+                            <TableCell className="text-xs capitalize">
+                              {row.condition
+                                ? <span className={row.matched_item?.claimed_condition && row.condition !== row.matched_item.claimed_condition ? 'text-amber-600 font-medium' : ''}>{row.condition}</span>
+                                : '—'}
+                              {row.matched_item?.claimed_condition && row.condition !== row.matched_item.claimed_condition && (
+                                <div className="text-[10px] text-muted-foreground">quoted: {row.matched_item.claimed_condition}</div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-center">
+                              {row.battery_health != null
+                                ? <span className={row.battery_health < 80 ? 'text-amber-600 font-medium' : 'text-green-700'}>{row.battery_health}%</span>
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div>{row.sim_lock || '—'}</div>
+                              {row.locked_carrier && <div className="text-muted-foreground text-[10px]">{row.locked_carrier}</div>}
+                            </TableCell>
+                            <TableCell className="text-xs max-w-[120px] truncate" title={row.notes}>{row.notes || '—'}</TableCell>
+                            <TableCell className="text-xs text-right tabular-nums">{row.device_cost != null ? formatCurrency(row.device_cost) : '—'}</TableCell>
+                            <TableCell className="text-xs text-right tabular-nums">{row.repair_cost != null && row.repair_cost > 0 ? formatCurrency(row.repair_cost) : '—'}</TableCell>
+                            <TableCell className="text-xs text-right tabular-nums">{row.quoted_price != null ? formatCurrency(row.quoted_price) : '—'}</TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {row.match_status === 'matched' && <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-3 w-3" />Matched</span>}
+                              {row.match_status === 'catalog_matched' && <span className="flex items-center gap-1 text-sky-700"><PackageSearch className="h-3 w-3" />Catalog matched</span>}
+                              {row.match_status === 'condition_mismatch' && <span className="flex items-center gap-1 text-amber-600"><AlertCircle className="h-3 w-3" />Condition mismatch</span>}
+                              {row.match_status === 'not_in_order' && <span className="flex items-center gap-1 text-muted-foreground"><XCircle className="h-3 w-3" />Not in order</span>}
+                              {row.match_status === 'not_in_catalog' && <span className="flex items-center gap-1 text-rose-700"><XCircle className="h-3 w-3" />Not in catalog</span>}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ══ MATCH WITH FILE/ORDER TAB ══════════════════════════════════════ */}
+        <TabsContent value="match" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                Order / Quote Reference Lookup
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Enter an order or quote number to see expected devices and quoted prices. Pick a recent order to auto-link file uploads.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Hash className="h-3.5 w-3.5" />
+                    Recent Orders
+                  </div>
+                  <Select value={recentOrders.find(order => order.order_number === refInput)?.id ?? ''} onValueChange={handleRecentOrderSelect} disabled={recentOrdersLoading || recentOrders.length === 0}>
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <SelectValue placeholder={recentOrdersLoading ? 'Loading recent orders...' : 'Pick a recent order'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {recentOrders.map(order => (
+                        <SelectItem key={order.id} value={order.id}>
+                          {order.order_number} {order.customer?.company_name ? `· ${order.customer.company_name}` : ''} · {order.status.replace(/_/g, ' ')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {recentOrders.length === 0 && !recentOrdersLoading && (
+                    <p className="text-[11px] text-muted-foreground">No recent orders found.</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex rounded-lg border overflow-hidden shrink-0">
+                    <button
+                      onClick={() => { setRefType('order'); setRefResult(null); setRefError('') }}
+                      className={`px-3 py-2 text-xs font-medium transition-colors ${refType === 'order' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50'}`}
+                    >
+                      Order #
+                    </button>
+                    <button
+                      onClick={() => { setRefType('quote'); setRefResult(null); setRefError('') }}
+                      className={`px-3 py-2 text-xs font-medium transition-colors ${refType === 'quote' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50'}`}
+                    >
+                      Quote #
+                    </button>
+                  </div>
+                  <div className="relative flex-1">
+                    <Hash className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      className="pl-9"
+                      placeholder={refType === 'order' ? 'Enter order number (e.g. ORD-0001)' : 'Enter quote / order number'}
+                      value={refInput}
+                      onChange={e => setRefInput(e.target.value)}
+                    />
+                  </div>
+                  {refLoading && <Loader2 className="h-4 w-4 animate-spin self-center text-muted-foreground" />}
+                </div>
+              </div>
+              {refError && <p className="text-xs text-muted-foreground mt-2">{refError}</p>}
+              {refResult && (
+                <div className="mt-3 rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{refResult.order_number}</span>
+                      <Badge variant="outline" className="text-[11px]">{refResult.status.replace(/_/g, ' ')}</Badge>
+                    </div>
+                    {(refResult.quoted_amount ?? 0) > 0 && (
+                      <span className="text-sm font-medium text-green-700">
+                        Quoted: {formatCurrency(refResult.quoted_amount!)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Device</TableHead>
+                          <TableHead className="text-xs text-right">Qty</TableHead>
+                          <TableHead className="text-xs">Claimed Condition</TableHead>
+                          <TableHead className="text-xs text-right">Quoted Price</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {refItems.map(item => {
+                          const d = item.device as { make?: string; model?: string } | null
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell className="text-xs font-medium">
+                                {d ? `${d.make} ${d.model}` : '—'}
+                                {item.storage && <span className="text-muted-foreground ml-1">({item.storage})</span>}
+                              </TableCell>
+                              <TableCell className="text-xs text-right tabular-nums">{item.quantity}</TableCell>
+                              <TableCell className="text-xs">
+                                <span className={CONDITION_CONFIG[item.claimed_condition as DeviceCondition]?.color || ''}>
+                                  {CONDITION_CONFIG[item.claimed_condition as DeviceCondition]?.label || item.claimed_condition}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-xs text-right tabular-nums font-medium">
+                                {item.quoted_price != null ? formatCurrency(item.quoted_price) : <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

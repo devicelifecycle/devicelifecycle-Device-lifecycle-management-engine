@@ -23,7 +23,7 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { formatDateTime, formatRelativeTime } from '@/lib/utils'
 import type { Shipment, Order, OrderItem } from '@/types'
 
-const CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Other']
+const CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Picked Up', 'Other']
 
 const COE_ADDRESS = {
   name: 'COE Warehouse',
@@ -89,7 +89,7 @@ export default function COEReceivingPage() {
   const [orderResults, setOrderResults] = useState<Order[]>([])
   const [orderSearching, setOrderSearching] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  const [createForm, setCreateForm] = useState({ carrier: 'FedEx', tracking_number: '' })
+  const [createForm, setCreateForm] = useState({ carrier: 'FedEx', tracking_number: '', custom_carrier: '' })
   const [isCreating, setIsCreating] = useState(false)
 
   const buildFromAddress = (order: Order) => {
@@ -131,7 +131,7 @@ export default function COEReceivingPage() {
         const data = await res.json()
         const allTradeIns = (data.data || []) as Order[]
         setTradeInOrders(
-          allTradeIns.filter(order => ['submitted', 'accepted', 'shipped_to_coe', 'received'].includes(order.status))
+          allTradeIns.filter(order => ['submitted', 'accepted', 'shipped_to_coe'].includes(order.status))
         )
       }
     } catch {} finally { setIsTradeInLoading(false) }
@@ -196,8 +196,8 @@ export default function COEReceivingPage() {
         body: JSON.stringify({
           order_id: selectedOrder.id,
           direction: 'inbound',
-          carrier: createForm.carrier,
-          tracking_number: createForm.tracking_number,
+          carrier: createForm.carrier === 'Other' ? createForm.custom_carrier.trim() : createForm.carrier,
+          tracking_number: createForm.carrier === 'Picked Up' ? 'PICKED-UP' : createForm.tracking_number,
           from_address: buildFromAddress(selectedOrder),
           to_address: COE_ADDRESS,
         }),
@@ -210,7 +210,7 @@ export default function COEReceivingPage() {
       setCreateDialogOpen(false)
       setSelectedOrder(null)
       setOrderSearch('')
-      setCreateForm({ carrier: 'FedEx', tracking_number: '' })
+      setCreateForm({ carrier: 'FedEx', tracking_number: '', custom_carrier: '' })
       fetchShipments()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to record shipment')
@@ -279,6 +279,7 @@ export default function COEReceivingPage() {
       setReceiveNotes('')
       setManifest([])
       fetchShipments()
+      fetchTradeInOrders()
     } catch {
       toast.error('Failed to mark shipment as received')
     } finally { setIsReceiving(false) }
@@ -623,7 +624,7 @@ export default function COEReceivingPage() {
       {/* ── Record Inbound Shipment Dialog ────────────────────────────────── */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => {
         setCreateDialogOpen(open)
-        if (!open) { setSelectedOrder(null); setOrderSearch(''); setCreateForm({ carrier: 'FedEx', tracking_number: '' }) }
+        if (!open) { setSelectedOrder(null); setOrderSearch(''); setCreateForm({ carrier: 'FedEx', tracking_number: '', custom_carrier: '' }) }
       }}>
         <DialogContent>
           <DialogHeader>
@@ -671,25 +672,50 @@ export default function COEReceivingPage() {
             </div>
             <div className="space-y-2">
               <Label>Carrier</Label>
-              <Select value={createForm.carrier} onValueChange={v => setCreateForm(f => ({ ...f, carrier: v }))}>
+              <Select value={createForm.carrier} onValueChange={v => setCreateForm(f => ({ ...f, carrier: v, custom_carrier: '' }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {CARRIERS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Tracking Number</Label>
-              <Input
-                value={createForm.tracking_number}
-                onChange={e => setCreateForm(f => ({ ...f, tracking_number: e.target.value }))}
-                placeholder="Enter tracking number"
-              />
-            </div>
+            {createForm.carrier === 'Other' && (
+              <div className="space-y-2">
+                <Label>Custom Carrier Name</Label>
+                <Input
+                  value={createForm.custom_carrier}
+                  onChange={e => setCreateForm(f => ({ ...f, custom_carrier: e.target.value }))}
+                  placeholder="Enter carrier name"
+                  autoFocus
+                />
+              </div>
+            )}
+            {createForm.carrier === 'Picked Up' ? (
+              <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700">
+                COE picked up this shipment — no tracking number needed.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Tracking Number</Label>
+                <Input
+                  value={createForm.tracking_number}
+                  onChange={e => setCreateForm(f => ({ ...f, tracking_number: e.target.value }))}
+                  placeholder="Enter tracking number"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateInbound} disabled={isCreating || !selectedOrder || !createForm.tracking_number}>
+            <Button
+              onClick={handleCreateInbound}
+              disabled={
+                isCreating ||
+                !selectedOrder ||
+                (createForm.carrier !== 'Picked Up' && !createForm.tracking_number.trim()) ||
+                (createForm.carrier === 'Other' && !createForm.custom_carrier.trim())
+              }
+            >
               {isCreating ? 'Creating...' : 'Record Shipment'}
             </Button>
           </DialogFooter>
