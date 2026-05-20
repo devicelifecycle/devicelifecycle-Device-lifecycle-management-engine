@@ -43,8 +43,9 @@ export async function GET(request: NextRequest) {
       const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
       const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('page_size') || '20', 10)))
 
-      const serviceRole = createServiceRoleClient()
-      let query = serviceRole
+      // vendor_bids_select_internal RLS policy allows all internal roles —
+      // no need for service-role client here.
+      let query = supabase
         .from('vendor_bids')
         .select(
           '*, vendor:vendors(id, company_name, contact_email, contact_name), order:orders(id, order_number, type, status, total_quantity)',
