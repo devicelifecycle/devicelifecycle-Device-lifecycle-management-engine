@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       let query = supabase
         .from('vendor_bids')
         .select(
-          '*, vendor:vendors(id, company_name, contact_email, contact_name), order:orders(id, order_number, type, status, total_quantity)',
+          '*, vendor:vendors(id, company_name, contact_email, contact_name), order:orders!vendor_bids_order_id_fkey(id, order_number, type, status, total_quantity)',
           { count: 'exact' }
         )
         .order('created_at', { ascending: false })
