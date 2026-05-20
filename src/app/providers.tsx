@@ -7,13 +7,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
 import { useState } from 'react'
-import { AuthProvider } from '@/hooks/useAuth'
+import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
 // Inner component so useRealtimeSync can access the QueryClient context
 function RealtimeSyncProvider({ children }: { children: React.ReactNode }) {
   useRealtimeSync()
   return <>{children}</>
+}
+
+function ConditionalRealtimeProvider({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth()
+  if (!isAuthenticated) return <>{children}</>
+  return <RealtimeSyncProvider>{children}</RealtimeSyncProvider>
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -40,11 +46,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <RealtimeSyncProvider>
+        <ConditionalRealtimeProvider>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
             {children}
           </ThemeProvider>
-        </RealtimeSyncProvider>
+        </ConditionalRealtimeProvider>
       </QueryClientProvider>
     </AuthProvider>
   )

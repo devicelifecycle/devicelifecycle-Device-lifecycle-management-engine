@@ -51,10 +51,33 @@ function applyRoleRouting(pathname: string, role: string, request: NextRequest, 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public routes (exact match for '/', prefix match for others)
-  if (publicRoutes.some((route) =>
-    route === '/' ? pathname === '/' : pathname.startsWith(route)
-  )) {
+  // Cookie names must match those set in useAuth.ts — hoisted here so the
+  // '/' fast-redirect and the authenticated fast-path share one declaration.
+  const ROLE_COOKIE = 'dlm_role'
+  const USER_ID_COOKIE = 'dlm_uid'
+  const ACTIVE_ROLE_COOKIE = 'dlm_active_role'
+
+  // Authenticated users hitting '/' skip the landing page bundle entirely.
+  // Cookie presence means the user has a valid session (8h TTL); the actual
+  // JWT is verified per-request by API routes, not here.
+  if (pathname === '/') {
+    const rootRole = request.cookies.get(ROLE_COOKIE)?.value
+      ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
+      : null
+    if (rootRole) {
+      const activeRole = request.cookies.get(ACTIVE_ROLE_COOKIE)?.value
+        ? decodeURIComponent(request.cookies.get(ACTIVE_ROLE_COOKIE)!.value)
+        : rootRole
+      const dest = activeRole === 'customer' ? '/customer/orders'
+        : activeRole === 'vendor' ? '/vendor/orders'
+        : '/dashboard'
+      return NextResponse.redirect(new URL(dest, request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // Allow public routes (prefix match — '/' is handled above)
+  if (publicRoutes.some((route) => route !== '/' && pathname.startsWith(route))) {
     return NextResponse.next()
   }
 
@@ -71,11 +94,6 @@ export async function proxy(request: NextRequest) {
   ) {
     return NextResponse.next()
   }
-
-  // Cookie names must match those set in useAuth.ts
-  const ROLE_COOKIE = 'dlm_role'
-  const USER_ID_COOKIE = 'dlm_uid'
-  const ACTIVE_ROLE_COOKIE = 'dlm_active_role'
 
   const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
     ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
