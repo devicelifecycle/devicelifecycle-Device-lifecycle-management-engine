@@ -44,10 +44,12 @@ export async function GET(
     const expiredBids = allBids.filter(b => b.status === 'expired').length
     const winRate = totalBids > 0 ? Math.round((acceptedBids / totalBids) * 100) : null
 
-    // Average bid unit price (accepted bids only)
-    const acceptedBidPrices = allBids.filter(b => b.status === 'accepted').map(b => b.unit_price)
+    // Average bid unit price (accepted bids with a valid price only)
+    const acceptedBidPrices = allBids
+      .filter(b => b.status === 'accepted' && b.unit_price != null)
+      .map(b => Number(b.unit_price))
     const avgAcceptedUnitPrice = acceptedBidPrices.length > 0
-      ? acceptedBidPrices.reduce((s, p) => s + p, 0) / acceptedBidPrices.length
+      ? Math.round((acceptedBidPrices.reduce((s, p) => s + p, 0) / acceptedBidPrices.length) * 100) / 100
       : null
 
     // Average promised lead time (accepted bids only)

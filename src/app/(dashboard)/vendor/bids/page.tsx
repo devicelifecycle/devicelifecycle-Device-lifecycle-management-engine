@@ -104,7 +104,7 @@ export default function VendorBidsPage() {
     rejected: allBids.filter(b => b.status === 'rejected').length,
     totalAcceptedValue: allBids
       .filter(b => b.status === 'accepted')
-      .reduce((sum, b) => sum + (b.total_price ?? b.unit_price * b.quantity), 0),
+      .reduce((sum, b) => sum + (b.total_price ?? ((b.unit_price ?? 0) * (b.quantity ?? 0))), 0),
   }), [allBids])
 
   if (error) {

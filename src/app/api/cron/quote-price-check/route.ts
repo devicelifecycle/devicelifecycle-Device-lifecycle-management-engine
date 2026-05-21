@@ -152,7 +152,9 @@ export async function GET(request: NextRequest) {
 
         if (!comps || comps.length === 0) continue
 
-        const avgCurrent = comps.reduce((sum, c) => sum + (+c.trade_in_price), 0) / comps.length
+        const validPrices = comps.map(c => Number(c.trade_in_price)).filter(p => p > 0)
+        if (validPrices.length === 0) continue
+        const avgCurrent = validPrices.reduce((sum, p) => sum + p, 0) / validPrices.length
         totalCurrentPrice += avgCurrent * item.quantity
 
         const changePercent = quotedPrice > 0

@@ -71,6 +71,10 @@ export async function GET(request: NextRequest) {
     const active = allOrders.filter(o => ACTIVE_STATUSES.includes(o.status)).length
     const completed = (byStatus['completed'] || 0) + (byStatus['closed'] || 0) + (byStatus['delivered'] || 0)
     const cancelled = byStatus['cancelled'] || 0
+    // Only count orders that have been priced (total_amount > 0) in the avg denominator.
+    // Unpriced orders (submitted/quoted with no amount yet) contribute 0 to the sum but
+    // would inflate the count, making avg_value look much lower than it actually is.
+    const valuedOrderCount = allOrders.filter(o => (o.total_amount || 0) > 0).length
 
     // ── Daily trend (last N days) ────────────────────────────────────────────
     const dailyMap = new Map<string, { count: number; revenue: number }>()
@@ -142,7 +146,7 @@ export async function GET(request: NextRequest) {
         by_status: byStatus,
         by_type: { trade_in: tradeIn, cpo },
         total_value: totalValue,
-        avg_value: total > 0 ? totalValue / total : 0,
+        avg_value: valuedOrderCount > 0 ? Math.round((totalValue / valuedOrderCount) * 100) / 100 : 0,
         completion_rate: total > 0 ? Math.round((completed / total) * 100) : 0,
         cancellation_rate: total > 0 ? Math.round((cancelled / total) * 100) : 0,
         terminal_total: TERMINAL.reduce((sum, s) => sum + (byStatus[s] || 0), 0),
