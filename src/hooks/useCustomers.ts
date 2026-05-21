@@ -25,7 +25,7 @@ interface CustomersResponse {
 
 async function fetchCustomers(filters: CustomerFilters): Promise<CustomersResponse> {
   const params = new URLSearchParams()
-  
+
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') {
       params.append(key, String(value))
@@ -104,14 +104,38 @@ export function useCustomers(filters: CustomerFilters = {}) {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Customer> }) =>
       updateCustomer(id, data),
-    onSuccess: () => {
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['customers'] })
+      const snapshots = queryClient.getQueriesData<CustomersResponse>({ queryKey: ['customers'] })
+      queryClient.setQueriesData<CustomersResponse>({ queryKey: ['customers'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.map(c => c.id === id ? { ...c, ...data } : c) }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteCustomer,
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['customers'] })
+      const snapshots = queryClient.getQueriesData<CustomersResponse>({ queryKey: ['customers'] })
+      queryClient.setQueriesData<CustomersResponse>({ queryKey: ['customers'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.filter(c => c.id !== id), total: old.total - 1 }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
     },
   })
@@ -124,13 +148,13 @@ export function useCustomers(filters: CustomerFilters = {}) {
     isLoading: customersQuery.isLoading,
     error: customersQuery.error,
     refetch: customersQuery.refetch,
-    
+
     create: createMutation.mutateAsync,
     isCreating: createMutation.isPending,
-    
+
     update: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
-    
+
     remove: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
   }
@@ -179,7 +203,16 @@ export function useCustomer(id: string | null) {
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Customer>) => updateCustomer(id!, data),
-    onSuccess: () => {
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['customer', id] })
+      const prevCustomer = queryClient.getQueryData<Customer>(['customer', id])
+      queryClient.setQueryData<Customer>(['customer', id], (old) => old ? { ...old, ...data } : old)
+      return { prevCustomer }
+    },
+    onError: (_err, _vars, context) => {
+      queryClient.setQueryData(['customer', id], context?.prevCustomer)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['customer', id] })
       queryClient.invalidateQueries({ queryKey: ['customers'] })
     },
@@ -187,7 +220,19 @@ export function useCustomer(id: string | null) {
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteCustomer(id!),
-    onSuccess: () => {
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['customers'] })
+      const snapshots = queryClient.getQueriesData<CustomersResponse>({ queryKey: ['customers'] })
+      queryClient.setQueriesData<CustomersResponse>({ queryKey: ['customers'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.filter(c => c.id !== id), total: old.total - 1 }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['customer', id] })
       queryClient.invalidateQueries({ queryKey: ['customers'] })
     },
@@ -198,10 +243,10 @@ export function useCustomer(id: string | null) {
     isLoading: customerQuery.isLoading,
     error: customerQuery.error,
     refetch: customerQuery.refetch,
-    
+
     update: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
-    
+
     remove: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
   }

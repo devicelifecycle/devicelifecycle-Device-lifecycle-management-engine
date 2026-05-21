@@ -92,12 +92,35 @@ export async function GET(request: NextRequest) {
     }
     const daily = Array.from(dailyMap.entries()).map(([date, v]) => ({ date, ...v }))
 
-    // ── Top devices ──────────────────────────────────────────────────────────
-    const { data: itemRows } = await supabase
-      .from('order_items')
-      .select('device_id, trade_in_price, created_at, device_catalog!inner(make,model)')
-      .gte('created_at', since)
-      .limit(2000)
+    // ── Top devices + coverage counts — all independent, run in parallel ────
+    const [
+      { data: itemRows },
+      { count: competitorPriceCount },
+      { count: devicesWithPrices },
+      { count: slaBreachCount },
+      { count: openExceptions },
+    ] = await Promise.all([
+      supabase
+        .from('order_items')
+        .select('device_id, trade_in_price, created_at, device_catalog!inner(make,model)')
+        .gte('created_at', since)
+        .limit(2000),
+      supabase
+        .from('competitor_prices')
+        .select('id', { count: 'exact', head: true }),
+      supabase
+        .from('competitor_prices')
+        .select('device_id', { count: 'exact', head: true })
+        .not('trade_in_price', 'is', null),
+      supabase
+        .from('sla_breaches')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', since),
+      supabase
+        .from('order_exceptions')
+        .select('id', { count: 'exact', head: true })
+        .in('approval_status', ['pending', 'coe_approved']),
+    ])
 
     const deviceMap = new Map<string, { make: string; model: string; count: number; total: number }>()
     for (const row of (itemRows || []) as unknown as Array<{
@@ -116,29 +139,7 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
 
-    // ── Competitor price coverage ────────────────────────────────────────────
-    const { count: competitorPriceCount } = await supabase
-      .from('competitor_prices')
-      .select('id', { count: 'exact', head: true })
-
-    const { count: devicesWithPrices } = await supabase
-      .from('competitor_prices')
-      .select('device_id', { count: 'exact', head: true })
-      .not('trade_in_price', 'is', null)
-
-    // ── SLA breaches ─────────────────────────────────────────────────────────
-    const { count: slaBreachCount } = await supabase
-      .from('sla_breaches')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', since)
-
-    // ── Exceptions ───────────────────────────────────────────────────────────
-    const { count: openExceptions } = await supabase
-      .from('order_exceptions')
-      .select('id', { count: 'exact', head: true })
-      .in('approval_status', ['pending', 'coe_approved'])
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       period_days: days,
       orders: {
         total,
@@ -175,6 +176,8 @@ export async function GET(request: NextRequest) {
         open_exceptions: openExceptions || 0,
       },
     })
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=120')
+    return response
   } catch (error) {
     console.error('[reports]', error)
     return NextResponse.json({ error: 'Failed to load reports' }, { status: 500 })

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'edge'
 
 function isAdminOnlyNotification(notification: { title?: string; metadata?: Record<string, unknown> | null }): boolean {
   const metadata = notification.metadata || {}

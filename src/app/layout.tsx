@@ -9,6 +9,7 @@ import { Outfit, Syne, Instrument_Serif, Barlow, Poppins, Source_Serif_4 } from 
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from '@/components/ui/toaster'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { User } from '@/types'
 
@@ -49,6 +50,7 @@ export default async function RootLayout({
 }) {
   // Fetch user profile server-side so AuthProvider starts with isInitializing:false,
   // eliminating the "Loading DLM Engine" spinner even on a fresh browser with no cache.
+  // Fast path: if dlm_profile cookie is present and matches the session, skip the DB query.
   let initialUser: User | null | undefined = undefined
   try {
     const supabase = await createServerSupabaseClient()
@@ -56,12 +58,26 @@ export default async function RootLayout({
     if (!session?.user) {
       initialUser = null
     } else {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('id, email, full_name, role, secondary_role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
-        .eq('id', session.user.id)
-        .single()
-      initialUser = (profile?.is_active ? profile : null) as User | null
+      // Try profile cookie first — avoids a DB round-trip on repeat page loads
+      const cookieStore = await cookies()
+      const profileCookie = cookieStore.get('dlm_profile')
+      if (profileCookie) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(profileCookie.value)) as Partial<User>
+          if (parsed.id === session.user.id && parsed.is_active) {
+            initialUser = parsed as User
+          }
+        } catch {}
+      }
+      // Fallback to DB if no valid cookie
+      if (initialUser === undefined) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('id, email, full_name, role, secondary_role, organization_id, is_active, created_at, updated_at, notification_email, last_login_at')
+          .eq('id', session.user.id)
+          .single()
+        initialUser = (profile?.is_active ? profile : null) as User | null
+      }
     }
   } catch {
     // Proceed without server data — client auth handles the fallback

@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertCircle, ArrowRightLeft, CheckCircle2, Download, FileUp, Loader2, Plus, Search, ShoppingCart, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useAuth } from '@/hooks/useAuth'
@@ -27,6 +28,7 @@ import type { OrderStatus, OrderType } from '@/types'
 
 export default function OrdersPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const searchParams = useSearchParams()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -226,6 +228,15 @@ export default function OrdersPage() {
     setPage(1)
     if (customerIdFromUrl || vendorIdFromUrl) router.replace('/orders')
   }
+
+  const prefetchOrder = useCallback((id: string) => {
+    router.prefetch(`/orders/${id}`)
+    queryClient.prefetchQuery({
+      queryKey: ['order', id],
+      queryFn: () => fetch(`/api/orders/${id}`).then(r => r.json()),
+      staleTime: 30 * 1000,
+    })
+  }, [router, queryClient])
 
   function toggleAll() {
     setSelectedIds(allSelected ? new Set() : new Set(orders.map((order) => order.id)))
@@ -529,7 +540,7 @@ export default function OrdersPage() {
                     const statusConfig = ORDER_STATUS_CONFIG[order.status]
                     const isSelected = selectedIds.has(order.id)
                     return (
-                      <TableRow key={order.id} data-state={isSelected ? 'selected' : undefined}>
+                      <TableRow key={order.id} data-state={isSelected ? 'selected' : undefined} onMouseEnter={() => prefetchOrder(order.id)}>
                         <TableCell>
                           <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(order.id)} />
                         </TableCell>

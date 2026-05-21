@@ -54,7 +54,9 @@ export async function GET(request: NextRequest) {
       result.data = (result.data as unknown as Record<string, unknown>[]).map(({ base_price: _bp, cost_price: _cp, internal_notes: _in, ...safe }) => safe) as unknown as typeof result.data
     }
 
-    return NextResponse.json(result)
+    const response = NextResponse.json(result)
+    response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60')
+    return response
   } catch (error) {
     console.error('Error fetching devices:', error)
     return NextResponse.json(

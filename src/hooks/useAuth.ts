@@ -35,6 +35,7 @@ const AUTH_CACHE_KEY = '__dlm_auth_user'
 const ROLE_COOKIE = 'dlm_role'
 const USER_ID_COOKIE = 'dlm_uid'
 const ACTIVE_ROLE_COOKIE = 'dlm_active_role'
+const PROFILE_COOKIE = 'dlm_profile'
 
 // Module-level singleton — stable reference, never recreated
 const supabase = createBrowserSupabaseClient()
@@ -101,11 +102,26 @@ function setRoutingCookies(role: string, userId: string) {
   document.cookie = `${USER_ID_COOKIE}=${encodeURIComponent(userId)}${attrs}`
 }
 
+function writeProfileCookie(user: User) {
+  if (typeof document === 'undefined') return
+  try {
+    const compact = {
+      id: user.id, email: user.email, full_name: user.full_name,
+      role: user.role, secondary_role: user.secondary_role,
+      organization_id: user.organization_id, is_active: user.is_active,
+      notification_email: user.notification_email, last_login_at: user.last_login_at,
+      created_at: user.created_at, updated_at: user.updated_at,
+    }
+    document.cookie = `${PROFILE_COOKIE}=${encodeURIComponent(JSON.stringify(compact))}; path=/; max-age=28800; SameSite=Lax`
+  } catch {}
+}
+
 function clearRoutingCookies() {
   if (typeof document === 'undefined') return
   document.cookie = `${ROLE_COOKIE}=; path=/; max-age=0; SameSite=Lax`
   document.cookie = `${USER_ID_COOKIE}=; path=/; max-age=0; SameSite=Lax`
   document.cookie = `${ACTIVE_ROLE_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+  document.cookie = `${PROFILE_COOKIE}=; path=/; max-age=0; SameSite=Lax`
 }
 
 function getActiveRole(user: User): UserRole {
@@ -203,6 +219,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       }
 
       setRoutingCookies(profile.role, profile.id)
+      writeProfileCookie(profile as User)
       writeCachedUser(profile as User)
       setState(prev => ({
         ...prev,
@@ -345,6 +362,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       const cachedUser = readTrustedCachedUser()
       if (cachedUser && cachedUser.id === userId) {
         writeCachedUser(cachedUser)
+        writeProfileCookie(cachedUser)
         setState({ user: cachedUser, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(cachedUser) })
         router.replace(getDefaultAppPathForRole(cachedUser.role))
         // Hydrate full profile in background — updates state without blocking nav
@@ -377,6 +395,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       if (profile?.is_active) {
         writeCachedUser(profile)
         setRoutingCookies(profile.role, profile.id)
+        writeProfileCookie(profile)
         setState({ user: profile, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(profile) })
         router.replace(getDefaultAppPathForRole(profile.role))
         return
@@ -455,6 +474,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       if (typedProfile?.is_active) {
         writeCachedUser(typedProfile)
         setRoutingCookies(typedProfile.role, typedProfile.id)
+        writeProfileCookie(typedProfile)
         setState({ user: typedProfile, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(typedProfile) })
         router.replace(getDefaultAppPathForRole(typedProfile.role))
         return

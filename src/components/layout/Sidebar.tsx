@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useMemo } from 'react'
 import {
   AlertTriangle,
@@ -85,6 +85,7 @@ const navSections: NavSection[] = [
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, hasRole, logout } = useAuth()
   const counts = useDashboardCounts()
 
@@ -132,7 +133,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   pathname === item.href ||
                   (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
                 return (
-                  <Link key={item.title} href={item.href} onClick={onNavigate} prefetch={false}>
+                  <Link key={item.title} href={item.href} onClick={onNavigate} prefetch={false} onMouseEnter={() => router.prefetch(item.href)}>
                     <div
                       className={cn(
                         'group relative flex items-center gap-3 rounded-xl px-3 py-2 font-body text-sm transition-all duration-200',

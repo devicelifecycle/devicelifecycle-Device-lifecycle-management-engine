@@ -144,7 +144,19 @@ export function useOrders(filters: OrderFilters = {}) {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Order> }) =>
       updateOrder(id, data),
-    onSuccess: () => {
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['orders'] })
+      const snapshots = queryClient.getQueriesData<OrdersResponse>({ queryKey: ['orders'] })
+      queryClient.setQueriesData<OrdersResponse>({ queryKey: ['orders'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.map(o => o.id === id ? { ...o, ...data } : o) }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },
   })
@@ -153,7 +165,19 @@ export function useOrders(filters: OrderFilters = {}) {
   const transitionMutation = useMutation({
     mutationFn: ({ id, status, notes }: { id: string; status: OrderStatus; notes?: string }) =>
       transitionOrder(id, status, notes),
-    onSuccess: () => {
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: ['orders'] })
+      const snapshots = queryClient.getQueriesData<OrdersResponse>({ queryKey: ['orders'] })
+      queryClient.setQueriesData<OrdersResponse>({ queryKey: ['orders'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.map(o => o.id === id ? { ...o, status } : o) }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },
   })
@@ -162,7 +186,20 @@ export function useOrders(filters: OrderFilters = {}) {
   const bulkTransitionMutation = useMutation({
     mutationFn: ({ orderIds, toStatus, notes }: { orderIds: string[]; toStatus: OrderStatus; notes?: string }) =>
       bulkTransitionOrders(orderIds, toStatus, notes),
-    onSuccess: () => {
+    onMutate: async ({ orderIds, toStatus }) => {
+      await queryClient.cancelQueries({ queryKey: ['orders'] })
+      const snapshots = queryClient.getQueriesData<OrdersResponse>({ queryKey: ['orders'] })
+      const idSet = new Set(orderIds)
+      queryClient.setQueriesData<OrdersResponse>({ queryKey: ['orders'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.map(o => idSet.has(o.id) ? { ...o, status: toStatus } : o) }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },
   })
@@ -170,7 +207,21 @@ export function useOrders(filters: OrderFilters = {}) {
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
     mutationFn: (orderIds: string[]) => bulkDeleteOrders(orderIds),
-    onSuccess: () => {
+    onMutate: async (orderIds) => {
+      await queryClient.cancelQueries({ queryKey: ['orders'] })
+      const snapshots = queryClient.getQueriesData<OrdersResponse>({ queryKey: ['orders'] })
+      const idSet = new Set(orderIds)
+      queryClient.setQueriesData<OrdersResponse>({ queryKey: ['orders'] }, (old) => {
+        if (!old) return old
+        const filtered = old.data.filter(o => !idSet.has(o.id))
+        return { ...old, data: filtered, total: old.total - (old.data.length - filtered.length) }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },
   })
@@ -213,7 +264,16 @@ export function useOrder(id: string | null) {
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Order>) => updateOrder(id!, data),
-    onSuccess: () => {
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['order', id] })
+      const prevOrder = queryClient.getQueryData<Order>(['order', id])
+      queryClient.setQueryData<Order>(['order', id], (old) => old ? { ...old, ...data } : old)
+      return { prevOrder }
+    },
+    onError: (_err, _vars, context) => {
+      queryClient.setQueryData(['order', id], context?.prevOrder)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['order', id] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },
@@ -222,7 +282,16 @@ export function useOrder(id: string | null) {
   const transitionMutation = useMutation({
     mutationFn: ({ status, notes }: { status: OrderStatus; notes?: string }) =>
       transitionOrder(id!, status, notes),
-    onSuccess: () => {
+    onMutate: async ({ status }) => {
+      await queryClient.cancelQueries({ queryKey: ['order', id] })
+      const prevOrder = queryClient.getQueryData<Order>(['order', id])
+      queryClient.setQueryData<Order>(['order', id], (old) => old ? { ...old, status } : old)
+      return { prevOrder }
+    },
+    onError: (_err, _vars, context) => {
+      queryClient.setQueryData(['order', id], context?.prevOrder)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['order', id] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },

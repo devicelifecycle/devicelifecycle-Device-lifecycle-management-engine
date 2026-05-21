@@ -22,7 +22,7 @@ interface VendorsResponse {
 
 async function fetchVendors(filters: VendorFilters): Promise<VendorsResponse> {
   const params = new URLSearchParams()
-  
+
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') {
       params.append(key, String(value))
@@ -97,14 +97,38 @@ export function useVendors(filters: VendorFilters = {}) {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Vendor> }) =>
       updateVendor(id, data),
-    onSuccess: () => {
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['vendors'] })
+      const snapshots = queryClient.getQueriesData<VendorsResponse>({ queryKey: ['vendors'] })
+      queryClient.setQueriesData<VendorsResponse>({ queryKey: ['vendors'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.map(v => v.id === id ? { ...v, ...data } : v) }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteVendor,
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['vendors'] })
+      const snapshots = queryClient.getQueriesData<VendorsResponse>({ queryKey: ['vendors'] })
+      queryClient.setQueriesData<VendorsResponse>({ queryKey: ['vendors'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.filter(v => v.id !== id), total: old.total - 1 }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] })
     },
   })
@@ -117,13 +141,13 @@ export function useVendors(filters: VendorFilters = {}) {
     isLoading: vendorsQuery.isLoading,
     error: vendorsQuery.error,
     refetch: vendorsQuery.refetch,
-    
+
     create: createMutation.mutateAsync,
     isCreating: createMutation.isPending,
-    
+
     update: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
-    
+
     remove: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
   }
@@ -141,7 +165,16 @@ export function useVendor(id: string | null) {
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Vendor>) => updateVendor(id!, data),
-    onSuccess: () => {
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['vendor', id] })
+      const prevVendor = queryClient.getQueryData<Vendor>(['vendor', id])
+      queryClient.setQueryData<Vendor>(['vendor', id], (old) => old ? { ...old, ...data } : old)
+      return { prevVendor }
+    },
+    onError: (_err, _vars, context) => {
+      queryClient.setQueryData(['vendor', id], context?.prevVendor)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['vendor', id] })
       queryClient.invalidateQueries({ queryKey: ['vendors'] })
     },
@@ -152,7 +185,7 @@ export function useVendor(id: string | null) {
     isLoading: vendorQuery.isLoading,
     error: vendorQuery.error,
     refetch: vendorQuery.refetch,
-    
+
     update: updateMutation.mutateAsync,
     isUpdating: updateMutation.isPending,
   }

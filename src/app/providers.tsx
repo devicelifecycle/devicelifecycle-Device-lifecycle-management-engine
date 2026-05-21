@@ -37,7 +37,9 @@ export function Providers({ children, initialUser }: { children: React.ReactNode
             gcTime: 5 * 60 * 1000,
             refetchOnWindowFocus: true,
             refetchOnReconnect: true,
-            refetchOnMount: true,
+            // Skip refetch when navigating to a page whose data is still fresh.
+            // Realtime subscriptions handle live updates; staleTime handles the rest.
+            refetchOnMount: false,
             retry: 1,
           },
         },

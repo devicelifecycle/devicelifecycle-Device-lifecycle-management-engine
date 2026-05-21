@@ -97,14 +97,38 @@ export function useDevices(filters: DeviceFilters = {}) {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Device> }) =>
       updateDevice(id, data),
-    onSuccess: () => {
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['devices'] })
+      const snapshots = queryClient.getQueriesData<DevicesResponse>({ queryKey: ['devices'] })
+      queryClient.setQueriesData<DevicesResponse>({ queryKey: ['devices'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.map(d => d.id === id ? { ...d, ...data } : d) }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteDevice,
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['devices'] })
+      const snapshots = queryClient.getQueriesData<DevicesResponse>({ queryKey: ['devices'] })
+      queryClient.setQueriesData<DevicesResponse>({ queryKey: ['devices'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.filter(d => d.id !== id), total: old.total - 1 }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
   })
@@ -141,7 +165,16 @@ export function useDevice(id: string | null) {
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Device>) => updateDevice(id!, data),
-    onSuccess: () => {
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['device', id] })
+      const prevDevice = queryClient.getQueryData<Device>(['device', id])
+      queryClient.setQueryData<Device>(['device', id], (old) => old ? { ...old, ...data } : old)
+      return { prevDevice }
+    },
+    onError: (_err, _vars, context) => {
+      queryClient.setQueryData(['device', id], context?.prevDevice)
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['device', id] })
       queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
