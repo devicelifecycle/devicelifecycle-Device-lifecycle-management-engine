@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import { NotificationService } from '@/services/notification.service'
@@ -19,20 +19,11 @@ function mapDeviceConditionToPricingCondition(condition?: string): 'new' | 'exce
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile } = auth
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile || !['admin', 'coe_manager'].includes(userProfile.role)) {
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Only administrators and CoE managers can bulk reprice items' }, { status: 403 })
     }
 
@@ -156,7 +147,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           order_id: order.id,
           order_number: order.order_number,
           mismatched_count: mismatchedCount,
-          reviewed_by: user.id,
+          reviewed_by: authUser.id,
           recommendations: recommendations.map((r) => ({
             order_item_id: r.order_item_id,
             claimed_condition: r.claimed_condition,
@@ -202,7 +193,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     await AuditService.log({
-      user_id: user.id,
+      user_id: authUser.id,
       action: 'price_change',
       entity_type: 'order',
       entity_id: order.id,

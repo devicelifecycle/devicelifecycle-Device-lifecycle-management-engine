@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { generateOrderPDF } from '@/lib/pdf'
 export const dynamic = 'force-dynamic'
@@ -11,12 +11,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { authUser, profile } = auth
 
     const order = await OrderService.getOrderById((await params).id)
     if (!order) {
@@ -24,21 +21,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Authorization: same as GET /api/orders/[id]
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
-
-    const { role, organization_id } = userProfile
+    const { role, organization_id } = profile
     if (role === 'admin' || role === 'coe_manager' || role === 'coe_tech') {
       // Internal roles have full access
     } else if (role === 'sales') {
-      if (order.created_by_id !== user.id && order.assigned_to_id !== user.id) {
+      if (order.created_by_id !== authUser.id && order.assigned_to_id !== authUser.id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
       }
     } else if (role === 'customer') {

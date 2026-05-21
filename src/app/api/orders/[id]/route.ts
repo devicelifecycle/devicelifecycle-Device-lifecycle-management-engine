@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
 import { sanitizeOrderForVendor } from '@/lib/order-visibility'
@@ -17,12 +17,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid order ID format' }, { status: 400 })
     }
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { authUser, profile } = auth
 
     const order = await OrderService.getOrderById((await params).id)
 
@@ -30,19 +27,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    // Fetch current user's profile for authorization
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, organization_id, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile || !userProfile.is_active) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     // Role-based authorization
-    const { role, organization_id } = userProfile
+    const { role, organization_id } = profile
 
     // Internal roles have full access
     if (role === 'admin' || role === 'coe_manager' || role === 'coe_tech') {
@@ -51,7 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Sales can access orders they created or are assigned to (same org only)
     if (role === 'sales') {
-      if (order.created_by_id === user.id || order.assigned_to_id === user.id) {
+      if (order.created_by_id === authUser.id || order.assigned_to_id === authUser.id) {
         if (organization_id && order.customer?.organization_id && order.customer.organization_id !== organization_id) {
           return NextResponse.json({ error: 'Access denied' }, { status: 403 })
         }
@@ -98,23 +84,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Fetch current user's profile for authorization
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, organization_id, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile || !userProfile.is_active) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { authUser, profile } = auth
 
     // Fetch the order for authorization check
     const order = await OrderService.getOrderById((await params).id)
@@ -123,20 +95,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     // Role-based authorization for updates
-    const { role } = userProfile
+    const { role } = profile
     const canUpdate =
       role === 'admin' ||
       role === 'coe_manager' ||
-      (role === 'coe_tech' && order.assigned_to_id === user.id) ||
-      (role === 'sales' && (order.created_by_id === user.id || order.assigned_to_id === user.id))
+      (role === 'coe_tech' && order.assigned_to_id === authUser.id) ||
+      (role === 'sales' && (order.created_by_id === authUser.id || order.assigned_to_id === authUser.id))
 
     if (!canUpdate) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
     // Sales org-boundary check on updates
-    if (role === 'sales' && userProfile.organization_id && order.customer?.organization_id) {
-      if (order.customer.organization_id !== userProfile.organization_id) {
+    if (role === 'sales' && profile.organization_id && order.customer?.organization_id) {
+      if (order.customer.organization_id !== profile.organization_id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
       }
     }
@@ -157,7 +129,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       assigned_to_id: validationResult.data.assigned_to_id === null ? undefined : validationResult.data.assigned_to_id,
     }
 
-    const updatedOrder = await OrderService.updateOrder((await params).id, updateData, user.id)
+    const updatedOrder = await OrderService.updateOrder((await params).id, updateData, authUser.id)
 
     return NextResponse.json(updatedOrder)
   } catch (error) {
@@ -171,30 +143,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Fetch current user's profile for authorization
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { authUser, profile } = auth
 
     // Only admin and coe_manager can delete orders
-    if (userProfile.role !== 'admin' && userProfile.role !== 'coe_manager') {
+    if (profile.role !== 'admin' && profile.role !== 'coe_manager') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    await OrderService.deleteOrder((await params).id, user.id)
+    await OrderService.deleteOrder((await params).id, authUser.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting order:', error)
