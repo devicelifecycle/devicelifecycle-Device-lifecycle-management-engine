@@ -34,7 +34,12 @@ type BrowserRunnerOptions = {
 }
 
 function normalizeText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return value
+    .toLowerCase()
+    .replace(/\+/g, ' plus ')        // "S24+" → "s24 plus" to match our "S24 Plus" model names
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function normalizeStorage(value: string): string {
@@ -67,60 +72,83 @@ function parseTelusCatalogEntries(payload: unknown): TelusCatalogEntry[] {
   return Object.values(record).filter(isValidEntry)
 }
 
-async function fetchTelusCatalogByQuery(query: string): Promise<TelusCatalogEntry[]> {
-  const params = new URLSearchParams({
-    device: query,
-    lang: 'en',
-    salesTransactionId: crypto.randomUUID(),
-  })
-
-  const browserHeaders: Record<string, string> = {
+function buildTelusHeaders(): Record<string, string> {
+  return {
     Accept: 'application/json, text/plain, */*',
+    'Accept-Encoding': 'gzip, deflate, br',
     'Accept-Language': 'en-CA,en;q=0.9',
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     Referer: TRADE_IN_URL,
     Origin: 'https://www.telus.com',
     'X-Requested-With': 'XMLHttpRequest',
+    // Cloudflare bot-detection fingerprint headers — must match a real Chrome XHR from same-origin
+    'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"macOS"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
     Pragma: 'no-cache',
     'Cache-Control': 'no-cache',
   }
+}
+
+function isHtmlResponse(res: Response): boolean {
+  const ct = res.headers.get('content-type') || ''
+  return ct.includes('text/html')
+}
+
+async function fetchTelusCatalogByQuery(query: string): Promise<TelusCatalogEntry[]> {
+  const buildParams = () =>
+    new URLSearchParams({
+      device: query,
+      lang: 'en',
+      salesTransactionId: crypto.randomUUID(), // fresh UUID each call
+    })
 
   const endpoints = [TELUS_DEVICES_API_URL, TELUS_DEVICES_API_ALT, TELUS_DEVICES_API_ALT2]
 
-  // Phase 5: Try each endpoint once (3 requests), then single retry on primary, then browser fallback
+  // Try each endpoint once (3 requests), then single retry on primary, then browser fallback
   for (const baseUrl of endpoints) {
     try {
-      const res = await fetchWithRetry(`${baseUrl}?${params.toString()}`, {
+      const res = await fetchWithRetry(`${baseUrl}?${buildParams().toString()}`, {
         method: 'GET',
-        headers: browserHeaders,
+        headers: buildTelusHeaders(),
       })
       if (!res.ok) continue
+      if (isHtmlResponse(res)) {
+        console.warn(`[telus] Cloudflare challenge on ${baseUrl} (HTML returned for JSON request)`)
+        continue
+      }
       const payload = await res.json()
       const entries = parseTelusCatalogEntries(payload)
       if (entries.length > 0) return entries
-    } catch {
+    } catch (e) {
+      console.warn(`[telus] Endpoint ${baseUrl} failed for "${query}":`, e instanceof Error ? e.message : e)
       continue
     }
   }
 
-  // Single retry on primary endpoint after brief delay
-  await throttle(200)
+  // Single retry on primary with a fresh transaction ID after brief delay
+  await throttle(500)
   try {
-    const res = await fetchWithRetry(`${endpoints[0]}?${params.toString()}`, {
+    const res = await fetchWithRetry(`${endpoints[0]}?${buildParams().toString()}`, {
       method: 'GET',
-      headers: browserHeaders,
+      headers: buildTelusHeaders(),
     })
-    if (res.ok) {
+    if (res.ok && !isHtmlResponse(res)) {
       const payload = await res.json()
       const entries = parseTelusCatalogEntries(payload)
       if (entries.length > 0) return entries
+    } else if (res.ok && isHtmlResponse(res)) {
+      console.warn(`[telus] Cloudflare challenge on retry for "${query}" — falling back to browser runner`)
     }
-  } catch {
-    // fall through to browser runner
+  } catch (e) {
+    console.warn(`[telus] Retry failed for "${query}":`, e instanceof Error ? e.message : e)
   }
 
-  // Browser runner as last resort
+  // Browser runner as last resort (requires TELUS_ENABLE_BROWSER_RUNNER=true)
   const browserEntries = await fetchTelusCatalogByQueryViaBrowserRunner(query)
   if (browserEntries.length > 0) return browserEntries
 
