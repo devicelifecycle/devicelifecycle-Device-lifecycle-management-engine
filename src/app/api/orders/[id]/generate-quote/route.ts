@@ -11,6 +11,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import { OrderService } from '@/services/order.service'
+import { NotificationService } from '@/services/notification.service'
 
 export const dynamic = 'force-dynamic'
 
@@ -143,12 +144,28 @@ export async function POST(
       .eq('id', orderId)
 
     // Transition order to 'quoted' so customer can accept/reject
+    const prevStatus = order.status
     const updatedOrder = await OrderService.transitionOrder(
       orderId,
       'quoted',
       authUser.id,
       'Post-triage quote generated from actual device condition'
     )
+
+    // Notify customer that their quote is ready (fire-and-forget)
+    NotificationService.sendOrderTransitionNotifications(
+      {
+        id: orderId,
+        order_number: updatedOrder.order_number,
+        type: updatedOrder.type,
+        customer_id: updatedOrder.customer_id,
+        vendor_id: updatedOrder.vendor_id,
+        assigned_to_id: updatedOrder.assigned_to_id,
+        created_by_id: authUser.id,
+      },
+      prevStatus,
+      'quoted'
+    ).catch(err => console.error('[generate-quote] Failed to send quote-ready notification:', err))
 
     return NextResponse.json({ data: updatedOrder })
   } catch (error) {
