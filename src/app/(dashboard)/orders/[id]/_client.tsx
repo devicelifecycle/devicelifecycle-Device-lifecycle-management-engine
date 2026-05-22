@@ -147,6 +147,8 @@ export default function OrderDetailClient() {
   const canSendQuote = !isCustomer && !isVendor && ['admin', 'coe_manager', 'sales'].includes(user?.role ?? '')
   const { shipments: orderShipments, refetch: refetchShipments } = useOrderShipments(params.id as string)
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
+  const [pricingDialogNotes, setPricingDialogNotes] = useState('')
+  const [pricingItemEdits, setPricingItemEdits] = useState<Record<string, { storage?: string; condition?: string }>>({})
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({})
   const [itemMetadata, setItemMetadata] = useState<Record<string, PricingMetadata>>({})
   const [expandedPricingContext, setExpandedPricingContext] = useState<string | null>(null)
@@ -398,7 +400,8 @@ export default function OrderDetailClient() {
   }
 
   const getStorageForItem = (item: OrderItem): string => {
-    if (item.storage && STORAGE_OPTIONS.includes(item.storage)) return item.storage
+    // Always prefer the value that was actually uploaded/stored on the item
+    if (item.storage) return item.storage
     const variant = item.device?.variant || ''
     const match = STORAGE_OPTIONS.find(s => variant.includes(s))
     return match || '128GB'
@@ -552,6 +555,8 @@ export default function OrderDetailClient() {
     setItemPrices(prices)
     setItemMetadata(metadata)
     setBeatCompetitorPercent(0)
+    setPricingDialogNotes(order?.notes || '')
+    setPricingItemEdits({})
     setPricingDialogOpen(true)
     if (order?.items) fetchMarketContext(order.items)
   }
@@ -875,6 +880,29 @@ export default function OrderDetailClient() {
 
     setIsSavingPrices(true)
     try {
+      // Save any item-level field edits (storage, condition) made inside the dialog
+      const itemEditEntries = Object.entries(pricingItemEdits).filter(([, e]) => e.storage || e.condition)
+      await Promise.all(itemEditEntries.map(([itemId, edits]) =>
+        fetch(`/api/orders/${params.id}/items/${itemId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...(edits.storage ? { storage: edits.storage } : {}),
+            ...(edits.condition ? { condition: edits.condition } : {}),
+          }),
+        })
+      ))
+
+      // Save order-level notes if changed
+      const notesChanged = pricingDialogNotes !== (order?.notes || '')
+      if (notesChanged) {
+        await fetch(`/api/orders/${params.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer_notes: pricingDialogNotes }),
+        })
+      }
+
       const response = await fetch(`/api/orders/${params.id}/items`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -3122,14 +3150,29 @@ export default function OrderDetailClient() {
                 <div key={item.id} className={`rounded-lg border p-4 space-y-3 ${highlightedPricingItemIds.includes(item.id) ? 'border-primary bg-primary/5' : ''}`}>
                   {/* Item header + price input + total */}
                   <div className="grid grid-cols-[1fr_auto_auto_140px] gap-4 items-end">
-                    <div>
+                    <div className="space-y-1.5">
                       <Label className="text-sm font-medium">
                         {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
                       </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Qty: {item.quantity} | {item.claimed_condition ? (CONDITION_CONFIG[item.claimed_condition]?.label || item.claimed_condition) : '—'}
-                        {getStorageForItem(item) !== '128GB' && ` | ${getStorageForItem(item)}`}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
+                        <select
+                          value={pricingItemEdits[item.id]?.condition ?? item.claimed_condition ?? 'good'}
+                          onChange={e => setPricingItemEdits(prev => ({ ...prev, [item.id]: { ...prev[item.id], condition: e.target.value } }))}
+                          className="rounded border border-input bg-background px-1.5 py-0.5 text-xs"
+                        >
+                          {['new','excellent','good','fair','poor','broken'].map(c => (
+                            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Storage"
+                          value={pricingItemEdits[item.id]?.storage ?? getStorageForItem(item)}
+                          onChange={e => setPricingItemEdits(prev => ({ ...prev, [item.id]: { ...prev[item.id], storage: e.target.value } }))}
+                          className="w-20 rounded border border-input bg-background px-1.5 py-0.5 text-xs"
+                        />
+                      </div>
                     </div>
                     <div className="flex flex-col gap-1">
                       <Label htmlFor={`price-${item.id}`} className="text-xs text-muted-foreground">
@@ -3297,6 +3340,18 @@ export default function OrderDetailClient() {
                 </div>
               )
             })}
+          </div>
+          {/* Order notes — visible to customer and included in quote email */}
+          <div className="pt-2 border-t space-y-1.5">
+            <Label className="text-sm font-medium">Notes for customer</Label>
+            <p className="text-xs text-muted-foreground">Included in the quote email sent to the customer.</p>
+            <textarea
+              rows={3}
+              placeholder="Add any notes, special instructions, or comments for the customer…"
+              value={pricingDialogNotes}
+              onChange={e => setPricingDialogNotes(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPricingDialogOpen(false)}>

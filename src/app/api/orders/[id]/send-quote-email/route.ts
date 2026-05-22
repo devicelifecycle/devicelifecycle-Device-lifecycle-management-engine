@@ -52,6 +52,7 @@ function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrder
     ['Total Quantity', order!.total_quantity ?? '—'],
     ['Quoted Amount', formatCurrency(order!.quoted_amount ?? order!.total_amount)],
     ['Final Amount', formatCurrency(order!.final_amount)],
+    ...(order!.notes ? [[], ['Notes', order!.notes]] : []),
   ]
   const ws1 = XLSX.utils.aoa_to_sheet(summaryData)
   ws1['!cols'] = [{ wch: 20 }, { wch: 40 }]
@@ -194,6 +195,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Date</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${formatDate(order.quoted_at || order.created_at)}</td></tr>
   </table>
   ${lineItemsTable}
+  ${order.notes ? `<div style="margin:16px 0;padding:12px 16px;background:#f9f9f9;border-left:4px solid #e0a96d;border-radius:4px">
+    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.06em">Notes</p>
+    <p style="margin:0;font-size:13px;color:#333;white-space:pre-wrap">${escapeHtml(order.notes)}</p>
+  </div>` : ''}
   <div style="margin:24px 0;text-align:center">
     <a href="${orderUrl}" style="display:inline-block;padding:14px 32px;background:#b65d2f;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">View &amp; Accept Quote in Portal</a>
   </div>

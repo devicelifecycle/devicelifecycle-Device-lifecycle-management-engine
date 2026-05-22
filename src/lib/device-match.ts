@@ -32,13 +32,15 @@ const MAKE_ALIASES: Record<string, string> = {
   asus: 'asus',
 }
 
-/** Normalize string for matching: trim, lowercase, collapse spaces */
+/** Normalize string for matching: trim, lowercase, collapse spaces, expand '+' suffix */
 function normalize(s: string | undefined | null): string {
   if (s == null || typeof s !== 'string') return ''
   return s
     .toLowerCase()
     .trim()
+    .replace(/\+/g, ' plus ')
     .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /** Strip storage from model string (e.g. "iPhone 15 Pro 256GB" -> "iPhone 15 Pro") */
@@ -67,8 +69,8 @@ function sanitizeModelNoise(model: string): string {
 }
 
 /** Known brand prefixes for splitting "Samsung Galaxy S24" -> make=Samsung, model=Galaxy S24 */
-const BRAND_PREFIXES = ['samsung', 'apple', 'google', 'oneplus', 'motorola', 'moto', 'lg', 'sony',
-  'xiaomi', 'huawei', 'oppo', 'vivo', 'nokia', 'microsoft', 'lenovo', 'dell', 'hp', 'asus']
+const BRAND_PREFIXES = ['samsung', 'galaxy', 'apple', 'google', 'pixel', 'oneplus', 'motorola', 'moto', 'lg', 'sony',
+  'xiaomi', 'huawei', 'oppo', 'vivo', 'nokia', 'microsoft', 'surface', 'lenovo', 'thinkpad', 'dell', 'hp', 'asus']
 
 /** Split "Samsung Galaxy S24" into make + model when full name is in one column */
 function splitMakeModel(full: string): { make: string; model: string } | null {
@@ -211,7 +213,8 @@ export function matchDeviceFromCsv(
   if (!csvMake && csvModelRaw) {
     const split = splitMakeModel(deviceModel ?? '')
     if (split) {
-      csvMake = split.make
+      // Apply MAKE_ALIASES so "galaxy" → "samsung", "pixel" → "google", etc.
+      csvMake = resolveMake(split.make)
       csvModelRaw = sanitizeModelNoise(stripStorage(split.model))
     }
   }
@@ -258,6 +261,26 @@ export function matchDeviceFromCsv(
       return false
     })
     if (match) return match
+  }
+
+  // 4. Word-boundary keyword match: CSV model token appears as a whole word inside catalog model.
+  //    Enables "S23" to match "Galaxy S23", "S23 Ultra" etc. when make is resolved to "samsung".
+  //    Prefers shortest matching model name (most specific match) to avoid false positives.
+  const keywordMatches: Device[] = []
+  for (const candidate of candidates) {
+    // Build a word-boundary regex: \bcandidate\b
+    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`\\b${escaped}\\b`)
+    const matching = devices.filter((d) => {
+      if (normalize(d.make) !== csvMake) return false
+      return re.test(normalize(d.model))
+    })
+    keywordMatches.push(...matching)
+  }
+  if (keywordMatches.length > 0) {
+    // Pick the device whose model name is shortest (most specific / fewest extra tokens)
+    keywordMatches.sort((a, b) => normalize(a.model).length - normalize(b.model).length)
+    return keywordMatches[0]
   }
 
   return undefined

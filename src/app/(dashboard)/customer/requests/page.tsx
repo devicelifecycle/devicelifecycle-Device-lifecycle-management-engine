@@ -39,6 +39,7 @@ export default function CustomerRequestsPage() {
   const [parsedSummary, setParsedSummary] = useState<ParseSummary | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [customerId, setCustomerId] = useState<string | null>(null)
+  const [rowValidationErrors, setRowValidationErrors] = useState<{ row: number; message: string }[] | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch own customer ID on mount — /me is scoped to the logged-in customer's org
@@ -70,10 +71,11 @@ export default function CustomerRequestsPage() {
     }
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(skipInvalidRows = false) {
     if (!customerId) { toast.error('Customer profile not found. Please refresh and try again.'); return }
     if (parsedRows.length === 0) { toast.error('No devices found in your file.'); return }
     setSubmitting(true)
+    setRowValidationErrors(null)
     try {
       // Route ALL rows (matched + unmatched) through upload-csv so antiquated/unlisted
       // devices are still submitted — COE team can manually identify and link them.
@@ -92,16 +94,28 @@ export default function CustomerRequestsPage() {
       const res = await fetch('/api/orders/upload-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: rawRows, customer_id: customerId, order_type: 'trade_in' }),
+        body: JSON.stringify({ rows: rawRows, customer_id: customerId, order_type: 'trade_in', ...(skipInvalidRows ? { skip_invalid_rows: true } : {}) }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Submission failed')
+      if (!res.ok) {
+        // Show row-level validation errors with an override option
+        if (res.status === 400 && Array.isArray(data.details) && data.details.length > 0) {
+          setRowValidationErrors(data.details)
+          return
+        }
+        throw new Error(data.error || 'Submission failed')
+      }
       const total = parsedRows.length
       const matched = data.items_created ?? total
-      toast.success(`Request submitted — ${matched} of ${total} device${total !== 1 ? 's' : ''} processed. We'll send your quote within 24 hours.`)
+      const skipped = data.skipped_rows ?? 0
+      const msg = skipped > 0
+        ? `Request submitted — ${matched} device${matched !== 1 ? 's' : ''} processed, ${skipped} row${skipped !== 1 ? 's' : ''} skipped.`
+        : `Request submitted — ${matched} of ${total} device${total !== 1 ? 's' : ''} processed. We'll send your quote within 24 hours.`
+      toast.success(msg)
       setUploadFile(null)
       setParsedRows([])
       setParsedSummary(null)
+      setRowValidationErrors(null)
       if (data.order?.id) router.push(`/orders/${data.order.id}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Submission failed')
@@ -196,8 +210,29 @@ export default function CustomerRequestsPage() {
                 ))}
               </div>
 
-              <div className="flex justify-end">
-                <Button variant="success" onClick={handleSubmit} disabled={submitting || parsedRows.length === 0}>
+              {rowValidationErrors && rowValidationErrors.length > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50/40 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-400 space-y-2">
+                  <p className="font-semibold flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {rowValidationErrors.length} row{rowValidationErrors.length !== 1 ? 's' : ''} have errors:
+                  </p>
+                  <ul className="ml-6 list-disc space-y-0.5 text-xs">
+                    {rowValidationErrors.slice(0, 5).map((e, i) => (
+                      <li key={i}>Row {e.row}: {e.message}</li>
+                    ))}
+                    {rowValidationErrors.length > 5 && <li>…and {rowValidationErrors.length - 5} more</li>}
+                  </ul>
+                  <p className="text-xs">Fix your file and re-upload, or skip these rows and submit the rest.</p>
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                {rowValidationErrors && rowValidationErrors.length > 0 && (
+                  <Button variant="outline" onClick={() => handleSubmit(true)} disabled={submitting}>
+                    {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                    Skip invalid rows &amp; submit rest
+                  </Button>
+                )}
+                <Button variant="success" onClick={() => handleSubmit(false)} disabled={submitting || parsedRows.length === 0}>
                   {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                   {submitting ? 'Submitting…' : `Submit Trade-In Request (${parsedRows.length} device${parsedRows.length !== 1 ? 's' : ''})`}
                 </Button>

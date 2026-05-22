@@ -343,11 +343,12 @@ export async function POST(request: NextRequest) {
     const { supabase, authUser, profile, effectiveRole } = auth
 
     const body = await request.json()
-    const { rows, columns, customer_id, order_type } = body as {
+    const { rows, columns, customer_id, order_type, skip_invalid_rows } = body as {
       rows: Record<string, string>[]
       columns?: string[]
       customer_id: string
       order_type?: 'trade_in' | 'cpo'
+      skip_invalid_rows?: boolean
     }
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
@@ -478,10 +479,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (errors.length > 0) {
-      return NextResponse.json(
-        { error: 'Validation errors', details: errors },
-        { status: 400 }
-      )
+      if (!skip_invalid_rows) {
+        return NextResponse.json(
+          { error: 'Validation errors', details: errors },
+          { status: 400 }
+        )
+      }
+      // Admin override: drop invalid rows and continue with valid ones
+      const invalidIndices = new Set(errors.map(e => e.row - 1))
+      const validRows = normalizedRows.filter((_, i) => !invalidIndices.has(i))
+      if (validRows.length === 0) {
+        return NextResponse.json(
+          { error: 'No valid rows to process', details: errors },
+          { status: 400 }
+        )
+      }
+      normalizedRows.splice(0, normalizedRows.length, ...validRows)
     }
 
     // Determine order type
@@ -612,6 +625,7 @@ export async function POST(request: NextRequest) {
       order_type: effectiveOrderType,
       items_created: orderItems.length,
       total_quantity: totalQuantity,
+      ...(errors.length > 0 && skip_invalid_rows ? { skipped_rows: errors.length, skipped_details: errors } : {}),
     }, { status: 201 })
   } catch (error) {
     console.error('Error uploading CSV:', error)
