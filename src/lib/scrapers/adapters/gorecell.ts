@@ -70,7 +70,12 @@ function normalizeStorage(s: string): string {
 }
 
 function normalizeText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return value
+    .toLowerCase()
+    .replace(/\+/g, ' plus ')        // "Galaxy S24+" → "galaxy s24 plus" before stripping specials
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function selectBestGoRecellProduct(catalog: WooProduct[], device: DeviceToScrape): WooProduct | null {
@@ -111,10 +116,19 @@ function mapCondition(ourCond?: string): string {
   return 'Good'
 }
 
-/** Get base price from storage step and condition multiplier from condition step */
+/** Get base price from storage step and condition multiplier from condition step.
+ *
+ * Match quality scoring: exact (2) beats partial/substring (1).
+ * Uses STORAGE_SIZE_RE to extract the capacity token from the rule title so that
+ * RAM specs ("16GB RAM") and compound titles ("256GB WiFi+Cellular") are handled
+ * the same way as extractAllStoragePrices — no false matches, no multi-step bleed.
+ */
 function computePrice(queryData: QueryData, storage: string, condition: string): number | null {
   let basePrice: number | null = null
+  let bestMatchScore = 0  // 0=none, 1=partial, 2=exact
   let conditionMultiplier = 1
+
+  const ourStorageNorm = normalizeStorage(storage)
 
   for (const step of Object.values(queryData)) {
     if (!step.rules) continue
@@ -124,11 +138,28 @@ function computePrice(queryData: QueryData, storage: string, condition: string):
       if (getPriceFormat(rule) === 'fixed') {
         const price = parseFloat(priceStr)
         if (!Number.isNaN(price) && price > 0) {
-          const ruleStorageNorm = normalizeStorage(ruleTitle)
-          const ourStorageNorm = normalizeStorage(storage)
-          if (ruleStorageNorm === ourStorageNorm || ruleStorageNorm.includes(ourStorageNorm) || ourStorageNorm.includes(ruleStorageNorm)) {
+          // Extract the capacity token (e.g. "256GB") from the rule title via regex
+          // so that compound specs like "16GB RAM 256GB Storage" don't false-match
+          // a "16GB" storage lookup (mirrors extractAllStoragePrices logic).
+          const storageSizeMatch = STORAGE_SIZE_RE.exec(ruleTitle)
+          if (!storageSizeMatch) continue
+          const afterMatch = ruleTitle.slice(storageSizeMatch.index + storageSizeMatch[0].length).trim()
+          if (/^(RAM|Memory|DDR\d*|LPDDR\d*)\b/i.test(afterMatch)) continue
+
+          const extractedStorage = storageSizeMatch[1] + storageSizeMatch[2].toUpperCase()
+          const ruleStorageNorm = normalizeStorage(extractedStorage)
+
+          let matchScore = 0
+          if (ruleStorageNorm === ourStorageNorm) {
+            matchScore = 2
+          } else if (ruleStorageNorm.includes(ourStorageNorm) || ourStorageNorm.includes(ruleStorageNorm)) {
+            matchScore = 1
+          }
+
+          // Exact match always wins; for ties, first found wins (don't overwrite with equal)
+          if (matchScore > bestMatchScore) {
             basePrice = price
-            break
+            bestMatchScore = matchScore
           }
         }
       } else if (getPriceFormat(rule) === 'percent' && ruleTitle.toLowerCase().includes(condition.toLowerCase())) {
@@ -136,18 +167,20 @@ function computePrice(queryData: QueryData, storage: string, condition: string):
         if (!Number.isNaN(pct)) {
           conditionMultiplier = 1 + pct / 100
         } else if (priceStr === '' && /like\s*new|excellent/i.test(ruleTitle)) {
-          conditionMultiplier = 1 // Like New = no discount
+          conditionMultiplier = 1
         }
       }
     }
   }
 
   if (basePrice == null) return null
-  const final = basePrice * conditionMultiplier
-  return Math.round(final * 100) / 100
+  return Math.round(basePrice * conditionMultiplier * 100) / 100
 }
 
-/** Try alternate storage matches; for N/A or "any", returns first available fixed price */
+/** Try alternate storage matches; for N/A or "any", returns first available fixed price.
+ * Uses STORAGE_SIZE_RE to extract the capacity token so that "256GB WiFi" scores as
+ * an exact match for "256GB" (same logic as extractAllStoragePrices).
+ */
 function findBestStorageMatch(queryData: QueryData, storage: string): number | null {
   const ourNorm = normalizeStorage(storage)
   const useAny = ourNorm === 'n/a' || ourNorm === 'any' || ourNorm === ''
@@ -159,7 +192,16 @@ function findBestStorageMatch(queryData: QueryData, storage: string): number | n
       if (getPriceFormat(rule) !== 'fixed') continue
       const price = parseFloat(rule.price)
       if (Number.isNaN(price) || price <= 0) continue
-      const ruleNorm = normalizeStorage(rule.title)
+
+      const ruleTitle = rule.title?.trim() || ''
+      const storageSizeMatch = STORAGE_SIZE_RE.exec(ruleTitle)
+      if (!storageSizeMatch) continue
+      const afterMatch = ruleTitle.slice(storageSizeMatch.index + storageSizeMatch[0].length).trim()
+      if (/^(RAM|Memory|DDR\d*|LPDDR\d*)\b/i.test(afterMatch)) continue
+
+      const extractedStorage = storageSizeMatch[1] + storageSizeMatch[2].toUpperCase()
+      const ruleNorm = normalizeStorage(extractedStorage)
+
       const exact = ruleNorm === ourNorm
       const contains = ruleNorm.includes(ourNorm) || ourNorm.includes(ruleNorm)
       const matchScore = useAny ? 1 : exact ? 2 : contains ? 1 : 0
