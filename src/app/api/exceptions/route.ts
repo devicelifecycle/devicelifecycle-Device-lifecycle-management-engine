@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { safeErrorMessage } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,9 +78,8 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error fetching exceptions:', error)
-    const message = error instanceof Error ? error.message : 'Failed to fetch exceptions'
     return NextResponse.json(
-      { error: message },
+      { error: safeErrorMessage(error, 'Failed to fetch exceptions') },
       { status: 500 }
     )
   }

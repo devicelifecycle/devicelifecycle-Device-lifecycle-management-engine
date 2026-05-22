@@ -46,7 +46,7 @@ async function fetchAllRows<T>(
     const { data, error } = await fetchPage(from, to)
 
     if (error) {
-      throw new Error(error.message || 'Failed to fetch paginated rows')
+      throw new Error('Failed to fetch paginated rows')
     }
 
     const batch = data || []

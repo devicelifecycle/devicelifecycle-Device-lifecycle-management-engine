@@ -8,6 +8,7 @@ import { VendorService } from '@/services/vendor.service'
 import { vendorSchema } from '@/lib/validations'
 import { OrganizationService } from '@/services/organization.service'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
+import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existingVendorOrgByEmailError) {
-      throw new Error(existingVendorOrgByEmailError.message)
+      throw existingVendorOrgByEmailError
     }
 
     const { data: existingVendorOrgByName, error: existingVendorOrgByNameError } = await supabase
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existingVendorOrgByNameError) {
-      throw new Error(existingVendorOrgByNameError.message)
+      throw existingVendorOrgByNameError
     }
 
     const vendorOrganization = existingVendorOrgByEmail || existingVendorOrgByName || await OrganizationService.createOrganization({
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existingVendorError) {
-      throw new Error(existingVendorError.message)
+      throw existingVendorError
     }
 
     if (existingVendor) {
@@ -136,10 +137,11 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('Error creating vendor:', error)
-    const message = error instanceof Error ? error.message : 'Failed to create vendor'
+    const rawMessage = error instanceof Error ? error.message : ''
+    const status = rawMessage.includes('exists') ? 400 : 500
     return NextResponse.json(
-      { error: message },
-      { status: message.includes('exists') ? 400 : 500 }
+      { error: safeErrorMessage(error, 'Failed to create vendor') },
+      { status }
     )
   }
 }

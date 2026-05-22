@@ -7,6 +7,8 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { CustomerService } from '@/services/customer.service'
 import { customerSchema } from '@/lib/validations'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
+import { safeErrorMessage } from '@/lib/utils'
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 export const dynamic = 'force-dynamic'
 
 
@@ -45,6 +47,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkRateLimit(`customer-create:${getClientIp(request)}`, RATE_LIMITS.api)
+    if (!rl.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
     const auth = await requireAuth()
     if (!auth) return unauthorized()
 
@@ -131,10 +136,11 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('Error creating customer:', error)
-    const message = error instanceof Error ? error.message : 'Failed to create customer'
+    const rawMessage = error instanceof Error ? error.message : ''
+    const status = rawMessage.includes('exists') || rawMessage.includes('Organization') ? 400 : 500
     return NextResponse.json(
-      { error: message },
-      { status: message.includes('exists') || message.includes('Organization') ? 400 : 500 }
+      { error: safeErrorMessage(error, 'Failed to create customer') },
+      { status }
     )
   }
 }
