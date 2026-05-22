@@ -15,7 +15,12 @@ const BELL_BASE_ADDR = process.env.BELL_TRADE_IN_BASE_ADDR || 'https://ws1-bell.
 type $Root = ReturnType<typeof cheerio.load>
 
 function normalizeText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return value
+    .toLowerCase()
+    .replace(/\+/g, ' plus ')        // "S24+" → "s24 plus" to match our "S24 Plus" model names
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function normalizeStorage(value: string): string {
