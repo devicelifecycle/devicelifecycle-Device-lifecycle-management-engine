@@ -230,8 +230,8 @@ export async function POST(request: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
 
     const ext = file.name.toLowerCase().split('.').pop() ?? ''
-    if (!['csv', 'txt', 'xlsx', 'xls'].includes(ext)) {
-      return NextResponse.json({ error: 'Supported formats: CSV, Excel (.xlsx/.xls), plain text (.txt)' }, { status: 400 })
+    if (!['csv', 'txt', 'xlsx'].includes(ext)) {
+      return NextResponse.json({ error: 'Supported formats: CSV, Excel (.xlsx), plain text (.txt)' }, { status: 400 })
     }
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: 'File too large (max 10 MB)' }, { status: 400 })
@@ -241,13 +241,28 @@ export async function POST(request: NextRequest) {
     let headers: string[] = []
     let dataRows: string[][] = []
 
-    if (ext === 'xlsx' || ext === 'xls') {
-      // Excel parsing via SheetJS
-      const XLSX = await import('xlsx')
+    if (ext === 'xlsx') {
+      const ExcelJS = await import('exceljs')
       const arrayBuffer = await file.arrayBuffer()
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-      const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const raw: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][]
+      const wb = new ExcelJS.default.Workbook()
+      try { await wb.xlsx.load(arrayBuffer) } catch {
+        return NextResponse.json({ error: 'Could not read Excel file. Make sure it is a valid .xlsx file.' }, { status: 400 })
+      }
+      const ws = wb.worksheets[0]
+      if (!ws) return NextResponse.json({ error: 'Excel file does not contain a worksheet' }, { status: 400 })
+      const colCount = Math.max(ws.columnCount, 1)
+      const raw: unknown[][] = []
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        const cells: unknown[] = []
+        for (let c = 1; c <= colCount; c++) {
+          const cell = row.getCell(c)
+          let val: unknown = cell.value
+          if (val && typeof val === 'object' && 'result' in (val as Record<string, unknown>)) val = (val as { result: unknown }).result
+          if (val && typeof val === 'object' && 'richText' in (val as Record<string, unknown>)) val = (val as { richText: Array<{ text: string }> }).richText.map(t => t.text).join('')
+          cells.push(val ?? '')
+        }
+        raw.push(cells)
+      })
       if (!raw || raw.length < 2) {
         return NextResponse.json({ error: 'Excel file must have a header row and at least one data row' }, { status: 400 })
       }

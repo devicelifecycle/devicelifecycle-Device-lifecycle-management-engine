@@ -8,7 +8,6 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
 import { generateOrderPDF } from '@/lib/pdf'
-import * as XLSX from 'xlsx'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
@@ -31,12 +30,16 @@ function formatDate(s?: string | null): string {
   return new Date(s).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrderById>>): Buffer {
+async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrderById>>): Promise<Buffer> {
+  const ExcelJS = await import('exceljs')
   const isQuote = ['draft', 'submitted', 'quoted'].includes(order!.status)
   const docType = isQuote ? 'Quote' : 'Invoice'
-  const wb = XLSX.utils.book_new()
+  const wb = new ExcelJS.default.Workbook()
 
-  const summaryData = [
+  // Summary sheet
+  const ws1 = wb.addWorksheet('Summary')
+  ws1.columns = [{ width: 20 }, { width: 40 }]
+  const summaryData: (string | number | null | undefined)[][] = [
     ['DLM Engine — ' + docType],
     [],
     ['Order Number', order!.order_number],
@@ -52,32 +55,33 @@ function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrder
     ['Total Quantity', order!.total_quantity ?? '—'],
     ['Quoted Amount', formatCurrency(order!.quoted_amount ?? order!.total_amount)],
     ['Final Amount', formatCurrency(order!.final_amount)],
-    ...(order!.notes ? [[], ['Notes', order!.notes]] : []),
+    ...(order!.notes ? [[], ['Notes', order!.notes]] as (string | number | null | undefined)[][] : []),
   ]
-  const ws1 = XLSX.utils.aoa_to_sheet(summaryData)
-  ws1['!cols'] = [{ wch: 20 }, { wch: 40 }]
-  XLSX.utils.book_append_sheet(wb, ws1, 'Summary')
+  summaryData.forEach(row => ws1.addRow(row))
 
-  const headers = ['Device', 'Storage', 'Condition', 'Quantity', 'Unit Price', 'Total']
-  const rows: (string | number)[][] = (order!.items || []).map(item => {
+  // Line Items sheet
+  const ws2 = wb.addWorksheet('Line Items')
+  ws2.columns = [
+    { width: 30 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 14 }, { width: 14 },
+  ]
+  ws2.addRow(['Device', 'Storage', 'Condition', 'Quantity', 'Unit Price', 'Total'])
+  for (const item of order!.items || []) {
     const device = item.device ? `${item.device.make || ''} ${item.device.model || ''}`.trim() : '—'
     const qty = item.quantity ?? 1
     const unit = item.unit_price ?? item.guaranteed_buyback_price ?? 0
     const total = unit * qty
-    return [
+    ws2.addRow([
       device,
       item.storage || '—',
       (item.claimed_condition || '—').replace(/_/g, ' '),
       qty,
       unit > 0 ? unit : '—',
       total > 0 ? total : '—',
-    ]
-  })
-  const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows])
-  ws2['!cols'] = [{ wch: 30 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 14 }]
-  XLSX.utils.book_append_sheet(wb, ws2, 'Line Items')
+    ])
+  }
 
-  return XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }) as Buffer
+  const arrayBuffer = await wb.xlsx.writeBuffer()
+  return Buffer.from(arrayBuffer)
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -139,7 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     // Generate Excel
-    const excelBuffer = buildExcelBuffer(order)
+    const excelBuffer = await buildExcelBuffer(order)
 
     const quotedTotal = order.quoted_amount ?? order.total_amount ?? 0
     const totalFormatted = quotedTotal > 0 ? `$${quotedTotal.toFixed(2)}` : 'See attached'

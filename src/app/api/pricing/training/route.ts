@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { safeErrorMessage } from '@/lib/utils'
 
 const CONDITION_MULTIPLIERS: Record<string, number> = {
   excellent: 1.0,
@@ -218,7 +219,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Training data generation error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Generation failed' },
+      { error: safeErrorMessage(error, 'Generation failed') },
       { status: 500 }
     )
   }
@@ -282,7 +283,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Get training data error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch data' },
+      { error: safeErrorMessage(error, 'Failed to fetch data') },
       { status: 500 }
     )
   }
@@ -310,7 +311,7 @@ export async function DELETE(request: NextRequest) {
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000') // Match all
 
-      if (error) throw new Error(error.message)
+      if (error) throw error
       
       return NextResponse.json({ success: true, message: 'All training data deleted' })
     }
@@ -322,7 +323,7 @@ export async function DELETE(request: NextRequest) {
         .delete()
         .eq('source', source)
 
-      if (error) throw new Error(error.message)
+      if (error) throw error
       
       return NextResponse.json({ success: true, message: `Deleted training data with source: ${source}` })
     }
@@ -331,7 +332,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error('Delete training data error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Delete failed' },
+      { error: safeErrorMessage(error, 'Delete failed') },
       { status: 500 }
     )
   }

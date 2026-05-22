@@ -453,8 +453,8 @@ export async function POST(request: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
 
     const ext = file.name.toLowerCase().split('.').pop() ?? ''
-    if (!['csv', 'xlsx', 'xls'].includes(ext)) {
-      return NextResponse.json({ error: 'Supported formats: CSV, Excel (.xlsx / .xls)' }, { status: 400 })
+    if (!['csv', 'xlsx'].includes(ext)) {
+      return NextResponse.json({ error: 'Supported formats: CSV, Excel (.xlsx)' }, { status: 400 })
     }
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: 'File too large (max 10 MB)' }, { status: 400 })
@@ -468,25 +468,58 @@ export async function POST(request: NextRequest) {
     let sheetParsed = 'Sheet1'
     let availableSheets: string[] = []
 
-    if (ext === 'xlsx' || ext === 'xls') {
-      const XLSX = await import('xlsx')
+    if (ext === 'xlsx') {
+      // Use exceljs (no prototype-pollution or ReDoS CVEs unlike the xlsx package)
+      const ExcelJS = await import('exceljs')
       const arrayBuffer = await file.arrayBuffer()
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-      availableSheets = workbook.SheetNames
-      sheetParsed = sheetParam || workbook.SheetNames[0]
-
-      // Resolve sheet by name or numeric index
-      let resolvedSheet = sheetParsed
-      if (!workbook.Sheets[resolvedSheet]) {
-        const idx = parseInt(sheetParam, 10)
-        resolvedSheet = Number.isFinite(idx) ? (workbook.SheetNames[idx] ?? workbook.SheetNames[0]) : workbook.SheetNames[0]
-        sheetParsed = resolvedSheet
+      const wb = new ExcelJS.default.Workbook()
+      try {
+        await wb.xlsx.load(arrayBuffer)
+      } catch {
+        return NextResponse.json({ error: 'Could not read Excel file. Make sure it is a valid .xlsx file.' }, { status: 400 })
       }
 
-      const sheet = workbook.Sheets[resolvedSheet]
-      if (!sheet) return NextResponse.json({ error: 'Sheet not found' }, { status: 400 })
-      const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][]
-      if (!raw || raw.length < 2) return NextResponse.json({ error: 'Sheet needs a header row and at least one data row', available_sheets: availableSheets }, { status: 400 })
+      availableSheets = wb.worksheets.map(ws => ws.name)
+      if (availableSheets.length === 0) {
+        return NextResponse.json({ error: 'No sheets found in workbook' }, { status: 400 })
+      }
+
+      sheetParsed = sheetParam || availableSheets[0]
+
+      // Resolve sheet by name or numeric index
+      let ws = wb.getWorksheet(sheetParsed) ?? null
+      if (!ws) {
+        const idx = parseInt(sheetParam, 10)
+        ws = (Number.isFinite(idx) ? wb.worksheets[idx] : null) ?? wb.worksheets[0] ?? null
+        sheetParsed = ws?.name ?? availableSheets[0]
+      }
+
+      if (!ws) return NextResponse.json({ error: 'Sheet not found' }, { status: 400 })
+
+      // Build array-of-arrays (same shape as xlsx sheet_to_json { header:1, defval:'' })
+      const raw: unknown[][] = []
+      const colCount = Math.max(ws.columnCount, 1)
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        const cells: unknown[] = []
+        for (let c = 1; c <= colCount; c++) {
+          const cell = row.getCell(c)
+          let val: unknown = cell.value
+          // Unwrap formula cells — use cached result, not formula string
+          if (val && typeof val === 'object' && 'result' in (val as Record<string, unknown>)) {
+            val = (val as { result: unknown }).result
+          }
+          // Unwrap richText objects
+          if (val && typeof val === 'object' && 'richText' in (val as Record<string, unknown>)) {
+            val = (val as { richText: Array<{ text: string }> }).richText.map(t => t.text).join('')
+          }
+          cells.push(val ?? '')
+        }
+        raw.push(cells)
+      })
+
+      if (!raw || raw.length < 2) {
+        return NextResponse.json({ error: 'Sheet needs a header row and at least one data row', available_sheets: availableSheets }, { status: 400 })
+      }
 
       // Auto-detect the header row (not always row 0)
       const { headerIdx, groupIdx } = findHeaderRow(raw)

@@ -128,12 +128,12 @@ export async function buildXlsxTemplateBlob(
   headers: readonly string[],
   rows: string[][],
 ): Promise<Blob> {
-  const XLSX = await import('xlsx')
-  const workbook = XLSX.utils.book_new()
-  const worksheet = XLSX.utils.aoa_to_sheet([Array.from(headers), ...rows])
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
-
-  const arrayBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const ExcelJS = await import('exceljs')
+  const wb = new ExcelJS.default.Workbook()
+  const ws = wb.addWorksheet(sheetName)
+  ws.addRow(Array.from(headers))
+  rows.forEach(row => ws.addRow(row))
+  const arrayBuffer = await wb.xlsx.writeBuffer()
   return new Blob([arrayBuffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
@@ -143,19 +143,30 @@ export async function buildXlsxTemplateBlob(
 export async function parseTabularUpload(file: File): Promise<ParsedTabularUpload> {
   const ext = file.name.toLowerCase().split('.').pop() ?? ''
 
-  if (ext === 'xlsx' || ext === 'xls') {
-    const XLSX = await import('xlsx')
+  if (ext === 'xlsx') {
+    const ExcelJS = await import('exceljs')
     const arrayBuffer = await file.arrayBuffer()
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-    const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    if (!sheet) {
-      throw new Error('Excel file does not contain a worksheet')
-    }
+    const wb = new ExcelJS.default.Workbook()
+    await wb.xlsx.load(arrayBuffer)
 
-    const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][]
-    if (!raw || raw.length < 2) {
-      throw new Error('Excel file must have a header row and at least one data row')
-    }
+    const ws = wb.worksheets[0]
+    if (!ws) throw new Error('Excel file does not contain a worksheet')
+
+    const colCount = Math.max(ws.columnCount, 1)
+    const raw: unknown[][] = []
+    ws.eachRow({ includeEmpty: false }, (row) => {
+      const cells: unknown[] = []
+      for (let c = 1; c <= colCount; c++) {
+        const cell = row.getCell(c)
+        let val: unknown = cell.value
+        if (val && typeof val === 'object' && 'result' in (val as Record<string, unknown>)) val = (val as { result: unknown }).result
+        if (val && typeof val === 'object' && 'richText' in (val as Record<string, unknown>)) val = (val as { richText: Array<{ text: string }> }).richText.map(t => t.text).join('')
+        cells.push(val ?? '')
+      }
+      raw.push(cells)
+    })
+
+    if (!raw || raw.length < 2) throw new Error('Excel file must have a header row and at least one data row')
 
     const headers = raw[0].map((value, index) => String(value ?? '').trim() || `column_${index + 1}`)
     const rows = raw
@@ -163,9 +174,7 @@ export async function parseTabularUpload(file: File): Promise<ParsedTabularUploa
       .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
       .map((row) => {
         const record: Record<string, string> = {}
-        headers.forEach((header, index) => {
-          record[header] = String(row[index] ?? '').trim()
-        })
+        headers.forEach((header, index) => { record[header] = String(row[index] ?? '').trim() })
         return record
       })
 
@@ -173,7 +182,7 @@ export async function parseTabularUpload(file: File): Promise<ParsedTabularUploa
   }
 
   if (ext !== 'csv') {
-    throw new Error('Supported formats: CSV, Excel (.xlsx/.xls)')
+    throw new Error('Supported formats: CSV, Excel (.xlsx)')
   }
 
   const { default: Papa } = await import('papaparse')

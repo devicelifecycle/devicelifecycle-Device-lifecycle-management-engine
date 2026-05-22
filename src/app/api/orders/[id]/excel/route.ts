@@ -6,7 +6,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
-import * as XLSX from 'xlsx'
 export const dynamic = 'force-dynamic'
 
 function formatCurrency(n?: number | null): string {
@@ -37,10 +36,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
     const docType = isQuote ? 'Quote' : 'Invoice'
-    const wb = XLSX.utils.book_new()
+    const ExcelJS = await import('exceljs')
+    const wb = new ExcelJS.default.Workbook()
 
     // ── Sheet 1: Summary ────────────────────────────────────────────────────
-    const summaryData = [
+    const ws1 = wb.addWorksheet('Summary')
+    ws1.columns = [{ width: 20 }, { width: 40 }]
+    ;[
       ['DLM Engine — ' + docType],
       [],
       ['Order Number', order.order_number],
@@ -57,33 +59,31 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ['Total Quantity', order.total_quantity ?? '—'],
       ['Quoted Amount', formatCurrency(order.quoted_amount ?? order.total_amount)],
       ['Final Amount', formatCurrency(order.final_amount)],
-    ]
-    const ws1 = XLSX.utils.aoa_to_sheet(summaryData)
-    ws1['!cols'] = [{ wch: 20 }, { wch: 40 }]
-    XLSX.utils.book_append_sheet(wb, ws1, 'Summary')
+    ].forEach(row => ws1.addRow(row))
 
     // ── Sheet 2: Line Items ──────────────────────────────────────────────────
-    const headers = ['Device', 'Storage', 'Condition', 'Quantity', 'Unit Price', 'Total']
-    const rows: (string | number)[][] = (order.items || []).map(item => {
+    const ws2 = wb.addWorksheet('Line Items')
+    ws2.columns = [
+      { width: 30 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 14 }, { width: 14 },
+    ]
+    ws2.addRow(['Device', 'Storage', 'Condition', 'Quantity', 'Unit Price', 'Total'])
+    for (const item of order.items || []) {
       const device = item.device ? `${item.device.make || ''} ${item.device.model || ''}`.trim() : '—'
       const qty = item.quantity ?? 1
       const unit = item.unit_price ?? item.guaranteed_buyback_price ?? 0
       const total = unit * qty
-      return [
+      ws2.addRow([
         device,
         item.storage || '—',
         (item.claimed_condition || '—').replace(/_/g, ' '),
         qty,
         unit > 0 ? unit : '—',
         total > 0 ? total : '—',
-      ]
-    })
+      ])
+    }
 
-    const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows])
-    ws2['!cols'] = [{ wch: 30 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 14 }]
-    XLSX.utils.book_append_sheet(wb, ws2, 'Line Items')
-
-    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }) as Buffer
+    const arrayBuffer = await wb.xlsx.writeBuffer()
+    const buf = Buffer.from(arrayBuffer)
     const safeOrderNum = (order.order_number || '').replace(/[^a-zA-Z0-9._-]/g, '_')
     const filename = `${safeOrderNum}-${docType}.xlsx`
 
