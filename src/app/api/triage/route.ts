@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { TriageService } from '@/services/triage.service'
 import { triageSubmitSchema } from '@/lib/validations'
 import { z } from 'zod'
@@ -24,19 +24,9 @@ const addDeviceSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
@@ -68,19 +58,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const body = await request.json()
 
@@ -120,7 +100,7 @@ export async function POST(request: NextRequest) {
           metadata: {
             storage,
             color,
-            added_by_id: user.id,
+            added_by_id: authUser.id,
             added_manually: true,
             notes: notes || `Manually added by ${profile.role}`,
           },
@@ -225,7 +205,7 @@ export async function POST(request: NextRequest) {
             repair_cost: row.repair_cost,
             notes: row.notes,
             bulk_imported: true,
-            imported_by_id: user.id,
+            imported_by_id: authUser.id,
           },
         })
         if (insertError) {
@@ -257,7 +237,7 @@ export async function POST(request: NextRequest) {
 
     const result = await TriageService.submitTriageResult({
       ...validation.data,
-      triaged_by_id: user.id,
+      triaged_by_id: authUser.id,
     })
 
     return NextResponse.json(result, { status: 201 })

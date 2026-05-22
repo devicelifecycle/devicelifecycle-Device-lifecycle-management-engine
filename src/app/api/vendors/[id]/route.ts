@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { VendorService } from '@/services/vendor.service'
 import { vendorSchema } from '@/lib/validations'
 import { isValidUUID } from '@/lib/utils'
@@ -15,27 +15,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
     if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid vendor ID format' }, { status: 400 })
     }
 
     // Only internal roles can view vendor details
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || ['customer', 'vendor'].includes(profile?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const vendor = await VendorService.getVendorById((await params).id)
     if (!vendor) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
@@ -56,24 +43,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin/coe_manager/sales can update vendors
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager', 'sales'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const body = await request.json()
 
     // Validate input
@@ -101,24 +75,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin/coe_manager can delete vendors
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     await VendorService.deleteVendor((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {

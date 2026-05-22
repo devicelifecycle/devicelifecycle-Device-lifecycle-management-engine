@@ -4,29 +4,21 @@
 // ============================================================================
 
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { EmailService } from '@/services/email.service'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST() {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('email, full_name, notification_email')
-      .eq('id', user.id)
-      .single()
-
-    const email = profile?.email
-    const notif = (profile as { notification_email?: string | null })?.notification_email
-    // Login ID users (@login.local): use notification_email; otherwise use profile email
+    const email = authUser.email
+    const { data: userFull } = await supabase.from('users').select('full_name, notification_email').eq('id', authUser.id).single()
+    const notif = userFull?.notification_email
+    // Login ID users (@login.local): use notification_email; otherwise use auth email
     const to = email?.endsWith('@login.local') ? notif : email
     if (!to) {
       return NextResponse.json({ ok: true }) // No deliverable email
@@ -34,7 +26,7 @@ export async function POST() {
 
     await EmailService.sendPasswordChangeConfirmationEmail({
       to,
-      recipientName: profile?.full_name || 'User',
+      recipientName: userFull?.full_name || 'User',
     })
 
     return NextResponse.json({ ok: true })

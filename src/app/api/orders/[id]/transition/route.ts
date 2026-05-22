@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
@@ -25,22 +25,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     if (!profile.is_active) {
       return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
@@ -187,13 +174,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const updatedOrder = await OrderService.transitionOrder(
       (await params).id,
       newStatus,
-      user.id,
+      authUser.id,
       notes
     )
 
     // Log audit
     await AuditService.logStatusChange(
-      user.id,
+      authUser.id,
       'order',
       (await params).id,
       currentOrder.status,

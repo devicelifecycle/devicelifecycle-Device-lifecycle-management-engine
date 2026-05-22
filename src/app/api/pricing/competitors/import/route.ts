@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { PricingService } from '@/services/pricing.service'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -78,18 +78,9 @@ function parseCsv(text: string): { rows: CsvRow[]; parseErrors: string[] } {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     if (!['admin', 'coe_manager'].includes(profile?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

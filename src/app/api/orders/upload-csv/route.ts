@@ -8,7 +8,8 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import type { AuthContext } from '@/lib/supabase/require-auth'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
@@ -23,7 +24,7 @@ function incrementOrderNumber(orderNumber: string): string {
 }
 
 async function getNextOrderNumberFromTable(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: AuthContext['supabase'],
   direction: 'inbound' | 'outbound',
 ): Promise<string> {
   const prefix = direction === 'inbound' ? 'PO' : 'INV'
@@ -337,22 +338,9 @@ interface NormalizedRow {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile || !['admin', 'coe_manager', 'sales', 'customer'].includes(userProfile.role)) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const body = await request.json()
     const { rows, columns, customer_id, order_type } = body as {
@@ -388,14 +376,14 @@ export async function POST(request: NextRequest) {
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     if (!customer.is_active) return NextResponse.json({ error: 'Customer is inactive' }, { status: 400 })
 
-    if (userProfile.role === 'customer') {
-      if (!userProfile.organization_id || userProfile.organization_id !== customer.organization_id) {
+    if (profile.role === 'customer') {
+      if (!profile.organization_id || profile.organization_id !== customer.organization_id) {
         return NextResponse.json({ error: 'Cannot create orders for another organization' }, { status: 403 })
       }
     }
 
-    if (userProfile.role === 'sales' && userProfile.organization_id && customer.organization_id) {
-      if (customer.organization_id !== userProfile.organization_id) {
+    if (profile.role === 'sales' && profile.organization_id && customer.organization_id) {
+      if (customer.organization_id !== profile.organization_id) {
         return NextResponse.json({ error: 'Cannot create orders for customers in another organization' }, { status: 403 })
       }
     }
@@ -499,7 +487,7 @@ export async function POST(request: NextRequest) {
     // Determine order type
     const effectiveOrderType = order_type || (templateType === 'cpo' ? 'cpo' : 'trade_in')
 
-    if (userProfile.role === 'sales' && effectiveOrderType === 'cpo') {
+    if (profile.role === 'sales' && effectiveOrderType === 'cpo') {
       return NextResponse.json(
         { error: 'Sales can create trade-in orders only' },
         { status: 403 }
@@ -532,7 +520,7 @@ export async function POST(request: NextRequest) {
           order_direction: direction,
           status: 'draft',
           customer_id,
-          created_by_id: user.id,
+          created_by_id: authUser.id,
           total_quantity: totalQuantity,
           total_amount: 0,
         })

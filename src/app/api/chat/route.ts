@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server'
 import Groq from 'groq-sdk'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { getSystemPrompt } from '@/lib/chat/prompts'
 import { getToolsForRole, executeTool } from '@/lib/chat/tools'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
@@ -37,23 +37,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Auth
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, full_name, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    const role = (profile?.role || 'customer') as UserRole
-    const userName = profile?.full_name || undefined
+    const role = profile.role as UserRole
+    // Fetch full_name for system prompt context (not in requireAuth select)
+    const { data: userFull } = await supabase.from('users').select('full_name').eq('id', authUser.id).single()
+    const userName = userFull?.full_name || undefined
 
     // Parse request
     const body = await request.json()
@@ -70,7 +61,7 @@ export async function POST(request: NextRequest) {
     const systemPrompt = getSystemPrompt(role, userName)
     const tools = getToolsForRole(role)
     const toolCtx = {
-      userId: user.id,
+      userId: authUser.id,
       role,
       organizationId: profile?.organization_id || undefined,
     }

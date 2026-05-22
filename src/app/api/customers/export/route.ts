@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { CustomerService } from '@/services/customer.service'
 import type { Customer } from '@/types'
 
@@ -35,27 +35,14 @@ function toCSV(rows: Customer[]): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || ['customer', 'vendor'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || undefined
     const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)
-    const organization_id = isInternal ? undefined : profile.organization_id
+    const organization_id = isInternal ? undefined : profile.organization_id ?? undefined
 
     const result = await CustomerService.getCustomers({
       page: 1,

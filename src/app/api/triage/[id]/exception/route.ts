@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { TriageService } from '@/services/triage.service'
 export const dynamic = 'force-dynamic'
@@ -14,17 +14,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Resolve triage result and verify order ownership for customer
     const serviceRole = createServiceRoleClient()
@@ -58,7 +50,7 @@ export async function POST(
     const result = await TriageService.handleException(
       (await params).id,
       approved,
-      user.id,
+      authUser.id,
       notes
     )
 

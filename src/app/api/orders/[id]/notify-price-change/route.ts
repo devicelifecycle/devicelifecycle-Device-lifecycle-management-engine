@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { EmailService } from '@/services/email.service'
 import { AuditService } from '@/services/audit.service'
 import { safeErrorMessage } from '@/lib/utils'
@@ -7,22 +7,9 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile || !['admin', 'coe_manager', 'sales'].includes(userProfile.role)) {
-      return NextResponse.json({ error: 'Only admins, CoE managers, and sales staff can send price change notifications' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const orderId = (await params).id
 
@@ -57,7 +44,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const sent = await EmailService.sendEmail(customerEmail, subject, body)
 
     await AuditService.log({
-      user_id: user.id,
+      user_id: authUser.id,
       action: 'price_change',
       entity_type: 'order',
       entity_id: order.id,

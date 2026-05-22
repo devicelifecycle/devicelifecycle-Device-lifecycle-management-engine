@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ShipmentService } from '@/services/shipment.service'
 import { NotificationService } from '@/services/notification.service'
@@ -20,19 +20,9 @@ type CustomerShipmentOrder = {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const { searchParams } = new URL(request.url)
     const direction = searchParams.get('direction') as 'inbound' | 'outbound' | null
@@ -99,19 +89,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const body = await request.json()
     const rawCarrier = typeof body.carrier === 'string' ? body.carrier.trim() : ''
@@ -201,7 +181,7 @@ export async function POST(request: NextRequest) {
       await OrderService.transitionOrder(
         body.order_id,
         'shipped_to_coe',
-        user.id,
+        authUser.id,
         'Customer submitted inbound shipment',
       )
     }
@@ -210,7 +190,7 @@ export async function POST(request: NextRequest) {
       ...body,
       carrier: resolvedCarrier,
       tracking_number: normalizedTrackingNumber,
-      created_by_id: user.id,
+      created_by_id: authUser.id,
     })
 
     const responsePayload: Shipment = shipment

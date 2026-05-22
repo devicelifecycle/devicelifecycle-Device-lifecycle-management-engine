@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ensureCustomerProfileForOrganization } from '@/lib/customer-profile'
 
@@ -10,24 +10,9 @@ const CUSTOMER_COMPLETED_STATUSES = ['delivered', 'closed'] as const
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('users')
-      .select('role, organization_id, full_name, email, notification_email, phone')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError || !profile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile } = auth
 
     if (profile.role !== 'customer') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -53,9 +38,15 @@ export async function GET() {
     // We intentionally use only this ONE customer record (not all customers
     // for the org) so the dashboard reflects only THIS customer's orders —
     // not orders from other customer accounts that may share the same org.
+    const { data: userDetails } = await supabase
+      .from('users')
+      .select('full_name, email, notification_email, phone')
+      .eq('id', authUser.id)
+      .single()
+
     let canonicalCustomerId: string | null = null
     try {
-      const customer = await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, profile)
+      const customer = await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, userDetails ?? {})
       canonicalCustomerId = customer.id
     } catch {
       // Organization or customer profile not yet set up — return empty dashboard

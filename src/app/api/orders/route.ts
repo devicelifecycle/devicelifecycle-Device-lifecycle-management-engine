@@ -67,24 +67,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Get user's role and organization
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
-
     if (!profile.is_active) {
       return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
     }
@@ -119,7 +106,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve organization: user's org or customer's org (for internal users without org)
-    let orgId = profile.organization_id
+    let orgId: string = profile.organization_id ?? ''
     const { data: customer } = await supabase
       .from('customers')
       .select('id, organization_id')
@@ -144,14 +131,14 @@ export async function POST(request: NextRequest) {
 
     let order = await OrderService.createOrder(
       orderData as Parameters<typeof OrderService.createOrder>[0],
-      user.id,
+      authUser.id,
       orgId
     )
 
     // Customers have already reviewed their order — auto-submit so it enters the pricing queue
     if (profile.role === 'customer') {
       try {
-        order = await OrderService.transitionOrder(order.id, 'submitted', user.id, 'Auto-submitted by customer')
+        order = await OrderService.transitionOrder(order.id, 'submitted', authUser.id, 'Auto-submitted by customer')
       } catch (err) {
         console.error('Failed to auto-submit customer order:', err)
         // Non-fatal — order exists in draft, customer can submit manually

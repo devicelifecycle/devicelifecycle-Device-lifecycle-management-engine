@@ -54,8 +54,11 @@ const CONDITION_MULTIPLIERS: Record<DeviceCondition, number> = {
   poor: 0.50,
 }
 
-// Functional deductions
-const FUNCTIONAL_DEDUCTIONS: Record<string, { type: 'percentage' | 'fixed'; value: number }> = {
+export type DeductionRule = { type: 'percentage' | 'fixed'; value: number }
+
+// Hardcoded defaults — ops can override by upserting a row in pricing_settings:
+//   setting_key = 'functional_deductions', setting_value = JSON.stringify({...})
+const FUNCTIONAL_DEDUCTIONS: Record<string, DeductionRule> = {
   SCREEN_CRACK: { type: 'percentage', value: 15 },
   SCREEN_DEAD: { type: 'percentage', value: 40 },
   BATTERY_POOR: { type: 'fixed', value: 30 },
@@ -63,10 +66,34 @@ const FUNCTIONAL_DEDUCTIONS: Record<string, { type: 'percentage' | 'fixed'; valu
   CAMERA_BROKEN: { type: 'percentage', value: 20 },
   SPEAKER_BROKEN: { type: 'fixed', value: 25 },
   BUTTON_BROKEN: { type: 'fixed', value: 20 },
-  CONNECTIVITY_BROKEN: { type: 'fixed', value: 40 }, // WiFi/cellular antenna/chip fault
+  CONNECTIVITY_BROKEN: { type: 'fixed', value: 40 },
   WATER_DAMAGE: { type: 'percentage', value: 35 },
   ICLOUD_LOCKED: { type: 'percentage', value: 90 },
   CARRIER_LOCKED: { type: 'fixed', value: 50 },
+}
+
+let _deductionSettingsCache: { value: Record<string, DeductionRule>; expiresAt: number } | null = null
+
+async function getDeductionSettings(supabaseClient?: Awaited<ReturnType<typeof createServerSupabaseClient>>): Promise<Record<string, DeductionRule>> {
+  if (_deductionSettingsCache && Date.now() < _deductionSettingsCache.expiresAt) {
+    return _deductionSettingsCache.value
+  }
+  try {
+    const supabase = supabaseClient || await createServerSupabaseClient()
+    const { data } = await supabase
+      .from('pricing_settings')
+      .select('setting_value')
+      .eq('setting_key', 'functional_deductions')
+      .single()
+    if (data?.setting_value) {
+      const parsed = JSON.parse(data.setting_value) as Record<string, DeductionRule>
+      _deductionSettingsCache = { value: parsed, expiresAt: Date.now() + 5 * 60 * 1000 }
+      return parsed
+    }
+  } catch {
+    // Fall through to defaults on any error
+  }
+  return FUNCTIONAL_DEDUCTIONS
 }
 
 const round2 = (n: number) => Math.round(Math.max(n, 0) * 100) / 100
@@ -81,15 +108,15 @@ const WHOLESALE_TO_TRADE_FACTOR = 0.55
 /** Critical issues that make device "broken" — use 50% of good rule (Brian's algorithm) */
 const CRITICAL_BROKEN_ISSUES = ['SCREEN_DEAD', 'ICLOUD_LOCKED', 'WATER_DAMAGE', 'BATTERY_DEAD']
 
-/** Maps triage/display issue labels to FUNCTIONAL_DEDUCTIONS keys. Logs unmapped issues. */
-function mapIssuesToDeductionKeys(issues: string[]): string[] {
+/** Maps triage/display issue labels to deduction keys. Logs unmapped issues. */
+function mapIssuesToDeductionKeys(issues: string[], deductions: Record<string, DeductionRule> = FUNCTIONAL_DEDUCTIONS): string[] {
   const keys: string[] = []
   for (const issue of issues) {
-    if (FUNCTIONAL_DEDUCTIONS[issue]) {
+    if (deductions[issue]) {
       keys.push(issue)
     } else {
       const mapped = ISSUE_TO_DEDUCTION_KEY[issue]
-      if (mapped && FUNCTIONAL_DEDUCTIONS[mapped]) {
+      if (mapped && deductions[mapped]) {
         keys.push(mapped)
       } else if (!mapped) {
         console.warn(`[Pricing] Issue has no matching deduction: "${issue}"`)
@@ -1055,11 +1082,12 @@ export class PricingService {
       let adjustedPrice = anchorIsBaseNormalized ? anchorPrice * conditionMultiplier : anchorPrice
 
       // Step 4: Apply functional deductions (map triage labels to deduction keys)
+      const deductions = await getDeductionSettings(supabase)
       let totalDeductions = 0
-      const deductionKeys = mapIssuesToDeductionKeys(normalizedInput.issues || [])
+      const deductionKeys = mapIssuesToDeductionKeys(normalizedInput.issues || [], deductions)
       if (deductionKeys.length > 0) {
         for (const issue of deductionKeys) {
-          const deduction = FUNCTIONAL_DEDUCTIONS[issue]
+          const deduction = deductions[issue]
           if (deduction) {
             if (deduction.type === 'percentage') {
               const amt = adjustedPrice * (deduction.value / 100)
@@ -1860,10 +1888,11 @@ export class PricingService {
       calculatedPrice = afterCondition
 
       const issuesApplied: string[] = []
-      const deductionKeys = mapIssuesToDeductionKeys(input.issues || [])
+      const deductions2 = await getDeductionSettings(supabase)
+      const deductionKeys = mapIssuesToDeductionKeys(input.issues || [], deductions2)
       if (deductionKeys.length > 0) {
         for (const issue of deductionKeys) {
-          const deduction = FUNCTIONAL_DEDUCTIONS[issue]
+          const deduction = deductions2[issue]
           if (deduction) {
             issuesApplied.push(issue)
             if (deduction.type === 'percentage') {

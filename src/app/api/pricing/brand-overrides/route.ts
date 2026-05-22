@@ -6,26 +6,17 @@
 // DELETE — remove a brand override (by ?make=Apple)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 export const dynamic = 'force-dynamic'
 
-async function requireAdmin(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Unauthorized', status: 401 }
-  const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-  if (!profile || profile.role !== 'admin') return { error: 'Forbidden — admin only', status: 403 }
-  return { userId: user.id }
-}
-
 export async function GET(_request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-    if (!profile || ['customer', 'vendor'].includes(profile.role)) {
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
+    if (['customer', 'vendor'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -43,9 +34,10 @@ export async function GET(_request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const auth = await requireAdmin(supabase)
-    if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { profile } = auth
+    if (profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
 
     const body = await request.json()
     const make = (body.make || '').trim()
@@ -80,9 +72,10 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const auth = await requireAdmin(supabase)
-    if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { profile } = auth
+    if (profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
 
     const make = request.nextUrl.searchParams.get('make')
     if (!make) return NextResponse.json({ error: 'make query param required' }, { status: 400 })

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
@@ -21,24 +21,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin can bulk delete
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
-    }
-
     const body = await request.json().catch(() => ({}))
     const { order_ids } = body || {}
 
@@ -67,10 +54,10 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        await OrderService.deleteOrder(orderId, user.id)
+        await OrderService.deleteOrder(orderId, authUser.id)
 
         await AuditService.logDelete(
-          user.id,
+          authUser.id,
           'order',
           orderId,
           { order_number: order.order_number, status: order.status },

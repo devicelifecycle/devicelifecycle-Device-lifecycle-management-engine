@@ -7,7 +7,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import { OrderService } from '@/services/order.service'
@@ -39,19 +39,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Admin or COE manager required' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const orderId = (await params).id
 
@@ -156,7 +146,7 @@ export async function POST(
     const updatedOrder = await OrderService.transitionOrder(
       orderId,
       'quoted',
-      user.id,
+      authUser.id,
       'Post-triage quote generated from actual device condition'
     )
 

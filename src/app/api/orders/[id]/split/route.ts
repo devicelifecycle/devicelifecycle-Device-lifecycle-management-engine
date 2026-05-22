@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { safeErrorMessage } from '@/lib/utils'
 import { OrderSplitService } from '@/services/order-split.service'
 import type { OrderSplitConfig } from '@/types'
@@ -15,24 +15,11 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Role-based access control
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     // Customers cannot view split details
     if (profile.role === 'customer') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -65,24 +52,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin and coe_manager can split orders
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden — only admins and COE managers can split orders' }, { status: 403 })
-    }
-
     const body = await request.json()
 
     // Validate request body
@@ -100,7 +74,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       notes: body.notes,
     }
 
-    const subOrders = await OrderSplitService.executeOrderSplit(config, user.id)
+    const subOrders = await OrderSplitService.executeOrderSplit(config, authUser.id)
 
     return NextResponse.json({
       message: `Order split into ${subOrders.length} sub-orders`,
@@ -117,25 +91,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin and coe_manager can undo splits
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    await OrderSplitService.undoSplit((await params).id, user.id)
+    await OrderSplitService.undoSplit((await params).id, authUser.id)
 
     return NextResponse.json({ message: 'Order split has been undone' })
   } catch (error) {

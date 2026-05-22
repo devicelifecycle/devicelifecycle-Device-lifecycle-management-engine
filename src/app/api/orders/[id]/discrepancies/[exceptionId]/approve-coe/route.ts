@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { ExceptionService } from '@/services/exception.service'
 
 export const dynamic = 'force-dynamic'
@@ -13,12 +13,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string; exceptionId: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const { id: orderId, exceptionId } = await params
 
@@ -34,19 +31,6 @@ export async function POST(
     const { notes } = body
 
     // Verify user is COE
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['coe_manager', 'coe_tech'].includes(profile.role)) {
-      return NextResponse.json(
-        { error: 'Only COE can approve exceptions' },
-        { status: 403 }
-      )
-    }
-
     // Verify exception belongs to order
     const { data: exception } = await supabase
       .from('order_exceptions')
@@ -67,7 +51,7 @@ export async function POST(
     }
 
     // Approve exception
-    const updated = await ExceptionService.approveByCOE(exceptionId, user.id, notes)
+    const updated = await ExceptionService.approveByCOE(exceptionId, authUser.id, notes)
 
     return NextResponse.json(updated, { status: 200 })
   } catch (error) {

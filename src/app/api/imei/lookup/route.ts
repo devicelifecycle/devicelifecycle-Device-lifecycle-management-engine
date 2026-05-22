@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { safeErrorMessage } from '@/lib/utils'
 import { IMEIService } from '@/services/imei.service'
 export const dynamic = 'force-dynamic'
@@ -11,21 +11,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile || !['admin', 'coe_manager', 'coe_tech'].includes(userProfile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q') || searchParams.get('query') || ''
@@ -40,7 +28,7 @@ export async function GET(request: NextRequest) {
         .eq('id', vendorId)
         .single()
       if (!vendor) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
-      if (userProfile.role === 'coe_tech' && vendor.organization_id !== userProfile.organization_id) {
+      if (profile.role === 'coe_tech' && vendor.organization_id !== profile.organization_id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
       const records = await IMEIService.getByVendor(vendorId)
@@ -55,7 +43,7 @@ export async function GET(request: NextRequest) {
         .eq('id', customerId)
         .single()
       if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
-      if (userProfile.role === 'coe_tech' && customer.organization_id !== userProfile.organization_id) {
+      if (profile.role === 'coe_tech' && customer.organization_id !== profile.organization_id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
       const records = await IMEIService.getByCustomer(customerId)
@@ -79,20 +67,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile } = auth
 
-    // Check role
-    const { data: user } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', authUser.id)
-      .single()
-
-    if (!user || !['admin', 'coe_manager', 'coe_tech'].includes(user.role)) {
+    if (!['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

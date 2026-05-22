@@ -17,7 +17,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { matchDeviceFromCsv } from '@/lib/device-match'
 import { normalizeTradeCondition } from '@/lib/condition'
 import type { Device } from '@/types'
@@ -439,14 +439,12 @@ export type TradeTemplateSummary = {
 // ── Main handler ─────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
-    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-    const role = profile?.role ?? 'customer'
     const allowedRoles = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer']
-    if (!allowedRoles.includes(role)) {
+    if (!allowedRoles.includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

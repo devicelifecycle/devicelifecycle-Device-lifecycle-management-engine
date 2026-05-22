@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
 import { NotificationService } from '@/services/notification.service'
@@ -21,24 +21,11 @@ export async function POST(request: NextRequest) {
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only internal roles
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const body = await request.json()
     const { order_ids, to_status, notes } = body
 
@@ -80,10 +67,10 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        await OrderService.transitionOrder(orderId, to_status as OrderStatus, user.id, notes)
+        await OrderService.transitionOrder(orderId, to_status as OrderStatus, authUser.id, notes)
 
         await AuditService.logStatusChange(
-          user.id, 'order', orderId,
+          authUser.id, 'order', orderId,
           currentOrder.status, to_status,
           { notes, order_number: currentOrder.order_number, bulk: true }
         )

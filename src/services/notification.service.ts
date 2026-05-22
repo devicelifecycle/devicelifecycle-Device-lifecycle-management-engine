@@ -24,6 +24,12 @@ export class NotificationService {
 
   private static async sendSmsIfConfigured(phone: string | undefined | null, message: string): Promise<boolean> {
     if (!phone || !EmailService.isTwilioConfigured()) return false
+    // Require at least 10 digits (North American) — rejects obviously invalid numbers
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 10) {
+      console.warn(`[NotificationService] Phone number too short to send SMS: "${phone}"`)
+      return false
+    }
 
     try {
       return await EmailService.sendSMS(phone, message)
@@ -400,7 +406,7 @@ export class NotificationService {
     const seenPhones = new Set<string>()
     const uniqueSmsTargets = smsTargets.filter(target => {
       const key = target.phone.replace(/\D/g, '')
-      if (!key || seenPhones.has(key)) return false
+      if (!key || key.length < 10 || seenPhones.has(key)) return false
       seenPhones.add(key)
       return true
     })

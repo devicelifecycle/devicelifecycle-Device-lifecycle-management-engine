@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 const CONDITION_MULTIPLIERS: Record<string, number> = {
@@ -44,23 +44,13 @@ function addVariation(price: number, percent: number): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { profile } = auth
     const serviceClient = createServiceRoleClient()
 
-    // Verify admin role
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -236,22 +226,12 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, profile } = auth
 
-    // Verify admin role
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -310,23 +290,13 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { profile } = auth
     const serviceClient = createServiceRoleClient()
 
-    // Verify admin role
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { PricingService } from '@/services/pricing.service'
 import { updateMarketPriceSchema } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
@@ -14,18 +14,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     if (!['admin', 'coe_manager'].includes(profile?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -40,7 +31,7 @@ export async function PATCH(
       )
     }
 
-    const entry = await PricingService.updateMarketPrice((await params).id, validation.data as any, user.id)
+    const entry = await PricingService.updateMarketPrice((await params).id, validation.data as any, authUser.id)
     return NextResponse.json(entry)
   } catch (error) {
     console.error('Error updating market price:', error)
@@ -53,18 +44,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     if (!['admin', 'coe_manager'].includes(profile?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

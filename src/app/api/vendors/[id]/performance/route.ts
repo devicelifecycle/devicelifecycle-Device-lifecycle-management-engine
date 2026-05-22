@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -19,12 +19,11 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid vendor ID' }, { status: 400 })
     }
 
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
-    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-    if (!profile || !['admin', 'coe_manager', 'sales'].includes(profile.role)) {
+    if (!['admin', 'coe_manager', 'sales'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 interface InternationalPriceRow {
@@ -47,23 +47,13 @@ function normalizeRegion(input?: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile } = auth
     const serviceClient = createServiceRoleClient()
 
-    // Verify admin role
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -91,7 +81,7 @@ export async function POST(request: NextRequest) {
         region: region ? normalizeRegion(region) : undefined,
         country_code: country_code,
         status: 'processing',
-        created_by_id: user.id,
+        created_by_id: authUser.id,
       })
       .select()
       .single()
@@ -162,7 +152,7 @@ export async function POST(request: NextRequest) {
           upload_batch_id: upload?.id,
           effective_date: new Date().toISOString().split('T')[0],
           is_active: true,
-          created_by_id: user.id,
+          created_by_id: authUser.id,
         }, {
           onConflict: 'device_id,storage,condition,region,country_code,effective_date',
           ignoreDuplicates: false,
@@ -211,22 +201,12 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, profile } = auth
 
-    // Verify admin role
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    if (!['admin', 'coe_manager', 'sales'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

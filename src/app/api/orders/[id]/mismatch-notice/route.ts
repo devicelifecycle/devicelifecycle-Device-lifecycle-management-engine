@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { AuditService } from '@/services/audit.service'
@@ -9,22 +9,9 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile || !['admin', 'coe_manager'].includes(userProfile.role)) {
-      return NextResponse.json({ error: 'Only administrators and CoE managers can send mismatch notices' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const { data: order } = await supabase
       .from('orders')
@@ -74,7 +61,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
           order_id: order.id,
           order_number: order.order_number,
           mismatched_count: mismatchedItems.length,
-          sent_by: user.id,
+          sent_by: authUser.id,
         },
       })
     }
@@ -134,7 +121,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     await AuditService.log({
-      user_id: user.id,
+      user_id: authUser.id,
       action: 'price_change',
       entity_type: 'order',
       entity_id: order.id,

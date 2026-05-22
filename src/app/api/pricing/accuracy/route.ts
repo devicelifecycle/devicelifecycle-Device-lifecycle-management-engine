@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { PricingModelRegistry } from '@/models/pricing'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -23,13 +23,9 @@ interface AccuracyMetrics {
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { data: profile } = await supabase
-      .from('users').select('role').eq('id', user.id).single()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     if (!profile || ['customer', 'vendor'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

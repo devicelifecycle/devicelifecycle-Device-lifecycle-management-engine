@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { ExceptionService } from '@/services/exception.service'
 
 export const dynamic = 'force-dynamic'
@@ -13,12 +13,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const orderId = (await params).id
     if (!orderId) {
@@ -37,20 +34,10 @@ export async function GET(
     }
 
     // Check authorization
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
-
     // Authorization check
     const isAdmin = profile.role === 'admin'
     const isCOE = profile.role === 'coe_manager' || profile.role === 'coe_tech'
-    const isOrderCreator = order.created_by_id === user.id
+    const isOrderCreator = order.created_by_id === authUser.id
     const isCustomer = profile.role === 'customer'
 
     if (!isAdmin && !isCOE && !isOrderCreator && !isCustomer) {

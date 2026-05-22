@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { ExceptionService } from '@/services/exception.service'
 
 export const dynamic = 'force-dynamic'
@@ -13,12 +13,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string; exceptionId: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const { id: orderId, exceptionId } = await params
 
@@ -34,19 +31,6 @@ export async function POST(
     const { notes, override = false } = body
 
     // Verify user is Admin
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Only admin can approve exceptions' },
-        { status: 403 }
-      )
-    }
-
     // Verify exception belongs to order
     const { data: exception } = await supabase
       .from('order_exceptions')
@@ -79,7 +63,7 @@ export async function POST(
     // Approve exception
     const updated = await ExceptionService.approveByAdmin(
       exceptionId,
-      user.id,
+      authUser.id,
       override,
       notes
     )

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { PricingService } from '@/services/pricing.service'
 import { createPricingTableSchema } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
@@ -11,24 +11,11 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only internal roles can view pricing tables
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || ['customer', 'vendor'].includes(profile?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const searchParams = request.nextUrl.searchParams
     const deviceId = searchParams.get('device_id') || undefined
 
@@ -45,24 +32,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Check admin role
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const body = await request.json()
     const validationResult = createPricingTableSchema.safeParse(body)
     if (!validationResult.success) {
@@ -78,7 +52,7 @@ export async function POST(request: NextRequest) {
       is_active: true
     }
 
-    const entry = await PricingService.createPricingEntry(pricingData, user.id)
+    const entry = await PricingService.createPricingEntry(pricingData, authUser.id)
     return NextResponse.json(entry, { status: 201 })
   } catch (error) {
     console.error('Error creating pricing entry:', error)

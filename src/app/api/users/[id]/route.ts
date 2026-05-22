@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { updateUserSchema } from '@/lib/validations'
 import { isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -14,53 +14,39 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
     if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
     }
 
-    const { data: profile } = await supabase
+    const { data: targetUser } = await supabase
       .from('users')
       .select('*')
       .eq('id', (await params).id)
       .single()
 
-    if (!profile) {
+    if (!targetUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Fetch current user's profile for authorization
-    const { data: currentUserProfile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!currentUserProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
-
     // Users can always view their own profile
-    if (user.id === (await params).id) {
-      return NextResponse.json(profile)
+    if (authUser.id === (await params).id) {
+      return NextResponse.json(targetUser)
     }
 
-    const { role, organization_id } = currentUserProfile
+    const { role, organization_id } = profile
 
     // Admin and coe_manager can view all users
     if (role === 'admin' || role === 'coe_manager') {
-      return NextResponse.json(profile)
+      return NextResponse.json(targetUser)
     }
 
     // COE tech and sales can view users in their organization
     if (role === 'coe_tech' || role === 'sales') {
-      if (profile.organization_id === organization_id) {
-        return NextResponse.json(profile)
+      if (targetUser.organization_id === organization_id) {
+        return NextResponse.json(targetUser)
       }
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
@@ -84,22 +70,13 @@ export async function PATCH(
     if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
     }
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Check admin role
-    const { data: currentProfile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    const isSelf = user.id === (await params).id
-    if (!isSelf && currentProfile?.role !== 'admin') {
+    const isSelf = authUser.id === (await params).id
+    if (!isSelf && profile?.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -118,12 +95,12 @@ export async function PATCH(
     }
 
     // Non-admin users cannot change their own role or secondary_role
-    if (isSelf && currentProfile?.role !== 'admin') {
+    if (isSelf && profile?.role !== 'admin') {
       delete updateData.role
       delete updateData.secondary_role
     }
     // Only admins can set secondary_role on any user
-    if (currentProfile?.role !== 'admin') {
+    if (profile?.role !== 'admin') {
       delete updateData.secondary_role
     }
 
@@ -155,25 +132,12 @@ export async function DELETE(
     if (!isValidUUID(targetId)) {
       return NextResponse.json({ error: 'Invalid user ID format' }, { status: 400 })
     }
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: currentProfile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (currentProfile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Prevent self-deletion
-    if (targetId === user.id) {
+    if (targetId === authUser.id) {
       return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })
     }
 

@@ -7,7 +7,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,12 +89,11 @@ function parseDiagnostics(results: Array<{ headerKey: string; status: string; fu
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
-    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-    if (!profile || !['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
+    if (!['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

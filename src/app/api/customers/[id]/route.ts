@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { CustomerService } from '@/services/customer.service'
 import { updateCustomerSchema } from '@/lib/validations'
 import { isValidUUID } from '@/lib/utils'
@@ -18,30 +18,16 @@ export async function GET(
     if (!isValidUUID((await params).id)) {
       return NextResponse.json({ error: 'Invalid customer ID format' }, { status: 400 })
     }
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const customer = await CustomerService.getCustomerById((await params).id)
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
 
-    // Fetch current user's profile for authorization
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
-
-    const { role, organization_id } = userProfile
+    const { role, organization_id } = profile
 
     // Internal roles and sales can view all customers
     if (role === 'admin' || role === 'coe_manager' || role === 'coe_tech' || role === 'sales') {
@@ -82,23 +68,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Fetch current user's profile for authorization
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Fetch the customer for authorization check
     const customer = await CustomerService.getCustomerById((await params).id)
@@ -106,7 +78,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
 
-    const { role, organization_id } = userProfile
+    const { role, organization_id } = profile
 
     // Determine if user can update this customer
     const canUpdate =
@@ -143,26 +115,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Fetch current user's profile for authorization
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin and coe_manager can delete customers
-    if (userProfile.role !== 'admin' && userProfile.role !== 'coe_manager') {
+    if (profile.role !== 'admin' && profile.role !== 'coe_manager') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 

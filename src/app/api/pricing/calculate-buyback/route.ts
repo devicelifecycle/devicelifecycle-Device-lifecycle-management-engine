@@ -6,7 +6,8 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import type { AuthContext } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import type { DeviceCondition } from '@/types'
@@ -32,7 +33,7 @@ const CONDITION_MULTIPLIERS: Record<string, number> = {
  * Returns { price, source } or null when nothing found.
  */
 async function estimatePriceFromInternalData(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: AuthContext['supabase'],
   deviceId: string,
   storage: string,
   condition: DeviceCondition
@@ -180,22 +181,9 @@ function addMonths(date: Date, months: number): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || ['customer', 'vendor'].includes(profile?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const body = await request.json()
     const items = Array.isArray(body.items) ? body.items : body.items ? [body.items] : []

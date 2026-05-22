@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { AuditService } from '@/services/audit.service'
 import { NotificationService } from '@/services/notification.service'
 import { addManualMismatchSchema } from '@/lib/validations'
@@ -30,25 +30,9 @@ function calculatePriceAdjustment(
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json(
-        { error: 'Only administrators and CoE managers can add mismatched devices' },
-        { status: 403 }
-      )
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const { data: order } = await supabase
       .from('orders')
@@ -144,7 +128,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           actual_condition: actual,
           quoted_price: quotedPrice,
           triage_status: exceptionRequired ? 'needs_exception' : 'complete',
-          metadata: { source: 'admin_added_mismatch', added_by: user.id },
+          metadata: { source: 'admin_added_mismatch', added_by: authUser.id },
         })
         .select('id')
         .single()
@@ -172,7 +156,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           exception_reason: exceptionRequired
             ? `Admin-added mismatch: claimed ${claimed}, actual ${actual}. Price adjustment: $${priceAdjustment.toFixed(2)}.`
             : null,
-          triaged_by_id: user.id,
+          triaged_by_id: authUser.id,
           triaged_at: new Date().toISOString(),
           notes: req.notes || 'Added manually by admin',
         })
@@ -265,7 +249,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     await AuditService.log({
-      user_id: user.id,
+      user_id: authUser.id,
       action: 'price_change',
       entity_type: 'order',
       entity_id: (await params).id,

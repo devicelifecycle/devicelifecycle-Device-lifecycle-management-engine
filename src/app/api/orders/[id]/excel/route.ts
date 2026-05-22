@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import * as XLSX from 'xlsx'
 export const dynamic = 'force-dynamic'
@@ -21,15 +21,12 @@ function formatDate(s?: string | null): string {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const order = await OrderService.getOrderById((await params).id)
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-
-    const { data: profile } = await supabase.from('users').select('role, organization_id').eq('id', user.id).single()
-    if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const { role, organization_id } = profile
     const isInternalRole = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(role)

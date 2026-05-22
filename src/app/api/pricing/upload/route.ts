@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { sanitizeCsvCell, safeErrorMessage } from '@/lib/utils'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { parse } from 'csv-parse/sync'
@@ -30,22 +30,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
-    const supabase = await createServerSupabaseClient()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile } = auth
 
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check if user has admin role
-    const { data: userData } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!userData || !['admin', 'coe_manager'].includes(userData.role)) {
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
@@ -227,15 +216,11 @@ function detectCategory(model: string): string {
 // GET - Download current pricing as CSV
 export async function GET(_request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, profile } = auth
 
-    const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

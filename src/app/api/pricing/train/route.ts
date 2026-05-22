@@ -5,7 +5,7 @@
 // Trains from order_items, imei_records, sales_history
 
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { PricingTrainingService } from '@/services/pricing-training.service'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -13,22 +13,9 @@ export const dynamic = 'force-dynamic'
 
 export async function POST() {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile && !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden. Admin or COE manager required.' }, { status: 403 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     const result = await PricingTrainingService.train()
 

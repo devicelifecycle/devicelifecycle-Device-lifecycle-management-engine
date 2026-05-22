@@ -8,7 +8,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { VendorService } from '@/services/vendor.service'
 import { NotificationService } from '@/services/notification.service'
 import { OrderService } from '@/services/order.service'
@@ -22,24 +22,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin and coe_manager can accept/reject bids
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || !['admin', 'coe_manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const body = await request.json()
     const { status, cpo_markup_percent } = body
 
@@ -194,7 +181,7 @@ export async function PATCH(
     if (status === 'accepted' && order && ['submitted', 'sourcing'].includes(order.status)) {
       try {
         // Transition order to 'quoted' — this sets quoted_at, quote_expires_at
-        await OrderService.transitionOrder(order.id, 'quoted', user.id, 'Vendor bid accepted — quote generated for customer')
+        await OrderService.transitionOrder(order.id, 'quoted', authUser.id, 'Vendor bid accepted — quote generated for customer')
 
         // Send customer notification with marked-up quote
         const customerAmount = order.quoted_amount || order.total_amount || 0

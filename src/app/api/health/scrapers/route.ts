@@ -1,27 +1,16 @@
 import { NextResponse } from 'next/server'
 import { SCRAPER_PROVIDERS, getProviderSettingsKeys } from '@/lib/scrapers/rollout-metadata'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, profile } = auth
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || ['customer', 'vendor'].includes(profile?.role)) {
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -44,7 +33,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch scraper health settings' }, { status: 500 })
     }
 
-    const settings = Object.fromEntries((data || []).map((row) => [row.setting_key, row.setting_value]))
+    const settings = Object.fromEntries((data || []).map((row: { setting_key: string; setting_value: string }) => [row.setting_key, row.setting_value]))
     const providers = SCRAPER_PROVIDERS.map((provider) => {
       const prefix = provider.settingsPrefix
       return {

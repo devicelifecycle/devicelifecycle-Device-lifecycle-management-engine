@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { PricingService } from '@/services/pricing.service'
 import { createMarketPriceSchema } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
@@ -11,24 +11,11 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only internal roles can view market prices
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || ['customer', 'vendor'].includes(profile?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const deviceId = request.nextUrl.searchParams.get('device_id') || undefined
     const data = await PricingService.getMarketPrices(deviceId)
     return NextResponse.json({ data })
@@ -40,18 +27,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    const auth = await requireAuth()
+    if (!auth) return unauthorized()
+    const { supabase, authUser, profile, effectiveRole } = auth
 
     if (!['admin', 'coe_manager'].includes(profile?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -66,7 +44,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const entry = await PricingService.createMarketPrice(validation.data as any, user.id)
+    const entry = await PricingService.createMarketPrice(validation.data as any, authUser.id)
     return NextResponse.json(entry, { status: 201 })
   } catch (error) {
     console.error('Error creating market price:', error)
