@@ -266,7 +266,12 @@ type UniverCellModel = {
 }
 
 function normalizeText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return value
+    .toLowerCase()
+    .replace(/\+/g, ' plus ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function normalizeStorage(value: string): string {
@@ -366,6 +371,7 @@ function selectBestModel(device: DeviceToScrape, models: UniverCellModel[]): { m
       }
     })
     .filter((entry): entry is { model: UniverCellModel; price: number; score: number } => entry !== null)
+    .filter((entry) => entry.score >= 6)
     .sort((left, right) => right.score - left.score)
 
   const best = candidates[0]
