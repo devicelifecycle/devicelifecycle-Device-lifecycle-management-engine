@@ -125,6 +125,7 @@ export default function CustomerRequestsPage() {
   }
 
   const matchedCount = parsedRows.filter(r => r.device_id).length
+  const autoAddedCount = parsedRows.filter(r => r.match_status === 'auto_added').length
 
   return (
     <div className="space-y-6">
@@ -184,8 +185,11 @@ export default function CustomerRequestsPage() {
               <div className={`rounded-md border px-4 py-3 text-sm ${matchedCount === parsedRows.length ? 'border-green-200 bg-green-50/40 text-green-700 dark:border-green-800 dark:bg-green-950/20 dark:text-green-400' : 'border-amber-200 bg-amber-50/40 text-amber-700 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-400'}`}>
                 <span className="font-semibold">{parsedSummary.total_devices} devices detected</span>
                 {parsedSummary.total_value != null && <span> · Estimated value: {formatCurrency(parsedSummary.total_value)}</span>}
+                {autoAddedCount > 0 && (
+                  <span className="ml-1">· {autoAddedCount} new device{autoAddedCount !== 1 ? 's' : ''} added to catalog automatically</span>
+                )}
                 {matchedCount < parsedRows.length && (
-                  <span className="ml-1">· {parsedRows.length - matchedCount} SKU{parsedRows.length - matchedCount !== 1 ? 's' : ''} unrecognized — only matched devices will be submitted</span>
+                  <span className="ml-1">· {parsedRows.length - matchedCount} SKU{parsedRows.length - matchedCount !== 1 ? 's' : ''} could not be identified and will be skipped</span>
                 )}
               </div>
 

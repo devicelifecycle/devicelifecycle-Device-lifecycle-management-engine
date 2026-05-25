@@ -18,6 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { matchDeviceFromCsv } from '@/lib/device-match'
 import { normalizeTradeCondition } from '@/lib/condition'
 import type { Device } from '@/types'
@@ -344,6 +345,70 @@ function parsePriceCell(value: string | undefined | null): number | null {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+// ── Infer device category from make/model string ──────────────────────────────
+function inferDeviceCategory(make: string, model: string): string {
+  const lower = `${make} ${model}`.toLowerCase()
+  if (lower.match(/\b(ipad|galaxy tab|surface|tab s\d|tab a\d)\b/)) return 'tablet'
+  if (lower.match(/\b(macbook|thinkpad|laptop|notebook|xps|chromebook)\b/)) return 'laptop'
+  return 'smartphone'
+}
+
+// ── Auto-add unmatched devices to device_catalog via service role ─────────────
+// Runs after CSV matching. For each (make, model) not found in the catalog,
+// inserts a placeholder device entry so the order item can reference a device_id.
+async function autoAddUnmatched(outputRows: TradeTemplateRow[]): Promise<TradeTemplateRow[]> {
+  const serviceRole = createServiceRoleClient()
+
+  // Group unmatched rows by (make, model) to avoid duplicate inserts
+  const groups = new Map<string, { make: string; model: string; indices: number[] }>()
+  outputRows.forEach((row, i) => {
+    if (row.device_id || !row.make) return
+    const key = `${row.make.toLowerCase()}|${row.model.toLowerCase()}`
+    const entry = groups.get(key)
+    if (entry) entry.indices.push(i)
+    else groups.set(key, { make: row.make, model: row.model, indices: [i] })
+  })
+
+  if (groups.size === 0) return outputRows
+
+  const result = [...outputRows]
+  for (const { make, model, indices } of groups.values()) {
+    try {
+      let deviceId: string | null = null
+
+      const { data: inserted, error: insertErr } = await serviceRole
+        .from('device_catalog')
+        .insert({ make, model, category: inferDeviceCategory(make, model), is_active: true, specifications: {} })
+        .select('id')
+        .single()
+
+      if (inserted?.id) {
+        deviceId = inserted.id
+      } else if ((insertErr as { code?: string } | null)?.code === '23505') {
+        // Unique conflict — device exists under a slightly different name; find it
+        const { data: existing } = await serviceRole
+          .from('device_catalog')
+          .select('id')
+          .ilike('make', make)
+          .ilike('model', model)
+          .limit(1)
+          .single()
+        if (existing?.id) deviceId = existing.id
+      }
+
+      if (deviceId) {
+        for (const idx of indices) {
+          result[idx] = { ...result[idx], device_id: deviceId, match_status: 'auto_added' as const }
+        }
+      }
+    } catch (e) {
+      console.error('[parse-trade-template] auto-add device failed:', make, model, e)
+    }
+  }
+
+  return result
+}
+
 // LLM fallback — ask Groq to infer columns when confidence is low
 async function inferColumnsWithLLM(
   headers: string[],
@@ -421,7 +486,7 @@ export type TradeTemplateRow = {
   serials: string[]
   imeis: string[]
   device_id: string | null
-  match_status: 'matched' | 'catalog_matched' | 'not_in_catalog'
+  match_status: 'matched' | 'catalog_matched' | 'not_in_catalog' | 'auto_added'
   row_error?: string
 }
 
@@ -565,14 +630,15 @@ export async function POST(request: NextRequest) {
             match_status: (device ? 'matched' : 'not_in_catalog') as 'matched' | 'catalog_matched' | 'not_in_catalog',
           }
         })
-        const matched = outputRows.filter(r => r.match_status === 'matched').length
-        const totalDevices = outputRows.reduce((s, r) => s + r.quantity, 0)
+        const finalRows = await autoAddUnmatched(outputRows)
+        const matched = finalRows.filter(r => r.device_id).length
+        const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)
         return NextResponse.json({
-          rows: outputRows,
+          rows: finalRows,
           summary: {
             total_devices: totalDevices,
             matched,
-            unmatched: outputRows.length - matched,
+            unmatched: finalRows.length - matched,
             total_value: null,
             format_type: 'batch',
             detected_columns: { 'pivot': 'transposed' },
@@ -783,16 +849,17 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const matched = outputRows.filter(r => r.match_status === 'matched').length
-    const totalDevices = outputRows.reduce((s, r) => s + r.quantity, 0)
-    const totalValue = outputRows.some(r => r.unit_price != null)
-      ? outputRows.reduce((s, r) => s + (r.unit_price ?? 0) * r.quantity, 0)
+    const finalRows = await autoAddUnmatched(outputRows)
+    const matched = finalRows.filter(r => r.device_id).length
+    const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)
+    const totalValue = finalRows.some(r => r.unit_price != null)
+      ? finalRows.reduce((s, r) => s + (r.unit_price ?? 0) * r.quantity, 0)
       : null
 
     const summary: TradeTemplateSummary = {
       total_devices: totalDevices,
       matched,
-      unmatched: outputRows.length - matched,
+      unmatched: finalRows.length - matched,
       total_value: totalValue ? Math.round(totalValue * 100) / 100 : null,
       format_type: formatType,
       detected_columns: detectedColumns,
@@ -800,7 +867,7 @@ export async function POST(request: NextRequest) {
       sheet_parsed: sheetParsed,
     }
 
-    return NextResponse.json({ rows: outputRows, summary, available_sheets: availableSheets })
+    return NextResponse.json({ rows: finalRows, summary, available_sheets: availableSheets })
   } catch (err) {
     console.error('[parse-trade-template]', err)
     return NextResponse.json({ error: 'Failed to parse file' }, { status: 500 })
