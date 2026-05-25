@@ -41,8 +41,10 @@ export class DeviceService {
       .eq('is_active', true)
 
     if (search) {
-      const s = sanitizeSearchInput(search)
-      query = query.or(`make.ilike.%${s}%,model.ilike.%${s}%`)
+      const tokens = sanitizeSearchInput(search).split(/\s+/).filter(Boolean)
+      for (const token of tokens) {
+        query = query.or(`make.ilike.%${token}%,model.ilike.%${token}%`)
+      }
     }
 
     if (category) {
@@ -166,12 +168,15 @@ export class DeviceService {
   static async searchDevices(query: string, limit = 10): Promise<Device[]> {
     const supabase = await createServerSupabaseClient()
 
-    const { data, error } = await supabase
+    const tokens = sanitizeSearchInput(query).split(/\s+/).filter(Boolean)
+    let dbQuery = supabase
       .from('device_catalog')
       .select('id, make, model, category, specifications')
       .eq('is_active', true)
-      .or(`make.ilike.%${sanitizeSearchInput(query)}%,model.ilike.%${sanitizeSearchInput(query)}%`)
-      .limit(limit)
+    for (const token of tokens) {
+      dbQuery = dbQuery.or(`make.ilike.%${token}%,model.ilike.%${token}%`)
+    }
+    const { data, error } = await dbQuery.limit(limit)
 
     if (error) {
       throw new Error(error.message)
