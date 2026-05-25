@@ -54,9 +54,11 @@ export async function POST(
       }
     }
 
-    if (order.status !== 'draft') {
+    const editableStatuses = ['draft', 'submitted', 'quoted']
+    const canEditNonDraft = ['admin', 'coe_manager', 'sales'].includes(profile.role)
+    if (!editableStatuses.includes(order.status) || (order.status !== 'draft' && !canEditNonDraft)) {
       return NextResponse.json(
-        { error: 'Can only add items to draft orders' },
+        { error: 'Items can only be added to orders in draft, submitted, or quoted status' },
         { status: 400 }
       )
     }

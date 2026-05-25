@@ -191,15 +191,38 @@ export default function CustomerRequestsPage() {
 
               <div className="rounded-lg border divide-y text-sm overflow-hidden">
                 {parsedRows.map((row, idx) => (
-                  <div key={idx} className="flex items-center gap-3 px-4 py-2.5">
+                  <div key={idx} className="flex items-center gap-2 px-4 py-2.5">
                     <div className="flex-1 min-w-0">
                       <span className="font-medium">{row.make} {row.model}</span>
-                      {row.storage && <span className="ml-1 text-xs text-muted-foreground">({row.storage})</span>}
                     </div>
-                    <span className="text-xs text-muted-foreground capitalize">{row.condition}</span>
-                    <span className="text-xs tabular-nums text-muted-foreground">×{row.quantity}</span>
+                    <input
+                      type="text"
+                      value={row.storage}
+                      onChange={e => setParsedRows(prev => prev.map((r, i) => i === idx ? { ...r, storage: e.target.value } : r))}
+                      placeholder="Storage"
+                      className="w-20 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center"
+                    />
+                    <select
+                      value={row.condition}
+                      onChange={e => setParsedRows(prev => prev.map((r, i) => i === idx ? { ...r, condition: e.target.value } : r))}
+                      className="rounded border border-input bg-background px-1 py-0.5 text-xs"
+                    >
+                      {['excellent', 'good', 'fair', 'poor', 'broken'].map(c => (
+                        <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span>×</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={row.quantity}
+                        onChange={e => setParsedRows(prev => prev.map((r, i) => i === idx ? { ...r, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) } : r))}
+                        className="w-14 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center"
+                      />
+                    </div>
                     {row.unit_price != null && (
-                      <span className="text-xs tabular-nums">{formatCurrency(row.unit_price)}/unit</span>
+                      <span className="text-xs tabular-nums shrink-0">{formatCurrency(row.unit_price)}/unit</span>
                     )}
                     {row.device_id ? (
                       <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />

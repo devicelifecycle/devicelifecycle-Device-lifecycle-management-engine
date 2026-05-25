@@ -191,19 +191,39 @@ export class OrderService {
     if (search) {
       const safeSearch = sanitizeSearchInput(search)
       if (safeSearch) {
-        // Also check order_items for matching IMEI or serial_number
+        // Check order_items for matching IMEI or serial_number
         const { data: matchingItems } = await supabase
           .from('order_items')
           .select('order_id')
           .or(`imei.ilike.%${safeSearch}%,serial_number.ilike.%${safeSearch}%`)
           .limit(200)
 
+        // Also check device catalog for matching make/model (e.g. "S23", "iPhone 14")
+        const { data: matchingDevices } = await supabase
+          .from('device_catalog')
+          .select('id')
+          .or(`make.ilike.%${safeSearch}%,model.ilike.%${safeSearch}%`)
+          .limit(100)
+
+        const deviceIds = (matchingDevices || []).map((d: { id: string }) => d.id).filter(Boolean)
+        let deviceItemOrderIds: string[] = []
+        if (deviceIds.length > 0) {
+          const { data: deviceItems } = await supabase
+            .from('order_items')
+            .select('order_id')
+            .in('device_id', deviceIds)
+            .limit(300)
+          deviceItemOrderIds = (deviceItems || []).map((i: { order_id: string }) => i.order_id).filter(Boolean)
+        }
+
         const matchingOrderIds = [
-          ...new Set((matchingItems || []).map((i: { order_id: string }) => i.order_id).filter(Boolean)),
+          ...new Set([
+            ...(matchingItems || []).map((i: { order_id: string }) => i.order_id).filter(Boolean),
+            ...deviceItemOrderIds,
+          ]),
         ]
 
         if (matchingOrderIds.length > 0) {
-          // Match on order number OR on orders that contain a device with that IMEI/serial
           query = query.or(`order_number.ilike.%${safeSearch}%,id.in.(${matchingOrderIds.join(',')})`)
         } else {
           query = query.ilike('order_number', `%${safeSearch}%`)

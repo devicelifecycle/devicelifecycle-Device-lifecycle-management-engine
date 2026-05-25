@@ -7,7 +7,7 @@
 import { useState, Fragment, useEffect, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2, GitBranch, ExternalLink, Truck, Package, Shield, RotateCcw, Pencil, Check, Plus, TrendingDown, UserPlus, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2, GitBranch, ExternalLink, Truck, Package, Shield, RotateCcw, Pencil, Check, Plus, TrendingDown, UserPlus, ThumbsUp, ThumbsDown, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrder } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
@@ -206,6 +206,12 @@ export default function OrderDetailClient() {
   const [editItemFields, setEditItemFields] = useState<{ quantity: string; storage: string; condition: string; notes: string }>({ quantity: '1', storage: '', condition: 'good', notes: '' })
   const [isSavingItem, setIsSavingItem] = useState(false)
   const [isDeletingItemId, setIsDeletingItemId] = useState<string | null>(null)
+  // Add item in pricing dialog
+  const [pricingAddOpen, setPricingAddOpen] = useState(false)
+  const [pricingAddForm, setPricingAddForm] = useState({ search: '', device_id: '', deviceLabel: '', storage: '', condition: 'good', quantity: '1' })
+  const [pricingSearchResults, setPricingSearchResults] = useState<Array<{ id: string; make: string; model: string }>>([])
+  const [isSearchingPricingDevice, setIsSearchingPricingDevice] = useState(false)
+  const [isAddingPricingItem, setIsAddingPricingItem] = useState(false)
   // Create Shipment dialog
   const [shipmentDialogOpen, setShipmentDialogOpen] = useState(false)
   const [isCreatingShipment, setIsCreatingShipment] = useState(false)
@@ -556,7 +562,18 @@ export default function OrderDetailClient() {
     setItemMetadata(metadata)
     setBeatCompetitorPercent(0)
     setPricingDialogNotes(order?.notes || '')
-    setPricingItemEdits({})
+    // Pre-populate storage for items that have no stored value so saves always write it to DB
+    const initialEdits: Record<string, { storage?: string; condition?: string }> = {}
+    order?.items?.forEach(item => {
+      if (!item.storage) {
+        const derived = getStorageForItem(item)
+        if (derived) initialEdits[item.id] = { storage: derived }
+      }
+    })
+    setPricingItemEdits(initialEdits)
+    setPricingAddOpen(false)
+    setPricingAddForm({ search: '', device_id: '', deviceLabel: '', storage: '', condition: 'good', quantity: '1' })
+    setPricingSearchResults([])
     setPricingDialogOpen(true)
     if (order?.items) fetchMarketContext(order.items)
   }
@@ -719,6 +736,46 @@ export default function OrderDetailClient() {
       toast.error(err instanceof Error ? err.message : 'Failed to delete item')
     } finally {
       setIsDeletingItemId(null)
+    }
+  }
+
+  const handleSearchPricingDevice = async (search: string) => {
+    if (!search.trim()) { setPricingSearchResults([]); return }
+    setIsSearchingPricingDevice(true)
+    try {
+      const res = await fetch(`/api/devices?search=${encodeURIComponent(search)}&limit=10`)
+      if (!res.ok) return
+      const data = await res.json()
+      setPricingSearchResults((data.data || []).slice(0, 10))
+    } catch { /* ignore */ } finally {
+      setIsSearchingPricingDevice(false)
+    }
+  }
+
+  const handleAddPricingItem = async () => {
+    if (!order?.id) return
+    setIsAddingPricingItem(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_id: pricingAddForm.device_id || undefined,
+          quantity: parseInt(pricingAddForm.quantity, 10) || 1,
+          storage: pricingAddForm.storage || undefined,
+          condition: pricingAddForm.condition,
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to add item') }
+      toast.success('Item added')
+      setPricingAddOpen(false)
+      setPricingAddForm({ search: '', device_id: '', deviceLabel: '', storage: '', condition: 'good', quantity: '1' })
+      setPricingSearchResults([])
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add item')
+    } finally {
+      setIsAddingPricingItem(false)
     }
   }
 
@@ -3147,7 +3204,18 @@ export default function OrderDetailClient() {
                     return preferNext ?? preferPrev ?? ctx.conditions[0]
                   })()
               return (
-                <div key={item.id} className={`rounded-lg border p-4 space-y-3 ${highlightedPricingItemIds.includes(item.id) ? 'border-primary bg-primary/5' : ''}`}>
+                <div key={item.id} className={`rounded-lg border p-4 space-y-3 relative ${highlightedPricingItemIds.includes(item.id) ? 'border-primary bg-primary/5' : ''}`}>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteItem(item.id)}
+                    disabled={!!isDeletingItemId}
+                    title="Remove item"
+                    className="absolute top-2 right-2 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    {isDeletingItemId === item.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <X className="h-3.5 w-3.5" />}
+                  </button>
                   {/* Item header + price input + total */}
                   <div className="grid grid-cols-[1fr_auto_auto_140px] gap-4 items-end">
                     <div className="space-y-1.5">
@@ -3340,6 +3408,117 @@ export default function OrderDetailClient() {
                 </div>
               )
             })}
+          </div>
+          {/* Add item to order from pricing dialog */}
+          <div className="border-t pt-3">
+            {!pricingAddOpen ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPricingAddOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Device
+              </Button>
+            ) : (
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Add Device</p>
+                  <button
+                    type="button"
+                    onClick={() => { setPricingAddOpen(false); setPricingSearchResults([]) }}
+                    className="p-1 rounded hover:bg-muted text-muted-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Search device (e.g. iPhone 15 Pro)"
+                      value={pricingAddForm.search}
+                      onChange={e => {
+                        const v = e.target.value
+                        setPricingAddForm(prev => ({ ...prev, search: v, device_id: '', deviceLabel: '' }))
+                        handleSearchPricingDevice(v)
+                      }}
+                    />
+                    {isSearchingPricingDevice && <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />}
+                  </div>
+                  {pricingSearchResults.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
+                      {pricingSearchResults.map(d => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent"
+                          onClick={() => {
+                            const label = `${d.make} ${d.model}`
+                            setPricingAddForm(prev => ({ ...prev, search: label, device_id: d.id, deviceLabel: label }))
+                            setPricingSearchResults([])
+                          }}
+                        >
+                          {d.make} {d.model}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Storage</Label>
+                    <Input
+                      placeholder="128GB"
+                      value={pricingAddForm.storage}
+                      onChange={e => setPricingAddForm(prev => ({ ...prev, storage: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Condition</Label>
+                    <select
+                      value={pricingAddForm.condition}
+                      onChange={e => setPricingAddForm(prev => ({ ...prev, condition: e.target.value }))}
+                      className="w-full rounded border border-input bg-background px-2 py-2 text-sm"
+                    >
+                      {['excellent', 'good', 'fair', 'poor', 'broken'].map(c => (
+                        <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Quantity</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={pricingAddForm.quantity}
+                      onChange={e => setPricingAddForm(prev => ({ ...prev, quantity: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setPricingAddOpen(false); setPricingSearchResults([]) }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isAddingPricingItem}
+                    onClick={handleAddPricingItem}
+                  >
+                    {isAddingPricingItem
+                      ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      : <Plus className="h-4 w-4 mr-1" />}
+                    Add
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
           {/* Order notes — visible to customer and included in quote email */}
           <div className="pt-2 border-t space-y-1.5">
