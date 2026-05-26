@@ -227,6 +227,11 @@ export default function OrderDetailClient() {
   const [customerShipNotes, setCustomerShipNotes] = useState('')
   const [isCustomerShipping, setIsCustomerShipping] = useState(false)
 
+  // Inline order label (internal_notes used as a short customer identifier beside PO number)
+  const [labelEditing, setLabelEditing] = useState(false)
+  const [labelDraft, setLabelDraft] = useState('')
+  const [labelSaving, setLabelSaving] = useState(false)
+
   // Assign Vendor dialog state
   const [assignVendorDialogOpen, setAssignVendorDialogOpen] = useState(false)
   const [vendorsList, setVendorsList] = useState<Vendor[]>([])
@@ -776,6 +781,25 @@ export default function OrderDetailClient() {
       toast.error(err instanceof Error ? err.message : 'Failed to add item')
     } finally {
       setIsAddingPricingItem(false)
+    }
+  }
+
+  const handleSaveLabel = async () => {
+    if (!order?.id) return
+    setLabelSaving(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ internal_notes: labelDraft.trim() }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save') }
+      setLabelEditing(false)
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save label')
+    } finally {
+      setLabelSaving(false)
     }
   }
 
@@ -1531,6 +1555,36 @@ export default function OrderDetailClient() {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold whitespace-nowrap">{order.order_number}</h1>
+            {!isCustomer && (
+              labelEditing ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={labelDraft}
+                    onChange={e => setLabelDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveLabel(); if (e.key === 'Escape') setLabelEditing(false) }}
+                    onBlur={handleSaveLabel}
+                    placeholder="Add label…"
+                    maxLength={60}
+                    className="h-7 rounded border border-input bg-background px-2 text-sm font-normal w-40"
+                  />
+                  {labelSaving && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setLabelDraft(order.internal_notes || ''); setLabelEditing(true) }}
+                  className="group flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                  title="Add / edit label"
+                >
+                  {order.internal_notes
+                    ? <span className="text-base font-normal">— {order.internal_notes}</span>
+                    : <span className="text-sm opacity-0 group-hover:opacity-60 transition-opacity">+ label</span>}
+                  <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                </button>
+              )
+            )}
             <Badge variant="outline" className="capitalize">{order.type.replace('_', ' ')}</Badge>
             <StatusBadge status={order.status} label={statusConfig?.label} dot />
             {!isCustomer && order.is_sla_breached && (

@@ -549,6 +549,9 @@ export default function OrdersPage() {
                             <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
                               {order.order_number}
                             </Link>
+                            {order.internal_notes && (
+                              <span className="text-xs text-muted-foreground">— {order.internal_notes}</span>
+                            )}
                             {(order.unresolved_discrepancy_count || 0) > 0 && (
                               <Badge variant="destructive" className="h-5 px-2 text-[10px] uppercase tracking-wide">
                                 {order.unresolved_discrepancy_count} exception{order.unresolved_discrepancy_count === 1 ? '' : 's'}
