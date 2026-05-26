@@ -51,6 +51,7 @@ export default function DevicesPage() {
     year: '',
     cpu: '',
     ram: '',
+    recommended_for_recycling: 'other' as 'other' | 'recycling',
   })
 
   const fetchDevices = useCallback(async () => {
@@ -91,6 +92,7 @@ export default function DevicesPage() {
       if (form.year.trim()) specEntries.year = form.year.trim()
       if (form.cpu.trim()) specEntries.cpu = form.cpu.trim()
       if (form.ram.trim()) specEntries.ram = form.ram.trim()
+      if (form.recommended_for_recycling === 'recycling') specEntries.recommended_for_recycling = true
       const body = {
         make: form.make,
         model: form.model,
@@ -107,7 +109,7 @@ export default function DevicesPage() {
       if (!res.ok) throw new Error('Failed to create device')
       toast.success('Device added to catalog')
       setDialogOpen(false)
-      setForm({ make: '', model: '', variant: '', category: '', sku: '', storage_options: '', colors: '', year: '', cpu: '', ram: '' })
+      setForm({ make: '', model: '', variant: '', category: '', sku: '', storage_options: '', colors: '', year: '', cpu: '', ram: '', recommended_for_recycling: 'other' })
       fetchDevices()
     } catch {
       toast.error('Failed to create device')
@@ -180,14 +182,26 @@ export default function DevicesPage() {
               <DialogDescription>Add a device model to the catalog</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Brand / Make *</Label>
-                <Select value={form.make} onValueChange={v => setForm(f => ({ ...f, make: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
-                  <SelectContent>
-                    {DEVICE_BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="grid gap-4 grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Brand / Make *</Label>
+                  <Select value={form.make} onValueChange={v => setForm(f => ({ ...f, make: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
+                    <SelectContent>
+                      {DEVICE_BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Classification</Label>
+                  <Select value={form.recommended_for_recycling} onValueChange={v => setForm(f => ({ ...f, recommended_for_recycling: v as 'other' | 'recycling' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="other">All other models</SelectItem>
+                      <SelectItem value="recycling">Recommended for Recycling</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Model *</Label>
