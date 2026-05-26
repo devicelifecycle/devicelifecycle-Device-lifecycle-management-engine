@@ -17,14 +17,15 @@ export class DeviceService {
    * Get devices with pagination
    */
   static async getDevices(
-    params: PaginationParams & { 
-      search?: string; 
+    params: PaginationParams & {
+      search?: string;
       category?: DeviceCategory;
       make?: string;
+      recycling?: 'recycling_only' | 'other_only';
     }
   ): Promise<PaginatedResponse<Device>> {
     const supabase = await createServerSupabaseClient()
-    
+
     const {
       page = 1,
       page_size = 20,
@@ -33,6 +34,7 @@ export class DeviceService {
       search,
       category,
       make,
+      recycling,
     } = params
 
     let query = supabase
@@ -53,6 +55,12 @@ export class DeviceService {
 
     if (make) {
       query = query.eq('make', make)
+    }
+
+    if (recycling === 'recycling_only') {
+      query = query.eq('specifications->>recommended_for_recycling', 'true')
+    } else if (recycling === 'other_only') {
+      query = query.or('specifications->>recommended_for_recycling.is.null,specifications->>recommended_for_recycling.eq.false')
     }
 
     const ALLOWED_SORT = ['make', 'model', 'category', 'created_at', 'updated_at', 'base_price'] as const
@@ -126,12 +134,24 @@ export class DeviceService {
   static async updateDevice(id: string, input: Partial<CreateDeviceInput>): Promise<Device> {
     const supabase = await createServerSupabaseClient()
 
+    let updateData: Record<string, unknown> = {
+      ...input,
+      updated_at: new Date().toISOString(),
+    }
+
+    // Merge specifications into existing JSONB to avoid overwriting unrelated fields
+    if (input.specifications !== undefined) {
+      const { data: current } = await supabase
+        .from('device_catalog')
+        .select('specifications')
+        .eq('id', id)
+        .single()
+      updateData.specifications = { ...(current?.specifications || {}), ...input.specifications }
+    }
+
     const { data, error } = await supabase
       .from('device_catalog')
-      .update({
-        ...input,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()

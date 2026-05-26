@@ -25,16 +25,22 @@ export async function GET(request: NextRequest) {
     const forOrderCreation = searchParams.get('for_order_creation') === '1'
     const maxPageSize = isInternal ? 5000 : forOrderCreation ? 500 : 100
     const search = searchParams.get('search') || undefined
+    const recyclingParam = searchParams.get('recycling')
+    const recyclingValue: 'recycling_only' | 'other_only' | undefined =
+      recyclingParam === 'recycling_only' ? 'recycling_only'
+      : recyclingParam === 'other_only' ? 'other_only'
+      : undefined
     const filters = {
       search,
       category: (searchParams.get('category') as DeviceCategory) || undefined,
       make: searchParams.get('make') || undefined,
+      recycling: recyclingValue,
       page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
       page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '50'), 1), maxPageSize),
     }
 
-    // Cache only unfiltered/non-searched requests — searches are per-user and too varied.
-    const cacheKey = search ? null : JSON.stringify({ ...filters, role: isInternal ? 'internal' : 'external' })
+    // Cache only unfiltered/non-searched requests — searches and recycling filter are too varied.
+    const cacheKey = (search || recyclingParam) ? null : JSON.stringify({ ...filters, role: isInternal ? 'internal' : 'external' })
     let result: Awaited<ReturnType<typeof DeviceService.getDevices>>
 
     if (cacheKey) {

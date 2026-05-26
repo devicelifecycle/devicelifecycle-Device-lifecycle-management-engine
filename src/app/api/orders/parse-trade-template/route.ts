@@ -392,8 +392,10 @@ async function autoAddUnmatched(outputRows: TradeTemplateRow[]): Promise<TradeTe
           .ilike('make', make)
           .ilike('model', model)
           .limit(1)
-          .single()
+          .maybeSingle()
         if (existing?.id) deviceId = existing.id
+      } else if (insertErr) {
+        console.error('[parse-trade-template] insert device failed:', make, model, insertErr)
       }
 
       if (deviceId) {

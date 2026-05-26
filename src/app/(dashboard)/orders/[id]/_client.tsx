@@ -148,7 +148,7 @@ export default function OrderDetailClient() {
   const { shipments: orderShipments, refetch: refetchShipments } = useOrderShipments(params.id as string)
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
   const [pricingDialogNotes, setPricingDialogNotes] = useState('')
-  const [pricingItemEdits, setPricingItemEdits] = useState<Record<string, { storage?: string; condition?: string }>>({})
+  const [pricingItemEdits, setPricingItemEdits] = useState<Record<string, { storage?: string; condition?: string; quantity?: number; device_id?: string; deviceLabel?: string }>>({})
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({})
   const [itemMetadata, setItemMetadata] = useState<Record<string, PricingMetadata>>({})
   const [expandedPricingContext, setExpandedPricingContext] = useState<string | null>(null)
@@ -212,6 +212,11 @@ export default function OrderDetailClient() {
   const [pricingSearchResults, setPricingSearchResults] = useState<Array<{ id: string; make: string; model: string }>>([])
   const [isSearchingPricingDevice, setIsSearchingPricingDevice] = useState(false)
   const [isAddingPricingItem, setIsAddingPricingItem] = useState(false)
+  // Per-item device replacement search in pricing dialog
+  const [deviceEditItemId, setDeviceEditItemId] = useState<string | null>(null)
+  const [deviceEditSearch, setDeviceEditSearch] = useState('')
+  const [deviceEditResults, setDeviceEditResults] = useState<Array<{ id: string; make: string; model: string }>>([])
+  const [isDeviceEditSearching, setIsDeviceEditSearching] = useState(false)
   // Create Shipment dialog
   const [shipmentDialogOpen, setShipmentDialogOpen] = useState(false)
   const [isCreatingShipment, setIsCreatingShipment] = useState(false)
@@ -744,6 +749,19 @@ export default function OrderDetailClient() {
     }
   }
 
+  const handleDeviceEditSearch = async (search: string) => {
+    if (!search.trim()) { setDeviceEditResults([]); return }
+    setIsDeviceEditSearching(true)
+    try {
+      const res = await fetch(`/api/devices?search=${encodeURIComponent(search)}&limit=10`)
+      if (!res.ok) return
+      const data = await res.json()
+      setDeviceEditResults(data.data || [])
+    } catch { /* ignore */ } finally {
+      setIsDeviceEditSearching(false)
+    }
+  }
+
   const handleSearchPricingDevice = async (search: string) => {
     if (!search.trim()) { setPricingSearchResults([]); return }
     setIsSearchingPricingDevice(true)
@@ -961,8 +979,10 @@ export default function OrderDetailClient() {
 
     setIsSavingPrices(true)
     try {
-      // Save any item-level field edits (storage, condition) made inside the dialog
-      const itemEditEntries = Object.entries(pricingItemEdits).filter(([, e]) => e.storage || e.condition)
+      // Save any item-level field edits (storage, condition, quantity, device_id) made inside the dialog
+      const itemEditEntries = Object.entries(pricingItemEdits).filter(
+        ([, e]) => e.storage || e.condition || e.quantity !== undefined || e.device_id
+      )
       await Promise.all(itemEditEntries.map(([itemId, edits]) =>
         fetch(`/api/orders/${params.id}/items/${itemId}`, {
           method: 'PATCH',
@@ -970,6 +990,8 @@ export default function OrderDetailClient() {
           body: JSON.stringify({
             ...(edits.storage ? { storage: edits.storage } : {}),
             ...(edits.condition ? { condition: edits.condition } : {}),
+            ...(edits.quantity !== undefined ? { quantity: edits.quantity } : {}),
+            ...(edits.device_id ? { device_id: edits.device_id } : {}),
           }),
         })
       ))
@@ -3273,11 +3295,73 @@ export default function OrderDetailClient() {
                   {/* Item header + price input + total */}
                   <div className="grid grid-cols-[1fr_auto_auto_140px] gap-4 items-end">
                     <div className="space-y-1.5">
-                      <Label className="text-sm font-medium">
-                        {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
-                      </Label>
+                      {deviceEditItemId === item.id ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              placeholder="Search device…"
+                              value={deviceEditSearch}
+                              onChange={e => { setDeviceEditSearch(e.target.value); handleDeviceEditSearch(e.target.value) }}
+                              className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs"
+                              autoFocus
+                            />
+                            {isDeviceEditSearching && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />}
+                            <button
+                              type="button"
+                              onClick={() => { setDeviceEditItemId(null); setDeviceEditSearch(''); setDeviceEditResults([]) }}
+                              className="text-muted-foreground hover:text-foreground p-0.5"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          {deviceEditResults.length > 0 && (
+                            <div className="rounded border bg-popover shadow text-xs max-h-36 overflow-y-auto z-10 relative">
+                              {deviceEditResults.map(d => (
+                                <button
+                                  key={d.id}
+                                  type="button"
+                                  className="w-full text-left px-2 py-1.5 hover:bg-accent"
+                                  onClick={() => {
+                                    const label = `${d.make} ${d.model}`
+                                    setPricingItemEdits(prev => ({ ...prev, [item.id]: { ...prev[item.id], device_id: d.id, deviceLabel: label } }))
+                                    setDeviceEditItemId(null)
+                                    setDeviceEditSearch('')
+                                    setDeviceEditResults([])
+                                  }}
+                                >
+                                  {d.make} {d.model}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-sm font-medium">
+                            {pricingItemEdits[item.id]?.deviceLabel ?? (item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device')}
+                          </Label>
+                          <button
+                            type="button"
+                            title="Change device"
+                            onClick={() => { setDeviceEditItemId(item.id); setDeviceEditSearch(''); setDeviceEditResults([]) }}
+                            className="text-muted-foreground hover:text-foreground p-0.5 rounded"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground">Qty:</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pricingItemEdits[item.id]?.quantity ?? item.quantity ?? 1}
+                            onChange={e => setPricingItemEdits(prev => ({ ...prev, [item.id]: { ...prev[item.id], quantity: Math.max(1, parseInt(e.target.value, 10) || 1) } }))}
+                            className="w-14 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center"
+                          />
+                        </div>
                         <select
                           value={pricingItemEdits[item.id]?.condition ?? item.claimed_condition ?? 'good'}
                           onChange={e => setPricingItemEdits(prev => ({ ...prev, [item.id]: { ...prev[item.id], condition: e.target.value } }))}
@@ -3317,7 +3401,8 @@ export default function OrderDetailClient() {
                           const raw = itemPrices[item.id] || ''
                           const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ''))
                           const unit = Number.isFinite(num) ? num : (item.unit_price ?? 0)
-                          const total = unit * (item.quantity ?? 1)
+                          const qty = pricingItemEdits[item.id]?.quantity ?? item.quantity ?? 1
+                          const total = unit * qty
                           return total > 0 ? formatCurrency(total) : '—'
                         })()}
                       </p>

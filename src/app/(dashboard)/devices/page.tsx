@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
-import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch, Trash2 } from 'lucide-react'
+import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch, Trash2, Recycle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,6 +34,8 @@ export default function DevicesPage() {
   const [search, setSearch] = useState('')
   const [makeFilter, setMakeFilter] = useState<string>('')
   const [categoryFilter, setCategoryFilter] = useState<string>('')
+  const [recyclingFilter, setRecyclingFilter] = useState<string>('')
+  const [togglingRecycleId, setTogglingRecycleId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const debouncedSearch = useDebounce(search)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -58,6 +60,7 @@ export default function DevicesPage() {
       if (debouncedSearch) params.append('search', debouncedSearch)
       if (makeFilter) params.append('make', makeFilter)
       if (categoryFilter) params.append('category', categoryFilter)
+      if (recyclingFilter) params.append('recycling', recyclingFilter)
       params.append('page', String(page))
       params.append('page_size', '50')
       const res = await fetch(`/api/devices?${params.toString()}`)
@@ -72,7 +75,7 @@ export default function DevicesPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [debouncedSearch, page, makeFilter, categoryFilter])
+  }, [debouncedSearch, page, makeFilter, categoryFilter, recyclingFilter])
 
   useEffect(() => { fetchDevices() }, [fetchDevices])
   useOnDbChange(fetchDevices)
@@ -129,6 +132,25 @@ export default function DevicesPage() {
     }
   }
 
+  const handleToggleRecycling = async (device: Device) => {
+    const currentSpecs = (device.specifications || {}) as Record<string, unknown>
+    const isRecycling = currentSpecs.recommended_for_recycling === true
+    setTogglingRecycleId(device.id)
+    try {
+      const res = await fetch(`/api/devices/${device.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ specifications: { recommended_for_recycling: !isRecycling } }),
+      })
+      if (!res.ok) throw new Error('Failed to update device')
+      fetchDevices()
+    } catch {
+      toast.error('Failed to update recycling flag')
+    } finally {
+      setTogglingRecycleId(null)
+    }
+  }
+
   const MAKE_ORDER = ['Apple', 'Samsung', 'Google'] as const
 
   const categoryColors: Record<string, { bg: string; text: string }> = {
@@ -139,7 +161,7 @@ export default function DevicesPage() {
     other: { bg: 'bg-muted', text: 'text-muted-foreground' },
   }
 
-  const specs = (d: Device) => (d.specifications || {}) as { storage_options?: string[]; colors?: string[]; year?: string; cpu?: string; ram?: string }
+  const specs = (d: Device) => (d.specifications || {}) as { storage_options?: string[]; colors?: string[]; year?: string; cpu?: string; ram?: string; recommended_for_recycling?: boolean }
 
   return (
     <div className="space-y-6">
@@ -254,6 +276,14 @@ export default function DevicesPage() {
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={recyclingFilter || 'all'} onValueChange={v => { setRecyclingFilter(v === 'all' ? '' : v); setPage(1) }}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Recycling" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All models</SelectItem>
+              <SelectItem value="recycling_only">Recommended for Recycling</SelectItem>
+              <SelectItem value="other_only">All other models</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -289,6 +319,7 @@ export default function DevicesPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-10"><Recycle className="h-3.5 w-3.5" /></TableHead>
                   {canCreate && <TableHead className="w-12" />}
                 </TableRow>
               </TableHeader>
@@ -320,6 +351,21 @@ export default function DevicesPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground font-mono">{device.sku || '—'}</TableCell>
                       <TableCell><Badge variant={device.is_active ? 'default' : 'secondary'} className="text-[11px]">{device.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                      <TableCell>
+                        {canCreate ? (
+                          <button
+                            type="button"
+                            title={s.recommended_for_recycling ? 'Recommended for Recycling — click to remove' : 'Mark as Recommended for Recycling'}
+                            onClick={() => handleToggleRecycling(device)}
+                            disabled={togglingRecycleId === device.id}
+                            className={`p-1 rounded transition-colors ${s.recommended_for_recycling ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+                          >
+                            <Recycle className="h-3.5 w-3.5" />
+                          </button>
+                        ) : s.recommended_for_recycling ? (
+                          <Recycle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        ) : null}
+                      </TableCell>
                       {canCreate && (
                         <TableCell>
                           <AlertDialog>
