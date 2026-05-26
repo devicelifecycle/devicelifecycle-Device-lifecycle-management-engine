@@ -182,26 +182,24 @@ export default function DevicesPage() {
               <DialogDescription>Add a device model to the catalog</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="grid gap-4 grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Brand / Make *</Label>
-                  <Select value={form.make} onValueChange={v => setForm(f => ({ ...f, make: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
-                    <SelectContent>
-                      {DEVICE_BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Classification</Label>
-                  <Select value={form.recommended_for_recycling} onValueChange={v => setForm(f => ({ ...f, recommended_for_recycling: v as 'other' | 'recycling' }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="other">All other models</SelectItem>
-                      <SelectItem value="recycling">Recommended for Recycling</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label>Brand / Make *</Label>
+                <Select value={form.make} onValueChange={v => setForm(f => ({ ...f, make: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
+                  <SelectContent>
+                    {DEVICE_BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Classification</Label>
+                <Select value={form.recommended_for_recycling} onValueChange={v => setForm(f => ({ ...f, recommended_for_recycling: v as 'other' | 'recycling' }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="other">All other models</SelectItem>
+                    <SelectItem value="recycling">Recommended for Recycling</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>Model *</Label>
