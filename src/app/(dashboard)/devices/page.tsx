@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
-import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch, Trash2, Recycle } from 'lucide-react'
+import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -134,20 +134,18 @@ export default function DevicesPage() {
     }
   }
 
-  const handleToggleRecycling = async (device: Device) => {
-    const currentSpecs = (device.specifications || {}) as Record<string, unknown>
-    const isRecycling = currentSpecs.recommended_for_recycling === true
+  const handleSetClassification = async (device: Device, value: 'recycling' | 'other') => {
     setTogglingRecycleId(device.id)
     try {
       const res = await fetch(`/api/devices/${device.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ specifications: { recommended_for_recycling: !isRecycling } }),
+        body: JSON.stringify({ specifications: { recommended_for_recycling: value === 'recycling' } }),
       })
       if (!res.ok) throw new Error('Failed to update device')
       fetchDevices()
     } catch {
-      toast.error('Failed to update recycling flag')
+      toast.error('Failed to update classification')
     } finally {
       setTogglingRecycleId(null)
     }
@@ -331,7 +329,7 @@ export default function DevicesPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-10"><Recycle className="h-3.5 w-3.5" /></TableHead>
+                  <TableHead>Classification</TableHead>
                   {canCreate && <TableHead className="w-12" />}
                 </TableRow>
               </TableHeader>
@@ -365,18 +363,20 @@ export default function DevicesPage() {
                       <TableCell><Badge variant={device.is_active ? 'default' : 'secondary'} className="text-[11px]">{device.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
                       <TableCell>
                         {canCreate ? (
-                          <button
-                            type="button"
-                            title={s.recommended_for_recycling ? 'Recommended for Recycling — click to remove' : 'Mark as Recommended for Recycling'}
-                            onClick={() => handleToggleRecycling(device)}
+                          <select
+                            value={s.recommended_for_recycling ? 'recycling' : 'other'}
                             disabled={togglingRecycleId === device.id}
-                            className={`p-1 rounded transition-colors ${s.recommended_for_recycling ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+                            onChange={e => handleSetClassification(device, e.target.value as 'recycling' | 'other')}
+                            className="rounded border border-input bg-background px-1.5 py-0.5 text-xs disabled:opacity-50"
                           >
-                            <Recycle className="h-3.5 w-3.5" />
-                          </button>
-                        ) : s.recommended_for_recycling ? (
-                          <Recycle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                        ) : null}
+                            <option value="other">All other models</option>
+                            <option value="recycling">Recommended for Recycling</option>
+                          </select>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            {s.recommended_for_recycling ? 'Recommended for Recycling' : 'All other models'}
+                          </span>
+                        )}
                       </TableCell>
                       {canCreate && (
                         <TableCell>
