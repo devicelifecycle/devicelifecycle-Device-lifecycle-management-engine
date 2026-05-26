@@ -37,6 +37,7 @@ export default function CustomerRequestsPage() {
   const [parseError, setParseError] = useState('')
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [parsedSummary, setParsedSummary] = useState<ParseSummary | null>(null)
+  const [rowsTruncated, setRowsTruncated] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [rowValidationErrors, setRowValidationErrors] = useState<{ row: number; message: string }[] | null>(null)
@@ -55,6 +56,7 @@ export default function CustomerRequestsPage() {
     setParsedRows([])
     setParsedSummary(null)
     setParseError('')
+    setRowsTruncated(0)
     setParsing(true)
     try {
       const form = new FormData()
@@ -64,6 +66,7 @@ export default function CustomerRequestsPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to read file')
       setParsedRows(data.rows || [])
       setParsedSummary(data.summary || null)
+      setRowsTruncated(data.rows_truncated || 0)
     } catch (err) {
       setParseError(err instanceof Error ? err.message : 'Could not read file. Please check the format.')
     } finally {
@@ -176,6 +179,14 @@ export default function CustomerRequestsPage() {
           {parseError && (
             <p className="flex items-center gap-2 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />{parseError}
+            </p>
+          )}
+
+          {/* Truncation warning */}
+          {rowsTruncated > 0 && (
+            <p className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              Your file has {rowsTruncated.toLocaleString()} additional rows that were not processed (file exceeds 10,000-row limit). Please split your file into smaller batches.
             </p>
           )}
 

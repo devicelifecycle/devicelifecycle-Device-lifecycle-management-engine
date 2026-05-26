@@ -81,6 +81,7 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
 
   // Per-device identifiers
   'imei': 'imei', 'imei/serial': 'imei', 'imei / serial': 'imei',
+  'imei/sn': 'imei', 'imei/s/n': 'imei', 'imei/serial number': 'imei',
   'serial': 'serial', 'serial number': 'serial', 'serial_number': 'serial',
   'sample s/n': 'serial', 's/n': 'serial', 'sn': 'serial',
 
@@ -695,8 +696,12 @@ export async function POST(request: NextRequest) {
       return idx != null ? (cells[idx] ?? '').trim() : ''
     }
 
+    const ROW_LIMIT = 10000
+    const rowsToProcess = Math.min(dataRows.length, ROW_LIMIT)
+    const rowsTruncated = dataRows.length > ROW_LIMIT ? dataRows.length - ROW_LIMIT : 0
+
     const parsedRows: ParsedRow[] = []
-    for (let i = 0; i < Math.min(dataRows.length, 1000); i++) {
+    for (let i = 0; i < rowsToProcess; i++) {
       const cells = dataRows[i]
       if (!cells || cells.every(c => !c)) continue
 
@@ -869,7 +874,7 @@ export async function POST(request: NextRequest) {
       sheet_parsed: sheetParsed,
     }
 
-    return NextResponse.json({ rows: finalRows, summary, available_sheets: availableSheets })
+    return NextResponse.json({ rows: finalRows, summary, available_sheets: availableSheets, rows_truncated: rowsTruncated })
   } catch (err) {
     console.error('[parse-trade-template]', err)
     return NextResponse.json({ error: 'Failed to parse file' }, { status: 500 })
