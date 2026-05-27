@@ -35,7 +35,6 @@ export default function DevicesPage() {
   const [makeFilter, setMakeFilter] = useState<string>('')
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [recyclingFilter, setRecyclingFilter] = useState<string>('')
-  const [togglingRecycleId, setTogglingRecycleId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const debouncedSearch = useDebounce(search)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -131,23 +130,6 @@ export default function DevicesPage() {
       toast.error('Failed to delete device')
     } finally {
       setDeletingId(null)
-    }
-  }
-
-  const handleSetClassification = async (device: Device, value: 'recycling' | 'other') => {
-    setTogglingRecycleId(device.id)
-    try {
-      const res = await fetch(`/api/devices/${device.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ specifications: { recommended_for_recycling: value === 'recycling' } }),
-      })
-      if (!res.ok) throw new Error('Failed to update device')
-      fetchDevices()
-    } catch {
-      toast.error('Failed to update classification')
-    } finally {
-      setTogglingRecycleId(null)
     }
   }
 
@@ -329,7 +311,6 @@ export default function DevicesPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Classification</TableHead>
                   {canCreate && <TableHead className="w-12" />}
                 </TableRow>
               </TableHeader>
@@ -361,23 +342,6 @@ export default function DevicesPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground font-mono">{device.sku || '—'}</TableCell>
                       <TableCell><Badge variant={device.is_active ? 'default' : 'secondary'} className="text-[11px]">{device.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
-                      <TableCell>
-                        {canCreate ? (
-                          <select
-                            value={s.recommended_for_recycling ? 'recycling' : 'other'}
-                            disabled={togglingRecycleId === device.id}
-                            onChange={e => handleSetClassification(device, e.target.value as 'recycling' | 'other')}
-                            className="rounded border border-input bg-background px-1.5 py-0.5 text-xs disabled:opacity-50"
-                          >
-                            <option value="other">All other models</option>
-                            <option value="recycling">Recommended for Recycling</option>
-                          </select>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {s.recommended_for_recycling ? 'Recommended for Recycling' : 'All other models'}
-                          </span>
-                        )}
-                      </TableCell>
                       {canCreate && (
                         <TableCell>
                           <AlertDialog>
