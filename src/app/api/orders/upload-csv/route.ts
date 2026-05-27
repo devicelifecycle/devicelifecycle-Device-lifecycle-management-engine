@@ -582,6 +582,12 @@ export async function POST(request: NextRequest) {
         deviceId = device?.id || null
       }
 
+      // When no catalog match, embed the raw device name in notes so the
+      // quote email can display it instead of showing a blank.
+      const deviceNameTag = !deviceId && (row.brand || row.model)
+        ? `[Device: ${[row.brand, row.model].filter(Boolean).join(' ')}]`
+        : null
+
       // Build the order item
       const item: Record<string, unknown> = {
         order_id: order.id,
@@ -589,7 +595,7 @@ export async function POST(request: NextRequest) {
         quantity: row.quantity,
         storage: row.storage || null,
         claimed_condition: row.condition || null,
-        notes: [row.notes, row.faults].filter(Boolean).join(' | ') || null,
+        notes: [deviceNameTag, row.notes, row.faults].filter(Boolean).join(' | ') || null,
       }
 
       // Add extended fields if present

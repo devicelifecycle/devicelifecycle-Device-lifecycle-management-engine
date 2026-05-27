@@ -97,7 +97,7 @@ export async function DELETE(
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { supabase, profile } = auth
+    const { profile } = auth
 
     if (!['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -105,7 +105,11 @@ export async function DELETE(
 
     const { id: orderId, itemId } = await resolveParams(params)
 
-    const { error: deleteError } = await supabase
+    // Use service role to bypass RLS — auth check above already gates access.
+    // RLS silently returns success on DELETE without error when policy blocks it,
+    // causing the client to show "removed" but the item staying in the DB.
+    const svc = createServiceRoleClient()
+    const { error: deleteError } = await svc
       .from('order_items')
       .delete()
       .eq('id', itemId)
@@ -114,7 +118,6 @@ export async function DELETE(
     if (deleteError) throw deleteError
 
     // Recalculate order total_quantity
-    const svc = createServiceRoleClient()
     const { data: remaining } = await svc.from('order_items').select('quantity').eq('order_id', orderId)
     const totalQuantity = (remaining || []).reduce((s, i) => s + (i.quantity || 0), 0)
     await svc.from('orders').update({ total_quantity: totalQuantity, updated_at: new Date().toISOString() }).eq('id', orderId)

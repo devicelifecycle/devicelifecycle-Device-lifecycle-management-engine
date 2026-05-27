@@ -66,7 +66,11 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
   ]
   ws2.addRow(['Device', 'Storage', 'Condition', 'Quantity', 'Unit Price', 'Total'])
   for (const item of order!.items || []) {
-    const device = item.device ? `${item.device.make || ''} ${item.device.model || ''}`.trim() : '—'
+    const rawLabel = item.device ? `${item.device.make || ''} ${item.device.model || ''}`.trim() : ''
+    const deviceFromNotes = !rawLabel && item.notes
+      ? (item.notes.match(/^\[Device: ([^\]]+)\]/) || [])[1] || ''
+      : ''
+    const device = rawLabel || deviceFromNotes || 'Unknown Device'
     const qty = item.quantity ?? 1
     const unit = item.unit_price ?? item.guaranteed_buyback_price ?? 0
     const total = unit * qty
@@ -159,7 +163,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const safeTotalFormatted = escapeHtml(totalFormatted)
 
     const itemRows = (order.items || []).map(item => {
-      const device = item.device ? escapeHtml(`${item.device.make || ''} ${item.device.model || ''}`.trim()) : '—'
+      const deviceLabel = item.device
+        ? `${item.device.make || ''} ${item.device.model || ''}`.trim()
+        : ''
+      // Fall back to device name embedded in notes (stored by upload-csv for unmatched rows)
+      const deviceFromNotes = !deviceLabel && item.notes
+        ? (item.notes.match(/^\[Device: ([^\]]+)\]/) || [])[1] || ''
+        : ''
+      const device = escapeHtml(deviceLabel || deviceFromNotes || 'Unknown Device')
       const storage = escapeHtml(item.storage || '—')
       const condition = escapeHtml((item.claimed_condition || '—').replace(/_/g, ' '))
       const qty = item.quantity ?? 1
