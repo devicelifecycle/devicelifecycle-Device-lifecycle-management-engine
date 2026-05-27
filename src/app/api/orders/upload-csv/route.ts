@@ -355,8 +355,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No data rows provided' }, { status: 400 })
     }
 
-    if (rows.length > 1000) {
-      return NextResponse.json({ error: 'Too many rows. Maximum 1,000 rows per upload.' }, { status: 400 })
+    if (rows.length > 10000) {
+      return NextResponse.json({ error: 'Too many rows. Maximum 10,000 rows per upload.' }, { status: 400 })
     }
 
     if (!customer_id) {

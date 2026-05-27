@@ -777,7 +777,10 @@ export async function POST(request: NextRequest) {
     // ── Detect format type ────────────────────────────────────────────────────
     const hasSerials = validRows.some(r => r.serial || r.imei)
     const hasQty = 'quantity' in colIndex
-    const formatType: 'batch' | 'per_device' | 'unknown' = hasSerials ? 'per_device' : hasQty ? 'batch' : 'unknown'
+    // If explicit qty > 1 exists anywhere, the file is batch-style even when IMEI column present.
+    // A true per-device manifest always has qty=1 per row (one IMEI = one device).
+    const hasExplicitQty = hasQty && validRows.some(r => r.quantity > 1)
+    const formatType: 'batch' | 'per_device' | 'unknown' = hasExplicitQty ? 'batch' : hasSerials ? 'per_device' : hasQty ? 'batch' : 'unknown'
 
     // ── Fetch device catalog ──────────────────────────────────────────────────
     const { data: devices } = await supabase
