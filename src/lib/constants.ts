@@ -404,6 +404,7 @@ export const DEVICE_BRANDS = [
   'Motorola',
   'LG',
   'Sony',
+  'Sonim',
   'Xiaomi',
   'Huawei',
   'Microsoft',

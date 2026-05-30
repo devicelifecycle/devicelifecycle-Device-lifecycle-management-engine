@@ -59,7 +59,7 @@ const CATEGORIES: { id: Category; label: string; icon: React.ElementType; brands
     id: 'smartphone',
     label: 'Smartphone',
     icon: Smartphone,
-    brands: ['Apple', 'Samsung', 'Google', 'OnePlus', 'Motorola', 'Sony', 'LG', 'Xiaomi', 'Huawei'],
+    brands: ['Apple', 'Samsung', 'Google', 'OnePlus', 'Motorola', 'Sony', 'Sonim', 'LG', 'Xiaomi', 'Huawei'],
   },
   {
     id: 'tablet',

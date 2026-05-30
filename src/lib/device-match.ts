@@ -69,7 +69,7 @@ function sanitizeModelNoise(model: string): string {
 }
 
 /** Known brand prefixes for splitting "Samsung Galaxy S24" -> make=Samsung, model=Galaxy S24 */
-const BRAND_PREFIXES = ['samsung', 'galaxy', 'apple', 'google', 'pixel', 'oneplus', 'motorola', 'moto', 'lg', 'sony',
+const BRAND_PREFIXES = ['samsung', 'galaxy', 'apple', 'google', 'pixel', 'oneplus', 'motorola', 'moto', 'lg', 'sony', 'sonim',
   'xiaomi', 'huawei', 'oppo', 'vivo', 'nokia', 'microsoft', 'surface', 'lenovo', 'thinkpad', 'dell', 'hp', 'asus']
 
 /** Split "Samsung Galaxy S24" into make + model when full name is in one column */
