@@ -175,9 +175,30 @@ export async function parseTabularUpload(file: File): Promise<ParsedTabularUploa
 
       if (!raw || raw.length < 2) throw new Error('Excel file must have a header row and at least one data row')
 
-      const headers = raw[0].map((value, index) => String(value ?? '').trim() || `column_${index + 1}`)
+      // Auto-detect the real header row — Excel files often have a title row before
+      // the actual column headers. Score each of the first 10 rows by counting cells
+      // that match a known column alias; the highest-scoring row wins.
+      const detectHeaderRow = (rows: unknown[][]): number => {
+        let best = { index: 0, score: -1 }
+        const limit = Math.min(rows.length, 10)
+        for (let i = 0; i < limit; i++) {
+          let score = 0
+          for (const cell of rows[i]) {
+            const v = String(cell ?? '').toLowerCase().trim().replace(/\s+/g, ' ')
+            if (v && CSV_COLUMN_ALIASES[v]) score += 3
+            else if (v && /^(type|make|model|brand|qty|quantity|condition|storage|notes|serial|imei|sn|color|colour|s\/n)$/.test(v)) score += 2
+            else if (v && /\b(make|model|brand|qty|quantity|condition|storage|serial|imei)\b/.test(v)) score += 1
+          }
+          if (score > best.score) best = { index: i, score }
+        }
+        // Only trust the auto-detected row if it has meaningful score (≥2)
+        return best.score >= 2 ? best.index : 0
+      }
+
+      const headerRowIndex = detectHeaderRow(raw)
+      const headers = raw[headerRowIndex].map((value, index) => String(value ?? '').trim() || `column_${index + 1}`)
       const rows = raw
-        .slice(1)
+        .slice(headerRowIndex + 1)
         .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
         .map((row) => {
           const record: Record<string, string> = {}

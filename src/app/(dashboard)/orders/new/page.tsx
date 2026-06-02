@@ -601,7 +601,7 @@ export default function NewOrderPage() {
         const errors: string[] = []
         rows.forEach((row, i) => {
           if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
-          if (!row.device_model) errors.push(`Row ${i + 1}: Missing model`)
+          // model is optional — auto-add handles unknown devices without model
         })
 
         setParsedFiles(prev => [...prev, {
@@ -613,7 +613,7 @@ export default function NewOrderPage() {
         if (errors.length === 0) {
           toast.success(`${file.name}: ${rows.length} rows parsed successfully`)
         } else {
-          toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors`)
+          toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors — you can fix make/brand by clicking cells below`)
         }
       } catch {
         toast.error(`Failed to parse ${file.name}. Supported formats: CSV, TSV, Excel (.xlsx, .xls), ODS.`)
@@ -628,22 +628,31 @@ export default function NewOrderPage() {
     setParsedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
-  // Edit a specific CSV row field (editable preview)
+  // Edit a specific CSV row field (editable preview) — re-validates errors after each edit
   const editCsvRow = (fileIndex: number, rowIndex: number, field: keyof CSVRow, value: string) => {
     setParsedFiles(prev => prev.map((f, fi) => {
       if (fi !== fileIndex) return f
       const newRows = [...f.rows]
       const nextValue = field === 'order_type' && !canCreateCpoOrder ? 'trade_in' : value
       newRows[rowIndex] = { ...newRows[rowIndex], [field]: nextValue }
-      return { ...f, rows: newRows }
+      const errors: string[] = []
+      newRows.forEach((row, i) => {
+        if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
+      })
+      return { ...f, rows: newRows, errors }
     }))
   }
 
-  // Delete a specific CSV row
+  // Delete a specific CSV row and re-validate
   const deleteCsvRow = (fileIndex: number, rowIndex: number) => {
     setParsedFiles(prev => prev.map((f, fi) => {
       if (fi !== fileIndex) return f
-      return { ...f, rows: f.rows.filter((_, ri) => ri !== rowIndex) }
+      const newRows = f.rows.filter((_, ri) => ri !== rowIndex)
+      const errors: string[] = []
+      newRows.forEach((row, i) => {
+        if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
+      })
+      return { ...f, rows: newRows, errors }
     }))
   }
 

@@ -312,46 +312,84 @@ export default function CustomerRequestsPage() {
             </div>
           )}
 
-          {/* File drop zone */}
-          <div
-            className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-muted px-6 py-8 cursor-pointer hover:border-primary/60 transition-colors"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {parsing ? (
-              uploadProgress > 0
-                ? <FileCheck2 className="h-8 w-8 text-primary" />
-                : <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            ) : (
-              <FileUp className="h-8 w-8 text-muted-foreground" />
-            )}
-            <p className="text-sm text-muted-foreground text-center">
-              {parsing
-                ? uploadProgress > 0
-                  ? `Processing… ${uploadProgress}%`
-                  : 'Reading your file…'
-                : uploadFile
-                  ? uploadFile.name
-                  : 'Click to upload your device list (Excel or CSV)'}
-            </p>
-            {uploadFile && !parsing && (
-              <p className="text-xs text-muted-foreground">{(uploadFile.size / 1024).toFixed(1)} KB</p>
-            )}
-            {parsing && uploadProgress > 0 && (
-              <div className="w-full max-w-xs h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all duration-500"
-                  style={{ width: `${uploadProgress}%` }}
-                />
+          {/* File drop zone — with clear button when a file is loaded */}
+          {uploadFile && !parsing ? (
+            <div className="flex items-center justify-between rounded-lg border border-muted bg-muted/30 px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <FileCheck2 className="h-5 w-5 text-primary shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{uploadFile.name}</p>
+                  <p className="text-xs text-muted-foreground">{(uploadFile.size / 1024).toFixed(1)} KB</p>
+                </div>
               </div>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = '' }}
-            />
-          </div>
+              <div className="flex items-center gap-2 shrink-0 ml-4">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadFile(null)
+                    setParsedRows([])
+                    setParsedSummary(null)
+                    setParseError('')
+                    setRowValidationErrors(null)
+                    setDraftRestoredAt(null)
+                    try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
+                  }}
+                  className="text-xs text-destructive hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = '' }}
+              />
+            </div>
+          ) : (
+            <div
+              className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-muted px-6 py-8 cursor-pointer hover:border-primary/60 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {parsing ? (
+                uploadProgress > 0
+                  ? <FileCheck2 className="h-8 w-8 text-primary" />
+                  : <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              ) : (
+                <FileUp className="h-8 w-8 text-muted-foreground" />
+              )}
+              <p className="text-sm text-muted-foreground text-center">
+                {parsing
+                  ? uploadProgress > 0
+                    ? `Processing… ${uploadProgress}%`
+                    : 'Reading your file…'
+                  : 'Click to upload your device list (Excel or CSV)'}
+              </p>
+              {parsing && uploadProgress > 0 && (
+                <div className="w-full max-w-xs h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all duration-500"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = '' }}
+              />
+            </div>
+          )}
 
           {/* Parse error */}
           {parseError && (

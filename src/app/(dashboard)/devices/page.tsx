@@ -4,10 +4,10 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
-import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch, Trash2 } from 'lucide-react'
+import { Plus, Search, Package, Smartphone, Tablet, Laptop, Watch, Trash2, Upload, FileSpreadsheet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +22,7 @@ import { DEVICE_BRANDS } from '@/lib/constants'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useAuth } from '@/hooks/useAuth'
 import { Pagination } from '@/components/ui/pagination'
+import { parseTabularUpload } from '@/lib/csv-templates'
 import type { Device } from '@/types'
 
 export default function DevicesPage() {
@@ -122,6 +123,64 @@ export default function DevicesPage() {
   }
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [bulkUploading, setBulkUploading] = useState(false)
+  const bulkFileRef = useRef<HTMLInputElement>(null)
+
+  const handleBulkUpload = async (file: File) => {
+    setBulkUploading(true)
+    try {
+      const { rows } = await parseTabularUpload(file)
+      if (rows.length === 0) { toast.error('No rows found in file'); return }
+
+      // Column aliases: support Make/Brand/Manufacturer → make, Model/Device → model, etc.
+      const ALIASES: Record<string, string> = {
+        make: 'make', brand: 'make', manufacturer: 'make', oem: 'make',
+        model: 'model', device: 'model', product: 'model', device_model: 'model', device_name: 'model',
+        category: 'category', type: 'category',
+        storage: 'storage', capacity: 'storage',
+        color: 'color', colour: 'color',
+        year: 'year', sku: 'sku',
+      }
+
+      let added = 0, skipped = 0, failed = 0
+      for (const rawRow of rows) {
+        const mapped: Record<string, string> = {}
+        for (const [key, val] of Object.entries(rawRow)) {
+          const canonical = ALIASES[key.toLowerCase().trim()] || key.toLowerCase().trim()
+          if (!mapped[canonical]) mapped[canonical] = String(val ?? '').trim()
+        }
+        const make = mapped.make || ''
+        const model = mapped.model || ''
+        if (!make) { skipped++; continue }
+
+        const res = await fetch('/api/devices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            make,
+            model: model || undefined,
+            category: mapped.category || undefined,
+            sku: mapped.sku || undefined,
+            specifications: mapped.storage ? { storage_options: [mapped.storage] } : undefined,
+          }),
+        })
+        if (res.ok) { added++ }
+        else if (res.status === 409) { skipped++ }
+        else { failed++ }
+      }
+
+      const parts = [`${added} added`]
+      if (skipped > 0) parts.push(`${skipped} skipped (no make or duplicate)`)
+      if (failed > 0) parts.push(`${failed} failed`)
+      toast.success(`Bulk upload complete — ${parts.join(', ')}`)
+      fetchDevices()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to parse file')
+    } finally {
+      setBulkUploading(false)
+      if (bulkFileRef.current) bulkFileRef.current.value = ''
+    }
+  }
 
   const handleDelete = async (id: string) => {
     setDeletingId(id)
@@ -156,10 +215,30 @@ export default function DevicesPage() {
           <h1 className="text-2xl font-bold tracking-tight">Device Catalog</h1>
           <p className="text-muted-foreground mt-1">Manage the master device list</p>
         </div>
-        {canCreate && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="success"><Plus className="mr-2 h-4 w-4" />Add Device</Button>
-          </DialogTrigger>
+        {canCreate && (
+          <div className="flex items-center gap-2">
+            <input
+              ref={bulkFileRef}
+              type="file"
+              accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleBulkUpload(f) }}
+            />
+            <Button
+              variant="outline"
+              disabled={bulkUploading}
+              onClick={() => bulkFileRef.current?.click()}
+            >
+              {bulkUploading ? (
+                <><FileSpreadsheet className="mr-2 h-4 w-4 animate-pulse" />Uploading…</>
+              ) : (
+                <><Upload className="mr-2 h-4 w-4" />Upload File</>
+              )}
+            </Button>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="success"><Plus className="mr-2 h-4 w-4" />Add Device</Button>
+              </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Device</DialogTitle>
@@ -243,14 +322,16 @@ export default function DevicesPage() {
                 </div>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreate} disabled={creating || !form.make || (form.make === 'Other' && !customMake.trim())}>
-                {creating ? 'Adding...' : 'Add Device'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreate} disabled={creating || !form.make || (form.make === 'Other' && !customMake.trim())}>
+                  {creating ? 'Adding...' : 'Add Device'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+            </Dialog>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
