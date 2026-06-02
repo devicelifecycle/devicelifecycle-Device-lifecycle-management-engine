@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { AlertCircle, ArrowRight, CheckCircle2, ClipboardList, FileUp, FilePlus2, Loader2, FileCheck2 } from 'lucide-react'
-import { parseTabularUpload, CSV_COLUMN_ALIASES } from '@/lib/csv-templates'
+import { CSV_COLUMN_ALIASES } from '@/lib/csv-templates'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useOrders } from '@/hooks/useOrders'
@@ -133,6 +133,9 @@ export default function CustomerRequestsPage() {
   // This avoids any Vercel function timeout regardless of row count.
   async function handleLargeFile(file: File) {
     setUploadProgress(5)
+    // Dynamic import keeps ExcelJS out of the initial page bundle — it only
+    // loads when the user actually uploads a file larger than LARGE_FILE_BYTES.
+    const { parseTabularUpload } = await import('@/lib/csv-templates')
     const { headers, rows: rawRows } = await parseTabularUpload(file)
     if (rawRows.length === 0) throw new Error('No data found in file.')
     setUploadProgress(30)
