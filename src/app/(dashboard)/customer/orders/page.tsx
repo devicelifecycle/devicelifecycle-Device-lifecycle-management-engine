@@ -105,7 +105,7 @@ export default function CustomerOrdersPage() {
                   return (
                     <TableRow key={order.id} className={isQuoted ? 'bg-purple-50/40 dark:bg-purple-950/20' : ''}>
                       <TableCell className="whitespace-nowrap">
-                        <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
+                        <Link href={`/customer/orders/${order.id}`} className="font-medium text-primary hover:underline">
                           {order.order_number}
                         </Link>
                       </TableCell>

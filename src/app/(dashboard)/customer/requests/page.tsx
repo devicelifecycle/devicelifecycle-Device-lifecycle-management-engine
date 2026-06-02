@@ -43,12 +43,17 @@ export default function CustomerRequestsPage() {
   const [rowValidationErrors, setRowValidationErrors] = useState<{ row: number; message: string }[] | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [customerLoadError, setCustomerLoadError] = useState('')
+
   // Fetch own customer ID on mount — /me is scoped to the logged-in customer's org
   useEffect(() => {
     fetch('/api/customers/me')
       .then(r => r.json())
-      .then(d => { if (d?.id) setCustomerId(d.id) })
-      .catch(() => {})
+      .then(d => {
+        if (d?.id) setCustomerId(d.id)
+        else setCustomerLoadError(d?.error || 'Your account is not linked to an organization. Please contact your administrator.')
+      })
+      .catch(() => setCustomerLoadError('Could not load your account. Please refresh the page.'))
   }, [])
 
   async function handleFileSelect(file: File) {
@@ -119,7 +124,7 @@ export default function CustomerRequestsPage() {
       setParsedRows([])
       setParsedSummary(null)
       setRowValidationErrors(null)
-      if (data.order?.id) router.push(`/orders/${data.order.id}`)
+      if (data.order?.id) router.push(`/customer/orders/${data.order.id}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Submission failed')
     } finally {
@@ -136,6 +141,14 @@ export default function CustomerRequestsPage() {
         <h1 className="text-2xl font-bold tracking-tight">Requests</h1>
         <p className="text-muted-foreground mt-1">Create and review trade-in requests.</p>
       </div>
+
+      {/* Account setup error */}
+      {customerLoadError && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{customerLoadError}</span>
+        </div>
+      )}
 
       {/* Upload your device list */}
       <Card>
@@ -325,7 +338,7 @@ export default function CustomerRequestsPage() {
               {orders.map((order) => (
                 <Link
                   key={order.id}
-                  href={`/orders/${order.id}`}
+                  href={`/customer/orders/${order.id}`}
                   className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
                 >
                   <div>
