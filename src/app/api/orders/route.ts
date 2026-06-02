@@ -287,7 +287,7 @@ export async function POST(request: NextRequest) {
       const orderTypeLabel = orderData.type === 'cpo' ? 'CPO' : 'Trade-In'
       const customerTitle = `Order #${order.order_number} Received`
       const customerMessage = `Your ${orderTypeLabel} order has been received and is being processed. We'll notify you as soon as a quote is ready.`
-      const orderLink = `/orders/${order.id}`
+      const orderLink = `/customer/orders/${order.id}`
       for (const orgUser of orgUsers || []) {
         await NotificationService.createNotification({
           user_id: orgUser.id,

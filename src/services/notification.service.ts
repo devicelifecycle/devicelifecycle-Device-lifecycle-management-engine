@@ -218,6 +218,7 @@ export class NotificationService {
       ? config.vendorMessage(order.order_number)
       : messageText
     const orderLink = `/orders/${order.id}`
+    const customerOrderLink = `/customer/orders/${order.id}`
 
     // Collect email recipients in parallel
     // isCustomer drives which message body to use when the config defines customerMessage
@@ -228,6 +229,7 @@ export class NotificationService {
 
     // In-app notification recipients (separate from email — org users may not have real email)
     const inAppUserIds = new Set<string>()
+    const customerInAppUserIds = new Set<string>()
 
     // Customer — email to contact + in-app to users in customer's organization
     if (config.customer && order.customer_id) {
@@ -248,6 +250,7 @@ export class NotificationService {
             .eq('is_active', true)
           ;(orgUsers || []).forEach(u => {
             inAppUserIds.add(u.id)
+            customerInAppUserIds.add(u.id)
             const effectiveEmail = (u as { email?: string; notification_email?: string | null }).email?.endsWith('@login.local')
               ? (u as { notification_email?: string | null }).notification_email
               : (u as { email?: string }).email
@@ -436,13 +439,14 @@ export class NotificationService {
     }
 
     for (const userId of Array.from(inAppUserIds)) {
+      const link = customerInAppUserIds.has(userId) ? customerOrderLink : orderLink
       sends.push(
         this.createNotification({
           user_id: userId,
           type: 'in_app',
           title: subjectText,
           message: messageText,
-          link: orderLink,
+          link,
           metadata: { order_id: order.id, order_number: order.order_number, from_status: fromStatus, to_status: toStatus },
         }).then(() => {}).catch(() => {})
       )
@@ -640,7 +644,7 @@ export class NotificationService {
         type: 'in_app',
         title,
         message,
-        link: `/orders/${input.order_id}`,
+        link: `/customer/orders/${input.order_id}`,
         metadata: {
           order_id: input.order_id,
           order_number: input.order_number,
@@ -722,7 +726,7 @@ export class NotificationService {
         type: 'in_app',
         title,
         message,
-        link: `/orders/${input.order_id}`,
+        link: `/customer/orders/${input.order_id}`,
         metadata: {
           order_id: input.order_id,
           order_number: input.order_number,

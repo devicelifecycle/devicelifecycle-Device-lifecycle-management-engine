@@ -69,6 +69,22 @@ export default function CustomerOrderDetailPage() {
   const isQuoted = order.status === 'quoted'
   const quotedAmount = order.quoted_amount ?? order.total_amount ?? 0
 
+  function parseItemQty(item: { quantity?: number | null; notes?: string | null }): number {
+    const match = item.notes?.match(/\[Original qty:\s*(\d+)\]/i)
+    if (match) return parseInt(match[1], 10)
+    return item.quantity ?? 1
+  }
+
+  function stripInternalNotes(notes: string | null | undefined): string {
+    if (!notes) return ''
+    return notes.replace(/\[Original qty:\s*\d+\]\s*\|?\s*/gi, '').replace(/^\s*\|\s*/, '').trim()
+  }
+
+  const hasAnyPrice = order.items?.some(item =>
+    (item.unit_price ?? item.guaranteed_buyback_price) != null
+  ) ?? false
+  const showPriceCol = isQuoted || hasAnyPrice
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -154,22 +170,27 @@ export default function CustomerOrderDetailPage() {
                     <TableHead>Storage</TableHead>
                     <TableHead>Condition</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
-                    {isQuoted && <TableHead className="text-right">Unit Price</TableHead>}
+                    {showPriceCol && <TableHead className="text-right">Unit Price</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {order.items.map((item) => {
                     const device = item.device ? `${item.device.make || ''} ${item.device.model || ''}`.trim() : '—'
                     const unitPrice = item.unit_price ?? item.guaranteed_buyback_price ?? null
+                    const displayQty = parseItemQty(item)
+                    const itemNote = stripInternalNotes(item.notes)
                     return (
                       <TableRow key={item.id}>
-                        <TableCell className="font-medium">{device}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{device}</div>
+                          {itemNote && <div className="text-xs text-muted-foreground mt-0.5">{itemNote}</div>}
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{item.storage || '—'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground capitalize">
                           {(item.claimed_condition || '—').replace(/_/g, ' ')}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">{item.quantity ?? 1}</TableCell>
-                        {isQuoted && (
+                        <TableCell className="text-right tabular-nums">{displayQty}</TableCell>
+                        {showPriceCol && (
                           <TableCell className="text-right tabular-nums font-medium">
                             {unitPrice != null ? formatCurrency(unitPrice) : '—'}
                           </TableCell>

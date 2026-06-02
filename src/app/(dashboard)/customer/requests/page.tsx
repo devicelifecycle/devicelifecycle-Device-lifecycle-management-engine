@@ -167,7 +167,8 @@ export default function CustomerRequestsPage() {
       const storage = getVal(row, 'storage')
       const condition = getVal(row, 'condition') || 'good'
       const qtyRaw = getVal(row, 'quantity')
-      const quantity = parseInt(qtyRaw, 10) || 1
+      const parsedQtyNum = qtyRaw !== '' ? parseInt(qtyRaw, 10) : NaN
+      const quantity = !isNaN(parsedQtyNum) ? Math.max(0, parsedQtyNum) : 1
       const rawSerial = getVal(row, 'serial_number')
       const isImei = /^\d{15}$/.test(rawSerial)
 
@@ -408,9 +409,9 @@ export default function CustomerRequestsPage() {
                     </select>
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       value={row.quantity}
-                      onChange={e => setParsedRows(prev => prev.map((r, i) => i === idx ? { ...r, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) } : r))}
+                      onChange={e => setParsedRows(prev => prev.map((r, i) => i === idx ? { ...r, quantity: Math.max(0, parseInt(e.target.value, 10) || 0) } : r))}
                       className="w-14 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center"
                       title="Quantity"
                     />

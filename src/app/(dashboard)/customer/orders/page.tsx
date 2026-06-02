@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Search, ShoppingCart, CheckCircle, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Input } from '@/components/ui/input'
@@ -32,12 +33,16 @@ export default function CustomerOrdersPage() {
   async function handleQuoteAction(orderId: string, action: 'accepted' | 'rejected') {
     setTransitioning(prev => ({ ...prev, [orderId]: true }))
     try {
-      await fetch(`/api/orders/${orderId}/transition`, {
+      const res = await fetch(`/api/orders/${orderId}/transition`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to_status: action }),
       })
+      if (!res.ok) throw new Error('Failed')
+      toast.success(action === 'accepted' ? 'Quote accepted! We will process your order.' : 'Quote declined.')
       refetch?.()
+    } catch {
+      toast.error('Could not update quote status. Please try again.')
     } finally {
       setTransitioning(prev => ({ ...prev, [orderId]: false }))
     }

@@ -268,7 +268,7 @@ async function notifyCustomer(
         type: 'in_app',
         title,
         message,
-        link: `/orders/${order.id}`,
+        link: `/customer/orders/${order.id}`,
         metadata: {
           order_id: order.id,
           order_number: order.order_number,
@@ -328,7 +328,7 @@ async function notifyCustomer(
         type: 'in_app',
         title,
         message,
-        link: `/orders/${order.id}`,
+        link: `/customer/orders/${order.id}`,
         metadata: {
           order_id: order.id,
           order_number: order.order_number,

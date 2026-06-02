@@ -212,7 +212,7 @@ export async function PATCH(
                   type: 'in_app',
                   title: custTitle,
                   message: custMessage,
-                  link: `/orders/${order.id}`,
+                  link: `/customer/orders/${order.id}`,
                   metadata: { order_id: order.id, order_number: orderLabel, type: 'cpo_quote_ready' },
                 }).catch(() => {})
               }

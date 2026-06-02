@@ -102,7 +102,7 @@ export async function POST() {
           type: 'in_app',
           title: `Updated Quote — Order #${order.order_number}`,
           message: `Your quote for Order #${order.order_number} has ${direction} by $${absDiff.toFixed(2)} following a pricing update. Please review your order.`,
-          link: `/orders/${order.id}`,
+          link: `/customer/orders/${order.id}`,
           metadata: {
             order_id: order.id,
             order_number: order.order_number,
