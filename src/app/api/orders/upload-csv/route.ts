@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import type { AuthContext } from '@/lib/supabase/require-auth'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
@@ -368,7 +369,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid customer_id format' }, { status: 400 })
     }
 
-    const { data: customer } = await supabase
+    // Use service role for the customers lookup so that RLS restrictions on
+    // the customers table don't block customer-role users from reading their own record.
+    const serviceRole = createServiceRoleClient()
+    const { data: customer } = await serviceRole
       .from('customers')
       .select('id, organization_id, is_active')
       .eq('id', customer_id)
@@ -378,7 +382,10 @@ export async function POST(request: NextRequest) {
     if (!customer.is_active) return NextResponse.json({ error: 'Customer is inactive' }, { status: 400 })
 
     if (profile.role === 'customer') {
-      if (!profile.organization_id || profile.organization_id !== customer.organization_id) {
+      if (!profile.organization_id) {
+        return NextResponse.json({ error: 'Your account is not linked to an organization. Please contact your administrator.' }, { status: 403 })
+      }
+      if (profile.organization_id !== customer.organization_id) {
         return NextResponse.json({ error: 'Cannot create orders for another organization' }, { status: 403 })
       }
     }
@@ -511,21 +518,22 @@ export async function POST(request: NextRequest) {
     const totalQuantity = normalizedRows.reduce((sum, row) => sum + row.quantity, 0)
 
     // Create order with retry on duplicate order_number (race-condition guard)
+    // Use service role for all write operations so customer-role RLS doesn't block inserts.
     const MAX_ATTEMPTS = 5
     let order: Record<string, unknown> | null = null
     let lastConflictedOrderNumber: string | null = null
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const { data: orderNumResult } = await supabase.rpc('generate_order_number', { direction })
+      const { data: orderNumResult } = await serviceRole.rpc('generate_order_number', { direction })
       let orderNumber = orderNumResult || `${effectiveOrderType === 'cpo' ? 'CPO' : 'TI'}-${Date.now()}`
 
       if (lastConflictedOrderNumber && orderNumber === lastConflictedOrderNumber) {
-        orderNumber = await getNextOrderNumberFromTable(supabase, direction)
+        orderNumber = await getNextOrderNumberFromTable(serviceRole, direction)
         if (orderNumber === lastConflictedOrderNumber) {
           orderNumber = incrementOrderNumber(lastConflictedOrderNumber)
         }
       }
 
-      const { data: createdOrder, error: orderError } = await supabase
+      const { data: createdOrder, error: orderError } = await serviceRole
         .from('orders')
         .insert({
           order_number: orderNumber,
@@ -572,7 +580,7 @@ export async function POST(request: NextRequest) {
         deviceId = row.preresolved_device_id
       } else {
         // No pre-resolved ID — fall back to exact make + model substring search.
-        const { data: device } = await supabase
+        const { data: device } = await serviceRole
           .from('device_catalog')
           .select('id')
           .ilike('make', row.brand)
@@ -615,7 +623,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (orderItems.length > 0) {
-      const { error: itemsError } = await supabase
+      const { error: itemsError } = await serviceRole
         .from('order_items')
         .insert(orderItems)
 
