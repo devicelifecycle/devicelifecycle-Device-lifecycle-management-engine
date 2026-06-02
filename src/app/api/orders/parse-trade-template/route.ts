@@ -521,12 +521,6 @@ export async function POST(request: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
 
     const ext = file.name.toLowerCase().split('.').pop() ?? ''
-    if (!['csv', 'xlsx'].includes(ext)) {
-      return NextResponse.json({ error: 'Supported formats: CSV, Excel (.xlsx)' }, { status: 400 })
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large (max 10 MB)' }, { status: 400 })
-    }
 
     // ── Sheet selection ───────────────────────────────────────────────────────
     const sheetParam = request.nextUrl.searchParams.get('sheet') ?? ''
@@ -536,76 +530,80 @@ export async function POST(request: NextRequest) {
     let sheetParsed = 'Sheet1'
     let availableSheets: string[] = []
 
-    if (ext === 'xlsx') {
-      // Use exceljs (no prototype-pollution or ReDoS CVEs unlike the xlsx package)
-      const ExcelJS = await import('exceljs')
-      const arrayBuffer = await file.arrayBuffer()
-      const wb = new ExcelJS.default.Workbook()
+    // Excel-family extensions: try ExcelJS first, fall back to PapaParse on failure.
+    // This handles .xlsx, .xlsm, .xls, .ods, etc. — anything ExcelJS can read works
+    // natively; older binary formats (.xls) or unknown extensions fall through to text parsing.
+    const isExcelFamily = ['xlsx', 'xlsm', 'xlsb', 'xltx', 'xltm', 'xls', 'ods'].includes(ext)
+    let parsedViaExcel = false
+
+    if (isExcelFamily) {
       try {
+        const ExcelJS = await import('exceljs')
+        const arrayBuffer = await file.arrayBuffer()
+        const wb = new ExcelJS.default.Workbook()
         await wb.xlsx.load(arrayBuffer)
-      } catch {
-        return NextResponse.json({ error: 'Could not read Excel file. Make sure it is a valid .xlsx file.' }, { status: 400 })
-      }
 
-      availableSheets = wb.worksheets.map(ws => ws.name)
-      if (availableSheets.length === 0) {
-        return NextResponse.json({ error: 'No sheets found in workbook' }, { status: 400 })
-      }
-
-      sheetParsed = sheetParam || availableSheets[0]
-
-      // Resolve sheet by name or numeric index
-      let ws = wb.getWorksheet(sheetParsed) ?? null
-      if (!ws) {
-        const idx = parseInt(sheetParam, 10)
-        ws = (Number.isFinite(idx) ? wb.worksheets[idx] : null) ?? wb.worksheets[0] ?? null
-        sheetParsed = ws?.name ?? availableSheets[0]
-      }
-
-      if (!ws) return NextResponse.json({ error: 'Sheet not found' }, { status: 400 })
-
-      // Build array-of-arrays (same shape as xlsx sheet_to_json { header:1, defval:'' })
-      const raw: unknown[][] = []
-      const colCount = Math.max(ws.columnCount, 1)
-      ws.eachRow({ includeEmpty: false }, (row) => {
-        const cells: unknown[] = []
-        for (let c = 1; c <= colCount; c++) {
-          const cell = row.getCell(c)
-          let val: unknown = cell.value
-          // Unwrap formula cells — use cached result, not formula string
-          if (val && typeof val === 'object' && 'result' in (val as Record<string, unknown>)) {
-            val = (val as { result: unknown }).result
-          }
-          // Unwrap richText objects
-          if (val && typeof val === 'object' && 'richText' in (val as Record<string, unknown>)) {
-            val = (val as { richText: Array<{ text: string }> }).richText.map(t => t.text).join('')
-          }
-          cells.push(val ?? '')
+        availableSheets = wb.worksheets.map(ws => ws.name)
+        if (availableSheets.length === 0) {
+          return NextResponse.json({ error: 'No sheets found in workbook' }, { status: 400 })
         }
-        raw.push(cells)
-      })
 
-      if (!raw || raw.length < 2) {
-        return NextResponse.json({ error: 'Sheet needs a header row and at least one data row', available_sheets: availableSheets }, { status: 400 })
+        sheetParsed = sheetParam || availableSheets[0]
+
+        let ws = wb.getWorksheet(sheetParsed) ?? null
+        if (!ws) {
+          const idx = parseInt(sheetParam, 10)
+          ws = (Number.isFinite(idx) ? wb.worksheets[idx] : null) ?? wb.worksheets[0] ?? null
+          sheetParsed = ws?.name ?? availableSheets[0]
+        }
+
+        if (!ws) return NextResponse.json({ error: 'Sheet not found' }, { status: 400 })
+
+        const raw: unknown[][] = []
+        const colCount = Math.max(ws.columnCount, 1)
+        ws.eachRow({ includeEmpty: false }, (row) => {
+          const cells: unknown[] = []
+          for (let c = 1; c <= colCount; c++) {
+            const cell = row.getCell(c)
+            let val: unknown = cell.value
+            if (val && typeof val === 'object' && 'result' in (val as Record<string, unknown>)) {
+              val = (val as { result: unknown }).result
+            }
+            if (val && typeof val === 'object' && 'richText' in (val as Record<string, unknown>)) {
+              val = (val as { richText: Array<{ text: string }> }).richText.map(t => t.text).join('')
+            }
+            cells.push(val ?? '')
+          }
+          raw.push(cells)
+        })
+
+        if (!raw || raw.length < 2) {
+          return NextResponse.json({ error: 'Sheet needs a header row and at least one data row', available_sheets: availableSheets }, { status: 400 })
+        }
+
+        const { headerIdx, groupIdx } = findHeaderRow(raw)
+        headers = buildHeaders(raw, headerIdx, groupIdx).filter((_, i) => i < (raw[headerIdx] as unknown[]).length)
+        dataRows = raw
+          .slice(headerIdx + 1)
+          .filter(row => (row as unknown[]).some(c => String(c ?? '').trim()))
+          .map(row => (row as unknown[]).map(c => String(c ?? '').trim()))
+        parsedViaExcel = true
+      } catch {
+        // ExcelJS could not read the file (e.g. legacy .xls binary) — fall through to text parsing.
       }
+    }
 
-      // Auto-detect the header row (not always row 0)
-      const { headerIdx, groupIdx } = findHeaderRow(raw)
-      headers = buildHeaders(raw, headerIdx, groupIdx).filter((_, i) => i < (raw[headerIdx] as unknown[]).length)
-      dataRows = raw
-        .slice(headerIdx + 1)
-        .filter(row => (row as unknown[]).some(c => String(c ?? '').trim()))
-        .map(row => (row as unknown[]).map(c => String(c ?? '').trim()))
-    } else {
+    if (!parsedViaExcel) {
+      // CSV, TSV, TXT, pipe-delimited, or any Excel format ExcelJS couldn't read.
+      // PapaParse auto-detects the delimiter (comma, tab, semicolon, pipe).
       const text = await file.text()
       const { default: Papa } = await import('papaparse')
-      const result = Papa.parse(text, { skipEmptyLines: true })
+      const result = Papa.parse(text, { skipEmptyLines: true, delimiter: '' })
       const allRows = result.data as string[][]
       if (allRows.length < 2) return NextResponse.json({ error: 'File needs a header row and at least one data row' }, { status: 400 })
       availableSheets = ['Sheet1']
       sheetParsed = 'Sheet1'
 
-      // Auto-detect header row in CSV too
       const { headerIdx, groupIdx } = findHeaderRow(allRows)
       headers = buildHeaders(allRows, headerIdx, groupIdx)
       dataRows = allRows.slice(headerIdx + 1).filter(row => row.some(c => c.trim()))
@@ -696,12 +694,8 @@ export async function POST(request: NextRequest) {
       return idx != null ? (cells[idx] ?? '').trim() : ''
     }
 
-    const ROW_LIMIT = 10000
-    const rowsToProcess = Math.min(dataRows.length, ROW_LIMIT)
-    const rowsTruncated = dataRows.length > ROW_LIMIT ? dataRows.length - ROW_LIMIT : 0
-
     const parsedRows: ParsedRow[] = []
-    for (let i = 0; i < rowsToProcess; i++) {
+    for (let i = 0; i < dataRows.length; i++) {
       const cells = dataRows[i]
       if (!cells || cells.every(c => !c)) continue
 
@@ -877,7 +871,7 @@ export async function POST(request: NextRequest) {
       sheet_parsed: sheetParsed,
     }
 
-    return NextResponse.json({ rows: finalRows, summary, available_sheets: availableSheets, rows_truncated: rowsTruncated })
+    return NextResponse.json({ rows: finalRows, summary, available_sheets: availableSheets, rows_truncated: 0 })
   } catch (err) {
     console.error('[parse-trade-template]', err)
     return NextResponse.json({ error: 'Failed to parse file' }, { status: 500 })

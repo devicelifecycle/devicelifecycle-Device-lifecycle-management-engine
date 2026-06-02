@@ -39,7 +39,6 @@ export default function CustomerRequestsPage() {
   const [parseError, setParseError] = useState('')
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [parsedSummary, setParsedSummary] = useState<ParseSummary | null>(null)
-  const [rowsTruncated, setRowsTruncated] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [rowValidationErrors, setRowValidationErrors] = useState<{ row: number; message: string }[] | null>(null)
@@ -94,7 +93,6 @@ export default function CustomerRequestsPage() {
     setParsedRows([])
     setParsedSummary(null)
     setParseError('')
-    setRowsTruncated(0)
     setDraftRestoredAt(null)
     try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
     setParsing(true)
@@ -108,7 +106,6 @@ export default function CustomerRequestsPage() {
       const summary: ParseSummary | null = data.summary || null
       setParsedRows(rows)
       setParsedSummary(summary)
-      setRowsTruncated(data.rows_truncated || 0)
       // Save draft immediately after successful parse
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ rows, summary, savedAt: new Date().toISOString() }))
@@ -245,7 +242,7 @@ export default function CustomerRequestsPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xlsx,.csv"
+              accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods"
               className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = '' }}
             />
@@ -258,13 +255,6 @@ export default function CustomerRequestsPage() {
             </p>
           )}
 
-          {/* Truncation warning */}
-          {rowsTruncated > 0 && (
-            <p className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              Your file has {rowsTruncated.toLocaleString()} additional rows that were not processed (file exceeds 10,000-row limit). Please split your file into smaller batches.
-            </p>
-          )}
 
           {/* Parsed preview */}
           {parsedSummary && parsedRows.length > 0 && (

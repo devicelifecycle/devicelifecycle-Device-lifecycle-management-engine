@@ -616,7 +616,7 @@ export default function NewOrderPage() {
           toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors`)
         }
       } catch {
-        toast.error(`Failed to parse ${file.name}. Use CSV or Excel (.xlsx/.xls).`)
+        toast.error(`Failed to parse ${file.name}. Supported formats: CSV, TSV, Excel (.xlsx, .xls), ODS.`)
       }
     }
 
@@ -1139,7 +1139,7 @@ export default function NewOrderPage() {
                   <p className="text-sm text-muted-foreground mb-3">
                     {canCreateCpoOrder ? 'Download a CSV or Excel template, or upload your own file.' : 'Download a trade-in CSV or Excel template, or upload your own file.'}
                   </p>
-                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" multiple onChange={handleFileUpload} className="hidden" />
+                  <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods" multiple onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={handleDownloadTradeInTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <Download className="mr-2 h-4 w-4" />Download Trade-In Template

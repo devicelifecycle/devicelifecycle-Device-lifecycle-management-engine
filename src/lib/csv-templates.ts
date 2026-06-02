@@ -139,57 +139,67 @@ export async function buildXlsxTemplateBlob(
   })
 }
 
-/** Parse a CSV or Excel file into normalized header/value records. */
+/** Parse a CSV, TSV, Excel, or any tabular file into normalized header/value records.
+ *  Excel-family extensions (.xlsx, .xlsm, .xls, .ods, etc.) are tried via ExcelJS first;
+ *  any failure falls through to PapaParse which auto-detects comma/tab/semicolon/pipe.
+ *  Text-like extensions (.csv, .tsv, .txt, .dat) go straight to PapaParse.
+ *  No row count limit is enforced here — the caller decides how many rows to use.
+ */
 export async function parseTabularUpload(file: File): Promise<ParsedTabularUpload> {
   const ext = file.name.toLowerCase().split('.').pop() ?? ''
+  const isExcelFamily = ['xlsx', 'xlsm', 'xlsb', 'xltx', 'xltm', 'xls', 'ods', 'numbers'].includes(ext)
 
-  if (ext === 'xlsx') {
-    const ExcelJS = await import('exceljs')
-    const arrayBuffer = await file.arrayBuffer()
-    const wb = new ExcelJS.default.Workbook()
-    await wb.xlsx.load(arrayBuffer)
+  if (isExcelFamily) {
+    try {
+      const ExcelJS = await import('exceljs')
+      const arrayBuffer = await file.arrayBuffer()
+      const wb = new ExcelJS.default.Workbook()
+      await wb.xlsx.load(arrayBuffer)
 
-    const ws = wb.worksheets[0]
-    if (!ws) throw new Error('Excel file does not contain a worksheet')
+      const ws = wb.worksheets[0]
+      if (!ws) throw new Error('Excel file does not contain a worksheet')
 
-    const colCount = Math.max(ws.columnCount, 1)
-    const raw: unknown[][] = []
-    ws.eachRow({ includeEmpty: false }, (row) => {
-      const cells: unknown[] = []
-      for (let c = 1; c <= colCount; c++) {
-        const cell = row.getCell(c)
-        let val: unknown = cell.value
-        if (val && typeof val === 'object' && 'result' in (val as Record<string, unknown>)) val = (val as { result: unknown }).result
-        if (val && typeof val === 'object' && 'richText' in (val as Record<string, unknown>)) val = (val as { richText: Array<{ text: string }> }).richText.map(t => t.text).join('')
-        cells.push(val ?? '')
-      }
-      raw.push(cells)
-    })
-
-    if (!raw || raw.length < 2) throw new Error('Excel file must have a header row and at least one data row')
-
-    const headers = raw[0].map((value, index) => String(value ?? '').trim() || `column_${index + 1}`)
-    const rows = raw
-      .slice(1)
-      .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
-      .map((row) => {
-        const record: Record<string, string> = {}
-        headers.forEach((header, index) => { record[header] = String(row[index] ?? '').trim() })
-        return record
+      const colCount = Math.max(ws.columnCount, 1)
+      const raw: unknown[][] = []
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        const cells: unknown[] = []
+        for (let c = 1; c <= colCount; c++) {
+          const cell = row.getCell(c)
+          let val: unknown = cell.value
+          if (val && typeof val === 'object' && 'result' in (val as Record<string, unknown>)) val = (val as { result: unknown }).result
+          if (val && typeof val === 'object' && 'richText' in (val as Record<string, unknown>)) val = (val as { richText: Array<{ text: string }> }).richText.map(t => t.text).join('')
+          cells.push(val ?? '')
+        }
+        raw.push(cells)
       })
 
-    return { headers, rows }
+      if (!raw || raw.length < 2) throw new Error('Excel file must have a header row and at least one data row')
+
+      const headers = raw[0].map((value, index) => String(value ?? '').trim() || `column_${index + 1}`)
+      const rows = raw
+        .slice(1)
+        .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
+        .map((row) => {
+          const record: Record<string, string> = {}
+          headers.forEach((header, index) => { record[header] = String(row[index] ?? '').trim() })
+          return record
+        })
+
+      return { headers, rows }
+    } catch {
+      // ExcelJS could not read the file (e.g. legacy .xls binary or .ods) —
+      // fall through and let PapaParse try to treat it as text.
+    }
   }
 
-  if (ext !== 'csv') {
-    throw new Error('Supported formats: CSV, Excel (.xlsx)')
-  }
-
+  // CSV, TSV, TXT, or any Excel that ExcelJS couldn't parse — auto-detect delimiter.
   const { default: Papa } = await import('papaparse')
+  const text = await file.text()
   return await new Promise<ParsedTabularUpload>((resolve, reject) => {
-    Papa.parse<Record<string, string>>(file, {
+    Papa.parse<Record<string, string>>(text, {
       header: true,
       skipEmptyLines: true,
+      delimiter: '', // auto-detect: comma, tab, semicolon, or pipe
       complete: (results) => {
         const rows = (results.data as Record<string, string>[]).map((row) => {
           const normalized: Record<string, string> = {}
@@ -204,7 +214,7 @@ export async function parseTabularUpload(file: File): Promise<ParsedTabularUploa
           rows,
         })
       },
-      error: (error) => reject(error),
+      error: (err: Error) => reject(err),
     })
   })
 }
