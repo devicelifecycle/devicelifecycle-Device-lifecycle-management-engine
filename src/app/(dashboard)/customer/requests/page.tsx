@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { AlertCircle, ArrowRight, CheckCircle2, ClipboardList, FileUp, FilePlus2, Loader2 } from 'lucide-react'
+import { AlertCircle, ArrowRight, CheckCircle2, ClipboardList, FileUp, FilePlus2, Loader2, FileCheck2 } from 'lucide-react'
+import { parseTabularUpload, CSV_COLUMN_ALIASES } from '@/lib/csv-templates'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useOrders } from '@/hooks/useOrders'
@@ -44,8 +45,13 @@ export default function CustomerRequestsPage() {
   const [rowValidationErrors, setRowValidationErrors] = useState<{ row: number; message: string }[] | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [uploadProgress, setUploadProgress] = useState(0) // 0 = no progress bar, 1-100 during large-file processing
   const [customerLoadError, setCustomerLoadError] = useState('')
   const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null)
+
+  // Large-file threshold: files >5 MB are parsed in the browser to avoid
+  // Vercel function timeout, then sent as pre-aggregated JSON for matching.
+  const LARGE_FILE_BYTES = 5 * 1024 * 1024
 
   // Restore draft on mount
   useEffect(() => {
@@ -93,28 +99,111 @@ export default function CustomerRequestsPage() {
     setParsedRows([])
     setParsedSummary(null)
     setParseError('')
+    setUploadProgress(0)
     setDraftRestoredAt(null)
     try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
     setParsing(true)
     try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch('/api/orders/parse-trade-template', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to read file')
-      const rows: ParsedRow[] = data.rows || []
-      const summary: ParseSummary | null = data.summary || null
-      setParsedRows(rows)
-      setParsedSummary(summary)
-      // Save draft immediately after successful parse
-      try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ rows, summary, savedAt: new Date().toISOString() }))
-      } catch { /* ignore */ }
+      if (file.size > LARGE_FILE_BYTES) {
+        await handleLargeFile(file)
+      } else {
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch('/api/orders/parse-trade-template', { method: 'POST', body: form })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to read file')
+        const rows: ParsedRow[] = data.rows || []
+        const summary: ParseSummary | null = data.summary || null
+        setParsedRows(rows)
+        setParsedSummary(summary)
+        try {
+          localStorage.setItem(DRAFT_KEY, JSON.stringify({ rows, summary, savedAt: new Date().toISOString() }))
+        } catch { /* ignore */ }
+      }
     } catch (err) {
       setParseError(err instanceof Error ? err.message : 'Could not read file. Please check the format.')
     } finally {
       setParsing(false)
+      setUploadProgress(0)
     }
+  }
+
+  // Parse a large file entirely in the browser, aggregate rows by SKU, then
+  // send pre-aggregated rows to the server for device matching only.
+  // This avoids any Vercel function timeout regardless of row count.
+  async function handleLargeFile(file: File) {
+    setUploadProgress(5)
+    const { headers, rows: rawRows } = await parseTabularUpload(file)
+    if (rawRows.length === 0) throw new Error('No data found in file.')
+    setUploadProgress(30)
+
+    // Map each header to its canonical column name using the shared alias table
+    const colMap: Record<string, string> = {}
+    for (const header of headers) {
+      const alias = CSV_COLUMN_ALIASES[header.toLowerCase().trim()]
+      if (alias) colMap[header] = alias
+    }
+
+    // Helper: find the first header that maps to the given canonical column
+    const getVal = (row: Record<string, string>, canonical: string): string => {
+      for (const [header, mapped] of Object.entries(colMap)) {
+        if (mapped === canonical && row[header] !== undefined) return row[header].trim()
+      }
+      return ''
+    }
+
+    // Aggregate rows by (make, model, storage, condition) — reduces 100k IMEI
+    // rows to a handful of unique SKUs before sending to the server.
+    const aggMap = new Map<string, { make: string; model: string; storage: string; condition: string; quantity: number; imeis: string[]; serials: string[] }>()
+
+    for (const row of rawRows) {
+      const make = getVal(row, 'device_make')
+      const model = getVal(row, 'device_model')
+      if (!make && !model) continue
+
+      const storage = getVal(row, 'storage')
+      const condition = getVal(row, 'condition') || 'good'
+      const qtyRaw = getVal(row, 'quantity')
+      const quantity = parseInt(qtyRaw, 10) || 1
+      const rawSerial = getVal(row, 'serial_number')
+      const isImei = /^\d{15}$/.test(rawSerial)
+
+      const key = `${make.toLowerCase()}|${model.toLowerCase()}|${storage.toLowerCase()}|${condition.toLowerCase()}`
+      const existing = aggMap.get(key)
+      if (existing) {
+        existing.quantity += quantity
+        if (rawSerial) (isImei ? existing.imeis : existing.serials).push(rawSerial)
+      } else {
+        aggMap.set(key, {
+          make, model, storage, condition, quantity,
+          imeis: rawSerial && isImei ? [rawSerial] : [],
+          serials: rawSerial && !isImei ? [rawSerial] : [],
+        })
+      }
+    }
+    setUploadProgress(60)
+
+    const aggregated = Array.from(aggMap.values())
+    if (aggregated.length === 0) throw new Error('No device rows found. Check that your file has Make/Model columns.')
+
+    // Send aggregated rows as JSON — server does device matching + auto-add only
+    const res = await fetch('/api/orders/parse-trade-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows: aggregated }),
+    })
+    setUploadProgress(90)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to match devices')
+
+    const rows: ParsedRow[] = data.rows || []
+    const summary: ParseSummary | null = data.summary || null
+    setParsedRows(rows)
+    setParsedSummary(summary)
+    setUploadProgress(100)
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ rows, summary, savedAt: new Date().toISOString() }))
+    } catch { /* ignore */ }
   }
 
   async function handleSubmit(skipInvalidRows = false) {
@@ -225,19 +314,31 @@ export default function CustomerRequestsPage() {
             onClick={() => fileInputRef.current?.click()}
           >
             {parsing ? (
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              uploadProgress > 0
+                ? <FileCheck2 className="h-8 w-8 text-primary" />
+                : <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             ) : (
               <FileUp className="h-8 w-8 text-muted-foreground" />
             )}
             <p className="text-sm text-muted-foreground text-center">
               {parsing
-                ? 'Reading your file…'
+                ? uploadProgress > 0
+                  ? `Processing… ${uploadProgress}%`
+                  : 'Reading your file…'
                 : uploadFile
                   ? uploadFile.name
                   : 'Click to upload your device list (Excel or CSV)'}
             </p>
             {uploadFile && !parsing && (
               <p className="text-xs text-muted-foreground">{(uploadFile.size / 1024).toFixed(1)} KB</p>
+            )}
+            {parsing && uploadProgress > 0 && (
+              <div className="w-full max-w-xs h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-500"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
             )}
             <input
               ref={fileInputRef}

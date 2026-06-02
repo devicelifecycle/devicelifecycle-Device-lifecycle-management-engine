@@ -24,6 +24,7 @@ import { normalizeTradeCondition } from '@/lib/condition'
 import type { Device } from '@/types'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 // ── Known device brands (for combined-field splitting and brand inference) ───
 const KNOWN_BRANDS = ['apple', 'samsung', 'google', 'motorola', 'lg', 'sony',
@@ -514,6 +515,49 @@ export async function POST(request: NextRequest) {
     const allowedRoles = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer']
     if (!allowedRoles.includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // ── JSON path: pre-parsed rows from large-file client-side processing ────
+    // The customer page parses files >5 MB in the browser and sends aggregated
+    // rows as JSON so this handler only needs to do device matching + auto-add.
+    const contentType = request.headers.get('content-type') ?? ''
+    if (contentType.includes('application/json')) {
+      interface PreParsedRow {
+        make: string; model: string; storage: string; condition: string
+        quantity: number; imeis: string[]; serials: string[]
+      }
+      const body = await request.json() as { rows?: PreParsedRow[] }
+      const inputRows: PreParsedRow[] = Array.isArray(body.rows) ? body.rows : []
+      if (inputRows.length === 0) {
+        return NextResponse.json({ error: 'No rows provided' }, { status: 400 })
+      }
+      const { data: devices } = await supabase
+        .from('device_catalog').select('id, make, model, specifications, category')
+        .eq('is_active', true).order('make')
+      const catalog = (devices ?? []) as unknown as Device[]
+      const outputRows: TradeTemplateRow[] = inputRows.map(row => {
+        const device = matchDeviceFromCsv(catalog, row.make, row.model)
+        return {
+          make: row.make, model: row.model, storage: row.storage,
+          condition: normalizeTradeCondition(row.condition),
+          quantity: row.quantity, unit_price: null,
+          serials: row.serials, imeis: row.imeis,
+          device_id: device?.id ?? null,
+          match_status: (device ? 'matched' : 'not_in_catalog') as 'matched' | 'catalog_matched' | 'not_in_catalog',
+        }
+      })
+      const finalRows = await autoAddUnmatched(outputRows)
+      const matched = finalRows.filter(r => r.device_id).length
+      const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)
+      return NextResponse.json({
+        rows: finalRows,
+        summary: {
+          total_devices: totalDevices, matched,
+          unmatched: finalRows.length - matched, total_value: null,
+          format_type: 'batch' as const, detected_columns: {}, llm_assisted: false, sheet_parsed: 'client-parsed',
+        },
+        rows_truncated: 0,
+      })
     }
 
     const formData = await request.formData()

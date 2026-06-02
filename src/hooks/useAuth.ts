@@ -355,10 +355,8 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       // Update last_login_at in background — don't block navigation
       void supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userId)
 
-      // ── Navigate immediately using cached role ──────────────────────────
-      // Only trust the fast-path cache when both the cached role and user id
-      // match the freshly authenticated user. That keeps navigation snappy
-      // without accidentally reusing another account's route.
+      // ── Fast path 1: localStorage cache matches the authenticated user ──
+      // Most common case for returning users — navigate immediately with no DB call.
       const cachedUser = readTrustedCachedUser()
       if (cachedUser && cachedUser.id === userId) {
         writeCachedUser(cachedUser)
@@ -370,7 +368,31 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         return
       }
 
-      // ── First login or cleared cookie: fetch profile + MFA in parallel ──
+      // ── Fast path 2: role stored in user_metadata from a previous login ──
+      // Fires when localStorage was cleared (cache miss) but the Supabase JWT
+      // carries the role from the last successful login. Saves ~200 ms by
+      // skipping the profile DB round-trip for all but the very first login.
+      const metaRole = (authData.user.user_metadata?.dlm_role ?? '') as string
+      if (metaRole) {
+        // Still check MFA before navigating — this is fast (auth server, no DB).
+        const aalResult = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+        const aalData = aalResult.data
+        if (aalData?.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
+          const { data: factorsData } = await supabase.auth.mfa.listFactors()
+          const totpFactor = factorsData?.totp?.[0]
+          if (totpFactor) {
+            setState((prev) => ({ ...prev, isLoading: false }))
+            throw Object.assign(new Error('MFA_REQUIRED'), { type: 'MFA_REQUIRED', factorId: totpFactor.id })
+          }
+        }
+        setState((prev) => ({ ...prev, isLoading: false }))
+        router.replace(getDefaultAppPathForRole(metaRole as UserRole))
+        // Populate full profile in background so dashboard renders correctly
+        fetchUser().catch(() => {})
+        return
+      }
+
+      // ── First-ever login: fetch profile + MFA in parallel ────────────────
       const [profileResult, aalResult] = await Promise.all([
         supabase
           .from('users')
@@ -398,6 +420,8 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         writeProfileCookie(profile)
         setState({ user: profile, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(profile) })
         router.replace(getDefaultAppPathForRole(profile.role))
+        // Persist role in user_metadata so fast path 2 works on next login
+        void supabase.auth.updateUser({ data: { dlm_role: profile.role } })
         return
       }
 
