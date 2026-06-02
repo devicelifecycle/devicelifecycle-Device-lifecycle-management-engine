@@ -783,7 +783,8 @@ export async function POST(request: NextRequest) {
 
       const condRaw = get(cells, 'condition')
       const qtyRaw = get(cells, 'quantity')
-      const qty = qtyRaw ? (parseInt(qtyRaw, 10) || 1) : 1
+      const parsedQtyNum = qtyRaw !== '' ? parseInt(qtyRaw, 10) : NaN
+      const qty = !isNaN(parsedQtyNum) ? Math.max(0, parsedQtyNum) : 1
 
       parsedRows.push({
         brand: brand || '',

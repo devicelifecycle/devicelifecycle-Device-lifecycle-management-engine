@@ -429,17 +429,18 @@ export async function POST(request: NextRequest) {
         : faults
 
       // Quantity: default to 1 for trade-in/inventory (per-device rows)
-      let quantity = Number(mapped.quantity || rawRow.quantity || rawRow.Quantity || rawRow.Qty || 0)
-      if (templateType !== 'cpo' && (!quantity || quantity < 1)) {
+      const qtyStr = mapped.quantity || rawRow.quantity || rawRow.Quantity || rawRow.Qty || ''
+      const rawQtyNum = qtyStr !== '' ? Number(qtyStr) : NaN
+      const isExplicitZero = !isNaN(rawQtyNum) && rawQtyNum === 0
+      let quantity = !isNaN(rawQtyNum) && rawQtyNum > 0 ? Math.round(rawQtyNum) : 0
+      if (templateType !== 'cpo' && quantity < 1 && !isExplicitZero) {
         quantity = 1  // Per-device rows have implicit qty=1
       }
+      // quantity=0 rows: DB uses qty=1 with an [Original qty: 0] note; not a hard error
 
       // Validation
       if (!brand) errors.push({ row: i + 1, message: 'Make/Brand is required' })
       if (!model) errors.push({ row: i + 1, message: 'Model is required' })
-      if (templateType === 'cpo' && (!quantity || quantity < 1)) {
-        errors.push({ row: i + 1, message: 'Quantity is required for CPO orders' })
-      }
 
       const yearStr = mapped.year || rawRow.year || rawRow.Year || ''
       const yearNum = yearStr ? parseInt(yearStr, 10) : undefined
@@ -476,7 +477,7 @@ export async function POST(request: NextRequest) {
         model_number: sanitizeCsvCell(mapped.model_number || rawRow['Model Number'] || ''),
         accessories: sanitizeCsvCell(mapped.accessories || rawRow.accessories || rawRow.Accessories || rawRow['Accessories. Ex., Charger?'] || ''),
         faults: effectiveFaults || undefined,
-        notes: sanitizeCsvCell(mapped.notes || rawRow.notes || rawRow.Notes || ''),
+        notes: [isExplicitZero ? '[Original qty: 0]' : '', sanitizeCsvCell(mapped.notes || rawRow.notes || rawRow.Notes || '')].filter(Boolean).join(' | '),
         raw_condition: rawCondition || undefined,
       })
     }
@@ -584,10 +585,34 @@ export async function POST(request: NextRequest) {
           .limit(1)
           .single()
         deviceId = device?.id || null
+
+        // Auto-add device to catalog when not found so future lookups succeed
+        if (!deviceId && (row.brand || row.model)) {
+          const autoMake = row.brand || 'Unknown'
+          const autoModel = row.model || 'Unknown Model'
+          try {
+            const { data: newDevice } = await serviceRole
+              .from('device_catalog')
+              .insert({ make: autoMake, model: autoModel, is_active: true })
+              .select('id')
+              .single()
+            deviceId = newDevice?.id || null
+          } catch {
+            // May already exist from a concurrent insert — retry lookup
+            const { data: existingDevice } = await serviceRole
+              .from('device_catalog')
+              .select('id')
+              .ilike('make', autoMake)
+              .ilike('model', autoModel)
+              .limit(1)
+              .maybeSingle()
+            deviceId = existingDevice?.id || null
+          }
+        }
       }
 
-      // When no catalog match, embed the raw device name in notes so the
-      // quote email can display it instead of showing a blank.
+      // When catalog match still failed (auto-add also failed), embed the raw device name in notes
+      // so the quote email can display it instead of showing a blank.
       const deviceNameTag = !deviceId && (row.brand || row.model)
         ? `[Device: ${[row.brand, row.model].filter(Boolean).join(' ')}]`
         : null

@@ -39,6 +39,7 @@ export default function DevicesPage() {
   const debouncedSearch = useDebounce(search)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [customMake, setCustomMake] = useState('')
   const [form, setForm] = useState({
     make: '',
     model: '',
@@ -83,6 +84,7 @@ export default function DevicesPage() {
   const handleCreate = async () => {
     setCreating(true)
     try {
+      const effectiveMake = form.make === 'Other' ? (customMake.trim() || 'Other') : form.make
       const storageList = form.storage_options?.split(/[,;]/).map(s => s.trim()).filter(Boolean) || []
       const colorList = form.colors?.split(/[,;]/).map(c => c.trim()).filter(Boolean) || []
       const specEntries: Record<string, unknown> = {}
@@ -92,9 +94,10 @@ export default function DevicesPage() {
       if (form.cpu.trim()) specEntries.cpu = form.cpu.trim()
       if (form.ram.trim()) specEntries.ram = form.ram.trim()
       if (form.recommended_for_recycling === 'recycling') specEntries.recommended_for_recycling = true
+      if (!form.model.trim()) specEntries.partial_entry_note = 'Partial entry — model not specified'
       const body = {
-        make: form.make,
-        model: form.model,
+        make: effectiveMake,
+        model: form.model || undefined,
         variant: form.variant || undefined,
         category: form.category || undefined,
         sku: form.sku || undefined,
@@ -108,6 +111,7 @@ export default function DevicesPage() {
       if (!res.ok) throw new Error('Failed to create device')
       toast.success('Device added to catalog')
       setDialogOpen(false)
+      setCustomMake('')
       setForm({ make: '', model: '', variant: '', category: '', sku: '', storage_options: '', colors: '', year: '', cpu: '', ram: '', recommended_for_recycling: 'other' })
       fetchDevices()
     } catch {
@@ -164,12 +168,15 @@ export default function DevicesPage() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Brand / Make *</Label>
-                <Select value={form.make} onValueChange={v => setForm(f => ({ ...f, make: v }))}>
+                <Select value={form.make} onValueChange={v => { setForm(f => ({ ...f, make: v })); if (v !== 'Other') setCustomMake('') }}>
                   <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
                   <SelectContent>
                     {DEVICE_BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {form.make === 'Other' && (
+                  <Input placeholder="Enter brand name" value={customMake} onChange={e => setCustomMake(e.target.value)} />
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Classification</Label>
@@ -182,8 +189,11 @@ export default function DevicesPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Model *</Label>
+                <Label>Model <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input placeholder="e.g. iPhone 15 Pro Max" value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
+                {!form.model.trim() && form.make && (
+                  <p className="text-xs text-muted-foreground">Device will be saved as a partial entry — model can be added later.</p>
+                )}
               </div>
               <div className="grid gap-4 grid-cols-2">
                 <div className="space-y-2">
@@ -235,7 +245,7 @@ export default function DevicesPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreate} disabled={creating || !form.make || !form.model}>
+              <Button onClick={handleCreate} disabled={creating || !form.make || (form.make === 'Other' && !customMake.trim())}>
                 {creating ? 'Adding...' : 'Add Device'}
               </Button>
             </DialogFooter>

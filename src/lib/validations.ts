@@ -227,7 +227,7 @@ export const updateVendorSchema = vendorSchema.partial()
 
 export const createDeviceSchema = z.object({
   make: z.string().min(1, 'Make/Brand is required'),
-  model: z.string().min(1, 'Model is required'),
+  model: z.string().optional().default(''),
   variant: z.string().optional(),
   category: z.enum(DEVICE_CATEGORY_VALUES).optional(),
   sku: z.string().optional(),
