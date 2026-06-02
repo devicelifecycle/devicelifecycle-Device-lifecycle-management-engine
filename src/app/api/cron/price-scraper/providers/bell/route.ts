@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { GET as runCron } from '../../route'
 
+export const maxDuration = 300
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   url.pathname = '/api/cron/price-scraper'

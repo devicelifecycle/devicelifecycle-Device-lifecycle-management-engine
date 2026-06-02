@@ -14,6 +14,7 @@ import type { ScraperProviderId } from '@/lib/scrapers'
 import { runPostScrapeCleanup } from '@/lib/scrapers/post-scrape'
 import { auditCompetitorPricesHealth } from '@/lib/scrapers/health-audit'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 const VALID_PROVIDERS: ScraperProviderId[] = ['gorecell', 'telus', 'bell', 'universal', 'apple']
 

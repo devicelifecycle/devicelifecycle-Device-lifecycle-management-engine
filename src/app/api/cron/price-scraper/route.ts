@@ -13,6 +13,9 @@ import { runPostScrapeCleanup } from '@/lib/scrapers/post-scrape'
 import { auditCompetitorPricesHealth } from '@/lib/scrapers/health-audit'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
+// Allow up to 300 s on Vercel Pro; Hobby plan is capped at 60 s by the platform.
+export const maxDuration = 300
+
 const VALID_PROVIDERS: ScraperProviderId[] = ['gorecell', 'telus', 'bell', 'universal', 'apple']
 
 function parseProviders(request: NextRequest): ScraperProviderId[] | undefined {
