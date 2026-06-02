@@ -136,7 +136,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   <Link key={item.title} href={item.href} onClick={onNavigate} prefetch={false} onMouseEnter={() => router.prefetch(item.href)}>
                     <div
                       className={cn(
-                        'group relative flex items-center gap-3 rounded-xl px-3 py-2 font-body text-sm transition-all duration-200',
+                        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm transition-all duration-200',
                         isActive
                           ? 'liquid-glass text-white'
                           : 'text-white/65 hover:text-white/90'
@@ -148,7 +148,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                       )}
                       <item.icon
                         className={cn(
-                          'h-[14px] w-[14px] shrink-0 transition-colors',
+                          'h-4 w-4 shrink-0 transition-colors',
                           isActive ? 'text-primary' : 'text-white/50 group-hover:text-white/80'
                         )}
                       />

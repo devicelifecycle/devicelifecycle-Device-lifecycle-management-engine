@@ -21,6 +21,8 @@ type ParseSummary = {
   total_value: number | null; format_type: string; llm_assisted: boolean
 }
 
+const DRAFT_KEY = 'dlm_trade_draft'
+
 export default function CustomerRequestsPage() {
   const router = useRouter()
   const { orders, isLoading } = useOrders({
@@ -44,6 +46,37 @@ export default function CustomerRequestsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [customerLoadError, setCustomerLoadError] = useState('')
+  const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null)
+
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const draft = JSON.parse(raw) as { rows: ParsedRow[]; summary: ParseSummary; savedAt: string }
+      if (Array.isArray(draft.rows) && draft.rows.length > 0) {
+        setParsedRows(draft.rows)
+        if (draft.summary) setParsedSummary(draft.summary)
+        setDraftRestoredAt(draft.savedAt)
+      }
+    } catch { /* ignore parse errors */ }
+  }, [])
+
+  // Auto-save every 30s when rows are loaded
+  useEffect(() => {
+    if (parsedRows.length === 0) return
+    const save = () => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          rows: parsedRows,
+          summary: parsedSummary,
+          savedAt: new Date().toISOString(),
+        }))
+      } catch { /* ignore storage errors */ }
+    }
+    const interval = setInterval(save, 30000)
+    return () => clearInterval(interval)
+  }, [parsedRows, parsedSummary])
 
   // Fetch own customer ID on mount — /me is scoped to the logged-in customer's org
   useEffect(() => {
@@ -62,6 +95,8 @@ export default function CustomerRequestsPage() {
     setParsedSummary(null)
     setParseError('')
     setRowsTruncated(0)
+    setDraftRestoredAt(null)
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
     setParsing(true)
     try {
       const form = new FormData()
@@ -69,9 +104,15 @@ export default function CustomerRequestsPage() {
       const res = await fetch('/api/orders/parse-trade-template', { method: 'POST', body: form })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to read file')
-      setParsedRows(data.rows || [])
-      setParsedSummary(data.summary || null)
+      const rows: ParsedRow[] = data.rows || []
+      const summary: ParseSummary | null = data.summary || null
+      setParsedRows(rows)
+      setParsedSummary(summary)
       setRowsTruncated(data.rows_truncated || 0)
+      // Save draft immediately after successful parse
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ rows, summary, savedAt: new Date().toISOString() }))
+      } catch { /* ignore */ }
     } catch (err) {
       setParseError(err instanceof Error ? err.message : 'Could not read file. Please check the format.')
     } finally {
@@ -124,6 +165,8 @@ export default function CustomerRequestsPage() {
       setParsedRows([])
       setParsedSummary(null)
       setRowValidationErrors(null)
+      setDraftRestoredAt(null)
+      try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
       if (data.order?.id) router.push(`/customer/orders/${data.order.id}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Submission failed')
@@ -159,6 +202,26 @@ export default function CustomerRequestsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Draft restored banner */}
+          {draftRestoredAt && parsedRows.length > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-400">
+              <span>
+                <span className="font-medium">Draft restored</span> — {parsedRows.length} device{parsedRows.length !== 1 ? 's' : ''} from {formatRelativeTime(draftRestoredAt)}. Upload a new file to replace.
+              </span>
+              <button
+                onClick={() => {
+                  setParsedRows([])
+                  setParsedSummary(null)
+                  setDraftRestoredAt(null)
+                  try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 underline shrink-0 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
           {/* File drop zone */}
           <div
             className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-muted px-6 py-8 cursor-pointer hover:border-primary/60 transition-colors"
@@ -206,22 +269,32 @@ export default function CustomerRequestsPage() {
           {/* Parsed preview */}
           {parsedSummary && parsedRows.length > 0 && (
             <div className="space-y-3">
-              <div className={`rounded-md border px-4 py-3 text-sm ${matchedCount === parsedRows.length ? 'border-green-200 bg-green-50/40 text-green-700 dark:border-green-800 dark:bg-green-950/20 dark:text-green-400' : 'border-amber-200 bg-amber-50/40 text-amber-700 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-400'}`}>
-                <span className="font-semibold">{parsedSummary.total_devices} devices detected</span>
-                {parsedSummary.total_value != null && <span> · Estimated value: {formatCurrency(parsedSummary.total_value)}</span>}
-                {autoAddedCount > 0 && (
-                  <span className="ml-1">· {autoAddedCount} new device{autoAddedCount !== 1 ? 's' : ''} added to catalog automatically</span>
-                )}
-                {matchedCount < parsedRows.length && (
-                  <span className="ml-1">· {parsedRows.length - matchedCount} SKU{parsedRows.length - matchedCount !== 1 ? 's' : ''} could not be identified and will be skipped</span>
-                )}
+              <div className={`rounded-md border px-4 py-3 text-sm space-y-1 ${matchedCount === parsedRows.length ? 'border-green-200 bg-green-50/40 text-green-700 dark:border-green-800 dark:bg-green-950/20 dark:text-green-400' : 'border-amber-200 bg-amber-50/40 text-amber-700 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-400'}`}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    {parsedSummary.total_devices} device{parsedSummary.total_devices !== 1 ? 's' : ''} across {parsedRows.length} SKU{parsedRows.length !== 1 ? 's' : ''} detected
+                  </span>
+                  {parsedSummary.format_type !== 'unknown' && (
+                    <span className="text-xs opacity-70 capitalize">{parsedSummary.format_type === 'per_device' ? 'per-device manifest' : 'batch format'}</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs opacity-80">
+                  <span>{matchedCount}/{parsedRows.length} SKUs matched in catalog</span>
+                  {parsedSummary.total_value != null && <span>Estimated value: {formatCurrency(parsedSummary.total_value)}</span>}
+                  {autoAddedCount > 0 && <span>{autoAddedCount} new device{autoAddedCount !== 1 ? 's' : ''} added to catalog</span>}
+                  {matchedCount < parsedRows.length && (
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">{parsedRows.length - matchedCount} unmatched SKU{parsedRows.length - matchedCount !== 1 ? 's' : ''} will be submitted for manual review</span>
+                  )}
+                </div>
               </div>
 
               <div className="rounded-lg border divide-y text-sm overflow-hidden">
                 {parsedRows.map((row, idx) => (
-                  <div key={idx} className="flex items-center gap-2 px-4 py-2.5">
+                  <div key={idx} className={`flex items-center gap-2 px-4 py-2.5 ${!row.device_id ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}>
                     <div className="flex-1 min-w-0">
                       <span className="font-medium">{row.make} {row.model}</span>
+                      <span className="ml-2 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">{row.quantity} unit{row.quantity !== 1 ? 's' : ''}</span>
                     </div>
                     <input
                       type="text"
@@ -239,16 +312,14 @@ export default function CustomerRequestsPage() {
                         <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
                       ))}
                     </select>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <span>×</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={row.quantity}
-                        onChange={e => setParsedRows(prev => prev.map((r, i) => i === idx ? { ...r, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) } : r))}
-                        className="w-14 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center"
-                      />
-                    </div>
+                    <input
+                      type="number"
+                      min="1"
+                      value={row.quantity}
+                      onChange={e => setParsedRows(prev => prev.map((r, i) => i === idx ? { ...r, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) } : r))}
+                      className="w-14 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center"
+                      title="Quantity"
+                    />
                     {row.unit_price != null && (
                       <span className="text-xs tabular-nums shrink-0">{formatCurrency(row.unit_price)}/unit</span>
                     )}

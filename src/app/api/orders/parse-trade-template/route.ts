@@ -34,7 +34,7 @@ const KNOWN_BRANDS = ['apple', 'samsung', 'google', 'motorola', 'lg', 'sony',
 const TRADE_COLUMN_MAP: Record<string, string> = {
   // Device identification
   'make': 'brand', 'brand': 'brand', 'manufacturer': 'brand', 'oem': 'brand',
-  'mfr': 'brand', 'vendor': 'brand',
+  'mfr': 'brand', 'vendor': 'brand', 'device_make': 'brand',
   'model': 'model', 'device': 'model', 'device model': 'model', 'device_model': 'model',
   'model name': 'model', 'phone model': 'model', 'product': 'model',
   'description': 'model', 'existing phone': 'model', 'models': 'model',

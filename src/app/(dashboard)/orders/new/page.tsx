@@ -175,8 +175,8 @@ export default function NewOrderPage() {
   const { customer: myCustomer, isLoading: myCustomerLoading, error: myCustomerError } = useMyCustomer()
   const isCustomer = user?.role === 'customer'
   const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
-  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech', 'customer'].includes(user?.role || '')
-  const cpoCreationBlockedMessage = 'Sales can create trade-in orders only. CPO orders must be created by admin, COE, or the customer portal.'
+  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech'].includes(user?.role || '')
+  const cpoCreationBlockedMessage = 'CPO orders must be created by admin or COE. Customers can submit trade-in requests from the Requests page.'
 
   const [devices, setDevices] = useState<Device[]>([])
   const [customerId, setCustomerId] = useState('')
@@ -726,10 +726,10 @@ export default function NewOrderPage() {
 
         if (results.length === 1) {
           toast.success(`${results[0].type} order created — ${allCsvRows.length} items`)
-          router.replace(`/orders/${results[0].id}`)
+          router.replace(isCustomer ? `/customer/orders/${results[0].id}` : `/orders/${results[0].id}`)
         } else if (results.length > 1) {
           toast.success(`Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
-          router.replace('/orders')
+          router.replace(isCustomer ? '/customer/orders' : '/orders')
         }
         return
       } catch (err) {
@@ -801,10 +801,10 @@ export default function NewOrderPage() {
 
       if (results.length === 1) {
         toast.success(isCustomer ? `${results[0].type} request submitted! Our team will send you a quote shortly.` : `${results[0].type} order created successfully`)
-        router.replace(`/orders/${results[0].id}`)
+        router.replace(isCustomer ? `/customer/orders/${results[0].id}` : `/orders/${results[0].id}`)
       } else if (results.length === 2) {
         toast.success(isCustomer ? `${results.length} requests submitted! Our team will send you quotes shortly.` : `Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
-        router.replace('/orders')
+        router.replace(isCustomer ? '/customer/orders' : '/orders')
       }
     } catch (err) {
       submittedRef.current = false

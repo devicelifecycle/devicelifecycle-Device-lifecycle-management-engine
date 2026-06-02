@@ -11,7 +11,7 @@ function Toaster() {
       closeButton
       className="toaster group"
       toastOptions={{
-        duration: 4500,
+        duration: 8000,
         classNames: {
           // Base toast shell
           toast:
