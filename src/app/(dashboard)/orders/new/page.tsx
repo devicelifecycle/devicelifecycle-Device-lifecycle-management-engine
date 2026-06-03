@@ -620,6 +620,49 @@ export default function NewOrderPage() {
             }
           }
 
+          // Model cleanup — runs regardless of whether make came from the column or inference
+          if (mapped.device_make && mapped.device_model) {
+            // 1. Strip brand prefix if model starts with the brand (e.g., "Apple iPhone 15" → "iPhone 15")
+            const brandLower = mapped.device_make.toLowerCase()
+            if (mapped.device_model.toLowerCase().startsWith(brandLower + ' ')) {
+              mapped.device_model = mapped.device_model.slice(mapped.device_make.length).trim()
+            }
+
+            // 2. Correct make when model strongly indicates a different brand (e.g., Samsung row with "Google Pixel 7a")
+            const modelLower = mapped.device_model.toLowerCase()
+            const makeLower = mapped.device_make.toLowerCase()
+            if (/\b(iphone|ipad|macbook|airpods)\b/.test(modelLower) && makeLower !== 'apple') {
+              mapped.device_make = 'Apple'
+            } else if (/\bgalaxy\b/.test(modelLower) && makeLower !== 'samsung') {
+              mapped.device_make = 'Samsung'
+            } else if (/\bpixel\b/.test(modelLower) && makeLower !== 'google') {
+              mapped.device_make = 'Google'
+            } else if (/\b(moto[a-z]*|motorola)\b/.test(modelLower) && makeLower !== 'motorola') {
+              mapped.device_make = 'Motorola'
+            }
+          }
+
+          // 3. Extract storage from model string when storage column is empty
+          if (mapped.device_model && !mapped.storage) {
+            const storageMatch = mapped.device_model.match(/\b(\d+\s*(?:GB|TB))\b/i)
+            if (storageMatch) {
+              mapped.storage = storageMatch[1].replace(/\s+/g, '').toUpperCase()
+              mapped.device_model = mapped.device_model.replace(storageMatch[0], '').replace(/\s+/g, ' ').trim()
+            }
+          }
+
+          // 4. Remove trailing color words from model (e.g., "iPhone 15 Black" → "iPhone 15")
+          if (mapped.device_model) {
+            const COLOR_RE = /\s+(Black|White|Silver|Gold|Red|Blue|Green|Yellow|Purple|Pink|Grey|Gray|Titanium|Natural|Midnight|Starlight|Graphite|Platinum|Coral|Lavender|Teal|Cream|Beige|Bronze|Burgundy|Champagne|Onyx|Rose|Violet|Sage|Blue Black|Space Gray|Space Grey|Rose Gold|Deep Purple|Product Red|Natural Titanium|White Titanium|Black Titanium|Desert Titanium)$/i
+            let cleaned = mapped.device_model
+            let prev: string
+            do {
+              prev = cleaned
+              cleaned = cleaned.replace(COLOR_RE, '').trim()
+            } while (cleaned !== prev)
+            mapped.device_model = cleaned
+          }
+
           const rawCondition = mapped.condition || ''
           mapped.condition = normalizeCondition(rawCondition)
 
@@ -1412,8 +1455,15 @@ export default function NewOrderPage() {
                           {price?.competitors && price.competitors.length > 0 ? (() => {
                             const isBellTelus = (n: string) => { const l = n.toLowerCase(); return l === 'bell' || l === 'telus' }
                             const isGoRecellName = (n: string) => { const l = n.toLowerCase(); return l.includes('gorecell') || l.includes('go recell') }
-                            const carriers = price.competitors.filter(c => isBellTelus(c.name))
-                            const goRecell = price.competitors.find(c => isGoRecellName(c.name))
+                            // Deduplicate: keep highest price per competitor name
+                            const seen = new Map<string, CompetitorPrice>()
+                            for (const c of price.competitors) {
+                              const ex = seen.get(c.name)
+                              if (!ex || c.price > ex.price) seen.set(c.name, c)
+                            }
+                            const deduped = Array.from(seen.values())
+                            const carriers = deduped.filter(c => isBellTelus(c.name))
+                            const goRecell = deduped.find(c => isGoRecellName(c.name))
                             const carrierAvg = carriers.length > 0
                               ? carriers.reduce((s, c) => s + c.price, 0) / carriers.length : 0
                             return (

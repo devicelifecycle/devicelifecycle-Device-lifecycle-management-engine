@@ -1114,21 +1114,35 @@ export class PricingService {
       if (competitorData && competitorData.length > 0) {
         const now = Date.now()
         let maxAgeMs = 0
+        // Deduplicate: for each competitor name keep the entry with the highest price
+        // (multiple rows exist when the scraper ran several times for the same device)
+        const bestTradeInByName = new Map<string, number>()
+        const bestSellByName = new Map<string, number>()
         for (const cp of competitorData) {
           const price = cp.trade_in_price || 0
           const sellPrice = cp.sell_price || 0
           const updatedAt = cp.updated_at || cp.scraped_at || cp.created_at
           const cpCondition = (cp as CompetitorPrice).condition
+          const name = cp.competitor_name || 'Unknown'
           if (updatedAt) {
             const ageMs = now - new Date(updatedAt).getTime()
             if (ageMs > maxAgeMs) maxAgeMs = ageMs
           }
-          if (price > 0) rawCompetitors.push({ name: cp.competitor_name || 'Unknown', price })
-          // Only use sell prices for our condition — when fallback fetches all conditions, avoid mixing
-          if (sellPrice > 0 && (!cpCondition || cpCondition === competitorCondition)) {
-            rawCompetitorSellPrices.push(sellPrice)
-            rawCpoCompetitors.push({ name: cp.competitor_name || 'Unknown', sell_price: sellPrice })
+          if (price > 0) {
+            const existing = bestTradeInByName.get(name) ?? 0
+            if (price > existing) bestTradeInByName.set(name, price)
           }
+          if (sellPrice > 0 && (!cpCondition || cpCondition === competitorCondition)) {
+            const existing = bestSellByName.get(name) ?? 0
+            if (sellPrice > existing) bestSellByName.set(name, sellPrice)
+          }
+        }
+        for (const [name, price] of bestTradeInByName) {
+          rawCompetitors.push({ name, price })
+        }
+        for (const [name, sell_price] of bestSellByName) {
+          rawCompetitorSellPrices.push(sell_price)
+          rawCpoCompetitors.push({ name, sell_price })
         }
         if (maxAgeMs > 0) {
           competitorDataAgeDays = round2(maxAgeMs / (24 * 60 * 60 * 1000))
