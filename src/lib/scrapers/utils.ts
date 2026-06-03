@@ -2,6 +2,25 @@
 // SCRAPER UTILITIES
 // ============================================================================
 
+// Browser fingerprint headers required by modern WAF/CDN (Cloudflare, Akamai, etc.)
+// These match a real Chrome 131 browser on Windows — absence triggers bot detection.
+const BROWSER_HEADERS: Record<string, string> = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-CA,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+  'Sec-Ch-Ua-Mobile': '?0',
+  'Sec-Ch-Ua-Platform': '"Windows"',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Sec-Fetch-User': '?1',
+  'Upgrade-Insecure-Requests': '1',
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache',
+}
+
 export async function fetchWithRetry(
   url: string,
   options?: RequestInit,
@@ -17,9 +36,7 @@ export async function fetchWithRetry(
         ...options,
         signal: options?.signal ?? controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-CA,en;q=0.9',
+          ...BROWSER_HEADERS,
           ...options?.headers,
         },
       })
@@ -29,13 +46,16 @@ export async function fetchWithRetry(
         return res
       }
 
-      const shouldRetry = res.status === 408 || res.status === 429 || res.status >= 500
+      // Retry on: Cloudflare transient 403, rate limit 429, timeout 408, server errors 5xx
+      const shouldRetry = res.status === 403 || res.status === 408 || res.status === 429 || res.status >= 500
       if (!shouldRetry || i === retries - 1) {
         clearTimeout(timeout)
         return res
       }
 
-      await sleep(1000 * (i + 1) + Math.floor(Math.random() * 300))
+      // Exponential backoff with jitter — longer for 429/403 to let WAF cooldown
+      const base = res.status === 429 || res.status === 403 ? 3000 : 1000
+      await sleep(base * (i + 1) + Math.floor(Math.random() * 500))
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e))
       if (i < retries - 1) await sleep(1000 * (i + 1) + Math.floor(Math.random() * 300))

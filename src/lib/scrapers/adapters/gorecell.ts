@@ -234,10 +234,7 @@ async function scrapeGoRecellTypeScript(devices: DeviceToScrape[]): Promise<Scra
           catalog = catalogCache.get(modelKey)!
         } else {
           const searchUrl = `${STORE_API}?search=${encodeURIComponent(device.model)}&per_page=10`
-          const catalogRes = await fetchWithRetry(searchUrl, {
-            method: 'GET',
-            headers: { Accept: 'application/json' },
-          })
+          const catalogRes = await fetchWithRetry(searchUrl, { method: 'GET' })
           const catalogRaw = catalogRes.ok ? await catalogRes.json() : []
           catalog = Array.isArray(catalogRaw) ? catalogRaw : []
           catalogCache.set(modelKey, catalog)
@@ -508,7 +505,7 @@ async function scrapeGoRecellFullCatalogTypeScript(limitProducts?: number): Prom
 
     while (limitProducts == null || fetched < limitProducts) {
       const url = `${STORE_API}?page=${page}&per_page=${perPage}`
-      const res = await fetchWithRetry(url, { method: 'GET', headers: { Accept: 'application/json' } })
+      const res = await fetchWithRetry(url, { method: 'GET' })
       const raw = res.ok ? await res.json() : []
       const products: WooProduct[] = Array.isArray(raw) ? raw : []
       if (products.length === 0) break
@@ -540,7 +537,7 @@ async function scrapeGoRecellFullCatalogTypeScript(limitProducts?: number): Prom
         let searchPage = 1
         for (;;) {
           const searchUrl = `${STORE_API}?search=${encodeURIComponent(term)}&per_page=100&page=${searchPage}`
-          const res = await fetchWithRetry(searchUrl, { method: 'GET', headers: { Accept: 'application/json' } })
+          const res = await fetchWithRetry(searchUrl, { method: 'GET' })
           const raw = res.ok ? await res.json() : []
           const products: WooProduct[] = Array.isArray(raw) ? raw : []
           if (products.length === 0) break
