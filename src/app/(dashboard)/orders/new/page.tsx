@@ -5,7 +5,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, Files } from 'lucide-react'
@@ -216,9 +215,11 @@ export default function NewOrderPage() {
   // Device search state — one entry per line item
   const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState<Record<number, boolean>>({})
-  const [dropdownRects, setDropdownRects] = useState<Record<number, DOMRect>>({})
   const [deviceSearchResults, setDeviceSearchResults] = useState<Record<number, Device[]>>({})
   const deviceInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+
+  // CSV preview pagination
+  const [csvPreviewPage, setCsvPreviewPage] = useState(1)
   const deviceSearchTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
 
   // Pricing state (internal roles only)
@@ -704,11 +705,12 @@ export default function NewOrderPage() {
           rows,
           errors,
         }])
+        setCsvPreviewPage(1)
 
         if (errors.length === 0) {
           toast.success(`${file.name}: ${rows.length} rows parsed successfully`)
         } else {
-          toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors — click any Make cell below to fix`)
+          toast.info(`${file.name}: ${rows.length} rows loaded — ${errors.length} flagged for admin review. You can still submit; flagged rows will be noted for your team.`)
           if (errors.length === rows.length) {
             // Try to give a targeted hint based on what columns were detected
             const detectedNorm = rawHeaders.map(h => h.toLowerCase().trim())
@@ -741,6 +743,7 @@ export default function NewOrderPage() {
 
   const removeFile = (index: number) => {
     setParsedFiles(prev => prev.filter((_, i) => i !== index))
+    setCsvPreviewPage(1)
   }
 
   // Edit a specific CSV row field (editable preview) — re-validates errors after each edit
@@ -809,16 +812,20 @@ export default function NewOrderPage() {
           if (csvRows.length === 0) continue
           // Prepare rows as records with canonical column names for the server
           const columns = ['device_make', 'device_model', 'quantity', 'condition', 'storage', 'serial_number', 'color', 'notes']
-          const apiRows = csvRows.map(row => ({
-            device_make: row.device_make,
-            device_model: row.device_model,
-            quantity: row.quantity || '1',
-            condition: row.condition || 'good',
-            storage: row.storage || '',
-            serial_number: row.serial_number || '',
-            color: row.color || '',
-            notes: row.notes || '',
-          }))
+          const apiRows = csvRows.map(row => {
+            const adminFlag = !row.device_make ? '⚠ Needs admin review: make/brand not identified from upload' : ''
+            const combinedNotes = [row.notes, adminFlag].filter(Boolean).join(' | ')
+            return {
+              device_make: row.device_make,
+              device_model: row.device_model,
+              quantity: row.quantity || '1',
+              condition: row.condition || 'good',
+              storage: row.storage || '',
+              serial_number: row.serial_number || '',
+              color: row.color || '',
+              notes: combinedNotes,
+            }
+          })
 
           const res = await fetch('/api/orders/upload-csv', {
             method: 'POST',
@@ -1063,7 +1070,7 @@ export default function NewOrderPage() {
                         <div className="flex items-start gap-3">
                           <div className="flex-1 space-y-2">
                             {/* Row 1: Type, Device, Qty, Condition (trade-in only), Storage */}
-                            <div className={`grid gap-2 ${isInternal ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
+                            <div className={`grid gap-2 ${isInternal ? 'sm:grid-cols-7' : 'sm:grid-cols-6'}`}>
                               {/* Order Type Badge */}
                               {canCreateCpoOrder ? (
                                 <Select value={item.order_type} onValueChange={v => updateItem(index, 'order_type', v)}>
@@ -1093,7 +1100,7 @@ export default function NewOrderPage() {
                                   Trade-In
                                 </div>
                               )}
-                              <div className="relative">
+                              <div className="relative col-span-2">
                                 <Input
                                   ref={el => { deviceInputRefs.current[index] = el }}
                                   placeholder="Search device..."
@@ -1101,29 +1108,16 @@ export default function NewOrderPage() {
                                   onChange={e => {
                                     setDeviceSearches(prev => ({ ...prev, [index]: e.target.value }))
                                     searchDevices(index, e.target.value)
-                                    const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
-                                    if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
                                     setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
                                   }}
                                   onFocus={() => {
-                                    const rect = deviceInputRefs.current[index]?.getBoundingClientRect()
-                                    if (rect) setDropdownRects(prev => ({ ...prev, [index]: rect }))
                                     setDeviceDropdownOpen(prev => ({ ...prev, [index]: true }))
                                   }}
                                   onBlur={() => setTimeout(() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: false })), 150)}
                                   autoComplete="off"
                                 />
-                                {deviceDropdownOpen[index] && dropdownRects[index] && createPortal(
-                                  <div
-                                    style={{
-                                      position: 'fixed',
-                                      top: dropdownRects[index].bottom + 4,
-                                      left: dropdownRects[index].left,
-                                      width: dropdownRects[index].width,
-                                      zIndex: 9999,
-                                    }}
-                                    className="max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg"
-                                  >
+                                {deviceDropdownOpen[index] && (
+                                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg">
                                     {(() => {
                                       const q = (deviceSearches[index] || '').toLowerCase()
                                       const serverResults = deviceSearchResults[index]
@@ -1178,8 +1172,7 @@ export default function NewOrderPage() {
                                         </button>
                                       ))
                                     })()}
-                                  </div>,
-                                  document.body
+                                  </div>
                                 )}
                               </div>
                               <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
@@ -1326,7 +1319,7 @@ export default function NewOrderPage() {
                             <p className="text-sm font-medium">{file.filename}</p>
                             <p className="text-xs text-muted-foreground">
                               {file.rows.length} rows
-                              {file.errors.length > 0 && <span className="text-destructive"> • {file.errors.length} errors</span>}
+                              {file.errors.length > 0 && <span className="text-amber-600"> • {file.errors.length} flagged for review</span>}
                             </p>
                           </div>
                         </div>
@@ -1339,10 +1332,15 @@ export default function NewOrderPage() {
                 )}
 
                 {allCsvErrors.length > 0 && (
-                  <div className="rounded-md bg-destructive/10 p-3 space-y-1">
-                    <p className="text-sm font-medium text-destructive">Validation Errors:</p>
-                    {allCsvErrors.slice(0, 5).map((err, i) => <p key={i} className="text-xs text-destructive">{err}</p>)}
-                    {allCsvErrors.length > 5 && <p className="text-xs text-destructive">...and {allCsvErrors.length - 5} more</p>}
+                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      {allCsvErrors.length} row{allCsvErrors.length !== 1 ? 's' : ''} flagged for admin review
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mb-1">
+                      These rows are missing a make/brand. The file will still submit — a &ldquo;⚠ Needs admin review&rdquo; note will be added to those items so your team can follow up.
+                    </p>
+                    {allCsvErrors.slice(0, 5).map((err, i) => <p key={i} className="text-xs text-amber-700 dark:text-amber-400">{err}</p>)}
+                    {allCsvErrors.length > 5 && <p className="text-xs text-amber-600">…and {allCsvErrors.length - 5} more — visible in the table below</p>}
                   </div>
                 )}
 
@@ -1364,7 +1362,13 @@ export default function NewOrderPage() {
                   )
                 })()}
 
-                {allCsvRows.length > 0 && (
+                {allCsvRows.length > 0 && (() => {
+                  const PAGE_SIZE = 50
+                  const totalPages = Math.ceil(allCsvRows.length / PAGE_SIZE)
+                  const pageStart = (csvPreviewPage - 1) * PAGE_SIZE
+                  const pageEnd = pageStart + PAGE_SIZE
+                  const pageRows = allCsvRows.slice(pageStart, pageEnd)
+                  return (
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-sm font-medium">Editable Preview ({allCsvRows.length} rows)</p>
@@ -1385,10 +1389,11 @@ export default function NewOrderPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {allCsvRows.slice(0, 50).map((row, i) => {
+                          {pageRows.map((row, i) => {
                             const isQtyOnly = !row.device_make && !row.device_model && !!row.quantity
+                            const isFlagged = !row.device_make
                             return (
-                            <TableRow key={i} className={isQtyOnly ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}>
+                            <TableRow key={i} className={isQtyOnly ? 'bg-amber-50/60 dark:bg-amber-950/20' : isFlagged ? 'bg-amber-50/40 dark:bg-amber-950/10' : ''}>
                               <TableCell className="p-1">
                                 {canCreateCpoOrder ? (
                                   <Select value={row.order_type || 'trade_in'} onValueChange={v => editCsvRow(row._fi, row._ri, 'order_type', v)}>
@@ -1449,9 +1454,53 @@ export default function NewOrderPage() {
                         </TableBody>
                       </Table>
                     </div>
-                    {allCsvRows.length > 50 && <p className="text-xs text-muted-foreground mt-2">Showing 50 of {allCsvRows.length} rows. All rows will be submitted.</p>}
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-3">
+                        <p className="text-xs text-muted-foreground">
+                          Rows {pageStart + 1}–{Math.min(pageEnd, allCsvRows.length)} of {allCsvRows.length} &bull; All rows will be submitted
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button" variant="outline" size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={csvPreviewPage === 1}
+                            onClick={() => setCsvPreviewPage(p => Math.max(1, p - 1))}
+                          >‹</Button>
+                          {Array.from({ length: totalPages }, (_, pi) => pi + 1)
+                            .filter(p => p === 1 || p === totalPages || Math.abs(p - csvPreviewPage) <= 1)
+                            .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+                              if (idx > 0 && typeof arr[idx - 1] === 'number' && (p as number) - (arr[idx - 1] as number) > 1) acc.push('…')
+                              acc.push(p)
+                              return acc
+                            }, [])
+                            .map((p, idx) =>
+                              p === '…'
+                                ? <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
+                                : <Button
+                                    key={p}
+                                    type="button"
+                                    variant={csvPreviewPage === p ? 'default' : 'outline'}
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-xs"
+                                    onClick={() => setCsvPreviewPage(p as number)}
+                                  >{p}</Button>
+                            )}
+                          <Button
+                            type="button" variant="outline" size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={csvPreviewPage === totalPages}
+                            onClick={() => setCsvPreviewPage(p => Math.min(totalPages, p + 1))}
+                          >›</Button>
+                        </div>
+                      </div>
+                    )}
+                    {totalPages <= 1 && allCsvRows.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-2">All {allCsvRows.length} rows shown. All will be submitted.</p>
+                    )}
                   </div>
-                )}
+                  )
+                })()}
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -1540,9 +1589,9 @@ export default function NewOrderPage() {
                                   </div>
                                 ))}
                                 {carriers.length >= 2 && (
-                                  <div className="flex items-center justify-between gap-2 border-t border-amber-200/40 pt-0.5">
-                                    <span className="text-slate-600 dark:text-slate-400 italic">Carrier avg</span>
-                                    <span className="font-mono text-amber-700">{formatCurrency(carrierAvg)}</span>
+                                  <div className="flex items-center justify-between gap-2 border-t-2 border-amber-400 dark:border-amber-500 pt-1 mt-0.5">
+                                    <span className="text-slate-900 dark:text-slate-100 font-bold text-[11px]">Carrier avg</span>
+                                    <span className="font-mono font-bold text-amber-800 dark:text-amber-200">{formatCurrency(carrierAvg)}</span>
                                   </div>
                                 )}
                                 {goRecell && (
