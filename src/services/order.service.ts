@@ -522,7 +522,9 @@ export class OrderService {
       throw new Error('Only draft or cancelled orders can be deleted')
     }
 
-    const { error } = await supabase
+    // Use service role to bypass RLS — session client silently no-ops on delete
+    const serviceSupabase = createServiceRoleClient()
+    const { error } = await serviceSupabase
       .from('orders')
       .delete()
       .eq('id', id)
