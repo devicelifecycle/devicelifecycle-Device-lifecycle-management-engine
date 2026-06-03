@@ -1602,7 +1602,7 @@ export default function NewOrderPage() {
                         <TableCell className="text-right">
                           {price?.last_manual_price != null ? (
                             <div>
-                              <span className="font-mono text-xs font-medium text-amber-700">{formatCurrency(price.last_manual_price)}</span>
+                              <span className="font-mono text-xs font-medium text-blue-600 dark:text-blue-400">{formatCurrency(price.last_manual_price)}</span>
                               {price.last_manual_at && (
                                 <div className="text-[10px] text-muted-foreground">{new Date(price.last_manual_at).toLocaleDateString()}</div>
                               )}
@@ -1612,7 +1612,7 @@ export default function NewOrderPage() {
                           )}
                         </TableCell>
                         {/* Competitor prices — internal only */}
-                        <TableCell className="bg-amber-50/40 min-w-[200px]">
+                        <TableCell className="bg-slate-50/60 dark:bg-slate-800/30 min-w-[200px]">
                           {price?.competitors && price.competitors.length > 0 ? (() => {
                             const isBellTelus = (n: string) => { const l = n.toLowerCase(); return l === 'bell' || l === 'telus' }
                             const isGoRecellName = (n: string) => { const l = n.toLowerCase(); return l.includes('gorecell') || l.includes('go recell') }
@@ -1629,29 +1629,32 @@ export default function NewOrderPage() {
                               ? carriers.reduce((s, c) => s + c.price, 0) / carriers.length : 0
                             return (
                               <div className="space-y-0.5 text-[11px]">
+                                {/* Carrier rows — blue */}
                                 {carriers.map(c => (
                                   <div key={c.name} className="flex items-center justify-between gap-2">
                                     <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[90px]">{c.name}</span>
-                                    <span className="font-mono text-amber-800">{formatCurrency(c.price)}</span>
+                                    <span className="font-mono text-blue-700 dark:text-blue-300">{formatCurrency(c.price)}</span>
                                   </div>
                                 ))}
                                 {carriers.length >= 2 && (
-                                  <div className="flex items-center justify-between gap-2 border-t-2 border-amber-400 dark:border-amber-500 pt-1 mt-0.5">
+                                  <div className="flex items-center justify-between gap-2 border-t-2 border-blue-200 dark:border-blue-700 pt-1 mt-0.5">
                                     <span className="text-slate-900 dark:text-slate-100 font-bold text-[11px]">Carrier avg</span>
-                                    <span className="font-mono font-bold text-amber-800 dark:text-amber-200">{formatCurrency(carrierAvg)}</span>
+                                    <span className="font-mono font-bold text-blue-700 dark:text-blue-300">{formatCurrency(carrierAvg)}</span>
                                   </div>
                                 )}
+                                {/* GoRecell row — emerald */}
                                 {goRecell && (
                                   <div className="flex items-center justify-between gap-2">
-                                    <span className="text-amber-700 font-semibold truncate max-w-[90px]">{goRecell.name}</span>
-                                    <span className="font-mono font-semibold text-amber-700">{formatCurrency(goRecell.price)}</span>
+                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold truncate max-w-[90px]">{goRecell.name}</span>
+                                    <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">{formatCurrency(goRecell.price)}</span>
                                   </div>
                                 )}
-                                <div className="flex items-center justify-between gap-2 border-t border-amber-300/60 pt-0.5 mt-0.5">
+                                {/* Final formula result — violet */}
+                                <div className="flex items-center justify-between gap-2 border-t border-slate-300 dark:border-slate-600 pt-0.5 mt-0.5">
                                   <span className="text-slate-800 dark:text-slate-200 font-semibold">
                                     {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
                                   </span>
-                                  <span className="font-mono font-bold text-amber-900">{formatCurrency(enginePrice)}</span>
+                                  <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(enginePrice)}</span>
                                 </div>
                               </div>
                             )

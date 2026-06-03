@@ -859,7 +859,7 @@ export default function NewTradeInPage() {
                           <TableCell className="text-right text-xs">{item.quantity}</TableCell>
                           <TableCell className="text-right font-mono text-xs text-muted-foreground">{formatCurrency(price.engine_price)}</TableCell>
                           {/* Competitor prices — internal only, never shown to customers */}
-                          <TableCell className="bg-amber-50/40 min-w-[200px]">
+                          <TableCell className="bg-slate-50/60 dark:bg-slate-800/30 min-w-[200px]">
                             {price.competitors.length > 0 ? (() => {
                               // Mirror server-side formula: only Bell and Telus form the carrier group
                               const isBellTelus = (n: string) => { const l = n.toLowerCase(); return l === 'bell' || l === 'telus' }
@@ -871,25 +871,25 @@ export default function NewTradeInPage() {
                                 : 0
                               return (
                                 <div className="space-y-0.5 text-[11px]">
-                                  {/* Carrier rows */}
+                                  {/* Carrier rows — blue */}
                                   {carriers.map(c => (
                                     <div key={c.name} className="flex items-center justify-between gap-2">
                                       <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[100px]">{c.name}</span>
-                                      <span className="font-mono text-amber-800">{formatCurrency(c.price)}</span>
+                                      <span className="font-mono text-blue-700 dark:text-blue-300">{formatCurrency(c.price)}</span>
                                     </div>
                                   ))}
                                   {/* Carrier avg subtotal */}
                                   {carriers.length >= 2 && (
-                                    <div className="flex items-center justify-between gap-2 border-t border-amber-200/40 pt-0.5">
+                                    <div className="flex items-center justify-between gap-2 border-t border-blue-200 dark:border-blue-700 pt-0.5">
                                       <span className="text-slate-600 dark:text-slate-400 italic font-medium">Carrier avg</span>
-                                      <span className="font-mono text-amber-700">{formatCurrency(carrierAvg)}</span>
+                                      <span className="font-mono text-blue-700 dark:text-blue-300">{formatCurrency(carrierAvg)}</span>
                                     </div>
                                   )}
-                                  {/* GoRecell row */}
+                                  {/* GoRecell row — emerald */}
                                   {goRecell && (
                                     <div className="flex items-center justify-between gap-2">
-                                      <span className="text-amber-700 font-semibold truncate max-w-[100px]">{goRecell.name}</span>
-                                      <span className="font-mono font-semibold text-amber-700">{formatCurrency(goRecell.price)}</span>
+                                      <span className="text-emerald-700 dark:text-emerald-400 font-semibold truncate max-w-[100px]">{goRecell.name}</span>
+                                      <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">{formatCurrency(goRecell.price)}</span>
                                     </div>
                                   )}
                                   {/* Bell/Telus N/A note for non-Apple devices */}
@@ -898,12 +898,12 @@ export default function NewTradeInPage() {
                                       Bell/Telus: Apple only
                                     </div>
                                   )}
-                                  {/* Final formula result */}
-                                  <div className="flex items-center justify-between gap-2 border-t border-amber-300/60 pt-0.5 mt-0.5">
+                                  {/* Final formula result — violet */}
+                                  <div className="flex items-center justify-between gap-2 border-t border-slate-300 dark:border-slate-600 pt-0.5 mt-0.5">
                                     <span className="text-slate-800 dark:text-slate-200 font-semibold">
                                       {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
                                     </span>
-                                    <span className="font-mono font-bold text-amber-900">{formatCurrency(price.engine_price)}</span>
+                                    <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(price.engine_price)}</span>
                                   </div>
                                 </div>
                               )
