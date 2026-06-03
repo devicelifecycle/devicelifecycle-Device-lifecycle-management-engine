@@ -47,6 +47,8 @@ const COLUMN_ALIASES: Record<string, string> = {
   devcie_model: 'device_model', divice_model: 'device_model', 'device model': 'device_model', 'model*': 'device_model',
   'phone model': 'device_model', 'model name': 'device_model', 'device name': 'device_model',
   'existing phone': 'device_model', description: 'device_model', phone_model: 'device_model',
+  'device description': 'device_model', 'item description': 'device_model',
+  'product description': 'device_model', 'asset description': 'device_model',
   // Quantity
   quantity: 'quantity', qty: 'quantity', quantitty: 'quantity', quantiy: 'quantity', quantit: 'quantity',
   count: 'quantity', num: 'quantity', '#': 'quantity', 'device count': 'quantity',
@@ -706,11 +708,26 @@ export default function NewOrderPage() {
         if (errors.length === 0) {
           toast.success(`${file.name}: ${rows.length} rows parsed successfully`)
         } else {
-          toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors — you can fix make/brand by clicking cells below`)
-          // Help debug column mapping: show detected headers if ALL rows are missing make
+          toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors — click any Make cell below to fix`)
           if (errors.length === rows.length) {
-            const detectedNames = rawHeaders.slice(0, 8).join(', ')
-            toast.info(`Detected columns: ${detectedNames}${rawHeaders.length > 8 ? '…' : ''}. If "Make" column is missing, check your file's column headers.`, { duration: 8000 })
+            // Try to give a targeted hint based on what columns were detected
+            const detectedNorm = rawHeaders.map(h => h.toLowerCase().trim())
+            const hasDescription = detectedNorm.some(h => h.includes('description'))
+            const hasMakeAlias = detectedNorm.some(h => COLUMN_ALIASES[h] === 'device_make')
+            if (hasDescription && !hasMakeAlias) {
+              toast.info(
+                'Your file uses a "Description" column — brand/make will be auto-detected from the description text (e.g., "Apple iPhone 12 64GB"). ' +
+                'Edit the Make cell in the table below if any row is wrong.',
+                { duration: 10000 }
+              )
+            } else {
+              const detectedNames = rawHeaders.slice(0, 8).join(', ')
+              toast.info(
+                `Detected columns: ${detectedNames}${rawHeaders.length > 8 ? '…' : ''}. ` +
+                'Add a "Make" column (or rename your column to "Make") to auto-fill brands.',
+                { duration: 10000 }
+              )
+            }
           }
         }
       } catch {
@@ -968,6 +985,33 @@ export default function NewOrderPage() {
               <p className="text-sm text-destructive">
                 Unable to load your organization profile. Please contact support.
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Customer selection — internal staff only */}
+        {!isCustomer && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer</CardTitle>
+              <CardDescription>Select the organization this order is for</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select value={customerId} onValueChange={setCustomerId}>
+                <SelectTrigger className="w-full sm:max-w-sm">
+                  <SelectValue placeholder="Select a customer…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(customers as Array<{ id: string; company_name: string }>).map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.company_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!customerId && (
+                <p className="text-xs text-muted-foreground mt-1.5">Required before submitting the order.</p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1302,6 +1346,24 @@ export default function NewOrderPage() {
                   </div>
                 )}
 
+                {allCsvRows.length > 0 && (() => {
+                  const qtyOnlyRows = allCsvRows.filter(r => !r.device_make && !r.device_model && r.quantity)
+                  return (
+                  <>
+                    {qtyOnlyRows.length > 0 && (
+                      <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1">
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                          {qtyOnlyRows.length} row{qtyOnlyRows.length > 1 ? 's' : ''} with quantity but no device name
+                        </p>
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                          These rows were found in your file with a quantity but no make or model. They are highlighted below — click the Make and Model cells to fill in the device info, or delete the rows you don&apos;t need.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                  )
+                })()}
+
                 {allCsvRows.length > 0 && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -1323,8 +1385,10 @@ export default function NewOrderPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {allCsvRows.slice(0, 50).map((row, i) => (
-                            <TableRow key={i}>
+                          {allCsvRows.slice(0, 50).map((row, i) => {
+                            const isQtyOnly = !row.device_make && !row.device_model && !!row.quantity
+                            return (
+                            <TableRow key={i} className={isQtyOnly ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}>
                               <TableCell className="p-1">
                                 {canCreateCpoOrder ? (
                                   <Select value={row.order_type || 'trade_in'} onValueChange={v => editCsvRow(row._fi, row._ri, 'order_type', v)}>
@@ -1380,7 +1444,8 @@ export default function NewOrderPage() {
                                 </Button>
                               </TableCell>
                             </TableRow>
-                          ))}
+                            )
+                          })}
                         </TableBody>
                       </Table>
                     </div>
