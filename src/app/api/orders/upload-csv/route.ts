@@ -136,25 +136,32 @@ const COLUMN_MAP: Record<string, string> = {
   'company': 'brand', 'phone brand': 'brand', 'phone make': 'brand',
   'device brand': 'brand', 'device manufacturer': 'brand',
   'phone_brand': 'brand', 'phone_make': 'brand',
-  // Model aliases
+  // Model aliases — universal: device description, asset, SKU, equipment, etc.
   'phone model': 'model', 'model name': 'model', 'existing phone': 'model',
   'device name': 'model', 'device_name': 'model', 'description': 'model',
+  'device description': 'model', 'item description': 'model',
+  'product description': 'model', 'asset description': 'model',
+  'product name': 'model', 'item name': 'model', 'asset name': 'model',
+  'equipment description': 'model', 'hardware description': 'model',
+  'sku': 'model', 'sku description': 'model', 'part description': 'model',
+  'part name': 'model', 'equipment name': 'model', 'equipment model': 'model',
+  'unit description': 'model', 'article description': 'model',
   // Quantity aliases
   'count': 'quantity', 'num': 'quantity', '#': 'quantity',
   'device count': 'quantity', 'count of mobile': 'quantity', 'volume': 'quantity',
+  'unit count': 'quantity', 'units': 'quantity', 'no of units': 'quantity',
+  'number of units': 'quantity', 'total units': 'quantity', 'total devices': 'quantity',
   // Storage aliases
-  'gb': 'storage',
-  'size': 'storage',
-  'disk': 'storage',
-  'hard drive': 'storage',
-  'ssd': 'storage',
+  'gb': 'storage', 'size': 'storage', 'disk': 'storage', 'hard drive': 'storage', 'ssd': 'storage',
+  'storage capacity': 'storage', 'disk size': 'storage', 'drive size': 'storage',
+  'internal storage': 'storage', 'device storage': 'storage', 'memory size': 'storage',
+  // Serial / asset tag aliases
+  'asset tag': 'serial_number', 'asset #': 'serial_number', 'asset number': 'serial_number',
+  'device id': 'serial_number', 'barcode': 'serial_number',
+  'sim card': 'serial_number', 'sim': 'serial_number',
   // Price aliases (user may include a price column)
-  'price': 'price',
-  'unit_price': 'price',
-  'unit price': 'price',
-  'value': 'price',
-  'amount': 'price',
-  'cost': 'price',
+  'price': 'price', 'unit_price': 'price', 'unit price': 'price',
+  'value': 'price', 'amount': 'price', 'cost': 'price',
 }
 
 // Levenshtein distance for fuzzy column matching
@@ -425,21 +432,35 @@ export async function POST(request: NextRequest) {
       // Infer brand from model when make/brand column was missing or unrecognized
       if (!brand && model) {
         const lower = model.toLowerCase()
-        if (lower.match(/\b(iphone|ipad|macbook|imac|airpods|apple)\b/)) { brand = 'Apple' }
+        if (lower.match(/\b(iphone|ipad|macbook|imac|airpods|apple watch|apple)\b/)) { brand = 'Apple' }
         else if (lower.match(/\b(galaxy|samsung)\b/)) { brand = 'Samsung'; model = model.replace(/^samsung\s+/i, '') }
         else if (lower.match(/\b(pixel|google)\b/)) { brand = 'Google'; model = model.replace(/^google\s+/i, '') }
         else if (lower.match(/\b(moto[a-z]*|motorola)\b/)) { brand = 'Motorola'; model = model.replace(/^motorola\s+/i, '') }
         else if (lower.match(/\bsonim\b/)) { brand = 'Sonim' }
         else if (lower.match(/\b(surface|microsoft)\b/)) { brand = 'Microsoft' }
-        else if (lower.match(/\b(thinkpad|lenovo)\b/)) { brand = 'Lenovo' }
+        else if (lower.match(/\b(thinkpad|ideapad|yoga|lenovo)\b/)) { brand = 'Lenovo' }
+        else if (lower.match(/\b(dell|latitude|xps|inspiron|alienware)\b/)) { brand = 'Dell' }
         else if (lower.match(/\b(kyocera)\b/)) { brand = 'Kyocera' }
         else if (lower.match(/\bnokia\b/)) { brand = 'Nokia'; model = model.replace(/^nokia\s+/i, '') }
+        else if (lower.match(/\b(blackberry)\b/)) { brand = 'BlackBerry'; model = model.replace(/^blackberry\s+/i, '') }
+        else if (lower.match(/\b(lg\s|lg-|lm-|stylo|velvet|wing)\b/)) { brand = 'LG'; model = model.replace(/^lg\s+/i, '') }
+        else if (lower.match(/\b(oneplus|one plus)\b/)) { brand = 'OnePlus'; model = model.replace(/^oneplus\s+/i, '') }
+        else if (lower.match(/\b(xperia|sony)\b/)) { brand = 'Sony'; model = model.replace(/^sony\s+/i, '') }
+        else if (lower.match(/\b(elitebook|probook|spectre|envy|pavilion|omen|hp\s|hp-)\b/)) { brand = 'HP' }
+        else if (lower.match(/\b(zenbook|vivobook|rog|asus)\b/)) { brand = 'Asus'; model = model.replace(/^asus\s+/i, '') }
+        else if (lower.match(/\b(aspire|swift|predator|acer)\b/)) { brand = 'Acer' }
+        else if (lower.match(/\b(huawei|p\d+\s*pro|mate\s*\d|nova\s*\d)\b/)) { brand = 'Huawei'; model = model.replace(/^huawei\s+/i, '') }
+        else if (lower.match(/\b(xiaomi|redmi|poco)\b/)) { brand = 'Xiaomi'; model = model.replace(/^xiaomi\s+/i, '') }
+        else if (lower.match(/\b(tcl)\b/)) { brand = 'TCL'; model = model.replace(/^tcl\s+/i, '') }
+        else if (lower.match(/\b(alcatel)\b/)) { brand = 'Alcatel'; model = model.replace(/^alcatel\s+/i, '') }
+        else if (lower.match(/\b(zte|blade|axon)\b/)) { brand = 'ZTE'; model = model.replace(/^zte\s+/i, '') }
         else {
           // Try first-word brand split (e.g. "Apple iPhone 15" → brand=Apple, model=iPhone 15)
-          const KNOWN = ['Apple','Samsung','Google','Motorola','LG','Sony','OnePlus','Sonim','Kyocera','BlackBerry','Microsoft','Lenovo','Dell','HP','Asus','Huawei','Xiaomi','Nokia','Alcatel','TCL','ZTE','Netgear','Novatel']
+          const KNOWN = ['Apple','Samsung','Google','Motorola','LG','Sony','OnePlus','Sonim','Kyocera','BlackBerry','Microsoft','Lenovo','Dell','HP','Asus','Acer','Huawei','Xiaomi','Nokia','Alcatel','TCL','ZTE','Netgear','Novatel','Inseego']
           const firstWord = model.trim().split(/\s+/)[0] ?? ''
           const matched = KNOWN.find(b => b.toLowerCase() === firstWord.toLowerCase())
           if (matched) { brand = matched; model = model.slice(firstWord.length).trim() || model }
+          else { brand = 'Unknown' }  // Cannot infer — set Unknown so import doesn't fail
         }
       }
 
@@ -464,9 +485,11 @@ export async function POST(request: NextRequest) {
       }
       // quantity=0 rows: DB uses qty=1 with an [Original qty: 0] note; not a hard error
 
-      // Validation
-      if (!brand) errors.push({ row: i + 1, message: 'Make/Brand is required' })
+      // Brand defaults to 'Unknown' when inference fails — never block the import.
+      // Missing model is the only remaining hard error (nothing to match against catalog).
       if (!model) errors.push({ row: i + 1, message: 'Model is required' })
+      // Flag 'Unknown' brand rows so admin can review and correct after import
+      const unknownBrandNote = (brand === 'Unknown' || !brand) ? '⚠ Brand unknown — needs admin review' : ''
 
       const yearStr = mapped.year || rawRow.year || rawRow.Year || ''
       const yearNum = yearStr ? parseInt(yearStr, 10) : undefined
@@ -503,7 +526,7 @@ export async function POST(request: NextRequest) {
         model_number: sanitizeCsvCell(mapped.model_number || rawRow['Model Number'] || ''),
         accessories: sanitizeCsvCell(mapped.accessories || rawRow.accessories || rawRow.Accessories || rawRow['Accessories. Ex., Charger?'] || ''),
         faults: effectiveFaults || undefined,
-        notes: [isExplicitZero ? '[Original qty: 0]' : '', sanitizeCsvCell(mapped.notes || rawRow.notes || rawRow.Notes || '')].filter(Boolean).join(' | '),
+        notes: [isExplicitZero ? '[Original qty: 0]' : '', unknownBrandNote, sanitizeCsvCell(mapped.notes || rawRow.notes || rawRow.Notes || '')].filter(Boolean).join(' | '),
         raw_condition: rawCondition || undefined,
       })
     }

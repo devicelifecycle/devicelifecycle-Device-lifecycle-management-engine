@@ -151,16 +151,18 @@ function normalizeStorageInput(storage: string): string {
   return raw
 }
 
-const APPROVED_TRADE_IN_PRICING_COMPETITORS = ['Bell', 'Telus', 'GoRecell', 'Apple Trade-In'] as const
+// Apple Trade-In is shown in the UI competitor table for reference but does NOT
+// influence the trade-in quote. Only Bell, Telus, and GoRecell drive live pricing.
+const APPROVED_TRADE_IN_PRICING_COMPETITORS = ['Bell', 'Telus', 'GoRecell'] as const
 type ApprovedTradeInPricingCompetitor = (typeof APPROVED_TRADE_IN_PRICING_COMPETITORS)[number]
 
-// Weights must sum to 1.0. When a source has no data, its weight is redistributed
-// proportionally among present sources so the result is always a true weighted average.
+// Weights produce the same result as the original (bellTelusAvg + goRecell) / 2 formula:
+// GoRecell gets 50%; Bell and Telus each get 25% of the remaining 50%.
+// Missing sources have their weight redistributed proportionally among present sources.
 const CONSENSUS_SOURCE_WEIGHTS: Record<ApprovedTradeInPricingCompetitor, number> = {
-  'GoRecell': 0.30,
-  'Apple Trade-In': 0.30,
-  'Bell': 0.20,
-  'Telus': 0.20,
+  'GoRecell': 0.50,
+  'Bell': 0.25,
+  'Telus': 0.25,
 }
 
 export type ConsensusConfidence = 'FULL' | 'STRONG' | 'PARTIAL' | 'FALLBACK'
@@ -180,10 +182,10 @@ function isApprovedTradeInPricingCompetitor(name?: string | null): boolean {
   return (APPROVED_TRADE_IN_PRICING_COMPETITORS as readonly string[]).includes(canonical)
 }
 
-function getApprovedTradeInPricingCompetitorName(name?: string | null): ApprovedTradeInPricingCompetitor | null {
+function getApprovedTradeInPricingCompetitorName(name?: string | null): 'Bell' | 'Telus' | 'GoRecell' | null {
   const canonical = normalizeCompetitorName(name || undefined)
   if ((APPROVED_TRADE_IN_PRICING_COMPETITORS as readonly string[]).includes(canonical)) {
-    return canonical as ApprovedTradeInPricingCompetitor
+    return canonical as 'Bell' | 'Telus' | 'GoRecell'
   }
   return null
 }
@@ -191,16 +193,15 @@ function getApprovedTradeInPricingCompetitorName(name?: string | null): Approved
 function buildApprovedTradeInPricingBlend(
   list: Array<{ name: string; price: number }>
 ): {
-  approvedCompetitors: Array<{ name: ApprovedTradeInPricingCompetitor; price: number }>
+  approvedCompetitors: Array<{ name: 'Bell' | 'Telus' | 'GoRecell'; price: number }>
   bellTelusCompetitors: Array<{ name: 'Bell' | 'Telus'; price: number }>
   bellTelusAvg: number
   goRecellPrice: number
-  appleTradeInPrice: number
   referencePrice: number
   consensusConfidence: ConsensusConfidence
   sourcesPresent: number
 } {
-  const grouped = new Map<ApprovedTradeInPricingCompetitor, number[]>()
+  const grouped = new Map<'Bell' | 'Telus' | 'GoRecell', number[]>()
   for (const entry of list) {
     if (!Number.isFinite(entry.price) || entry.price <= 0) continue
     const canonical = getApprovedTradeInPricingCompetitorName(entry.name)
@@ -210,7 +211,7 @@ function buildApprovedTradeInPricingBlend(
     grouped.set(canonical, existing)
   }
 
-  const approvedCompetitors: Array<{ name: ApprovedTradeInPricingCompetitor; price: number }> = []
+  const approvedCompetitors: Array<{ name: 'Bell' | 'Telus' | 'GoRecell'; price: number }> = []
   for (const [name, prices] of grouped.entries()) {
     if (prices.length === 0) continue
     const avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length
@@ -224,7 +225,6 @@ function buildApprovedTradeInPricingBlend(
     ? bellTelusCompetitors.reduce((sum, entry) => sum + entry.price, 0) / bellTelusCompetitors.length
     : 0
   const goRecellPrice = approvedCompetitors.find((entry) => entry.name === 'GoRecell')?.price ?? 0
-  const appleTradeInPrice = approvedCompetitors.find((entry) => entry.name === 'Apple Trade-In')?.price ?? 0
 
   // Weighted consensus: absent sources have their weight redistributed proportionally
   const totalRawWeight = approvedCompetitors.reduce((sum, c) => sum + (CONSENSUS_SOURCE_WEIGHTS[c.name] ?? 0), 0)
@@ -236,15 +236,14 @@ function buildApprovedTradeInPricingBlend(
   const coverage = sourcesPresent / APPROVED_TRADE_IN_PRICING_COMPETITORS.length
   const consensusConfidence: ConsensusConfidence =
     coverage >= 1.0 ? 'FULL' :
-    coverage >= 0.75 ? 'STRONG' :
-    coverage >= 0.5 ? 'PARTIAL' : 'FALLBACK'
+    coverage >= 0.67 ? 'STRONG' :
+    coverage >= 0.34 ? 'PARTIAL' : 'FALLBACK'
 
   return {
     approvedCompetitors,
     bellTelusCompetitors,
     bellTelusAvg,
     goRecellPrice,
-    appleTradeInPrice,
     referencePrice,
     consensusConfidence,
     sourcesPresent,
@@ -1297,7 +1296,6 @@ export class PricingService {
       const approvedPricingBlend = buildApprovedTradeInPricingBlend(filteredCompetitors)
       const goRecellPrice = approvedPricingBlend.goRecellPrice
       const bellTelusAvg = approvedPricingBlend.bellTelusAvg
-      const appleTradeInPrice = approvedPricingBlend.appleTradeInPrice
       const consensusConfidence = approvedPricingBlend.consensusConfidence
       const policyReferencePrice = approvedPricingBlend.referencePrice
       const bellTelusCompetitors = approvedPricingBlend.bellTelusCompetitors
@@ -1446,14 +1444,11 @@ export class PricingService {
         const carrierNames = bellTelusCompetitors.map(c => c.name).join(', ')
         const sourceParts: string[] = []
         if (goRecellPrice > 0) sourceParts.push(`GoRecell $${round2(goRecellPrice)}`)
-        if (appleTradeInPrice > 0) sourceParts.push(`Apple Trade-In $${round2(appleTradeInPrice)}`)
         if (bellTelusAvg > 0 && carrierNames) sourceParts.push(`${carrierNames} avg $${round2(bellTelusAvg)}`)
         if (sourceParts.length >= 2) {
           reasoning = `${consensusConfidence} consensus (${sourceParts.join(', ')}) → weighted quote $${round2(tradePrice)}.`
         } else if (goRecellPrice > 0) {
           reasoning = `GoRecell only — quote $${round2(tradePrice)}.`
-        } else if (appleTradeInPrice > 0) {
-          reasoning = `Apple Trade-In only — quote $${round2(tradePrice)}.`
         } else {
           reasoning = `${carrierNames} avg only — quote $${round2(tradePrice)}.`
         }
@@ -2156,7 +2151,7 @@ export class PricingService {
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
 
-    const byName = new Map<ApprovedTradeInPricingCompetitor, { price: number; retrieved_at?: string }>()
+    const byName = new Map<'Bell' | 'Telus' | 'GoRecell', { price: number; retrieved_at?: string }>()
     const selectedRows = selectApprovedTradeInPricingRows(
       data || [],
       competitorCondition,

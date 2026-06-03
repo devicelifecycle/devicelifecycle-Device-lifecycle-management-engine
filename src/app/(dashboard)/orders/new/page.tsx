@@ -32,41 +32,61 @@ import {
 } from '@/lib/csv-templates'
 import type { Device, DeviceCondition } from '@/types'
 
-// Column alias map — auto-corrects misspelled or alternative column names
+// Column alias map — auto-corrects misspelled or alternative column names.
+// Supports any CSV/Excel template without requiring a predefined format.
 const COLUMN_ALIASES: Record<string, string> = {
-  // Make / brand — covers every common variation seen in real customer files
+  // ── Make / Brand ──────────────────────────────────────────────────────────
   device_make: 'device_make', make: 'device_make', brand: 'device_make', manufacturer: 'device_make',
   devcie_make: 'device_make', divice_make: 'device_make', 'device make': 'device_make', 'make*': 'device_make',
   oem: 'device_make', mfr: 'device_make', vendor: 'device_make', supplier: 'device_make',
   company: 'device_make', 'phone brand': 'device_make', 'phone make': 'device_make',
   'device brand': 'device_make', 'device manufacturer': 'device_make',
   phone_brand: 'device_make', phone_make: 'device_make',
-  // Model — covers common aliases and combined-field column names
+  // ── Model ─────────────────────────────────────────────────────────────────
   device_model: 'device_model', model: 'device_model', device: 'device_model', product: 'device_model',
   devcie_model: 'device_model', divice_model: 'device_model', 'device model': 'device_model', 'model*': 'device_model',
   'phone model': 'device_model', 'model name': 'device_model', 'device name': 'device_model',
   'existing phone': 'device_model', description: 'device_model', phone_model: 'device_model',
   'device description': 'device_model', 'item description': 'device_model',
   'product description': 'device_model', 'asset description': 'device_model',
-  // Quantity
+  'product name': 'device_model', 'item name': 'device_model', 'asset name': 'device_model',
+  'equipment description': 'device_model', 'hardware description': 'device_model',
+  'sku': 'device_model', 'sku description': 'device_model', 'part description': 'device_model',
+  'part name': 'device_model', 'part number description': 'device_model',
+  'equipment name': 'device_model', 'equipment model': 'device_model',
+  'unit description': 'device_model', 'unit model': 'device_model',
+  'article description': 'device_model', 'article name': 'device_model',
+  // ── Quantity ──────────────────────────────────────────────────────────────
   quantity: 'quantity', qty: 'quantity', quantitty: 'quantity', quantiy: 'quantity', quantit: 'quantity',
   count: 'quantity', num: 'quantity', '#': 'quantity', 'device count': 'quantity',
   'count of mobile': 'quantity', volume: 'quantity', total: 'quantity',
-  // Condition
+  'unit count': 'quantity', 'units': 'quantity', 'no of units': 'quantity', 'no. of units': 'quantity',
+  'number of units': 'quantity', 'total units': 'quantity', 'total devices': 'quantity',
+  // ── Condition ─────────────────────────────────────────────────────────────
   condition: 'condition', condtion: 'condition', condiiton: 'condition',
   grade: 'condition', state: 'condition', 'device condition': 'condition',
-  // Storage
+  'cosmetic condition': 'condition', 'functional condition': 'condition', 'quality': 'condition',
+  'item condition': 'condition', 'asset condition': 'condition', 'unit condition': 'condition',
+  // ── Storage ───────────────────────────────────────────────────────────────
   storage: 'storage', 'storage/gb': 'storage', 'storage/gb*': 'storage', capacity: 'storage',
-  storag: 'storage', storrage: 'storage', gb: 'storage', size: 'storage', memory: 'storage',
-  // Notes / faults
+  storag: 'storage', storrage: 'storage', gb: 'storage', size: 'storage',
+  'storage capacity': 'storage', 'disk size': 'storage', 'drive size': 'storage',
+  'hard drive': 'storage', ssd: 'storage', 'ssd size': 'storage', 'memory size': 'storage',
+  'internal storage': 'storage', 'device storage': 'storage',
+  // ── Notes / Faults ────────────────────────────────────────────────────────
   notes: 'notes', faults: 'notes', 'faults/notes': 'notes', nots: 'notes', comments: 'notes',
-  // Serial / IMEI
+  remarks: 'notes', observations: 'notes', issues: 'notes', defects: 'notes',
+  'additional notes': 'notes', 'special notes': 'notes', 'device notes': 'notes',
+  // ── Serial / IMEI ─────────────────────────────────────────────────────────
   serial_number: 'serial_number', serial: 'serial_number', imei: 'serial_number',
   serial_numbr: 'serial_number', serail_number: 'serial_number', 'sample s/n': 'serial_number',
   's/n': 'serial_number', sn: 'serial_number', 'imei/sn': 'serial_number', 'imei/serial': 'serial_number',
-  // Color
-  color: 'color', colour: 'color', colur: 'color',
-  // Order type
+  'asset tag': 'serial_number', 'asset #': 'serial_number', 'asset number': 'serial_number',
+  'device id': 'serial_number', 'unit id': 'serial_number', 'barcode': 'serial_number',
+  'sim card': 'serial_number', 'sim': 'serial_number', 'sim #': 'serial_number',
+  // ── Color ─────────────────────────────────────────────────────────────────
+  color: 'color', colour: 'color', colur: 'color', 'device color': 'color', 'device colour': 'color',
+  // ── Order type ────────────────────────────────────────────────────────────
   order_type: 'order_type', type: 'order_type',
 }
 
@@ -598,9 +618,9 @@ export default function NewOrderPage() {
               mapped.device_model = mapped.device_model.replace(/^sonim\s+/i, '')
             } else if (lower.match(/\b(surface|microsoft)\b/)) {
               mapped.device_make = 'Microsoft'
-            } else if (lower.match(/\b(thinkpad|lenovo)\b/)) {
+            } else if (lower.match(/\b(thinkpad|ideapad|yoga|lenovo)\b/)) {
               mapped.device_make = 'Lenovo'
-            } else if (lower.match(/\b(dell|latitude|xps)\b/)) {
+            } else if (lower.match(/\b(dell|latitude|xps|inspiron|alienware)\b/)) {
               mapped.device_make = 'Dell'
             } else if (lower.match(/\b(kyocera)\b/)) {
               mapped.device_make = 'Kyocera'
@@ -610,15 +630,48 @@ export default function NewOrderPage() {
             } else if (lower.match(/\b(blackberry)\b/)) {
               mapped.device_make = 'BlackBerry'
               mapped.device_model = mapped.device_model.replace(/^blackberry\s+/i, '')
+            } else if (lower.match(/\b(lg\s|lg-|lg[a-z]|lm-|stylo|velvet|wing)\b/)) {
+              mapped.device_make = 'LG'
+              mapped.device_model = mapped.device_model.replace(/^lg\s+/i, '')
+            } else if (lower.match(/\b(oneplus|one plus|onep)\b/)) {
+              mapped.device_make = 'OnePlus'
+              mapped.device_model = mapped.device_model.replace(/^oneplus\s+/i, '')
+            } else if (lower.match(/\b(xperia|sony)\b/)) {
+              mapped.device_make = 'Sony'
+              mapped.device_model = mapped.device_model.replace(/^sony\s+/i, '')
+            } else if (lower.match(/\b(elitebook|probook|spectre|envy|pavilion|omen|hp\s|hp-)\b/)) {
+              mapped.device_make = 'HP'
+            } else if (lower.match(/\b(zenbook|vivobook|rog|asus)\b/)) {
+              mapped.device_make = 'Asus'
+              mapped.device_model = mapped.device_model.replace(/^asus\s+/i, '')
+            } else if (lower.match(/\b(aspire|swift|predator|chromebook|acer)\b/)) {
+              mapped.device_make = 'Acer'
+            } else if (lower.match(/\b(huawei|p\d+\s*pro|mate\s*\d|nova\s*\d)\b/)) {
+              mapped.device_make = 'Huawei'
+              mapped.device_model = mapped.device_model.replace(/^huawei\s+/i, '')
+            } else if (lower.match(/\b(xiaomi|redmi|poco)\b/)) {
+              mapped.device_make = 'Xiaomi'
+              mapped.device_model = mapped.device_model.replace(/^xiaomi\s+/i, '')
+            } else if (lower.match(/\b(tcl)\b/)) {
+              mapped.device_make = 'TCL'
+              mapped.device_model = mapped.device_model.replace(/^tcl\s+/i, '')
+            } else if (lower.match(/\b(alcatel)\b/)) {
+              mapped.device_make = 'Alcatel'
+              mapped.device_model = mapped.device_model.replace(/^alcatel\s+/i, '')
+            } else if (lower.match(/\b(zte|blade|axon)\b/)) {
+              mapped.device_make = 'ZTE'
+              mapped.device_model = mapped.device_model.replace(/^zte\s+/i, '')
             } else {
-              // Last resort: if the model starts with a capitalized word followed by more words,
-              // treat the first word as brand (handles "Recycling <model>", etc.)
-              const KNOWN_BRANDS_LIST = ['Apple','Samsung','Google','Motorola','LG','Sony','OnePlus','Sonim','Kyocera','BlackBerry','Netgear','Novatel','Inseego','Microsoft','Lenovo','Dell','HP','Asus','Huawei','Xiaomi','Nokia','Alcatel','TCL','ZTE']
+              // Last resort: first word matches known brand list
+              const KNOWN_BRANDS_LIST = ['Apple','Samsung','Google','Motorola','LG','Sony','OnePlus','Sonim','Kyocera','BlackBerry','Netgear','Novatel','Inseego','Microsoft','Lenovo','Dell','HP','Asus','Acer','Huawei','Xiaomi','Nokia','Alcatel','TCL','ZTE']
               const firstWord = mapped.device_model.trim().split(/\s+/)[0] ?? ''
               const matchedBrand = KNOWN_BRANDS_LIST.find(b => b.toLowerCase() === firstWord.toLowerCase())
               if (matchedBrand) {
                 mapped.device_make = matchedBrand
                 mapped.device_model = mapped.device_model.slice(firstWord.length).trim()
+              } else {
+                // Cannot infer brand — use 'Unknown' so file submits; admin will review
+                mapped.device_make = 'Unknown'
               }
             }
           }
@@ -694,11 +747,9 @@ export default function NewOrderPage() {
           continue
         }
 
+        // Brand is always set (either inferred or 'Unknown') — no hard error for missing make.
+        // Rows with 'Unknown' brand are flagged amber and admin-noted at submit time.
         const errors: string[] = []
-        rows.forEach((row, i) => {
-          if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
-          // model is optional — auto-add handles unknown devices without model
-        })
 
         setParsedFiles(prev => [...prev, {
           filename: file.name,
@@ -754,9 +805,7 @@ export default function NewOrderPage() {
       const nextValue = field === 'order_type' && !canCreateCpoOrder ? 'trade_in' : value
       newRows[rowIndex] = { ...newRows[rowIndex], [field]: nextValue }
       const errors: string[] = []
-      newRows.forEach((row, i) => {
-        if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
-      })
+      // Brand is always set (inferred or 'Unknown') — no hard error for missing make
       return { ...f, rows: newRows, errors }
     }))
   }
@@ -767,9 +816,7 @@ export default function NewOrderPage() {
       if (fi !== fileIndex) return f
       const newRows = f.rows.filter((_, ri) => ri !== rowIndex)
       const errors: string[] = []
-      newRows.forEach((row, i) => {
-        if (!row.device_make) errors.push(`Row ${i + 1}: Missing make/brand`)
-      })
+      // Brand is always set (inferred or 'Unknown') — no hard error for missing make
       return { ...f, rows: newRows, errors }
     }))
   }
