@@ -860,6 +860,44 @@ export default function OrderDetailClient() {
     }
   }
 
+  // Instantly stamps pre-fetched consensus prices into all items (no API call)
+  const handleApplyAllSuggested = () => {
+    const updates: Record<string, string> = {}
+    let count = 0
+    order?.items?.forEach(item => {
+      const price = lineItemSuggestions[item.id]
+      if (price != null && price > 0) {
+        updates[item.id] = price.toFixed(2)
+        count++
+      }
+    })
+    if (count === 0) {
+      toast.error('No consensus prices available — try Suggest All first')
+      return
+    }
+    setItemPrices(prev => ({ ...prev, ...updates }))
+    toast.success(`Applied consensus price to ${count} item(s)`)
+  }
+
+  // Apply consensus prices to a specific group of item IDs
+  const handleApplyGroupSuggested = (itemIds: string[]) => {
+    const updates: Record<string, string> = {}
+    let count = 0
+    itemIds.forEach(id => {
+      const price = lineItemSuggestions[id]
+      if (price != null && price > 0) {
+        updates[id] = price.toFixed(2)
+        count++
+      }
+    })
+    if (count === 0) {
+      toast.error('No consensus prices available for this group')
+      return
+    }
+    setItemPrices(prev => ({ ...prev, ...updates }))
+    toast.success(`Applied consensus price to ${count} item(s) in group`)
+  }
+
   const handleCalculateBuyback = async () => {
     if (!order?.items?.length || !order?.id) return
     setIsCalculatingBuyback(true)
@@ -3248,7 +3286,19 @@ export default function OrderDetailClient() {
               </div>
             </div>
           )}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {!isCpoOrder && Object.keys(lineItemSuggestions).length > 0 && (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={handleApplyAllSuggested}
+                disabled={isSuggestingAll || !!suggestingItemId}
+              >
+                <Check className="h-4 w-4" />
+                <span className="ml-1">Apply All Consensus ({Object.keys(lineItemSuggestions).length})</span>
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -3265,7 +3315,43 @@ export default function OrderDetailClient() {
             </Button>
           </div>
           <div className="space-y-6 py-4">
-            {order?.items?.map(item => {
+            {(() => {
+              // Group items by device+storage+condition for bulk-apply
+              type GroupEntry = { key: string; label: string; storage: string; condition: string; items: OrderItem[] }
+              const groupMap = new Map<string, GroupEntry>()
+              ;(order?.items ?? []).forEach(item => {
+                const deviceLabel = pricingItemEdits[item.id]?.deviceLabel ?? (item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device')
+                const storage = pricingItemEdits[item.id]?.storage ?? getStorageForItem(item)
+                const condition = pricingItemEdits[item.id]?.condition ?? item.claimed_condition ?? 'good'
+                const key = `${deviceLabel}|${storage}|${condition}`
+                if (!groupMap.has(key)) groupMap.set(key, { key, label: deviceLabel, storage, condition, items: [] })
+                groupMap.get(key)!.items.push(item)
+              })
+              const groups = Array.from(groupMap.values())
+              const showGroups = groups.length < (order?.items?.length ?? 0)
+              return <>{groups.map(group => (
+                <div key={group.key}>
+                  {showGroups && (
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        {group.label} · {group.storage} · <span className="capitalize">{group.condition}</span>
+                        <span className="ml-1 font-normal">({group.items.length} {group.items.length === 1 ? 'item' : 'items'})</span>
+                      </span>
+                      {!isCpoOrder && group.items.some(i => lineItemSuggestions[i.id] != null) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() => handleApplyGroupSuggested(group.items.map(i => i.id))}
+                        >
+                          <Check className="h-3 w-3 mr-1" />
+                          Apply to group
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {group.items.map(item => {
               const ctxKey = `${item.device_id}_${getStorageForItem(item)}`
               const ctx = marketContext[ctxKey]
               const itemCondition = mapOrderConditionToCompetitorCondition(item.claimed_condition || 'good')
@@ -3547,6 +3633,9 @@ export default function OrderDetailClient() {
                 </div>
               )
             })}
+                </div>
+              ))}</>
+            })()}
           </div>
           {/* Add item to order from pricing dialog */}
           <div className="border-t pt-3">
