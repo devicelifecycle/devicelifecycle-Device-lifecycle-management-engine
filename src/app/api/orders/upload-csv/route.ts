@@ -693,13 +693,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (orderItems.length > 0) {
-      const { error: itemsError } = await serviceRole
-        .from('order_items')
-        .insert(orderItems)
+      // Insert in chunks of 200 to stay within PostgREST body-size limits on large uploads
+      const CHUNK = 200
+      for (let i = 0; i < orderItems.length; i += CHUNK) {
+        const chunk = orderItems.slice(i, i + CHUNK)
+        const { error: itemsError } = await serviceRole
+          .from('order_items')
+          .insert(chunk)
 
-      if (itemsError) {
-        console.error('Error creating order items:', itemsError)
-        return NextResponse.json({ error: 'Order created but failed to save line items. Please add them manually.' }, { status: 500 })
+        if (itemsError) {
+          console.error('Error creating order items (chunk', Math.floor(i / CHUNK) + 1, '):', itemsError)
+          // Clean up the order so the customer can retry cleanly
+          await serviceRole.from('orders').delete().eq('id', (order as Record<string, unknown>).id)
+          return NextResponse.json({
+            error: `Failed to save line items: ${itemsError.message || 'database error'}`,
+          }, { status: 500 })
+        }
       }
     }
 

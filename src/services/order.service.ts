@@ -502,8 +502,8 @@ export class OrderService {
   // ============================================================================
 
   /**
-   * Delete an order. Soft-deletes by setting status to cancelled (hard delete
-   * would require cascading order_timeline, shipments, etc.).
+   * Permanently delete an order. Only draft/cancelled orders may be deleted.
+   * order_items, order_timeline and related rows cascade via FK ON DELETE CASCADE.
    */
   static async deleteOrder(id: string, userId: string): Promise<void> {
     const supabase = await createServerSupabaseClient()
@@ -524,10 +524,7 @@ export class OrderService {
 
     const { error } = await supabase
       .from('orders')
-      .update({
-        status: 'cancelled',
-        updated_at: new Date().toISOString(),
-      })
+      .delete()
       .eq('id', id)
 
     if (error) {

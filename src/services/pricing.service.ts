@@ -599,6 +599,15 @@ export class PricingService {
               const raw = Array.from(byName.entries()).map(([name, price]) => ({ name, price }))
               const filtered = filterCompetitorOutliers(raw)
               adapted.competitors = filtered.map(c => ({ name: c.name, price: c.price, gap_percent: 0 }))
+
+              // When all 3 approved sources are present the formula is more accurate
+              // than the ML model — live market data beats a trained approximation.
+              // Override the model price with the consensus blend so the displayed
+              // "(carr + GoRecell) ÷ 2" label matches the actual trade_price.
+              const blend = buildApprovedTradeInPricingBlend(filtered)
+              if (blend.consensusConfidence === 'FULL' && blend.referencePrice > 0) {
+                adapted.trade_price = round2(blend.referencePrice)
+              }
             }
           } catch {
             // non-fatal — model price still valid
