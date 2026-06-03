@@ -151,8 +151,20 @@ function normalizeStorageInput(storage: string): string {
   return raw
 }
 
-const APPROVED_TRADE_IN_PRICING_COMPETITORS = ['Bell', 'Telus', 'GoRecell'] as const
+const APPROVED_TRADE_IN_PRICING_COMPETITORS = ['Bell', 'Telus', 'GoRecell', 'Apple Trade-In'] as const
 type ApprovedTradeInPricingCompetitor = (typeof APPROVED_TRADE_IN_PRICING_COMPETITORS)[number]
+
+// Weights must sum to 1.0. When a source has no data, its weight is redistributed
+// proportionally among present sources so the result is always a true weighted average.
+const CONSENSUS_SOURCE_WEIGHTS: Record<ApprovedTradeInPricingCompetitor, number> = {
+  'GoRecell': 0.30,
+  'Apple Trade-In': 0.30,
+  'Bell': 0.20,
+  'Telus': 0.20,
+}
+
+export type ConsensusConfidence = 'FULL' | 'STRONG' | 'PARTIAL' | 'FALLBACK'
+
 type TradeInCompetitorRowLike = {
   competitor_name?: string | null
   trade_in_price?: number | null
@@ -168,10 +180,10 @@ function isApprovedTradeInPricingCompetitor(name?: string | null): boolean {
   return (APPROVED_TRADE_IN_PRICING_COMPETITORS as readonly string[]).includes(canonical)
 }
 
-function getApprovedTradeInPricingCompetitorName(name?: string | null): 'Bell' | 'Telus' | 'GoRecell' | null {
+function getApprovedTradeInPricingCompetitorName(name?: string | null): ApprovedTradeInPricingCompetitor | null {
   const canonical = normalizeCompetitorName(name || undefined)
   if ((APPROVED_TRADE_IN_PRICING_COMPETITORS as readonly string[]).includes(canonical)) {
-    return canonical as 'Bell' | 'Telus' | 'GoRecell'
+    return canonical as ApprovedTradeInPricingCompetitor
   }
   return null
 }
@@ -179,13 +191,16 @@ function getApprovedTradeInPricingCompetitorName(name?: string | null): 'Bell' |
 function buildApprovedTradeInPricingBlend(
   list: Array<{ name: string; price: number }>
 ): {
-  approvedCompetitors: Array<{ name: 'Bell' | 'Telus' | 'GoRecell'; price: number }>
+  approvedCompetitors: Array<{ name: ApprovedTradeInPricingCompetitor; price: number }>
   bellTelusCompetitors: Array<{ name: 'Bell' | 'Telus'; price: number }>
   bellTelusAvg: number
   goRecellPrice: number
+  appleTradeInPrice: number
   referencePrice: number
+  consensusConfidence: ConsensusConfidence
+  sourcesPresent: number
 } {
-  const grouped = new Map<'Bell' | 'Telus' | 'GoRecell', number[]>()
+  const grouped = new Map<ApprovedTradeInPricingCompetitor, number[]>()
   for (const entry of list) {
     if (!Number.isFinite(entry.price) || entry.price <= 0) continue
     const canonical = getApprovedTradeInPricingCompetitorName(entry.name)
@@ -195,7 +210,7 @@ function buildApprovedTradeInPricingBlend(
     grouped.set(canonical, existing)
   }
 
-  const approvedCompetitors: Array<{ name: 'Bell' | 'Telus' | 'GoRecell'; price: number }> = []
+  const approvedCompetitors: Array<{ name: ApprovedTradeInPricingCompetitor; price: number }> = []
   for (const [name, prices] of grouped.entries()) {
     if (prices.length === 0) continue
     const avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length
@@ -209,22 +224,30 @@ function buildApprovedTradeInPricingBlend(
     ? bellTelusCompetitors.reduce((sum, entry) => sum + entry.price, 0) / bellTelusCompetitors.length
     : 0
   const goRecellPrice = approvedCompetitors.find((entry) => entry.name === 'GoRecell')?.price ?? 0
+  const appleTradeInPrice = approvedCompetitors.find((entry) => entry.name === 'Apple Trade-In')?.price ?? 0
 
-  let referencePrice = 0
-  if (bellTelusAvg > 0 && goRecellPrice > 0) {
-    referencePrice = (bellTelusAvg + goRecellPrice) / 2
-  } else if (goRecellPrice > 0) {
-    referencePrice = goRecellPrice
-  } else if (bellTelusAvg > 0) {
-    referencePrice = bellTelusAvg
-  }
+  // Weighted consensus: absent sources have their weight redistributed proportionally
+  const totalRawWeight = approvedCompetitors.reduce((sum, c) => sum + (CONSENSUS_SOURCE_WEIGHTS[c.name] ?? 0), 0)
+  const referencePrice = totalRawWeight > 0
+    ? approvedCompetitors.reduce((sum, c) => sum + c.price * (CONSENSUS_SOURCE_WEIGHTS[c.name] ?? 0) / totalRawWeight, 0)
+    : 0
+
+  const sourcesPresent = approvedCompetitors.length
+  const coverage = sourcesPresent / APPROVED_TRADE_IN_PRICING_COMPETITORS.length
+  const consensusConfidence: ConsensusConfidence =
+    coverage >= 1.0 ? 'FULL' :
+    coverage >= 0.75 ? 'STRONG' :
+    coverage >= 0.5 ? 'PARTIAL' : 'FALLBACK'
 
   return {
     approvedCompetitors,
     bellTelusCompetitors,
     bellTelusAvg,
     goRecellPrice,
+    appleTradeInPrice,
     referencePrice,
+    consensusConfidence,
+    sourcesPresent,
   }
 }
 
@@ -1274,6 +1297,8 @@ export class PricingService {
       const approvedPricingBlend = buildApprovedTradeInPricingBlend(filteredCompetitors)
       const goRecellPrice = approvedPricingBlend.goRecellPrice
       const bellTelusAvg = approvedPricingBlend.bellTelusAvg
+      const appleTradeInPrice = approvedPricingBlend.appleTradeInPrice
+      const consensusConfidence = approvedPricingBlend.consensusConfidence
       const policyReferencePrice = approvedPricingBlend.referencePrice
       const bellTelusCompetitors = approvedPricingBlend.bellTelusCompetitors
 
@@ -1419,12 +1444,18 @@ export class PricingService {
       // Append risk mode context
       if (weightedAvgUsed) {
         const carrierNames = bellTelusCompetitors.map(c => c.name).join(', ')
-        if (bellTelusAvg > 0 && goRecellPrice > 0) {
-          reasoning = `Bell/Telus avg $${round2(bellTelusAvg)} (${carrierNames}) → avg with GoRecell $${goRecellPrice} → quote $${round2(tradePrice)}.`
+        const sourceParts: string[] = []
+        if (goRecellPrice > 0) sourceParts.push(`GoRecell $${round2(goRecellPrice)}`)
+        if (appleTradeInPrice > 0) sourceParts.push(`Apple Trade-In $${round2(appleTradeInPrice)}`)
+        if (bellTelusAvg > 0 && carrierNames) sourceParts.push(`${carrierNames} avg $${round2(bellTelusAvg)}`)
+        if (sourceParts.length >= 2) {
+          reasoning = `${consensusConfidence} consensus (${sourceParts.join(', ')}) → weighted quote $${round2(tradePrice)}.`
         } else if (goRecellPrice > 0) {
           reasoning = `GoRecell only — quote $${round2(tradePrice)}.`
+        } else if (appleTradeInPrice > 0) {
+          reasoning = `Apple Trade-In only — quote $${round2(tradePrice)}.`
         } else {
-          reasoning = `Bell/Telus avg only (${carrierNames}) — quote $${round2(tradePrice)}.`
+          reasoning = `${carrierNames} avg only — quote $${round2(tradePrice)}.`
         }
         if (goRecellFairFloorApplied) {
           const condFloor = normalizedInput.condition === 'excellent' ? goRecellGoodPrice
@@ -1518,7 +1549,11 @@ export class PricingService {
       if (mpPrice > 0 && !marketplaceAboveCstock) {
         dataStalenessWarnings.push(`Marketplace price ($${round2(mpPrice)}) below C-stock ($${round2(anchorPrice)}) — excluded from formula (possible low-baller).`)
       }
-      let confidence = this.calculateConfidenceV2(!!marketEntry, competitors.length, marketplaceAboveCstock && mpPrice > 0)
+      const consensusScore: number = consensusConfidence === 'FULL' ? 0.30
+        : consensusConfidence === 'STRONG' ? 0.25
+        : consensusConfidence === 'PARTIAL' ? 0.15
+        : 0.05
+      let confidence = this.calculateConfidenceV2(!!marketEntry, competitors.length, marketplaceAboveCstock && mpPrice > 0, consensusScore)
       if (competitorDataAgeDays != null && competitorDataAgeDays > settings.price_staleness_days) {
         dataStalenessWarnings.push(`Competitor data is ${competitorDataAgeDays} days old (threshold: ${settings.price_staleness_days}). Consider refreshing prices.`)
         confidence = Math.max(0, confidence - 0.15)
@@ -1570,6 +1605,7 @@ export class PricingService {
         brand_override: brandOverrideApplied,
         demand_score: demandScore !== 'normal' ? demandScore : undefined,
         demand_margin_adjustment: demandMarginAdjustment !== 0 ? demandMarginAdjustment : undefined,
+        consensus_confidence: weightedAvgUsed ? consensusConfidence : undefined,
         confidence,
         price_date: new Date().toISOString(),
         valid_for_hours: validForHours,
@@ -1616,13 +1652,16 @@ export class PricingService {
   private static calculateConfidenceV2(
     hasMarketData: boolean,
     competitorCount: number,
-    hasMarketplacePrice: boolean
+    hasMarketplacePrice: boolean,
+    consensusScore = 0.20
   ): number {
     let confidence = 0
-    if (hasMarketData) confidence += 0.4
-    if (competitorCount >= 2) confidence += 0.3
-    else if (competitorCount >= 1) confidence += 0.15
-    if (hasMarketplacePrice) confidence += 0.3
+    if (hasMarketData) confidence += 0.3
+    confidence += consensusScore  // 0.05–0.30 based on source coverage
+    if (competitorCount >= 3) confidence += 0.25
+    else if (competitorCount >= 2) confidence += 0.20
+    else if (competitorCount >= 1) confidence += 0.10
+    if (hasMarketplacePrice) confidence += 0.15
     return Math.min(confidence, 1.0)
   }
 
@@ -2117,7 +2156,7 @@ export class PricingService {
       .not('trade_in_price', 'is', null)
       .gt('trade_in_price', 0)
 
-    const byName = new Map<'Bell' | 'Telus' | 'GoRecell', { price: number; retrieved_at?: string }>()
+    const byName = new Map<ApprovedTradeInPricingCompetitor, { price: number; retrieved_at?: string }>()
     const selectedRows = selectApprovedTradeInPricingRows(
       data || [],
       competitorCondition,

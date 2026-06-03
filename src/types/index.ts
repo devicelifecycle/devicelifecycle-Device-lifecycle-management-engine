@@ -269,6 +269,8 @@ export interface PriceCalculationResultV2 {
   // Demand-based margin adjustment (P4 #18)
   demand_score?: 'high' | 'normal' | 'low';
   demand_margin_adjustment?: number;
+  // Consensus pricing confidence: FULL=all 4 sources, STRONG=3, PARTIAL=2, FALLBACK=1
+  consensus_confidence?: 'FULL' | 'STRONG' | 'PARTIAL' | 'FALLBACK';
   breakdown: {
     anchor_price: number;
     condition_adjustment: number;
