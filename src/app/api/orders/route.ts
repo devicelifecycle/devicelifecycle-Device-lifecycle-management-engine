@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
     }
 
-    if (profile.role === 'vendor') {
+    if (effectiveRole === 'vendor') {
       return NextResponse.json(
         { error: 'Vendors cannot create orders' },
         { status: 403 }
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     let orderData = validationResult.data
 
-    if (profile.role === 'sales' && orderData.type === 'cpo') {
+    if (effectiveRole === 'sales' && orderData.type === 'cpo') {
       return NextResponse.json(
         { error: 'Sales can create trade-in orders only' },
         { status: 403 }
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 400 })
     }
 
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       if (customer.organization_id !== profile.organization_id) {
         return NextResponse.json(
           { error: 'You can only create orders for your own organization' },

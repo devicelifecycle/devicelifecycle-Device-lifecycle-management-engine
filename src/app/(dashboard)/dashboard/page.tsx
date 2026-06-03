@@ -492,7 +492,7 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
               </div>
             )}
             {!isLoading && !error && recentOrders.map((order) => (
-              <Link key={order.id} href={`/orders/${order.id}`}>
+              <Link key={order.id} href={`/customer/orders/${order.id}`}>
                 <div className="rounded-[1.4rem] border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] px-5 py-4 transition hover:bg-muted/60 dark:hover:bg-white/[0.05]">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="space-y-1">

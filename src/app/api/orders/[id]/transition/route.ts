@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Customer can only transition their own orders, and only: submit, cancel, accept/reject quote
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       const customerOrg = (currentOrder.customer as { organization_id?: string } | null)?.organization_id
       if (customerOrg !== profile.organization_id) {
         return NextResponse.json({ error: 'You can only manage your own orders' }, { status: 403 })
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           { status: 403 }
         )
       }
-    } else if (profile.role === 'vendor') {
+    } else if (effectiveRole === 'vendor') {
       const vendorOrg = (currentOrder.vendor as { organization_id?: string } | null)?.organization_id
       if (!profile.organization_id || vendorOrg !== profile.organization_id) {
         return NextResponse.json({ error: 'You can only manage orders assigned to your organization' }, { status: 403 })

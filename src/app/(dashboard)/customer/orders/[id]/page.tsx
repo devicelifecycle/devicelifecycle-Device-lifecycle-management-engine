@@ -35,7 +35,8 @@ const TRADE_IN_STEPS: { statuses: string[]; icon: typeof Truck; label: string; d
   { statuses: ['submitted'], icon: CheckCircle2, label: 'Submitted', desc: 'Your device list received' },
   { statuses: ['quoted'], icon: CreditCard, label: 'Quoted', desc: 'Quote ready for your review' },
   { statuses: ['accepted'], icon: Truck, label: 'Ship Devices', desc: 'Ship your devices to us' },
-  { statuses: ['received', 'in_triage', 'qc_complete', 'shipped_to_coe'], icon: Package, label: 'Inspection', desc: 'We inspect your devices' },
+  { statuses: ['shipped_to_coe'], icon: Truck, label: 'In Transit', desc: 'Your devices are on the way to us' },
+  { statuses: ['received', 'in_triage', 'qc_complete'], icon: Package, label: 'Inspection', desc: 'We inspect your devices' },
   { statuses: ['payment_sent', 'ready_to_ship', 'closed'], icon: CreditCard, label: 'Payment', desc: 'Payment issued to you' },
 ]
 
@@ -179,7 +180,8 @@ export default function CustomerOrderDetailPage() {
   const statusCfg = CUSTOMER_STATUS_CONFIG[order.status as OrderStatus]
   const isQuoted = order.status === 'quoted'
   const isAccepted = order.status === 'accepted'
-  const isInProgress = ['received', 'in_triage', 'shipped_to_coe', 'qc_complete', 'sourcing', 'sourced'].includes(order.status)
+  const isShippedToCoe = isTradeIn && order.status === 'shipped_to_coe'
+  const isInProgress = ['received', 'in_triage', 'qc_complete', 'sourcing', 'sourced'].includes(order.status)
   const isPaymentStage = ['ready_to_ship', 'payment_sent'].includes(order.status)
   const isShipped = order.status === 'shipped'
   const isDelivered = order.status === 'delivered'
@@ -416,6 +418,21 @@ export default function CustomerOrderDetailPage() {
               <p className="font-semibold text-blue-800 dark:text-blue-200">We're sourcing your devices</p>
               <p className="text-sm text-blue-700 dark:text-blue-300 mt-0.5">
                 Your CPO order is accepted. Our team is locating the devices and will notify you once they are ready for dispatch. Typical lead time is 3–5 business days.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── IN TRANSIT — devices shipped to COE ─────────────────────────── */}
+      {isShippedToCoe && (
+        <Card className="border-sky-200 bg-sky-50/40 dark:border-sky-800 dark:bg-sky-950/10">
+          <CardContent className="py-4 flex items-start gap-3">
+            <Truck className="h-4 w-4 text-sky-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-sky-800 dark:text-sky-200">Your devices are on their way to us</p>
+              <p className="text-sm text-sky-700 dark:text-sky-300 mt-0.5">
+                We have received your tracking information and are monitoring the shipment. You will be notified as soon as your package arrives at our COE facility.
               </p>
             </div>
           </CardContent>

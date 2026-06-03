@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Search, ShoppingCart, CheckCircle, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
@@ -17,6 +18,7 @@ import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG } from '@/lib/constants'
 import type { OrderStatus } from '@/types'
 
 export default function CustomerOrdersPage() {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [transitioning, setTransitioning] = useState<Record<string, boolean>>({})
@@ -39,7 +41,12 @@ export default function CustomerOrdersPage() {
         body: JSON.stringify({ to_status: action }),
       })
       if (!res.ok) throw new Error('Failed')
-      toast.success(action === 'accepted' ? 'Quote accepted! We will process your order.' : 'Quote declined.')
+      if (action === 'accepted') {
+        toast.success('Quote accepted! Review your shipping instructions.')
+        router.push(`/customer/orders/${orderId}`)
+        return
+      }
+      toast.success('Quote declined.')
       refetch?.()
     } catch {
       toast.error('Could not update quote status. Please try again.')
