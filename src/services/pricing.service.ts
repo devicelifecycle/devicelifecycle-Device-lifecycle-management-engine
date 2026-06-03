@@ -316,12 +316,8 @@ function getApprovedTradeInCompetitorConditionPrice<T extends TradeInCompetitorR
 }
 
 /**
- * Filter competitor outliers — discard highest if >1.3x second-highest (e.g. Bell promotion).
- *
- * Guard: do NOT filter when the remaining prices average below 40% of the candidate
- * outlier. This prevents incorrectly suppressing GoRecell when carriers (Bell/Telus)
- * are structurally low for a device (e.g. Samsung S21: Bell=$20, GoRecell=$116 —
- * GoRecell is the fair market rate, not a promotional anomaly).
+ * Filter competitor outliers — discard highest carrier price if >1.3x second-highest.
+ * GoRecell is always kept; only Bell/Telus promotional spikes are filtered.
  */
 function filterCompetitorOutliers(
   list: Array<{ name: string; price: number }>
@@ -330,12 +326,14 @@ function filterCompetitorOutliers(
   const sorted = [...list].sort((a, b) => b.price - a.price)
   const highest = sorted[0].price
   const secondHighest = sorted[1].price
+  // Never filter GoRecell — it is the primary market reference, not a promotional anomaly.
+  // Carriers (Bell/Telus) run structural device-specific discounts that make them
+  // appear low relative to GoRecell; those low carrier prices should be filtered, not GoRecell.
+  const highestName = (sorted[0].name ?? '').toLowerCase()
+  if (highestName.includes('gorecell') || highestName.includes('go recell')) return list
   if (secondHighest > 0 && highest > secondHighest * 1.3) {
     const remaining = list.filter(c => c.price < highest)
     const remainingAvg = remaining.reduce((s, c) => s + c.price, 0) / remaining.length
-    // Only filter when remaining prices are ≥40% of the suspected outlier.
-    // If remaining avg is too low it means the "outlier" is actually the correct
-    // market rate and the low prices are the anomaly (carrier structural discount).
     if (remainingAvg >= highest * 0.4) return remaining
   }
   return list
@@ -1300,8 +1298,10 @@ export class PricingService {
       const policyReferencePrice = approvedPricingBlend.referencePrice
       const bellTelusCompetitors = approvedPricingBlend.bellTelusCompetitors
 
+      let formulaTradePrice: number | undefined
       if (hasCompetitorData && !beatPercent && !beatAmount) {
         tradePrice = round2(policyReferencePrice > 0 ? policyReferencePrice : avgCompetitorPrice)
+        formulaTradePrice = tradePrice
         weightedAvgUsed = true
       } else if (isBroken) {
         // Broken = 50% of good working trade price (Brian's rule)
@@ -1379,6 +1379,10 @@ export class PricingService {
             // extend reasoning to new floor labels so UI reflects the correct tier
             void floorLabel
           }
+        }
+        // Reset formulaTradePrice if it equals the post-floor price (no meaningful divergence)
+        if (goRecellFairFloorApplied && formulaTradePrice != null && formulaTradePrice === tradePrice) {
+          formulaTradePrice = undefined
         }
       }
 
@@ -1569,6 +1573,14 @@ export class PricingService {
         margin_applied: round2(marginPercent * 100),
         final_trade_price: round2(tradePrice),
         final_cpo_price: round2(cpoPrice),
+      }
+
+      if (formulaTradePrice != null) {
+        breakdown.formula_trade_price = formulaTradePrice
+      }
+      if (goRecellFairFloorApplied) {
+        breakdown.goRecell_fair_floor_applied = true
+        breakdown.goRecell_fair_floor_price = round2(tradePrice)
       }
 
       if (isBroken) {

@@ -64,6 +64,9 @@ interface ItemPrice {
   error: string | null
   source: string
   competitors: CompetitorPrice[]
+  formula_trade_price?: number
+  goRecell_fair_floor_applied?: boolean
+  goRecell_fair_floor_price?: number
 }
 
 function mapCondition(c: DeviceCondition): 'excellent' | 'good' | 'fair' | 'broken' {
@@ -199,6 +202,9 @@ export default function NewTradeInPage() {
               error: null,
               source: data.price_source || 'Pricing Engine V2',
               competitors: (data.competitors || []) as CompetitorPrice[],
+              formula_trade_price: data.breakdown?.formula_trade_price,
+              goRecell_fair_floor_applied: data.breakdown?.goRecell_fair_floor_applied,
+              goRecell_fair_floor_price: data.breakdown?.goRecell_fair_floor_price,
             },
           }))
           return
@@ -899,11 +905,28 @@ export default function NewTradeInPage() {
                                     </div>
                                   )}
                                   {/* Final formula result — violet */}
-                                  <div className="flex items-center justify-between gap-2 border-t border-slate-300 dark:border-slate-600 pt-0.5 mt-0.5">
-                                    <span className="text-slate-800 dark:text-slate-200 font-semibold">
-                                      {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
-                                    </span>
-                                    <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(price.engine_price)}</span>
+                                  <div className="border-t border-slate-300 dark:border-slate-600 pt-0.5 mt-0.5 space-y-0.5">
+                                    {price.goRecell_fair_floor_applied && price.formula_trade_price != null ? (
+                                      <>
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-slate-600 dark:text-slate-400 font-medium">
+                                            {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
+                                          </span>
+                                          <span className="font-mono text-slate-500 dark:text-slate-400 line-through">{formatCurrency(price.formula_trade_price)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-orange-700 dark:text-orange-400 font-semibold text-[10px]">GoRecell floor ↑</span>
+                                          <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(price.engine_price)}</span>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-slate-800 dark:text-slate-200 font-semibold">
+                                          {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
+                                        </span>
+                                        <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(price.engine_price)}</span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               )

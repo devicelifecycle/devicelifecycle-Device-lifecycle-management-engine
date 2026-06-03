@@ -282,6 +282,12 @@ export interface PriceCalculationResultV2 {
     data_driven_trade_price_before_market_sanity?: number;
     market_sanity_reference_trade_price?: number;
     market_sanity_clamped?: boolean;
+    /** Weighted formula result before any GoRecell floor / ceiling adjustments */
+    formula_trade_price?: number;
+    /** True when GoRecell's lower-grade floor raised the formula result */
+    goRecell_fair_floor_applied?: boolean;
+    /** The floor price that was applied */
+    goRecell_fair_floor_price?: number;
   };
   error?: string;
 }
@@ -315,6 +321,7 @@ export interface Order extends BaseEntity {
   shipped_at?: string;
   received_at?: string;
   completed_at?: string;
+  cancelled_at?: string;
   
   is_sla_breached: boolean;
   sla_breach_at?: string;

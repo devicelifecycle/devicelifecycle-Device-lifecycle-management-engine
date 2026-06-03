@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { AlertCircle, ArrowRight, CheckCircle2, ClipboardList, FileUp, FilePlus2, Loader2, FileCheck2 } from 'lucide-react'
-import { CSV_COLUMN_ALIASES } from '@/lib/csv-templates'
+import { AlertCircle, ArrowRight, CheckCircle2, ClipboardList, Download, FileSpreadsheet, FileUp, FilePlus2, Loader2, FileCheck2 } from 'lucide-react'
+import { CSV_COLUMN_ALIASES, CPO_CSV_HEADERS, CPO_CSV_SAMPLE, TRADE_IN_CSV_HEADERS, TRADE_IN_CSV_SAMPLE, buildCsvContent, buildXlsxTemplateBlob } from '@/lib/csv-templates'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useOrders } from '@/hooks/useOrders'
@@ -48,6 +48,14 @@ export default function CustomerRequestsPage() {
   const [uploadProgress, setUploadProgress] = useState(0) // 0 = no progress bar, 1-100 during large-file processing
   const [customerLoadError, setCustomerLoadError] = useState('')
   const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null)
+
+  // ── CPO upload state ────────────────────────────────────────────────────────
+  const [cpoUploadFile, setCpoUploadFile] = useState<File | null>(null)
+  const [cpoParsing, setCpoParsing] = useState(false)
+  const [cpoParseError, setCpoParseError] = useState('')
+  const [cpoParsedRows, setCpoParsedRows] = useState<ParsedRow[]>([])
+  const [cpoParsedSummary, setCpoParsedSummary] = useState<ParseSummary | null>(null)
+  const cpoFileInputRef = useRef<HTMLInputElement>(null)
 
   // Large-file threshold: files >5 MB are parsed in the browser to avoid
   // Vercel function timeout, then sent as pre-aggregated JSON for matching.
@@ -93,6 +101,51 @@ export default function CustomerRequestsPage() {
       })
       .catch(() => setCustomerLoadError('Could not load your account. Please refresh the page.'))
   }, [])
+
+  function handleDownloadTradeTemplate() {
+    const csv = buildCsvContent(TRADE_IN_CSV_HEADERS, TRADE_IN_CSV_SAMPLE)
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a'); a.href = url; a.download = 'trade-in-template.csv'; a.click(); URL.revokeObjectURL(url)
+  }
+
+  async function handleDownloadTradeExcelTemplate() {
+    const blob = await buildXlsxTemplateBlob('Trade-In', TRADE_IN_CSV_HEADERS, TRADE_IN_CSV_SAMPLE)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'trade-in-template.xlsx'; a.click(); URL.revokeObjectURL(url)
+  }
+
+  function handleDownloadCpoTemplate() {
+    const csv = buildCsvContent(CPO_CSV_HEADERS, CPO_CSV_SAMPLE)
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a'); a.href = url; a.download = 'cpo-template.csv'; a.click(); URL.revokeObjectURL(url)
+  }
+
+  async function handleDownloadCpoExcelTemplate() {
+    const blob = await buildXlsxTemplateBlob('CPO', CPO_CSV_HEADERS, CPO_CSV_SAMPLE)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'cpo-template.xlsx'; a.click(); URL.revokeObjectURL(url)
+  }
+
+  async function handleCpoFileSelect(file: File) {
+    setCpoUploadFile(file)
+    setCpoParsedRows([])
+    setCpoParsedSummary(null)
+    setCpoParseError('')
+    setCpoParsing(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/orders/parse-trade-template', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to read file')
+      setCpoParsedRows(data.rows || [])
+      setCpoParsedSummary(data.summary || null)
+    } catch (err) {
+      setCpoParseError(err instanceof Error ? err.message : 'Could not read file. Please check the format.')
+    } finally {
+      setCpoParsing(false)
+    }
+  }
 
   async function handleFileSelect(file: File) {
     setUploadFile(file)
@@ -212,52 +265,63 @@ export default function CustomerRequestsPage() {
 
   async function handleSubmit(skipInvalidRows = false) {
     if (!customerId) { toast.error('Customer profile not found. Please refresh and try again.'); return }
-    if (parsedRows.length === 0) { toast.error('No devices found in your file.'); return }
+    const hasTradeIn = parsedRows.length > 0
+    const hasCpo = cpoParsedRows.length > 0
+    if (!hasTradeIn && !hasCpo) { toast.error('No devices found. Please upload a file first.'); return }
     setSubmitting(true)
     setRowValidationErrors(null)
+
+    const toRows = (rows: ParsedRow[]) => rows.map(r => ({
+      make: r.make, model: r.model, storage: r.storage || '',
+      condition: r.condition || 'good', quantity: String(r.quantity),
+      ...(r.device_id ? { device_id: r.device_id } : {}),
+      ...(r.imeis.length > 0 ? { imei: r.imeis.join(', ') } : {}),
+      ...(r.serials.length > 0 ? { serial_number: r.serials.join(', ') } : {}),
+    }))
+
     try {
-      // Route ALL rows (matched + unmatched) through upload-csv so antiquated/unlisted
-      // devices are still submitted — COE team can manually identify and link them.
-      const rawRows = parsedRows.map(r => ({
-        make: r.make,
-        model: r.model,
-        storage: r.storage || '',
-        condition: r.condition || 'good',
-        quantity: String(r.quantity),
-        // Pass parse-step device_id so upload-csv skips its weaker ILIKE re-match
-        // and uses the deterministic exact/prefix match result from parse-trade-template.
-        ...(r.device_id ? { device_id: r.device_id } : {}),
-        ...(r.imeis.length > 0 ? { imei: r.imeis.join(', ') } : {}),
-        ...(r.serials.length > 0 ? { serial_number: r.serials.join(', ') } : {}),
-      }))
-      const res = await fetch('/api/orders/upload-csv', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: rawRows, customer_id: customerId, order_type: 'trade_in', ...(skipInvalidRows ? { skip_invalid_rows: true } : {}) }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        // Show row-level validation errors with an override option
-        if (res.status === 400 && Array.isArray(data.details) && data.details.length > 0) {
-          setRowValidationErrors(data.details)
-          return
+      let firstOrderId: string | undefined
+      let totalSubmitted = 0
+
+      if (hasTradeIn) {
+        const res = await fetch('/api/orders/upload-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: toRows(parsedRows), customer_id: customerId, order_type: 'trade_in', ...(skipInvalidRows ? { skip_invalid_rows: true } : {}) }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          if (res.status === 400 && Array.isArray(data.details) && data.details.length > 0) {
+            setRowValidationErrors(data.details); return
+          }
+          throw new Error(data.error || 'Trade-in submission failed')
         }
-        throw new Error(data.error || 'Submission failed')
+        if (data.order?.id) firstOrderId = data.order.id
+        totalSubmitted += data.items_created ?? parsedRows.length
       }
-      const total = parsedRows.length
-      const matched = data.items_created ?? total
-      const skipped = data.skipped_rows ?? 0
-      const msg = skipped > 0
-        ? `Request submitted — ${matched} device${matched !== 1 ? 's' : ''} processed, ${skipped} row${skipped !== 1 ? 's' : ''} skipped.`
-        : `Request submitted — ${matched} of ${total} device${total !== 1 ? 's' : ''} processed. We'll send your quote within 24 hours.`
-      toast.success(msg)
-      setUploadFile(null)
-      setParsedRows([])
-      setParsedSummary(null)
-      setRowValidationErrors(null)
-      setDraftRestoredAt(null)
+
+      if (hasCpo) {
+        const res = await fetch('/api/orders/upload-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: toRows(cpoParsedRows), customer_id: customerId, order_type: 'cpo' }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'CPO submission failed')
+        if (!firstOrderId && data.order?.id) firstOrderId = data.order.id
+        totalSubmitted += data.items_created ?? cpoParsedRows.length
+      }
+
+      const parts = [
+        hasTradeIn ? `${parsedRows.length} trade-in` : '',
+        hasCpo ? `${cpoParsedRows.length} CPO` : '',
+      ].filter(Boolean).join(' + ')
+      toast.success(`Request submitted — ${parts} device${totalSubmitted !== 1 ? 's' : ''} processed. We'll send your quote within 24 hours.`)
+
+      setUploadFile(null); setParsedRows([]); setParsedSummary(null); setRowValidationErrors(null); setDraftRestoredAt(null)
+      setCpoUploadFile(null); setCpoParsedRows([]); setCpoParsedSummary(null)
       try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
-      if (data.order?.id) router.push(`/customer/orders/${data.order.id}`)
+      if (firstOrderId) router.push(`/customer/orders/${firstOrderId}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Submission failed')
     } finally {
@@ -288,10 +352,27 @@ export default function CustomerRequestsPage() {
         <CardHeader>
           <CardTitle className="text-base">Upload Your Device List</CardTitle>
           <CardDescription>
-            Have a spreadsheet of devices? Upload it and we&apos;ll prepare your quote automatically — no manual entry needed.
+            Upload a Trade-In list, a CPO list, or both at once — we&apos;ll prepare your quote automatically.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          {/* ── Trade-In section ──────────────────────────────────────────── */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-green-700 dark:text-green-400">Trade-In Devices</p>
+                <p className="text-xs text-muted-foreground">Devices you are selling/returning</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs border-green-600 text-green-700 hover:bg-green-50 dark:text-green-400" onClick={handleDownloadTradeTemplate}>
+                  <Download className="h-3 w-3 mr-1" />CSV Template
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs border-green-600 text-green-700 hover:bg-green-50 dark:text-green-400" onClick={handleDownloadTradeExcelTemplate}>
+                  <FileSpreadsheet className="h-3 w-3 mr-1" />Excel Template
+                </Button>
+              </div>
+            </div>
+
           {/* Draft restored banner */}
           {draftRestoredAt && parsedRows.length > 0 && (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-400">
@@ -480,18 +561,112 @@ export default function CustomerRequestsPage() {
                   <p className="text-xs">Fix your file and re-upload, or skip these rows and submit the rest.</p>
                 </div>
               )}
-              <div className="flex justify-end gap-2">
-                {rowValidationErrors && rowValidationErrors.length > 0 && (
-                  <Button variant="outline" onClick={() => handleSubmit(true)} disabled={submitting}>
-                    {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                    Skip invalid rows &amp; submit rest
-                  </Button>
-                )}
-                <Button variant="success" onClick={() => handleSubmit(false)} disabled={submitting || parsedRows.length === 0}>
-                  {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                  {submitting ? 'Submitting…' : `Submit Trade-In Request (${parsedRows.length} device${parsedRows.length !== 1 ? 's' : ''})`}
+            </div>
+          )}
+          </div>{/* end trade-in section */}
+
+          {/* ── CPO section ──────────────────────────────────────────────── */}
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">CPO Devices</p>
+                <p className="text-xs text-muted-foreground">Certified Pre-Owned devices for purchase</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs border-blue-600 text-blue-700 hover:bg-blue-50 dark:text-blue-400" onClick={handleDownloadCpoTemplate}>
+                  <Download className="h-3 w-3 mr-1" />CSV Template
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs border-blue-600 text-blue-700 hover:bg-blue-50 dark:text-blue-400" onClick={handleDownloadCpoExcelTemplate}>
+                  <FileSpreadsheet className="h-3 w-3 mr-1" />Excel Template
                 </Button>
               </div>
+            </div>
+
+            {cpoUploadFile && !cpoParsing ? (
+              <div className="flex items-center justify-between rounded-lg border border-muted bg-muted/30 px-4 py-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileCheck2 className="h-5 w-5 text-primary shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{cpoUploadFile.name}</p>
+                    <p className="text-xs text-muted-foreground">{(cpoUploadFile.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <button type="button" onClick={() => cpoFileInputRef.current?.click()} className="text-xs text-primary hover:underline">Replace</button>
+                  <button type="button" onClick={() => { setCpoUploadFile(null); setCpoParsedRows([]); setCpoParsedSummary(null); setCpoParseError('') }} className="text-xs text-destructive hover:underline">Remove</button>
+                </div>
+                <input ref={cpoFileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleCpoFileSelect(f); e.target.value = '' }} />
+              </div>
+            ) : (
+              <div
+                className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-blue-200 dark:border-blue-800 px-6 py-6 cursor-pointer hover:border-blue-400 transition-colors"
+                onClick={() => cpoFileInputRef.current?.click()}
+              >
+                {cpoParsing ? <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /> : <FileUp className="h-7 w-7 text-muted-foreground" />}
+                <p className="text-sm text-muted-foreground text-center">
+                  {cpoParsing ? 'Reading your file…' : 'Click to upload your CPO device list (optional)'}
+                </p>
+                <input ref={cpoFileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleCpoFileSelect(f); e.target.value = '' }} />
+              </div>
+            )}
+
+            {cpoParseError && (
+              <p className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />{cpoParseError}
+              </p>
+            )}
+
+            {cpoParsedSummary && cpoParsedRows.length > 0 && (
+              <div className="space-y-2">
+                <div className="rounded-md border border-blue-200 bg-blue-50/40 dark:border-blue-800 dark:bg-blue-950/20 px-4 py-3 text-sm text-blue-700 dark:text-blue-400 space-y-1">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    {cpoParsedSummary.total_devices} CPO device{cpoParsedSummary.total_devices !== 1 ? 's' : ''} across {cpoParsedRows.length} SKU{cpoParsedRows.length !== 1 ? 's' : ''} detected
+                  </div>
+                </div>
+                <div className="rounded-lg border divide-y text-sm overflow-hidden">
+                  {cpoParsedRows.map((row, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-4 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium">{row.make} {row.model}</span>
+                        <span className="ml-2 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">{row.quantity} unit{row.quantity !== 1 ? 's' : ''}</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={row.storage}
+                        onChange={e => setCpoParsedRows(prev => prev.map((r, i) => i === idx ? { ...r, storage: e.target.value } : r))}
+                        placeholder="Storage"
+                        className="w-20 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center"
+                      />
+                      {row.device_id ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> : <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>{/* end CPO section */}
+
+          {/* ── Combined submit ───────────────────────────────────────────── */}
+          {(parsedRows.length > 0 || cpoParsedRows.length > 0) && (
+            <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+              {rowValidationErrors && rowValidationErrors.length > 0 && (
+                <Button variant="outline" onClick={() => handleSubmit(true)} disabled={submitting}>
+                  {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                  Skip invalid rows &amp; submit rest
+                </Button>
+              )}
+              <Button variant="success" onClick={() => handleSubmit(false)} disabled={submitting}>
+                {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                {submitting ? 'Submitting…' : (() => {
+                  const parts = [
+                    parsedRows.length > 0 ? `${parsedRows.length} trade-in` : '',
+                    cpoParsedRows.length > 0 ? `${cpoParsedRows.length} CPO` : '',
+                  ].filter(Boolean)
+                  return `Submit Request (${parts.join(' + ')} device${(parsedRows.length + cpoParsedRows.length) !== 1 ? 's' : ''})`
+                })()}
+              </Button>
             </div>
           )}
         </CardContent>

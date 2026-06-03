@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, Files } from 'lucide-react'
@@ -184,6 +185,9 @@ interface ItemPrice {
   competitors: CompetitorPrice[]
   last_manual_price: number | null   // last price a human set for this device+storage
   last_manual_at: string | null      // when it was last set
+  formula_trade_price?: number
+  goRecell_fair_floor_applied?: boolean
+  goRecell_fair_floor_price?: number
 }
 
 // CPO orders are always 'good' condition
@@ -332,6 +336,9 @@ export default function NewOrderPage() {
               competitors: (data.competitors || []) as CompetitorPrice[],
               last_manual_price: lastManualPrice,
               last_manual_at: lastManualAt,
+              formula_trade_price: data.breakdown?.formula_trade_price,
+              goRecell_fair_floor_applied: data.breakdown?.goRecell_fair_floor_applied,
+              goRecell_fair_floor_price: data.breakdown?.goRecell_fair_floor_price,
             },
           }))
           return
@@ -1163,64 +1170,71 @@ export default function NewOrderPage() {
                                   onBlur={() => setTimeout(() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: false })), 150)}
                                   autoComplete="off"
                                 />
-                                {deviceDropdownOpen[index] && (
-                                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg">
-                                    {(() => {
-                                      const q = (deviceSearches[index] || '').toLowerCase()
-                                      const serverResults = deviceSearchResults[index]
-                                      const fuzzyMatch = (device: Device) => {
-                                        if (!q) return true
-                                        const text = `${device.make} ${device.model}`.toLowerCase()
-                                        const tokens = q.trim().split(/\s+/).filter((s: string) => s)
-                                        return tokens.every((token: string) => text.includes(token))
-                                      }
-                                      const filtered = (serverResults !== undefined
-                                        ? serverResults
-                                        : q ? devices.filter(fuzzyMatch) : devices
-                                      ).slice(0, 50)
-                                      if (filtered.length === 0) {
-                                        const canQuickAdd = ['admin', 'coe_manager'].includes(user?.role || '')
-                                        return (
-                                          <div>
-                                            <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
-                                            {canQuickAdd && q && (
-                                              <button
-                                                type="button"
-                                                className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-accent border-t flex items-center gap-2"
-                                                onMouseDown={e => {
-                                                  e.preventDefault()
-                                                  const parts = q.trim().split(/\s+/)
-                                                  const parsedMake = parts.length > 1 ? parts[0] : ''
-                                                  const parsedModel = parts.length > 1 ? parts.slice(1).join(' ') : q
-                                                  setQuickAddDialog({ index, make: parsedMake, model: parsedModel })
-                                                  setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
-                                                }}
-                                              >
-                                                <Plus className="h-3 w-3 shrink-0" />
-                                                Add &ldquo;{q}&rdquo; to catalog
-                                              </button>
-                                            )}
-                                          </div>
-                                        )
-                                      }
-                                      return filtered.map(d => (
-                                        <button
-                                          key={d.id}
-                                          type="button"
-                                          className={`w-full text-left px-3 py-2 text-sm hover:bg-accent ${d.id === item.device_id ? 'bg-accent font-medium' : ''}`}
-                                          onMouseDown={e => {
-                                            e.preventDefault()
-                                            updateItem(index, 'device_id', d.id)
-                                            setDeviceSearches(prev => ({ ...prev, [index]: `${d.make} ${d.model}` }))
-                                            setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
-                                          }}
-                                        >
-                                          {d.make} {d.model}
-                                        </button>
-                                      ))
-                                    })()}
-                                  </div>
-                                )}
+                                {deviceDropdownOpen[index] && (() => {
+                                  const inputEl = deviceInputRefs.current[index]
+                                  const rect = inputEl?.getBoundingClientRect()
+                                  if (!rect) return null
+                                  const q = (deviceSearches[index] || '').toLowerCase()
+                                  const serverResults = deviceSearchResults[index]
+                                  const fuzzyMatch = (device: Device) => {
+                                    if (!q) return true
+                                    const text = `${device.make} ${device.model}`.toLowerCase()
+                                    const tokens = q.trim().split(/\s+/).filter((s: string) => s)
+                                    return tokens.every((token: string) => text.includes(token))
+                                  }
+                                  const filtered = (serverResults !== undefined
+                                    ? serverResults
+                                    : q ? devices.filter(fuzzyMatch) : devices
+                                  ).slice(0, 50)
+                                  const content = filtered.length === 0 ? (() => {
+                                    const canQuickAdd = ['admin', 'coe_manager'].includes(user?.role || '')
+                                    return (
+                                      <div>
+                                        <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>
+                                        {canQuickAdd && q && (
+                                          <button
+                                            type="button"
+                                            className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-accent border-t flex items-center gap-2"
+                                            onMouseDown={e => {
+                                              e.preventDefault()
+                                              const parts = q.trim().split(/\s+/)
+                                              const parsedMake = parts.length > 1 ? parts[0] : ''
+                                              const parsedModel = parts.length > 1 ? parts.slice(1).join(' ') : q
+                                              setQuickAddDialog({ index, make: parsedMake, model: parsedModel })
+                                              setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+                                            }}
+                                          >
+                                            <Plus className="h-3 w-3 shrink-0" />
+                                            Add &ldquo;{q}&rdquo; to catalog
+                                          </button>
+                                        )}
+                                      </div>
+                                    )
+                                  })() : filtered.map(d => (
+                                    <button
+                                      key={d.id}
+                                      type="button"
+                                      className={`w-full text-left px-3 py-2 text-sm hover:bg-accent ${d.id === item.device_id ? 'bg-accent font-medium' : ''}`}
+                                      onMouseDown={e => {
+                                        e.preventDefault()
+                                        updateItem(index, 'device_id', d.id)
+                                        setDeviceSearches(prev => ({ ...prev, [index]: `${d.make} ${d.model}` }))
+                                        setDeviceDropdownOpen(prev => ({ ...prev, [index]: false }))
+                                      }}
+                                    >
+                                      {d.make} {d.model}
+                                    </button>
+                                  ))
+                                  return createPortal(
+                                    <div
+                                      style={{ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 9999 }}
+                                      className="max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg"
+                                    >
+                                      {content}
+                                    </div>,
+                                    document.body
+                                  )
+                                })()}
                               </div>
                               <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
                               {item.order_type !== 'cpo' && (
@@ -1650,11 +1664,28 @@ export default function NewOrderPage() {
                                   </div>
                                 )}
                                 {/* Final formula result — violet */}
-                                <div className="flex items-center justify-between gap-2 border-t border-slate-300 dark:border-slate-600 pt-0.5 mt-0.5">
-                                  <span className="text-slate-800 dark:text-slate-200 font-semibold">
-                                    {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
-                                  </span>
-                                  <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(enginePrice)}</span>
+                                <div className="border-t border-slate-300 dark:border-slate-600 pt-0.5 mt-0.5 space-y-0.5">
+                                  {price?.goRecell_fair_floor_applied && price?.formula_trade_price != null ? (
+                                    <>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-slate-600 dark:text-slate-400 font-medium">
+                                          {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
+                                        </span>
+                                        <span className="font-mono text-slate-500 dark:text-slate-400 line-through">{formatCurrency(price.formula_trade_price)}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-orange-700 dark:text-orange-400 font-semibold text-[10px]">GoRecell floor ↑</span>
+                                        <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(enginePrice)}</span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-slate-800 dark:text-slate-200 font-semibold">
+                                        {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
+                                      </span>
+                                      <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(enginePrice)}</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )
