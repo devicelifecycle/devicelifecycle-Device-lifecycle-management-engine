@@ -344,6 +344,7 @@ export interface Order extends BaseEntity {
   assigned_to?: User;
   created_by?: User;
   items?: OrderItem[];
+  shipments?: Shipment[];
   parent_order?: Order;
   sub_orders?: Order[];
 }
