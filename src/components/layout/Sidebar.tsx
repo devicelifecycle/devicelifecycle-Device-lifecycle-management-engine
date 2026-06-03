@@ -105,7 +105,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     : 'U'
 
   return (
-    <aside className="sidebar-surface flex h-full w-[260px] flex-col overflow-hidden border-r border-white/[0.10]">
+    <aside className="sidebar-surface flex h-full w-[280px] flex-col overflow-hidden border-r border-white/[0.10]">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-[18px]">
         <div className="liquid-glass-strong flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white">
@@ -124,7 +124,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {filteredSections.map((section) => (
           <div key={section.title}>
-            <p className="mb-1.5 px-2 font-body text-[9px] font-semibold uppercase tracking-[0.2em] text-white/50">
+            <p className="mb-1.5 px-2 font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
               {section.title}
             </p>
             <div className="space-y-0.5">
@@ -136,7 +136,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   <Link key={item.title} href={item.href} onClick={onNavigate} prefetch={false} onMouseEnter={() => router.prefetch(item.href)}>
                     <div
                       className={cn(
-                        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm transition-all duration-200',
+                        'group relative flex items-center gap-3 rounded-xl px-3 py-3 font-body text-sm transition-all duration-200',
                         isActive
                           ? 'liquid-glass text-white'
                           : 'text-white/65 hover:text-white/90'
@@ -148,11 +148,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                       )}
                       <item.icon
                         className={cn(
-                          'h-4 w-4 shrink-0 transition-colors',
+                          'h-[18px] w-[18px] shrink-0 transition-colors',
                           isActive ? 'text-primary' : 'text-white/50 group-hover:text-white/80'
                         )}
                       />
-                      <span className={cn('flex-1 truncate text-[13px]', isActive ? 'font-semibold' : 'font-normal')}>
+                      <span className={cn('flex-1 truncate text-[14px]', isActive ? 'font-semibold' : 'font-normal')}>
                         {item.title}
                       </span>
                       {item.countKey && (counts[item.countKey] ?? 0) > 0 && (

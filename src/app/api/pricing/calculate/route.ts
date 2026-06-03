@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only internal roles can calculate pricing
-    const requesterRole = profile?.role
+    const requesterRole = effectiveRole
     if (!requesterRole || ['customer', 'vendor'].includes(requesterRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

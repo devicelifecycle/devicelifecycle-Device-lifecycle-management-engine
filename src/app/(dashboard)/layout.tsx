@@ -70,7 +70,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <motion.div
             className="hidden lg:block h-full shrink-0 overflow-hidden"
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 260, opacity: 1 }}
+            animate={{ width: 280, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
           >

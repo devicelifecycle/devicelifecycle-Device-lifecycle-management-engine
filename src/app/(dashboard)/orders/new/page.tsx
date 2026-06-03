@@ -246,6 +246,45 @@ export default function NewOrderPage() {
   const [csvPreviewPage, setCsvPreviewPage] = useState(1)
   const deviceSearchTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
 
+  // Auto-save draft to localStorage every 30 seconds
+  const DRAFT_KEY = 'dlm_new_order_draft'
+  const [hasDraft, setHasDraft] = useState(false)
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if ((parsed.items?.length > 0) || (parsed.parsedFiles?.length > 0) || parsed.notes) {
+          setHasDraft(true)
+        }
+      }
+    } catch { /* ignore */ }
+  }, [])
+  const restoreDraft = () => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (!saved) return
+      const parsed = JSON.parse(saved)
+      if (parsed.items) setItems(parsed.items)
+      if (parsed.parsedFiles) setParsedFiles(parsed.parsedFiles)
+      if (parsed.notes) setNotes(parsed.notes)
+      if (parsed.tab) setTab(parsed.tab)
+      setHasDraft(false)
+      toast.success('Draft restored')
+    } catch { toast.error('Could not restore draft') }
+  }
+  const discardDraft = () => { localStorage.removeItem(DRAFT_KEY); setHasDraft(false) }
+  // Auto-save every 30 seconds when form has content
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (items.length > 0 || parsedFiles.length > 0 || notes.trim()) {
+        try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ items, parsedFiles, notes, tab })) } catch { /* ignore */ }
+      }
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [items, parsedFiles, notes, tab])
+
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
 
@@ -910,9 +949,11 @@ export default function NewOrderPage() {
         }
 
         if (results.length === 1) {
+          localStorage.removeItem(DRAFT_KEY)
           toast.success(`${results[0].type} order created — ${allCsvRows.length} items`)
           router.replace(isCustomer ? `/customer/orders/${results[0].id}` : `/orders/${results[0].id}`)
         } else if (results.length > 1) {
+          localStorage.removeItem(DRAFT_KEY)
           toast.success(`Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
           router.replace(isCustomer ? '/customer/orders' : '/orders')
         }
@@ -985,9 +1026,11 @@ export default function NewOrderPage() {
       }
 
       if (results.length === 1) {
+        localStorage.removeItem(DRAFT_KEY)
         toast.success(isCustomer ? `${results[0].type} request submitted! Our team will send you a quote shortly.` : `${results[0].type} order created successfully`)
         router.replace(isCustomer ? `/customer/orders/${results[0].id}` : `/orders/${results[0].id}`)
       } else if (results.length === 2) {
+        localStorage.removeItem(DRAFT_KEY)
         toast.success(isCustomer ? `${results.length} requests submitted! Our team will send you quotes shortly.` : `Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
         router.replace(isCustomer ? '/customer/orders' : '/orders')
       }
@@ -1026,6 +1069,19 @@ export default function NewOrderPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Unsaved draft restore banner */}
+        {hasDraft && (
+          <div className="flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 px-4 py-3 gap-3">
+            <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+              You have an unsaved draft from a previous session.
+            </p>
+            <div className="flex gap-2 shrink-0">
+              <Button type="button" size="sm" variant="outline" onClick={restoreDraft} className="border-amber-400 text-amber-800 hover:bg-amber-100">Restore</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={discardDraft} className="text-amber-600">Discard</Button>
+            </div>
+          </div>
+        )}
+
         {/* Order for (info only - no selection needed) */}
         {isCustomer && myCustomer && (
           <Card>
@@ -1391,6 +1447,32 @@ export default function NewOrderPage() {
                     ))}
                   </div>
                 )}
+
+                {/* Category summary — grouped by Make + Model with total units */}
+                {allCsvRows.length > 0 && (() => {
+                  const grouped = new Map<string, number>()
+                  for (const row of allCsvRows) {
+                    const key = `${row.device_make || 'Unknown'} ${row.device_model || ''}`.trim()
+                    const qty = parseInt(row.quantity || '1', 10) || 1
+                    grouped.set(key, (grouped.get(key) || 0) + qty)
+                  }
+                  const totalUnits = Array.from(grouped.values()).reduce((s, v) => s + v, 0)
+                  return (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/20 p-3">
+                      <p className="text-xs font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                        Order summary — {grouped.size} model{grouped.size !== 1 ? 's' : ''}, {totalUnits} total unit{totalUnits !== 1 ? 's' : ''}
+                      </p>
+                      <div className="space-y-0.5">
+                        {Array.from(grouped.entries()).map(([name, qty]) => (
+                          <div key={name} className="flex items-center justify-between text-xs">
+                            <span className="text-blue-700 dark:text-blue-300 font-medium truncate max-w-[70%]">{name}</span>
+                            <span className="font-mono font-semibold text-blue-900 dark:text-blue-100 shrink-0">{qty} unit{qty !== 1 ? 's' : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {allCsvErrors.length > 0 && (
                   <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1">
