@@ -239,12 +239,12 @@ export default function DevicesPage() {
               <DialogTrigger asChild>
                 <Button variant="success"><Plus className="mr-2 h-4 w-4" />Add Device</Button>
               </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
+          <DialogContent className="sm:max-w-md flex flex-col max-h-[85vh]">
+            <DialogHeader className="shrink-0">
               <DialogTitle>Add New Device</DialogTitle>
               <DialogDescription>Add a device model to the catalog</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 overflow-y-auto flex-1 pr-1">
               <div className="space-y-2">
                 <Label>Brand / Make *</Label>
                 <Select value={form.make} onValueChange={v => { setForm(f => ({ ...f, make: v })); if (v !== 'Other') setCustomMake('') }}>
@@ -322,7 +322,7 @@ export default function DevicesPage() {
                 </div>
               </div>
             </div>
-              <DialogFooter>
+              <DialogFooter className="shrink-0 pt-2">
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleCreate} disabled={creating || !form.make || (form.make === 'Other' && !customMake.trim())}>
                   {creating ? 'Adding...' : 'Add Device'}

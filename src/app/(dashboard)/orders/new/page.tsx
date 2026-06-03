@@ -35,18 +35,37 @@ import type { Device, DeviceCondition } from '@/types'
 
 // Column alias map — auto-corrects misspelled or alternative column names
 const COLUMN_ALIASES: Record<string, string> = {
+  // Make / brand — covers every common variation seen in real customer files
   device_make: 'device_make', make: 'device_make', brand: 'device_make', manufacturer: 'device_make',
   devcie_make: 'device_make', divice_make: 'device_make', 'device make': 'device_make', 'make*': 'device_make',
+  oem: 'device_make', mfr: 'device_make', vendor: 'device_make', supplier: 'device_make',
+  company: 'device_make', 'phone brand': 'device_make', 'phone make': 'device_make',
+  'device brand': 'device_make', 'device manufacturer': 'device_make',
+  phone_brand: 'device_make', phone_make: 'device_make',
+  // Model — covers common aliases and combined-field column names
   device_model: 'device_model', model: 'device_model', device: 'device_model', product: 'device_model',
   devcie_model: 'device_model', divice_model: 'device_model', 'device model': 'device_model', 'model*': 'device_model',
+  'phone model': 'device_model', 'model name': 'device_model', 'device name': 'device_model',
+  'existing phone': 'device_model', description: 'device_model', phone_model: 'device_model',
+  // Quantity
   quantity: 'quantity', qty: 'quantity', quantitty: 'quantity', quantiy: 'quantity', quantit: 'quantity',
+  count: 'quantity', num: 'quantity', '#': 'quantity', 'device count': 'quantity',
+  'count of mobile': 'quantity', volume: 'quantity', total: 'quantity',
+  // Condition
   condition: 'condition', condtion: 'condition', condiiton: 'condition',
+  grade: 'condition', state: 'condition', 'device condition': 'condition',
+  // Storage
   storage: 'storage', 'storage/gb': 'storage', 'storage/gb*': 'storage', capacity: 'storage',
-  storag: 'storage', storrage: 'storage',
-  notes: 'notes', faults: 'notes', 'faults/notes': 'notes', nots: 'notes',
+  storag: 'storage', storrage: 'storage', gb: 'storage', size: 'storage', memory: 'storage',
+  // Notes / faults
+  notes: 'notes', faults: 'notes', 'faults/notes': 'notes', nots: 'notes', comments: 'notes',
+  // Serial / IMEI
   serial_number: 'serial_number', serial: 'serial_number', imei: 'serial_number',
-  serial_numbr: 'serial_number', serail_number: 'serial_number', 'sample s/n': 'serial_number', 's/n': 'serial_number',
+  serial_numbr: 'serial_number', serail_number: 'serial_number', 'sample s/n': 'serial_number',
+  's/n': 'serial_number', sn: 'serial_number', 'imei/sn': 'serial_number', 'imei/serial': 'serial_number',
+  // Color
   color: 'color', colour: 'color', colur: 'color',
+  // Order type
   order_type: 'order_type', type: 'order_type',
 }
 
@@ -559,14 +578,45 @@ export default function NewOrderPage() {
           }
 
           if (!mapped.device_make && mapped.device_model) {
-            const model = mapped.device_model.toLowerCase()
-            if (model.includes('iphone') || model.includes('ipad') || model.includes('macbook') || model.includes('apple watch')) {
+            const lower = mapped.device_model.toLowerCase()
+            if (lower.match(/\b(iphone|ipad|macbook|imac|airpods|apple watch|apple)\b/)) {
               mapped.device_make = 'Apple'
-            } else if (model.includes('galaxy') || model.includes('samsung')) {
+            } else if (lower.match(/\b(galaxy|samsung)\b/)) {
               mapped.device_make = 'Samsung'
-              mapped.device_model = mapped.device_model.replace(/samsung\s*/i, '')
-            } else if (model.includes('pixel')) {
+              mapped.device_model = mapped.device_model.replace(/^samsung\s+/i, '')
+            } else if (lower.match(/\b(pixel|google)\b/)) {
               mapped.device_make = 'Google'
+              mapped.device_model = mapped.device_model.replace(/^google\s+/i, '')
+            } else if (lower.match(/\b(moto[a-z]*|motorola)\b/)) {
+              mapped.device_make = 'Motorola'
+              mapped.device_model = mapped.device_model.replace(/^motorola\s+/i, '')
+            } else if (lower.match(/\bsonim\b/)) {
+              mapped.device_make = 'Sonim'
+              mapped.device_model = mapped.device_model.replace(/^sonim\s+/i, '')
+            } else if (lower.match(/\b(surface|microsoft)\b/)) {
+              mapped.device_make = 'Microsoft'
+            } else if (lower.match(/\b(thinkpad|lenovo)\b/)) {
+              mapped.device_make = 'Lenovo'
+            } else if (lower.match(/\b(dell|latitude|xps)\b/)) {
+              mapped.device_make = 'Dell'
+            } else if (lower.match(/\b(kyocera)\b/)) {
+              mapped.device_make = 'Kyocera'
+            } else if (lower.match(/\b(nokia)\b/)) {
+              mapped.device_make = 'Nokia'
+              mapped.device_model = mapped.device_model.replace(/^nokia\s+/i, '')
+            } else if (lower.match(/\b(blackberry)\b/)) {
+              mapped.device_make = 'BlackBerry'
+              mapped.device_model = mapped.device_model.replace(/^blackberry\s+/i, '')
+            } else {
+              // Last resort: if the model starts with a capitalized word followed by more words,
+              // treat the first word as brand (handles "Recycling <model>", etc.)
+              const KNOWN_BRANDS_LIST = ['Apple','Samsung','Google','Motorola','LG','Sony','OnePlus','Sonim','Kyocera','BlackBerry','Netgear','Novatel','Inseego','Microsoft','Lenovo','Dell','HP','Asus','Huawei','Xiaomi','Nokia','Alcatel','TCL','ZTE']
+              const firstWord = mapped.device_model.trim().split(/\s+/)[0] ?? ''
+              const matchedBrand = KNOWN_BRANDS_LIST.find(b => b.toLowerCase() === firstWord.toLowerCase())
+              if (matchedBrand) {
+                mapped.device_make = matchedBrand
+                mapped.device_model = mapped.device_model.slice(firstWord.length).trim()
+              }
             }
           }
 
@@ -614,6 +664,11 @@ export default function NewOrderPage() {
           toast.success(`${file.name}: ${rows.length} rows parsed successfully`)
         } else {
           toast.warning(`${file.name}: ${rows.length} rows with ${errors.length} errors — you can fix make/brand by clicking cells below`)
+          // Help debug column mapping: show detected headers if ALL rows are missing make
+          if (errors.length === rows.length) {
+            const detectedNames = rawHeaders.slice(0, 8).join(', ')
+            toast.info(`Detected columns: ${detectedNames}${rawHeaders.length > 8 ? '…' : ''}. If "Make" column is missing, check your file's column headers.`, { duration: 8000 })
+          }
         }
       } catch {
         toast.error(`Failed to parse ${file.name}. Supported formats: CSV, TSV, Excel (.xlsx, .xls), ODS.`)

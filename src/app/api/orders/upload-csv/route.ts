@@ -132,12 +132,16 @@ const COLUMN_MAP: Record<string, string> = {
   'serialnumber': 'serial_number',
   'nots': 'notes',
   // Brand/make aliases for user-created templates
-  'oem': 'brand',
-  'company': 'brand',
-  'phone brand': 'brand',
-  'phone model': 'model',
-  'device name': 'model',
-  'device_name': 'model',
+  'oem': 'brand', 'mfr': 'brand', 'vendor': 'brand', 'supplier': 'brand',
+  'company': 'brand', 'phone brand': 'brand', 'phone make': 'brand',
+  'device brand': 'brand', 'device manufacturer': 'brand',
+  'phone_brand': 'brand', 'phone_make': 'brand',
+  // Model aliases
+  'phone model': 'model', 'model name': 'model', 'existing phone': 'model',
+  'device name': 'model', 'device_name': 'model', 'description': 'model',
+  // Quantity aliases
+  'count': 'quantity', 'num': 'quantity', '#': 'quantity',
+  'device count': 'quantity', 'count of mobile': 'quantity', 'volume': 'quantity',
   // Storage aliases
   'gb': 'storage',
   'size': 'storage',
@@ -405,9 +409,10 @@ export async function POST(request: NextRequest) {
       const rawRow = rows[i]
       const mapped = mapRow(rawRow, detectedColumns, colMap)
 
-      // If no column mapping worked, fall back to raw keys with aliases
-      let brand = sanitizeCsvCell(mapped.brand || rawRow.brand || rawRow.Brand || rawRow.make || rawRow.Make || rawRow['Make*'] || '')
-      let model = sanitizeCsvCell(mapped.model || rawRow.model || rawRow.Model || rawRow['Model*'] || '')
+      // If no column mapping worked, fall back to raw keys with aliases.
+      // device_make / device_model are the canonical keys sent by the unified new order page.
+      let brand = sanitizeCsvCell(mapped.brand || rawRow.brand || rawRow.Brand || rawRow.make || rawRow.Make || rawRow['Make*'] || rawRow.device_make || rawRow.oem || rawRow.OEM || rawRow.vendor || rawRow.Vendor || '')
+      let model = sanitizeCsvCell(mapped.model || rawRow.model || rawRow.Model || rawRow['Model*'] || rawRow.device_model || '')
       const storage = sanitizeCsvCell(mapped.storage || rawRow.storage || rawRow.Storage || rawRow['Storage/GB'] || rawRow['Storage/GB*'] || '')
 
       // Handle "Product" column (vendor inventory format)
@@ -415,6 +420,27 @@ export async function POST(request: NextRequest) {
         const extracted = extractBrandFromProduct(mapped.product)
         brand = extracted.brand
         if (!model) model = extracted.model
+      }
+
+      // Infer brand from model when make/brand column was missing or unrecognized
+      if (!brand && model) {
+        const lower = model.toLowerCase()
+        if (lower.match(/\b(iphone|ipad|macbook|imac|airpods|apple)\b/)) { brand = 'Apple' }
+        else if (lower.match(/\b(galaxy|samsung)\b/)) { brand = 'Samsung'; model = model.replace(/^samsung\s+/i, '') }
+        else if (lower.match(/\b(pixel|google)\b/)) { brand = 'Google'; model = model.replace(/^google\s+/i, '') }
+        else if (lower.match(/\b(moto[a-z]*|motorola)\b/)) { brand = 'Motorola'; model = model.replace(/^motorola\s+/i, '') }
+        else if (lower.match(/\bsonim\b/)) { brand = 'Sonim' }
+        else if (lower.match(/\b(surface|microsoft)\b/)) { brand = 'Microsoft' }
+        else if (lower.match(/\b(thinkpad|lenovo)\b/)) { brand = 'Lenovo' }
+        else if (lower.match(/\b(kyocera)\b/)) { brand = 'Kyocera' }
+        else if (lower.match(/\bnokia\b/)) { brand = 'Nokia'; model = model.replace(/^nokia\s+/i, '') }
+        else {
+          // Try first-word brand split (e.g. "Apple iPhone 15" → brand=Apple, model=iPhone 15)
+          const KNOWN = ['Apple','Samsung','Google','Motorola','LG','Sony','OnePlus','Sonim','Kyocera','BlackBerry','Microsoft','Lenovo','Dell','HP','Asus','Huawei','Xiaomi','Nokia','Alcatel','TCL','ZTE','Netgear','Novatel']
+          const firstWord = model.trim().split(/\s+/)[0] ?? ''
+          const matched = KNOWN.find(b => b.toLowerCase() === firstWord.toLowerCase())
+          if (matched) { brand = matched; model = model.slice(firstWord.length).trim() || model }
+        }
       }
 
       // Condition: try to normalize to enum, store raw text if not mappable

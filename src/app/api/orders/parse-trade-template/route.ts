@@ -804,8 +804,13 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Filter out rows with no device info
-    const validRows = parsedRows.filter(r => r.brand || r.model)
+    // Filter out rows with no device info.
+    // Also exclude rows where model is a bare number (e.g. "0", "1") with no brand —
+    // these are formatting artifacts from Excel cells that held a numeric value.
+    const validRows = parsedRows.filter(r => {
+      if (!r.brand && /^\d+$/.test((r.model ?? '').trim())) return false
+      return r.brand || r.model
+    })
     if (validRows.length === 0) {
       return NextResponse.json({
         error: 'No device rows found. Check that your file has Make/Model/Brand columns.',
