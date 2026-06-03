@@ -1067,6 +1067,87 @@ export default function OrderDetailClient() {
     }
   }
 
+  const handleSavePricesAndSendQuote = async () => {
+    if (!order?.items) return
+
+    const itemsToSend = order.items.map(item => {
+      const raw = itemPrices[item.id] || '0'
+      const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ''))
+      const unit_price = Number.isFinite(num) ? num : 0
+      const payload: { id: string; unit_price: number; pricing_metadata?: PricingMetadata } = {
+        id: item.id,
+        unit_price,
+      }
+      if (item.id in itemMetadata) {
+        const meta = itemMetadata[item.id] as Record<string, unknown>
+        if (isCpoOrder && meta?.suggested_by_calc) {
+          const { suggested_by_calc: _removed, ...rest } = meta
+          payload.pricing_metadata = rest as PricingMetadata
+        } else {
+          payload.pricing_metadata = itemMetadata[item.id]
+        }
+      }
+      return payload
+    })
+
+    setIsSavingPrices(true)
+    setIsSendingQuote(true)
+    try {
+      // Save item-level field edits
+      const itemEditEntries = Object.entries(pricingItemEdits).filter(
+        ([, e]) => e.storage || e.condition || e.quantity !== undefined || e.device_id
+      )
+      await Promise.all(itemEditEntries.map(([itemId, edits]) =>
+        fetch(`/api/orders/${params.id}/items/${itemId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...(edits.storage ? { storage: edits.storage } : {}),
+            ...(edits.condition ? { condition: edits.condition } : {}),
+            ...(edits.quantity !== undefined ? { quantity: edits.quantity } : {}),
+            ...(edits.device_id ? { device_id: edits.device_id } : {}),
+          }),
+        })
+      ))
+
+      // Save order-level notes if changed
+      const notesChanged = pricingDialogNotes !== (order?.notes || '')
+      if (notesChanged) {
+        await fetch(`/api/orders/${params.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer_notes: pricingDialogNotes }),
+        })
+      }
+
+      const patchRes = await fetch(`/api/orders/${params.id}/items`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToSend }),
+      })
+      const patchData = await patchRes.json().catch(() => ({}))
+      if (!patchRes.ok) {
+        const msg = patchData.error || patchData.details?.[0]?.message || 'Failed to update prices'
+        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+      }
+
+      if (order?.status === 'draft') {
+        await transition({ status: 'submitted' as OrderStatus, notes: 'Auto-submitted for quoting' })
+        await refetch()
+      }
+      await transition({ status: 'quoted' as OrderStatus, notes: 'Quote sent to customer' })
+      toast.success('Prices saved and quote sent to customer')
+      setPricingDialogOpen(false)
+      refetch()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save and send quote'
+      toast.error(message)
+    } finally {
+      setIsSavingPrices(false)
+      setIsSendingQuote(false)
+    }
+  }
+
   const handleRepriceMismatchedItems = async () => {
     if (!order?.items?.length) return
 
@@ -3240,15 +3321,20 @@ export default function OrderDetailClient() {
 
       {/* Pricing Dialog */}
       <Dialog open={pricingDialogOpen} onOpenChange={setPricingDialogOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Set Item Pricing</DialogTitle>
-            <DialogDescription>
-              {isCpoOrder
-                ? 'Set the CPO sell price for each device. Use "Suggest" to pull a market-based CPO price, or enter manually.'
-                : 'Set the unit price for each item. Use "Suggest Price" to get market-based recommendations, or enter manually.'}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0">
+          {/* Sticky header */}
+          <div className="px-6 pt-6 pb-3 border-b flex-none">
+            <DialogHeader>
+              <DialogTitle>Set Item Pricing</DialogTitle>
+              <DialogDescription>
+                {isCpoOrder
+                  ? 'Set the CPO sell price for each device. Use "Suggest" to pull a market-based CPO price, or enter manually.'
+                  : 'Set the unit price for each item. Use "Suggest Price" to get market-based recommendations, or enter manually.'}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {!isCpoOrder && (
             <div className="rounded-lg border bg-muted/30 p-3 flex items-center justify-between gap-4">
               <div>
@@ -3314,7 +3400,7 @@ export default function OrderDetailClient() {
               <span className="ml-1">{isSuggestingAll ? 'Suggesting…' : isCpoOrder ? 'Suggest All CPO' : 'Suggest All'}</span>
             </Button>
           </div>
-          <div className="space-y-6 py-4">
+          <div className="space-y-4">
             {(() => {
               // Group items by device+storage+condition for bulk-apply
               type GroupEntry = { key: string; label: string; storage: string; condition: string; items: OrderItem[] }
@@ -3468,7 +3554,7 @@ export default function OrderDetailClient() {
                     </div>
                     <div className="flex flex-col gap-1">
                       <Label htmlFor={`price-${item.id}`} className="text-xs text-muted-foreground">
-                        Unit Price
+                        Unit Price {group.items.length > 1 && <span className="ml-1 text-[10px] text-muted-foreground/70">(applies to all {group.items.length})</span>}
                       </Label>
                       <Input
                         id={`price-${item.id}`}
@@ -3477,8 +3563,37 @@ export default function OrderDetailClient() {
                         min="0"
                         placeholder="0.00"
                         value={itemPrices[item.id] || ''}
-                        onChange={(e) => setItemPrices(prev => ({ ...prev, [item.id]: e.target.value }))}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setItemPrices(prev => {
+                            const updates: Record<string, string> = {}
+                            group.items.forEach(gi => { updates[gi.id] = val })
+                            return { ...prev, ...updates }
+                          })
+                        }}
                       />
+                      {(() => {
+                        const storage = pricingItemEdits[item.id]?.storage ?? getStorageForItem(item)
+                        const cond = pricingItemEdits[item.id]?.condition ?? item.claimed_condition ?? 'good'
+                        const manualKey = `${item.device_id}|${storage}|${cond}`
+                        const manualEntry = lastManualPrices[manualKey]
+                        if (!manualEntry) return null
+                        return (
+                          <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                            <span>Last manual: <strong>{formatCurrency(manualEntry.price)}</strong></span>
+                            <span className="text-muted-foreground">({new Date(manualEntry.set_at).toLocaleDateString()})</span>
+                            <button
+                              type="button"
+                              className="underline hover:no-underline"
+                              onClick={() => setItemPrices(prev => {
+                                const updates: Record<string, string> = {}
+                                group.items.forEach(gi => { updates[gi.id] = manualEntry.price.toFixed(2) })
+                                return { ...prev, ...updates }
+                              })}
+                            >Use</button>
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div className="flex flex-col gap-1">
                       <Label className="text-xs text-muted-foreground">Total</Label>
@@ -3760,14 +3875,42 @@ export default function OrderDetailClient() {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPricingDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSavePrices} disabled={isSavingPrices}>
-              {isSavingPrices ? 'Saving...' : 'Save Prices'}
-            </Button>
-          </DialogFooter>
+          </div>{/* end scrollable body */}
+
+          {/* Sticky footer */}
+          <div className="flex-none border-t px-6 py-4 flex flex-wrap items-center justify-between gap-3 bg-background">
+            <div className="text-xs text-muted-foreground">
+              {(() => {
+                const total = (order?.items ?? []).reduce((sum, item) => {
+                  const raw = itemPrices[item.id] || ''
+                  const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ''))
+                  const unit = Number.isFinite(num) ? num : 0
+                  const qty = pricingItemEdits[item.id]?.quantity ?? item.quantity ?? 1
+                  return sum + unit * qty
+                }, 0)
+                return total > 0 ? <span>Quote total: <strong>{formatCurrency(total)}</strong></span> : null
+              })()}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={() => setPricingDialogOpen(false)} disabled={isSavingPrices}>
+                Cancel
+              </Button>
+              <Button onClick={handleSavePrices} disabled={isSavingPrices}>
+                {isSavingPrices ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Saving…</> : 'Save Prices'}
+              </Button>
+              {canSendQuote && (order?.status === 'draft' || order?.status === 'submitted') && (
+                <Button
+                  variant="success"
+                  onClick={handleSavePricesAndSendQuote}
+                  disabled={isSavingPrices || isSendingQuote}
+                >
+                  {(isSavingPrices || isSendingQuote)
+                    ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Sending…</>
+                    : <><Send className="h-4 w-4 mr-1" />Save & Send Quote</>}
+                </Button>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

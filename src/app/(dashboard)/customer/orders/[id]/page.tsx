@@ -1,25 +1,70 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, CheckCircle, XCircle, Loader2, Package } from 'lucide-react'
+import {
+  ArrowLeft, CheckCircle, XCircle, Loader2, Package, Truck,
+  MapPin, CheckCircle2, Clock, CreditCard, AlertTriangle,
+  ThumbsUp, ThumbsDown, ExternalLink,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { useOrder } from '@/hooks/useOrders'
-import { formatCurrency, formatRelativeTime } from '@/lib/utils'
-import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG } from '@/lib/constants'
+import { formatCurrency, formatRelativeTime, formatDateTime } from '@/lib/utils'
+import { CUSTOMER_STATUS_CONFIG } from '@/lib/constants'
 import { toast } from 'sonner'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import type { OrderStatus } from '@/types'
+
+const COE_ADDRESS = {
+  name: 'DLM COE Warehouse',
+  line1: '123 COE Drive',
+  city: 'Toronto',
+  province: 'ON',
+  postal: 'M1B 2C3',
+  country: 'Canada',
+}
+
+const CARRIERS = ['FedEx', 'UPS', 'Canada Post', 'USPS', 'DHL', 'Other']
+
+// Trade-in step definitions (customer-facing)
+const TRADE_IN_STEPS: { statuses: string[]; icon: typeof Truck; label: string; desc: string }[] = [
+  { statuses: ['submitted'], icon: CheckCircle2, label: 'Submitted', desc: 'Your device list received' },
+  { statuses: ['quoted'], icon: CreditCard, label: 'Quoted', desc: 'Quote ready for your review' },
+  { statuses: ['accepted'], icon: Truck, label: 'Ship Devices', desc: 'Ship your devices to us' },
+  { statuses: ['received', 'in_triage', 'qc_complete', 'shipped_to_coe'], icon: Package, label: 'Inspection', desc: 'We inspect your devices' },
+  { statuses: ['payment_sent', 'ready_to_ship', 'closed'], icon: CreditCard, label: 'Payment', desc: 'Payment issued to you' },
+]
+
+const CPO_STEPS: { statuses: string[]; icon: typeof Truck; label: string; desc: string }[] = [
+  { statuses: ['submitted'], icon: CheckCircle2, label: 'Submitted', desc: 'Order received' },
+  { statuses: ['quoted'], icon: CreditCard, label: 'Quoted', desc: 'Quote ready for review' },
+  { statuses: ['accepted', 'sourcing', 'sourced'], icon: Package, label: 'Sourcing', desc: 'We source your devices' },
+  { statuses: ['shipped'], icon: Truck, label: 'Shipped', desc: 'Devices on the way' },
+  { statuses: ['delivered', 'closed'], icon: CheckCircle, label: 'Delivered', desc: 'Devices delivered' },
+]
+
+function getStepIndex(steps: typeof TRADE_IN_STEPS, status: string): number {
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i].statuses.includes(status)) return i
+  }
+  return -1
+}
 
 export default function CustomerOrderDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const orderId = typeof params.id === 'string' ? params.id : null
   const { order, isLoading, refetch } = useOrder(orderId)
   const [transitioning, setTransitioning] = useState(false)
+  const [carrier, setCarrier] = useState('FedEx')
+  const [customCarrier, setCustomCarrier] = useState('')
+  const [trackingNumber, setTrackingNumber] = useState('')
+  const [shippingNotes, setShippingNotes] = useState('')
+  const [isSubmittingShipment, setIsSubmittingShipment] = useState(false)
+  const [exceptionProcessingId, setExceptionProcessingId] = useState<string | null>(null)
 
   async function handleQuoteAction(action: 'accepted' | 'rejected') {
     if (!order) return
@@ -31,12 +76,77 @@ export default function CustomerOrderDetailPage() {
         body: JSON.stringify({ to_status: action }),
       })
       if (!res.ok) throw new Error('Failed to update quote')
-      toast.success(action === 'accepted' ? 'Quote accepted! We will process your order.' : 'Quote declined.')
+      toast.success(
+        action === 'accepted'
+          ? 'Quote accepted! Please ship your devices to us using the instructions below.'
+          : 'Quote declined.'
+      )
       refetch?.()
     } catch {
       toast.error('Could not update quote status. Please try again.')
     } finally {
       setTransitioning(false)
+    }
+  }
+
+  async function handleSubmitShipment() {
+    if (!order) return
+    const resolvedCarrier = carrier === 'Other' ? customCarrier.trim() : carrier
+    if (!resolvedCarrier) { toast.error('Please select or enter a carrier'); return }
+    if (!trackingNumber.trim()) { toast.error('Please enter a tracking number'); return }
+    setIsSubmittingShipment(true)
+    try {
+      const res = await fetch('/api/shipments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: order.id,
+          direction: 'inbound',
+          carrier: resolvedCarrier,
+          tracking_number: trackingNumber.trim(),
+          notes: shippingNotes.trim() || undefined,
+          from_address: {},
+          to_address: {
+            name: COE_ADDRESS.name,
+            street1: COE_ADDRESS.line1,
+            city: COE_ADDRESS.city,
+            state: COE_ADDRESS.province,
+            postal_code: COE_ADDRESS.postal,
+            country: 'CA',
+          },
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to submit shipment')
+      toast.success('Shipment submitted! We\'ll track your package and notify you when it arrives.')
+      setTrackingNumber('')
+      setShippingNotes('')
+      refetch?.()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to submit shipment')
+    } finally {
+      setIsSubmittingShipment(false)
+    }
+  }
+
+  async function handleExceptionDecision(triageResultId: string, approved: boolean) {
+    setExceptionProcessingId(triageResultId)
+    try {
+      const res = await fetch(`/api/triage/${triageResultId}/exception`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to update device condition')
+      }
+      toast.success(approved ? 'Device condition approved' : 'Device condition rejected')
+      refetch?.()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update device condition')
+    } finally {
+      setExceptionProcessingId(null)
     }
   }
 
@@ -59,15 +169,30 @@ export default function CustomerOrderDetailPage() {
         <div className="text-center py-20 text-muted-foreground">
           <Package className="mx-auto h-10 w-10 text-muted-foreground/40" />
           <p className="mt-3 text-sm font-medium">Order not found</p>
-          <p className="mt-1 text-xs">This order may have been removed or you may not have access to it.</p>
         </div>
       </div>
     )
   }
 
-  const statusCfg = CUSTOMER_STATUS_CONFIG[order.status as OrderStatus] ?? ORDER_STATUS_CONFIG[order.status as OrderStatus]
+  const isCpo = order.type === 'cpo'
+  const isTradeIn = order.type === 'trade_in'
+  const statusCfg = CUSTOMER_STATUS_CONFIG[order.status as OrderStatus]
   const isQuoted = order.status === 'quoted'
+  const isAccepted = order.status === 'accepted'
+  const isInProgress = ['received', 'in_triage', 'shipped_to_coe', 'qc_complete', 'sourcing', 'sourced'].includes(order.status)
+  const isPaymentStage = ['ready_to_ship', 'payment_sent'].includes(order.status)
+  const isShipped = order.status === 'shipped'
+  const isDelivered = order.status === 'delivered'
+  const isClosed = order.status === 'closed'
+  const isCancelled = order.status === 'cancelled'
+  const isRejected = order.status === 'rejected'
+
   const quotedAmount = order.quoted_amount ?? order.total_amount ?? 0
+  const steps = isCpo ? CPO_STEPS : TRADE_IN_STEPS
+  const currentStepIdx = getStepIndex(steps, order.status)
+
+  const hasAnyPrice = order.items?.some(item => (item.unit_price ?? item.guaranteed_buyback_price) != null) ?? false
+  const showPriceCol = isQuoted || hasAnyPrice
 
   function parseItemQty(item: { quantity?: number | null; notes?: string | null }): number {
     const match = item.notes?.match(/\[Original qty:\s*(\d+)\]/i)
@@ -80,78 +205,360 @@ export default function CustomerOrderDetailPage() {
     return notes.replace(/\[Original qty:\s*\d+\]\s*\|?\s*/gi, '').replace(/^\s*\|\s*/, '').trim()
   }
 
-  const hasAnyPrice = order.items?.some(item =>
-    (item.unit_price ?? item.guaranteed_buyback_price) != null
-  ) ?? false
-  const showPriceCol = isQuoted || hasAnyPrice
+  const timeline = [
+    order.created_at && { label: 'Created', date: order.created_at },
+    order.submitted_at && { label: 'Submitted', date: order.submitted_at },
+    order.quoted_at && { label: 'Quoted', date: order.quoted_at },
+    order.accepted_at && { label: 'Accepted', date: order.accepted_at },
+    order.shipped_at && { label: isCpo ? 'Shipped to you' : 'Received by us', date: order.shipped_at },
+    order.received_at && { label: 'Devices received', date: order.received_at },
+    order.completed_at && { label: isCpo ? 'Delivered' : 'Complete', date: order.completed_at },
+  ].filter(Boolean) as { label: string; date: string }[]
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/customer/orders">
           <Button variant="ghost" size="sm" className="gap-1.5">
             <ArrowLeft className="h-4 w-4" />Back
           </Button>
         </Link>
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Order {order.order_number}</h1>
-          <p className="text-xs text-muted-foreground">Updated {formatRelativeTime(order.updated_at || order.created_at)}</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight">{order.order_number}</h1>
+            <Badge variant="outline" className="text-xs capitalize">{order.type?.replace(/_/g, ' ')}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">Updated {formatRelativeTime(order.updated_at || order.created_at)}</p>
         </div>
-        <Badge variant="secondary" className="ml-auto text-xs">{statusCfg?.label || order.status}</Badge>
+        <Badge
+          className={`text-xs shrink-0 ${statusCfg?.bgColor || 'bg-gray-100'} ${statusCfg?.color || 'text-gray-600'} border-0`}
+        >
+          {statusCfg?.label || order.status}
+        </Badge>
       </div>
 
-      {/* Quote Accept Banner */}
-      {isQuoted && (
-        <div className="rounded-xl border border-purple-200 bg-purple-50/60 dark:border-purple-800 dark:bg-purple-950/20 p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <p className="font-semibold text-purple-900 dark:text-purple-200">Your quote is ready</p>
-            <p className="text-sm text-purple-700 dark:text-purple-300 mt-0.5">
-              Total: <strong>{formatCurrency(quotedAmount)}</strong> — Please accept or decline below.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="success"
-              className="gap-1.5"
-              disabled={transitioning}
-              onClick={() => handleQuoteAction('accepted')}
-            >
-              {transitioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-              Accept Quote
-            </Button>
-            <Button
-              variant="outline"
-              className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50/60 hover:border-red-300 hover:text-red-600"
-              disabled={transitioning}
-              onClick={() => handleQuoteAction('rejected')}
-            >
-              <XCircle className="h-4 w-4" />
-              Decline
-            </Button>
+      {/* Progress bar */}
+      {!isCancelled && !isRejected && (
+        <div className="rounded-xl border bg-slate-50/60 dark:bg-slate-900/40 px-5 py-4">
+          <div className="flex items-start justify-between gap-2">
+            {steps.map((step, i) => {
+              const Icon = step.icon
+              const isDone = currentStepIdx > i
+              const isCurrent = currentStepIdx === i
+              const isLast = i === steps.length - 1
+              return (
+                <div key={step.label} className="flex flex-col items-center flex-1 gap-1.5 text-center">
+                  <div className="relative flex items-center w-full justify-center">
+                    {i > 0 && (
+                      <div className={`absolute right-1/2 top-1/2 -translate-y-1/2 w-[calc(100%-20px)] h-0.5 ${isDone ? 'bg-green-500' : 'bg-muted'}`} />
+                    )}
+                    <div className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                      isDone ? 'bg-green-500 border-green-500 text-white' :
+                      isCurrent ? 'bg-primary border-primary text-primary-foreground' :
+                      'bg-background border-muted text-muted-foreground'
+                    }`}>
+                      {isDone ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                    </div>
+                    {!isLast && (
+                      <div className={`absolute left-1/2 top-1/2 -translate-y-1/2 w-[calc(100%-20px)] h-0.5 ${isDone ? 'bg-green-500' : 'bg-muted'}`} />
+                    )}
+                  </div>
+                  <p className={`text-[10px] font-semibold leading-tight ${isCurrent ? 'text-primary' : isDone ? 'text-green-600' : 'text-muted-foreground'}`}>
+                    {step.label}
+                  </p>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
 
+      {/* ── QUOTE READY banner ──────────────────────────────────────────── */}
+      {isQuoted && (
+        <Card className="border-purple-200 bg-purple-50/60 dark:border-purple-800 dark:bg-purple-950/20">
+          <CardContent className="py-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1">
+                <p className="font-semibold text-purple-900 dark:text-purple-200">
+                  {isCpo ? 'Your CPO quote is ready' : 'Your quote is ready'}
+                </p>
+                <p className="text-sm text-purple-700 dark:text-purple-300 mt-0.5">
+                  Total: <strong>{formatCurrency(quotedAmount)}</strong>
+                  {isCpo ? ' — CPO devices will be shipped to you after acceptance.' : ' — Accept to proceed with shipping your devices to us.'}
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button variant="success" className="gap-1.5" disabled={transitioning} onClick={() => handleQuoteAction('accepted')}>
+                  {transitioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  Accept Quote
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50/60"
+                  disabled={transitioning}
+                  onClick={() => handleQuoteAction('rejected')}
+                >
+                  <XCircle className="h-4 w-4" />Decline
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── TRADE-IN: NEXT STEP — SHIP YOUR DEVICES ─────────────────────── */}
+      {isTradeIn && isAccepted && (
+        <Card className="border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-blue-800 dark:text-blue-200">
+              <Truck className="h-5 w-5" />
+              Next Step — Ship Your Devices to Us
+            </CardTitle>
+            <CardDescription className="text-blue-700 dark:text-blue-300">
+              Pack your devices securely and ship them to our COE facility. Enter your tracking number once shipped so we can monitor the arrival.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* COE Address */}
+            <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 p-4">
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Ship devices to:</p>
+                  <p className="text-sm mt-1 text-slate-700 dark:text-slate-300">{COE_ADDRESS.name}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{COE_ADDRESS.line1}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{COE_ADDRESS.city}, {COE_ADDRESS.province}  {COE_ADDRESS.postal}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{COE_ADDRESS.country}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Packing tips */}
+            <div className="rounded-lg border border-blue-100 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/10 px-4 py-3">
+              <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1.5">Packing tips</p>
+              <ul className="text-xs text-blue-700 dark:text-blue-400 space-y-0.5 list-disc ml-4">
+                <li>Use a sturdy box with sufficient padding for each device</li>
+                <li>Include your order number <strong>{order.order_number}</strong> on a paper inside the box</li>
+                <li>Remove all personal data and disable Find My / Factory Reset each device</li>
+                <li>Include all original accessories where possible</li>
+              </ul>
+            </div>
+
+            {/* Submit tracking */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Enter your tracking number once shipped:</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground font-medium">Carrier</label>
+                  <Select value={carrier} onValueChange={setCarrier}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CARRIERS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground font-medium">Tracking Number</label>
+                  <input
+                    type="text"
+                    value={trackingNumber}
+                    onChange={e => setTrackingNumber(e.target.value)}
+                    placeholder="Enter tracking number"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+              {carrier === 'Other' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground font-medium">Carrier Name</label>
+                  <input
+                    type="text"
+                    value={customCarrier}
+                    onChange={e => setCustomCarrier(e.target.value)}
+                    placeholder="Enter carrier name"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground font-medium">Notes <span className="font-normal">(optional)</span></label>
+                <textarea
+                  value={shippingNotes}
+                  onChange={e => setShippingNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Any special instructions…"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <Button
+                variant="success"
+                className="gap-2"
+                onClick={handleSubmitShipment}
+                disabled={isSubmittingShipment || !trackingNumber.trim()}
+              >
+                {isSubmittingShipment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                {isSubmittingShipment ? 'Submitting…' : 'Submit Tracking'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── CPO: ACCEPTED — sourcing / in progress ───────────────────────── */}
+      {isCpo && isAccepted && (
+        <Card className="border-blue-200 bg-blue-50/40 dark:border-blue-800 dark:bg-blue-950/10">
+          <CardContent className="py-4 flex items-start gap-3">
+            <Clock className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-blue-800 dark:text-blue-200">We're sourcing your devices</p>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-0.5">
+                Your CPO order is accepted. Our team is locating the devices and will notify you once they are ready for dispatch. Typical lead time is 3–5 business days.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── IN PROGRESS (inspection / sourcing) ─────────────────────────── */}
+      {isInProgress && (
+        <Card className="border-blue-200 bg-blue-50/40 dark:border-blue-800 dark:bg-blue-950/10">
+          <CardContent className="py-4 flex items-start gap-3">
+            <Clock className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-blue-800 dark:text-blue-200">
+                {isTradeIn ? 'Your devices are being inspected' : 'Sourcing & preparing your devices'}
+              </p>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-0.5">
+                {isTradeIn
+                  ? 'Our COE team is inspecting each device. If any device condition differs from what was quoted, we\'ll contact you for approval before finalizing payment.'
+                  : 'Our team is sourcing your requested devices. You\'ll receive an update once they are packaged and shipped.'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── PAYMENT STAGE ─────────────────────────────────────────────────── */}
+      {isPaymentStage && (
+        <Card className="border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/10">
+          <CardContent className="py-4 flex items-start gap-3">
+            <CreditCard className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-emerald-800 dark:text-emerald-200">
+                {order.status === 'payment_sent' ? 'Payment has been sent!' : 'Inspection complete — payment processing'}
+              </p>
+              <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">
+                {order.status === 'payment_sent'
+                  ? `Your payment of ${formatCurrency(order.final_amount ?? quotedAmount)} has been processed. Please allow 1–2 business days for it to reflect in your account.`
+                  : 'All devices have passed inspection. Your payment is being prepared and will be sent shortly.'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── SHIPPED (CPO) ──────────────────────────────────────────────────── */}
+      {isShipped && (
+        <Card className="border-blue-200 bg-blue-50/40 dark:border-blue-800 dark:bg-blue-950/10">
+          <CardContent className="py-4 flex items-start gap-3">
+            <Truck className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-blue-800 dark:text-blue-200">Your devices are on the way!</p>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-0.5">
+                Your CPO devices have been dispatched. Check the shipment tracking below to monitor delivery.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── DELIVERED / CLOSED ─────────────────────────────────────────────── */}
+      {(isDelivered || isClosed) && (
+        <Card className="border-green-200 bg-green-50/40 dark:border-green-800 dark:bg-green-950/10">
+          <CardContent className="py-4 flex items-start gap-3">
+            <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-green-800 dark:text-green-200">
+                {isCpo ? 'Devices delivered — order complete!' : 'Order complete!'}
+              </p>
+              <p className="text-sm text-green-700 dark:text-green-300 mt-0.5">
+                {isCpo
+                  ? 'Your CPO devices have been delivered. Thank you for your order!'
+                  : `Your trade-in is complete. Thank you! Final amount: ${formatCurrency(order.final_amount ?? quotedAmount)}.`}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── CONDITION MISMATCH — customer exceptions ─────────────────────── */}
+      {order.items?.some(i => i.actual_condition && i.claimed_condition && i.actual_condition !== i.claimed_condition) && (
+        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              Device Condition Review Required
+            </CardTitle>
+            <CardDescription>
+              Our team found a condition difference on one or more devices. Please review and approve or decline the updated pricing.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {order.items
+              .filter(i => i.actual_condition && i.claimed_condition && i.actual_condition !== i.claimed_condition)
+              .map(item => {
+                const device = item.device ? `${item.device.make} ${item.device.model}` : 'Device'
+                const isProcessing = exceptionProcessingId === item.id
+                return (
+                  <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border bg-background p-3">
+                    <div>
+                      <p className="font-medium text-sm">{device}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        You reported: <strong className="capitalize">{item.claimed_condition}</strong>
+                        {' → '}Inspected: <strong className="capitalize text-amber-600">{item.actual_condition}</strong>
+                        {item.unit_price != null && (
+                          <span className="ml-2 text-xs">· Updated price: {formatCurrency(item.unit_price)}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" variant="success" disabled={isProcessing}
+                        onClick={() => handleExceptionDecision(item.id, true)}>
+                        {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
+                        <span className="ml-1.5">Approve</span>
+                      </Button>
+                      <Button size="sm" variant="destructive" disabled={isProcessing}
+                        onClick={() => handleExceptionDecision(item.id, false)}>
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                        <span className="ml-1.5">Reject</span>
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Order Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-muted-foreground">Order Type</p>
-            <p className="font-semibold capitalize mt-1">{order.type?.replace(/_/g, ' ') || '—'}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-muted-foreground">Total Devices</p>
-            <p className="font-semibold mt-1">{order.total_quantity ?? '—'}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-muted-foreground">{isQuoted ? 'Quoted Amount' : 'Amount'}</p>
-            <p className="font-semibold mt-1">{quotedAmount > 0 ? formatCurrency(quotedAmount) : '—'}</p>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="pt-5">
+          <p className="text-xs text-muted-foreground">Order Type</p>
+          <p className="font-semibold capitalize mt-1">{order.type?.replace(/_/g, ' ') || '—'}</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-5">
+          <p className="text-xs text-muted-foreground">Total Devices</p>
+          <p className="font-semibold mt-1">{order.total_quantity ?? '—'}</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-5">
+          <p className="text-xs text-muted-foreground">{isQuoted ? 'Quoted Amount' : order.status === 'payment_sent' || isClosed ? 'Final Amount' : 'Amount'}</p>
+          <p className="font-semibold mt-1">
+            {(order.final_amount ?? 0) > 0 ? formatCurrency(order.final_amount!) : quotedAmount > 0 ? formatCurrency(quotedAmount) : '—'}
+          </p>
+        </CardContent></Card>
       </div>
 
       {/* Line Items */}
@@ -179,6 +586,7 @@ export default function CustomerOrderDetailPage() {
                     const unitPrice = item.unit_price ?? item.guaranteed_buyback_price ?? null
                     const displayQty = parseItemQty(item)
                     const itemNote = stripInternalNotes(item.notes)
+                    const hasMismatch = item.actual_condition && item.claimed_condition && item.actual_condition !== item.claimed_condition
                     return (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">
@@ -186,8 +594,13 @@ export default function CustomerOrderDetailPage() {
                           {itemNote && <div className="text-xs text-muted-foreground mt-0.5">{itemNote}</div>}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{item.storage || '—'}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground capitalize">
-                          {(item.claimed_condition || '—').replace(/_/g, ' ')}
+                        <TableCell className="text-sm">
+                          <span className="capitalize">{(item.claimed_condition || '—').replace(/_/g, ' ')}</span>
+                          {hasMismatch && (
+                            <span className="ml-1.5 text-xs text-amber-600 dark:text-amber-400">
+                              → {item.actual_condition}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{displayQty}</TableCell>
                         {showPriceCol && (
@@ -205,12 +618,83 @@ export default function CustomerOrderDetailPage() {
         </Card>
       )}
 
+      {/* Shipments */}
+      {order.shipments && order.shipments.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">Shipment Tracking</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {order.shipments.map((shipment: { id: string; carrier: string; tracking_number: string; direction: string; status: string; estimated_delivery?: string }) => {
+                const carrierLower = (shipment.carrier || '').toLowerCase()
+                const tn = encodeURIComponent(shipment.tracking_number || '')
+                const trackUrl = carrierLower.includes('ups') ? `https://www.ups.com/track?tracknum=${tn}`
+                  : carrierLower.includes('fedex') ? `https://www.fedex.com/fedextrack/?trknbr=${tn}`
+                  : carrierLower.includes('canada post') || carrierLower.includes('canadapost') ? `https://www.canadapost-postescanada.ca/track-reperage/en#/detail/${tn}`
+                  : carrierLower.includes('usps') ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${tn}`
+                  : carrierLower.includes('dhl') ? `https://www.dhl.com/en/express/tracking.html?AWB=${tn}`
+                  : null
+                return (
+                  <div key={shipment.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-mono font-medium">{shipment.tracking_number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {shipment.carrier} · {shipment.direction === 'inbound' ? 'To our facility' : 'To you'}
+                        {shipment.estimated_delivery && ` · ETA ${formatDateTime(shipment.estimated_delivery)}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="secondary" className="text-xs capitalize">{shipment.status?.replace(/_/g, ' ')}</Badge>
+                      {trackUrl && (
+                        <a href={trackUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                          <ExternalLink className="h-3 w-3" />Track
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Timeline */}
+      {timeline.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              Timeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="relative pl-4">
+              <div className="absolute left-[7px] top-0 bottom-0 w-px bg-border" />
+              <div className="space-y-4">
+                {timeline.map((event, i) => (
+                  <div key={i} className="relative flex items-start gap-3">
+                    <div className="absolute -left-4 mt-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary ring-2 ring-background" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{event.label}</p>
+                      <p className="text-xs text-muted-foreground">{formatDateTime(event.date)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Notes */}
       {order.notes && (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Notes</CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Notes</CardTitle></CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.notes}</p>
           </CardContent>
