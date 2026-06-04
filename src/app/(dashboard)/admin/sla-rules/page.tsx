@@ -32,7 +32,8 @@ import type { SLARule, OrderStatus, OrderType } from '@/types'
 
 const statuses: OrderStatus[] = [
   'draft', 'submitted', 'quoted', 'accepted', 'sourcing', 'sourced',
-  'shipped_to_coe', 'received', 'in_triage', 'qc_complete', 'ready_to_ship', 'shipped', 'delivered',
+  'shipped_to_coe', 'received', 'in_triage', 'qc_complete', 'mismatch_review',
+  'ready_to_ship', 'shipped', 'delivered', 'payment_processing', 'payment_sent',
 ]
 
 export default function AdminSLARulesPage() {
