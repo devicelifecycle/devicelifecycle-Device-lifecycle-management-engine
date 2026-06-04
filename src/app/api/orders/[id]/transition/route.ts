@@ -50,16 +50,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    // Customer can only transition their own orders, and only: submit, cancel, accept/reject quote
+    // Customer can only transition their own orders, and only: submit, cancel, accept/reject quote,
+    // or approve mismatch review (moves mismatch_review → payment_processing)
     if (effectiveRole === 'customer') {
       const customerOrg = (currentOrder.customer as { organization_id?: string } | null)?.organization_id
       if (customerOrg !== profile.organization_id) {
         return NextResponse.json({ error: 'You can only manage your own orders' }, { status: 403 })
       }
-      const customerAllowed = new Set<string>(['submitted', 'cancelled', 'accepted', 'rejected'])
+      const customerAllowed = new Set<string>(['submitted', 'cancelled', 'accepted', 'rejected', 'payment_processing'])
       if (!customerAllowed.has(newStatus)) {
         return NextResponse.json(
-          { error: 'Customers can only submit, cancel, or accept/reject quotes' },
+          { error: 'Customers can only submit, cancel, accept/reject quotes, or approve a mismatch review' },
+          { status: 403 }
+        )
+      }
+      // Customer can only move to payment_processing from mismatch_review
+      if (newStatus === 'payment_processing' && currentOrder.status !== 'mismatch_review') {
+        return NextResponse.json(
+          { error: 'Payment processing can only be triggered from mismatch review' },
           { status: 403 }
         )
       }
@@ -94,6 +102,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (newStatus === 'quoted' && !['admin', 'coe_manager', 'sales'].includes(profile.role)) {
       return NextResponse.json(
         { error: 'Only admin, COE managers, or sales can send quotes' },
+        { status: 403 }
+      )
+    }
+
+    // mismatch_review and payment_processing are triggered by admin/coe_manager only
+    // (exception: customer can approve mismatch_review → payment_processing, handled above)
+    if (newStatus === 'mismatch_review' && !['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json(
+        { error: 'Only admin or COE managers can flag a mismatch review' },
+        { status: 403 }
+      )
+    }
+    if (newStatus === 'payment_processing' && effectiveRole !== 'customer' && !['admin', 'coe_manager', 'sales'].includes(profile.role)) {
+      return NextResponse.json(
+        { error: 'Only admin, COE managers, or sales can initiate payment processing' },
+        { status: 403 }
+      )
+    }
+    if (newStatus === 'payment_sent' && !['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json(
+        { error: 'Only admin or COE managers can mark payment as sent' },
         { status: 403 }
       )
     }

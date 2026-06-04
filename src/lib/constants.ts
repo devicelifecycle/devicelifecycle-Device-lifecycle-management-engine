@@ -86,6 +86,18 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatus, {
     bgColor: 'bg-lime-100',
     description: 'Quality check finished',
   },
+  mismatch_review: {
+    label: 'Mismatch Review',
+    color: 'text-amber-700 dark:text-amber-400',
+    bgColor: 'bg-amber-100 dark:bg-amber-500/20',
+    description: 'Customer review required — condition differences found',
+  },
+  payment_processing: {
+    label: 'Payment Processing',
+    color: 'text-teal-600',
+    bgColor: 'bg-teal-100',
+    description: 'Payment initiated and being processed',
+  },
   ready_to_ship: {
     label: 'Ready to Ship',
     color: 'text-amber-600 dark:text-amber-400',
@@ -146,7 +158,9 @@ export const CUSTOMER_STATUS_CONFIG: Record<OrderStatus, {
   shipped_to_coe: { label: 'In Progress',     description: 'Devices being prepared at our facility',      color: 'text-blue-600',   bgColor: 'bg-blue-100' },
   received:       { label: 'In Progress',     description: 'Devices received — running quality checks',   color: 'text-blue-600',   bgColor: 'bg-blue-100' },
   in_triage:      { label: 'In Progress',     description: 'Devices being inspected and graded',          color: 'text-blue-600',   bgColor: 'bg-blue-100' },
-  qc_complete:    { label: 'In Progress',     description: 'Quality check complete — almost ready',       color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  qc_complete:        { label: 'In Progress',        description: 'Quality check complete — finalising',           color: 'text-blue-600',   bgColor: 'bg-blue-100' },
+  mismatch_review:    { label: 'Action Required',   description: 'Condition review needed — please check your order', color: 'text-amber-700',  bgColor: 'bg-amber-100' },
+  payment_processing: { label: 'Payment Processing', description: 'Your payment is being prepared and sent',         color: 'text-teal-600',   bgColor: 'bg-teal-100' },
   ready_to_ship:  { label: 'Ready to Ship',   description: 'Your order is ready for dispatch',            color: 'text-amber-600',  bgColor: 'bg-amber-100' },
   shipped:        { label: 'Shipped',         description: 'Your order is on its way',                    color: 'text-blue-600',   bgColor: 'bg-blue-100' },
   delivered:      { label: 'Delivered',       description: 'Order delivered successfully',                color: 'text-green-600',  bgColor: 'bg-green-100' },
@@ -264,23 +278,42 @@ export const USER_ROLE_CONFIG: Record<UserRole, {
 // ============================================================================
 
 export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  draft: ['submitted', 'cancelled'],
-  submitted: ['quoted', 'sourcing', 'cancelled'],
-  quoted: ['accepted', 'rejected'],
-  accepted: ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled', 'ready_to_ship'],
-  rejected: [], // Terminal state
-  sourcing: ['sourced', 'quoted', 'cancelled'],
-  sourced: ['shipped_to_coe', 'shipped', 'cancelled'],
-  shipped_to_coe: ['received'],
-  received: ['in_triage'],
-  in_triage: ['qc_complete'],
-  qc_complete: ['ready_to_ship', 'quoted'], // 'quoted' = post-triage quote for walk-in/unquoted orders
-  ready_to_ship: ['shipped'],
-  shipped: ['delivered'],
-  delivered: ['payment_sent', 'closed'],
-  payment_sent: ['closed'],
-  closed: [], // Terminal state
-  cancelled: [], // Terminal state
+  // ── Common ────────────────────────────────────────────────────────────────
+  draft:              ['submitted', 'cancelled'],
+  submitted:          ['quoted', 'sourcing', 'cancelled'],
+  quoted:             ['accepted', 'rejected'],
+  accepted:           ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled', 'ready_to_ship'],
+  rejected:           [], // Terminal
+
+  // ── CPO sourcing path ─────────────────────────────────────────────────────
+  sourcing:           ['sourced', 'quoted', 'cancelled'],
+  sourced:            ['shipped_to_coe', 'shipped', 'cancelled'],
+
+  // ── Trade-in inbound path ─────────────────────────────────────────────────
+  shipped_to_coe:     ['received'],
+  received:           ['in_triage'],
+  in_triage:          ['qc_complete'],
+  // After QC: clean → payment_processing; mismatches found → mismatch_review
+  // 'quoted' kept for post-triage re-quote on walk-in / unquoted orders
+  qc_complete:        ['payment_processing', 'mismatch_review', 'ready_to_ship', 'quoted'],
+
+  // ── Mismatch resolution path ──────────────────────────────────────────────
+  // Admin triggers mismatch_review; customer approves/disputes → payment_processing
+  // Admin can push back to qc_complete if re-inspection needed
+  mismatch_review:    ['payment_processing', 'qc_complete', 'cancelled'],
+
+  // ── Payment path (trade-in + CPO) ─────────────────────────────────────────
+  payment_processing: ['payment_sent', 'cancelled'],
+  payment_sent:       ['closed'],
+
+  // ── CPO outbound delivery path ────────────────────────────────────────────
+  ready_to_ship:      ['shipped'],
+  shipped:            ['delivered'],
+  delivered:          ['payment_processing', 'payment_sent', 'closed'],
+
+  // ── Terminal ──────────────────────────────────────────────────────────────
+  closed:             [], // Terminal
+  cancelled:          [], // Terminal
 }
 
 // ============================================================================
@@ -732,6 +765,19 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
     assigned: true,
     subject: (n) => `QC Complete — Order #${n}`,
     message: (n) => `Quality check for order #${n} is complete. The order is ready for final preparation.`,
+  },
+  mismatch_review: {
+    customer: true,
+    admin: true,
+    subject: (n) => `Action Required — Device Condition Update on Order #${n}`,
+    message: (n) => `Our inspection found condition differences on one or more devices in order #${n}. Please log in to review the updated pricing and approve or dispute the changes before we can process your payment.`,
+    customerMessage: (n) =>
+      `During our quality inspection of order #${n}, our technicians found that one or more devices did not match the condition you described when submitting the order.\n\nWe have updated the pricing to reflect the actual condition. Please log in to review the changes — you can approve the revised quote or contact us to discuss.\n\nPayment cannot be processed until this review is complete.`,
+  },
+  payment_processing: {
+    customer: true,
+    subject: (n) => `Payment Processing — Order #${n}`,
+    message: (n) => `Great news! All devices for order #${n} have been verified and your payment is now being processed. You should receive it within 1–2 business days.`,
   },
   ready_to_ship: {
     customer: true,

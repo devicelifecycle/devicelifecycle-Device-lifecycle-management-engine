@@ -13,8 +13,8 @@ export const ORDER_TYPE_VALUES = ['cpo', 'trade_in'] as const
 export const ORDER_STATUS_VALUES = [
   'draft', 'submitted', 'quoted', 'accepted', 'rejected',
   'sourcing', 'sourced', 'shipped_to_coe', 'received',
-  'in_triage', 'qc_complete', 'ready_to_ship', 'shipped',
-  'delivered', 'closed', 'cancelled'
+  'in_triage', 'qc_complete', 'mismatch_review', 'ready_to_ship', 'shipped',
+  'delivered', 'payment_processing', 'payment_sent', 'closed', 'cancelled'
 ] as const
 export const DEVICE_CONDITION_VALUES = ['new', 'excellent', 'good', 'fair', 'poor'] as const
 export const DEVICE_CATEGORY_VALUES = ['phone', 'tablet', 'laptop', 'watch', 'other'] as const
@@ -286,6 +286,10 @@ export const updateOrderSchema = z.object({
   depreciation_rate_override: z
     .union([z.coerce.number().min(0).max(50).finite(), z.null()])
     .optional(),
+  payment_method: z.string().max(50).optional(),
+  payment_reference: z.string().max(100).optional(),
+  payment_notes: z.string().optional(),
+  payment_processed_at: z.string().datetime().optional(),
 })
 
 export const orderTransitionSchema = z.object({

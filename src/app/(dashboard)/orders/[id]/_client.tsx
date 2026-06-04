@@ -163,6 +163,9 @@ export default function OrderDetailClient() {
   const [isSuggestingAll, setIsSuggestingAll] = useState(false)
   const [transitionTarget, setTransitionTarget] = useState<OrderStatus | null>(null)
   const [transitionNotes, setTransitionNotes] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('')
+  const [paymentReference, setPaymentReference] = useState('')
+  const [paymentNotes, setPaymentNotes] = useState('')
   const [beatCompetitorPercent, setBeatCompetitorPercent] = useState<number>(0)
   const [mismatchAuditLogs, setMismatchAuditLogs] = useState<AuditLog[]>([])
   const [mismatchAuditLoading, setMismatchAuditLoading] = useState(false)
@@ -344,10 +347,25 @@ export default function OrderDetailClient() {
 
   const handleTransition = async (newStatus: OrderStatus) => {
     try {
+      if (newStatus === 'payment_sent' && (paymentMethod || paymentReference || paymentNotes)) {
+        await fetch(`/api/orders/${order?.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payment_method: paymentMethod || undefined,
+            payment_reference: paymentReference || undefined,
+            payment_notes: paymentNotes || undefined,
+            payment_processed_at: new Date().toISOString(),
+          }),
+        })
+      }
       await transition({ status: newStatus, notes: transitionNotes || undefined })
       toast.success(`Order moved to ${ORDER_STATUS_CONFIG[newStatus]?.label}`)
       setTransitionTarget(null)
       setTransitionNotes('')
+      setPaymentMethod('')
+      setPaymentReference('')
+      setPaymentNotes('')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to update order status')
     }
@@ -3915,7 +3933,7 @@ export default function OrderDetailClient() {
       </Dialog>
 
       {/* Status Transition Confirmation */}
-      <AlertDialog open={!!transitionTarget} onOpenChange={(open) => { if (!open) { setTransitionTarget(null); setTransitionNotes('') } }}>
+      <AlertDialog open={!!transitionTarget} onOpenChange={(open) => { if (!open) { setTransitionTarget(null); setTransitionNotes(''); setPaymentMethod(''); setPaymentReference(''); setPaymentNotes('') } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -3927,17 +3945,48 @@ export default function OrderDetailClient() {
               {isCustomer ? ' this order?' : ''}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {isVendor
-                ? 'This will update your fulfillment progress for the assigned order. You can optionally add a note.'
-                : 'This will update the order status. You can optionally add a note.'}
+              {transitionTarget === 'payment_sent'
+                ? 'Record payment details and mark the payment as sent to the customer.'
+                : isVendor
+                  ? 'This will update your fulfillment progress for the assigned order. You can optionally add a note.'
+                  : 'This will update the order status. You can optionally add a note.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-2">
+          <div className="space-y-3 py-2">
+            {transitionTarget === 'payment_sent' && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="payment-method">Payment Method</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger id="payment-method">
+                      <SelectValue placeholder="Select method…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EFT">EFT (Bank Transfer)</SelectItem>
+                      <SelectItem value="Cheque">Cheque</SelectItem>
+                      <SelectItem value="PayPal">PayPal</SelectItem>
+                      <SelectItem value="Wire">Wire Transfer</SelectItem>
+                      <SelectItem value="Credit">Credit / Account Credit</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="payment-reference">Reference / Transaction ID <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input
+                    id="payment-reference"
+                    placeholder="e.g. TXN-1234"
+                    value={paymentReference}
+                    onChange={e => setPaymentReference(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             <Textarea
               placeholder="Add a note (optional)..."
               value={transitionNotes}
               onChange={(e) => setTransitionNotes(e.target.value)}
-              rows={3}
+              rows={transitionTarget === 'payment_sent' ? 2 : 3}
             />
           </div>
           <AlertDialogFooter>
@@ -3951,7 +4000,7 @@ export default function OrderDetailClient() {
               disabled={isTransitioning}
               onClick={() => transitionTarget && handleTransition(transitionTarget)}
             >
-              {isTransitioning ? 'Updating...' : 'Confirm'}
+              {isTransitioning ? 'Updating...' : transitionTarget === 'payment_sent' ? 'Confirm & Mark Sent' : 'Confirm'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

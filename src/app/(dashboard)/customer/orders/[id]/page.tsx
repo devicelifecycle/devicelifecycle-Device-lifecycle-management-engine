@@ -31,21 +31,24 @@ const COE_ADDRESS = {
 const CARRIERS = ['FedEx', 'UPS', 'Canada Post', 'USPS', 'DHL', 'Other']
 
 // Trade-in step definitions (customer-facing)
+// Reflects the full enterprise inbound flow: quote → ship → inspect → review/pay
 const TRADE_IN_STEPS: { statuses: string[]; icon: typeof Truck; label: string; desc: string }[] = [
-  { statuses: ['submitted'], icon: CheckCircle2, label: 'Submitted', desc: 'Your device list received' },
-  { statuses: ['quoted'], icon: CreditCard, label: 'Quoted', desc: 'Quote ready for your review' },
-  { statuses: ['accepted'], icon: Truck, label: 'Ship Devices', desc: 'Ship your devices to us' },
-  { statuses: ['shipped_to_coe'], icon: Truck, label: 'In Transit', desc: 'Your devices are on the way to us' },
-  { statuses: ['received', 'in_triage', 'qc_complete'], icon: Package, label: 'Inspection', desc: 'We inspect your devices' },
-  { statuses: ['payment_sent', 'ready_to_ship', 'closed'], icon: CreditCard, label: 'Payment', desc: 'Payment issued to you' },
+  { statuses: ['submitted'],                              icon: CheckCircle2, label: 'Submitted',   desc: 'Your device list received' },
+  { statuses: ['quoted'],                                  icon: CreditCard,   label: 'Quoted',      desc: 'Quote ready for your review' },
+  { statuses: ['accepted'],                                icon: Truck,        label: 'Ship Devices',desc: 'Ship your devices to us' },
+  { statuses: ['shipped_to_coe'],                          icon: Truck,        label: 'In Transit',  desc: 'Your devices are on the way to us' },
+  { statuses: ['received', 'in_triage', 'qc_complete', 'mismatch_review'], icon: Package, label: 'Inspection', desc: 'We inspect your devices' },
+  { statuses: ['payment_processing', 'payment_sent', 'ready_to_ship', 'closed'], icon: CreditCard, label: 'Payment', desc: 'Payment issued to you' },
 ]
 
+// CPO step definitions (customer-facing) — outbound: COE ships TO customer
 const CPO_STEPS: { statuses: string[]; icon: typeof Truck; label: string; desc: string }[] = [
-  { statuses: ['submitted'], icon: CheckCircle2, label: 'Submitted', desc: 'Order received' },
-  { statuses: ['quoted'], icon: CreditCard, label: 'Quoted', desc: 'Quote ready for review' },
-  { statuses: ['accepted', 'sourcing', 'sourced'], icon: Package, label: 'Sourcing', desc: 'We source your devices' },
-  { statuses: ['shipped'], icon: Truck, label: 'Shipped', desc: 'Devices on the way' },
-  { statuses: ['delivered', 'closed'], icon: CheckCircle, label: 'Delivered', desc: 'Devices delivered' },
+  { statuses: ['submitted'],                              icon: CheckCircle2, label: 'Submitted',  desc: 'Order received' },
+  { statuses: ['quoted'],                                  icon: CreditCard,   label: 'Quoted',     desc: 'Quote ready for review' },
+  { statuses: ['accepted', 'sourcing', 'sourced'],         icon: Package,      label: 'Sourcing',   desc: 'We source your devices' },
+  { statuses: ['shipped', 'ready_to_ship'],                icon: Truck,        label: 'Shipped',    desc: 'Devices on the way' },
+  { statuses: ['delivered'],                               icon: CheckCircle,  label: 'Delivered',  desc: 'Devices delivered' },
+  { statuses: ['payment_processing', 'payment_sent', 'closed'], icon: CreditCard, label: 'Complete', desc: 'Order complete' },
 ]
 
 function getStepIndex(steps: typeof TRADE_IN_STEPS, status: string): number {
@@ -130,6 +133,24 @@ export default function CustomerOrderDetailPage() {
     }
   }
 
+  async function handleTransition(toStatus: OrderStatus, notes?: string) {
+    if (!order) return
+    setTransitioning(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to_status: toStatus, notes }),
+      })
+      if (!res.ok) throw new Error('Failed to update order status')
+      refetch?.()
+    } catch {
+      toast.error('Could not update order status. Please try again.')
+    } finally {
+      setTransitioning(false)
+    }
+  }
+
   async function handleExceptionDecision(triageResultId: string, approved: boolean) {
     setExceptionProcessingId(triageResultId)
     try {
@@ -182,12 +203,18 @@ export default function CustomerOrderDetailPage() {
   const isAccepted = order.status === 'accepted'
   const isShippedToCoe = isTradeIn && order.status === 'shipped_to_coe'
   const isInProgress = ['received', 'in_triage', 'qc_complete', 'sourcing', 'sourced'].includes(order.status)
-  const isPaymentStage = ['ready_to_ship', 'payment_sent'].includes(order.status)
+  const isMismatchReview = order.status === 'mismatch_review'
+  const isPaymentProcessing = order.status === 'payment_processing'
+  const isPaymentSent = order.status === 'payment_sent'
   const isShipped = order.status === 'shipped'
   const isDelivered = order.status === 'delivered'
   const isClosed = order.status === 'closed'
   const isCancelled = order.status === 'cancelled'
   const isRejected = order.status === 'rejected'
+
+  const hasMismatchItems = order.items?.some(
+    i => i.actual_condition && i.claimed_condition && i.actual_condition !== i.claimed_condition
+  ) ?? false
 
   const quotedAmount = order.quoted_amount ?? order.total_amount ?? 0
   const steps = isCpo ? CPO_STEPS : TRADE_IN_STEPS
@@ -450,27 +477,127 @@ export default function CustomerOrderDetailPage() {
               </p>
               <p className="text-sm text-blue-700 dark:text-blue-300 mt-0.5">
                 {isTradeIn
-                  ? 'Our COE team is inspecting each device. If any device condition differs from what was quoted, we\'ll contact you for approval before finalizing payment.'
-                  : 'Our team is sourcing your requested devices. You\'ll receive an update once they are packaged and shipped.'}
+                  ? "Our COE team is inspecting each device for condition, functionality, and matching. If anything differs from what was quoted, we'll notify you before processing payment."
+                  : "Our team is sourcing your requested devices. You'll receive an update once they are packaged and shipped."}
               </p>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* ── PAYMENT STAGE ─────────────────────────────────────────────────── */}
-      {isPaymentStage && (
+      {/* ── MISMATCH REVIEW — action required ────────────────────────────── */}
+      {isMismatchReview && (
+        <Card className="border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/25 ring-1 ring-amber-300/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Action Required — Device Condition Differences Found
+            </CardTitle>
+            <CardDescription className="text-amber-700 dark:text-amber-300">
+              Our inspection found that one or more devices arrived in a different condition than reported.
+              Please review the details below, then approve the updated quote or contact us to dispute.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {hasMismatchItems && order.items
+              ?.filter(i => i.actual_condition && i.claimed_condition && i.actual_condition !== i.claimed_condition)
+              .map(item => {
+                const device = item.device ? `${item.device.make} ${item.device.model}` : 'Device'
+                const isProcessing = exceptionProcessingId === item.id
+                return (
+                  <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white dark:bg-slate-900 p-3">
+                    <div>
+                      <p className="font-medium text-sm">{device}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Reported: <strong className="capitalize">{item.claimed_condition}</strong>
+                        {' → '}
+                        Inspected: <strong className="capitalize text-amber-700 dark:text-amber-400">{item.actual_condition}</strong>
+                        {item.unit_price != null && (
+                          <span className="ml-2 font-medium text-slate-700 dark:text-slate-300">· Revised price: {formatCurrency(item.unit_price)}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" variant="success" disabled={isProcessing}
+                        onClick={() => handleExceptionDecision(item.id, true)}>
+                        {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
+                        <span className="ml-1.5">Approve</span>
+                      </Button>
+                      <Button size="sm" variant="destructive" disabled={isProcessing}
+                        onClick={() => handleExceptionDecision(item.id, false)}>
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                        <span className="ml-1.5">Dispute</span>
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            <div className="pt-1 border-t border-amber-200 dark:border-amber-800">
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
+                Once you approve all items above, click below to confirm the revised quote and proceed to payment.
+              </p>
+              <Button
+                variant="success"
+                className="gap-2"
+                disabled={transitioning || hasMismatchItems}
+                onClick={() => handleTransition('payment_processing', 'Customer approved revised quote after mismatch review')}
+              >
+                {transitioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                Confirm Revised Quote & Proceed to Payment
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── PAYMENT PROCESSING ───────────────────────────────────────────── */}
+      {isPaymentProcessing && (
+        <Card className="border-teal-200 bg-teal-50/40 dark:border-teal-800 dark:bg-teal-950/10">
+          <CardContent className="py-4 flex items-start gap-3">
+            <CreditCard className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-teal-800 dark:text-teal-200">Payment is being processed</p>
+              <p className="text-sm text-teal-700 dark:text-teal-300 mt-0.5">
+                All devices have been verified and your payment of{' '}
+                <strong>{formatCurrency(order.final_amount ?? quotedAmount)}</strong> is being prepared.
+                You will receive a notification once it has been sent — typically within 1–2 business days.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── PAYMENT SENT ─────────────────────────────────────────────────── */}
+      {isPaymentSent && (
         <Card className="border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/10">
           <CardContent className="py-4 flex items-start gap-3">
             <CreditCard className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold text-emerald-800 dark:text-emerald-200">
-                {order.status === 'payment_sent' ? 'Payment has been sent!' : 'Inspection complete — payment processing'}
-              </p>
+              <p className="font-semibold text-emerald-800 dark:text-emerald-200">Payment has been sent!</p>
               <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">
-                {order.status === 'payment_sent'
-                  ? `Your payment of ${formatCurrency(order.final_amount ?? quotedAmount)} has been processed. Please allow 1–2 business days for it to reflect in your account.`
-                  : 'All devices have passed inspection. Your payment is being prepared and will be sent shortly.'}
+                Your payment of{' '}
+                <strong>{formatCurrency(order.final_amount ?? quotedAmount)}</strong>{' '}
+                has been processed
+                {order.payment_method ? ` via ${order.payment_method}` : ''}.
+                Please allow 1–2 business days for it to reflect in your account.
+                {order.payment_reference && (
+                  <span className="ml-1 text-xs font-mono">Ref: {order.payment_reference}</span>
+                )}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Legacy ready_to_ship payment stage (CPO / old flow) */}
+      {order.status === 'ready_to_ship' && (
+        <Card className="border-amber-200 bg-amber-50/40 dark:border-amber-800 dark:bg-amber-950/10">
+          <CardContent className="py-4 flex items-start gap-3">
+            <Package className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-amber-800 dark:text-amber-200">Order ready — preparing dispatch</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">
+                All devices have passed quality check. We are preparing your shipment and will notify you with tracking information once dispatched.
               </p>
             </div>
           </CardContent>
@@ -507,55 +634,6 @@ export default function CustomerOrderDetailPage() {
                   : `Your trade-in is complete. Thank you! Final amount: ${formatCurrency(order.final_amount ?? quotedAmount)}.`}
               </p>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── CONDITION MISMATCH — customer exceptions ─────────────────────── */}
-      {order.items?.some(i => i.actual_condition && i.claimed_condition && i.actual_condition !== i.claimed_condition) && (
-        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              Device Condition Review Required
-            </CardTitle>
-            <CardDescription>
-              Our team found a condition difference on one or more devices. Please review and approve or decline the updated pricing.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {order.items
-              .filter(i => i.actual_condition && i.claimed_condition && i.actual_condition !== i.claimed_condition)
-              .map(item => {
-                const device = item.device ? `${item.device.make} ${item.device.model}` : 'Device'
-                const isProcessing = exceptionProcessingId === item.id
-                return (
-                  <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border bg-background p-3">
-                    <div>
-                      <p className="font-medium text-sm">{device}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        You reported: <strong className="capitalize">{item.claimed_condition}</strong>
-                        {' → '}Inspected: <strong className="capitalize text-amber-600">{item.actual_condition}</strong>
-                        {item.unit_price != null && (
-                          <span className="ml-2 text-xs">· Updated price: {formatCurrency(item.unit_price)}</span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <Button size="sm" variant="success" disabled={isProcessing}
-                        onClick={() => handleExceptionDecision(item.id, true)}>
-                        {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
-                        <span className="ml-1.5">Approve</span>
-                      </Button>
-                      <Button size="sm" variant="destructive" disabled={isProcessing}
-                        onClick={() => handleExceptionDecision(item.id, false)}>
-                        <ThumbsDown className="h-3.5 w-3.5" />
-                        <span className="ml-1.5">Reject</span>
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
           </CardContent>
         </Card>
       )}

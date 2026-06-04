@@ -32,6 +32,8 @@ export type OrderStatus =
   | 'received'
   | 'in_triage'
   | 'qc_complete'
+  | 'mismatch_review'
+  | 'payment_processing'
   | 'ready_to_ship'
   | 'shipped'
   | 'delivered'
@@ -322,7 +324,15 @@ export interface Order extends BaseEntity {
   received_at?: string;
   completed_at?: string;
   cancelled_at?: string;
-  
+  mismatch_reviewed_at?: string;
+  payment_processing_at?: string;
+
+  // Payment recording (populated when admin logs payment_sent)
+  payment_method?: string;
+  payment_reference?: string;
+  payment_notes?: string;
+  payment_processed_at?: string;
+
   is_sla_breached: boolean;
   sla_breach_at?: string;
   

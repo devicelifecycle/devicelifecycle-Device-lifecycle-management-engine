@@ -632,6 +632,12 @@ export class OrderService {
       case 'received':
         updateData.received_at = new Date().toISOString()
         break
+      case 'mismatch_review':
+        updateData.mismatch_reviewed_at = new Date().toISOString()
+        break
+      case 'payment_processing':
+        updateData.payment_processing_at = new Date().toISOString()
+        break
       case 'closed':
         updateData.completed_at = new Date().toISOString()
         break
