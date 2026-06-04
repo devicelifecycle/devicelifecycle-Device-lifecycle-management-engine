@@ -82,7 +82,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   const isDark = resolvedTheme === 'dark'
   const { orders, total } = useOrders({ page_size: 50 })
   const counts = useDashboardCounts()
-  const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
+  const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage', 'qc_complete', 'mismatch_review', 'payment_processing'].includes(order.status)).length
   const slaAlerts = orders.filter((order) => order.is_sla_breached).length
   const recentRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
   const trendData = useTrend(orders)

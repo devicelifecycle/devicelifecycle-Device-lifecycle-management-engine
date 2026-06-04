@@ -94,8 +94,11 @@
   .badge-received   { @apply badge-base bg-cyan-50 text-cyan-700 ring-1 ring-inset ring-cyan-600/20 dark:bg-cyan-900/40 dark:text-cyan-300 dark:ring-cyan-500/30; }
   .badge-in_triage  { @apply badge-base bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20 dark:bg-orange-900/40 dark:text-orange-300 dark:ring-orange-500/30; }
   /* QC / complete */
-  .badge-qc_complete { @apply badge-base bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/20 dark:bg-teal-900/40 dark:text-teal-300 dark:ring-teal-500/30; }
-  .badge-delivered  { @apply badge-base bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-900/40 dark:text-green-300 dark:ring-green-500/30; }
+  .badge-qc_complete        { @apply badge-base bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/20 dark:bg-teal-900/40 dark:text-teal-300 dark:ring-teal-500/30; }
+  .badge-mismatch_review    { @apply badge-base bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-500/30; }
+  .badge-payment_processing { @apply badge-base bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/20 dark:bg-teal-900/40 dark:text-teal-300 dark:ring-teal-500/30; }
+  .badge-payment_sent       { @apply badge-base bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-500/30; }
+  .badge-delivered          { @apply badge-base bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-900/40 dark:text-green-300 dark:ring-green-500/30; }
   /* Rejected / cancelled */
   .badge-rejected   { @apply badge-base bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-900/40 dark:text-red-300 dark:ring-red-500/30; }
   .badge-cancelled  { @apply badge-base bg-stone-100 text-stone-500 ring-1 ring-inset ring-stone-400/20 dark:bg-stone-800/60 dark:text-stone-400 dark:ring-stone-500/30; }

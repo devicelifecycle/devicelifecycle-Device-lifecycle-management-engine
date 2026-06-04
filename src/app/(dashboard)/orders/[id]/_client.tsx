@@ -1902,6 +1902,23 @@ export default function OrderDetailClient() {
         </Card>
       )}
 
+      {/* Vendor: fulfillment complete — order is in payment or closed state */}
+      {isVendor && ['payment_processing', 'payment_sent', 'closed'].includes(order.status) && (
+        <Card className="border-green-200 bg-green-50/50 dark:border-green-900/30 dark:bg-green-950/20">
+          <CardContent className="py-4 flex items-start gap-3">
+            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium text-green-800 dark:text-green-200">Fulfillment complete</p>
+              <p className="text-sm text-green-700 dark:text-green-300/90 mt-0.5">
+                {order.status === 'closed'
+                  ? 'This order has been fully completed and closed. Thank you for fulfilling this order.'
+                  : 'The customer has confirmed delivery. DLM is processing the final payment and will close the order shortly.'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Parent order banner (shown for sub-orders, hidden from customers) */}
       {!isCustomer && order.parent_order_id && order.parent_order && (
         <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
@@ -2709,7 +2726,7 @@ export default function OrderDetailClient() {
           )}
 
           {/* Discrepancies / Exceptions Section */}
-          {(['accepted', 'sourcing', 'sourced', 'shipped_to_coe', 'received', 'in_triage', 'qc_complete', 'ready_to_ship'] as const).includes(order.status as any) && (
+          {(['accepted', 'sourcing', 'sourced', 'shipped_to_coe', 'received', 'in_triage', 'qc_complete', 'mismatch_review', 'ready_to_ship'] as const).includes(order.status as any) && (
               <DiscrepancyDetail orderId={order.id} />
 
               )}
