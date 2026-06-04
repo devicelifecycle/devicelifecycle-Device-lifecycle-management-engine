@@ -846,7 +846,7 @@ export async function POST(request: NextRequest) {
     const agg = new Map<AggKey, AggEntry>()
 
     for (const row of validRows) {
-      if (row.condition === 'recycle') continue // Skip recycle rows
+      if (row.condition === 'recycle') row.condition = 'poor' // Remap recycle → poor (lowest tier, not skipped)
 
       const isFair = row.condition === 'fair' || row.condition === 'poor'
       let unitPrice: number | null = row.customer_net
