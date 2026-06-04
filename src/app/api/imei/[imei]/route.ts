@@ -30,15 +30,17 @@ export async function GET(
     }
 
     if (profile.role === 'coe_tech' && profile.organization_id) {
-      let hasAccess = false
-      if (record.source_vendor_id) {
-        const { data: v } = await supabase.from('vendors').select('organization_id').eq('id', record.source_vendor_id).single()
-        if (v?.organization_id === profile.organization_id) hasAccess = true
-      }
-      if (!hasAccess && record.current_customer_id) {
-        const { data: c } = await supabase.from('customers').select('organization_id').eq('id', record.current_customer_id).single()
-        if (c?.organization_id === profile.organization_id) hasAccess = true
-      }
+      const [vendorResult, customerResult] = await Promise.all([
+        record.source_vendor_id
+          ? supabase.from('vendors').select('organization_id').eq('id', record.source_vendor_id).single()
+          : Promise.resolve({ data: null }),
+        record.current_customer_id
+          ? supabase.from('customers').select('organization_id').eq('id', record.current_customer_id).single()
+          : Promise.resolve({ data: null }),
+      ])
+      const hasAccess =
+        vendorResult.data?.organization_id === profile.organization_id ||
+        customerResult.data?.organization_id === profile.organization_id
       if (!hasAccess) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
@@ -74,15 +76,17 @@ export async function PATCH(
 
     // Enforce org boundary for non-admin/coe_manager (IDOR prevention)
     if (profile.role === 'coe_tech' && profile.organization_id) {
-      let hasAccess = false
-      if (record.source_vendor_id) {
-        const { data: v } = await supabase.from('vendors').select('organization_id').eq('id', record.source_vendor_id).single()
-        if (v?.organization_id === profile.organization_id) hasAccess = true
-      }
-      if (!hasAccess && record.current_customer_id) {
-        const { data: c } = await supabase.from('customers').select('organization_id').eq('id', record.current_customer_id).single()
-        if (c?.organization_id === profile.organization_id) hasAccess = true
-      }
+      const [vendorResult, customerResult] = await Promise.all([
+        record.source_vendor_id
+          ? supabase.from('vendors').select('organization_id').eq('id', record.source_vendor_id).single()
+          : Promise.resolve({ data: null }),
+        record.current_customer_id
+          ? supabase.from('customers').select('organization_id').eq('id', record.current_customer_id).single()
+          : Promise.resolve({ data: null }),
+      ])
+      const hasAccess =
+        vendorResult.data?.organization_id === profile.organization_id ||
+        customerResult.data?.organization_id === profile.organization_id
       if (!hasAccess) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }

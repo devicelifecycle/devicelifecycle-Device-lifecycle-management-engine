@@ -190,28 +190,35 @@ export async function POST(request: NextRequest) {
       const orderTypeLabel = orderData.type === 'cpo' ? 'CPO' : 'Trade-In'
       const title = `New ${orderTypeLabel} Order #${order.order_number}`
       const message = `A new ${orderTypeLabel} order #${order.order_number} has been created${order.status === 'submitted' ? ' and is awaiting pricing.' : '.'}`
-      for (const admin of admins || []) {
-        NotificationService.createNotification({
-          user_id: admin.id,
-          type: 'in_app',
-          title,
-          message,
-          link: orderLink,
-          metadata: { order_id: order.id, order_number: order.order_number, status: order.status, audience: 'admin' },
-        }).catch(() => {})
-        if (admin.email) {
-          EmailService.sendOrderStatusEmail({
-            to: admin.email,
-            recipientName: admin.full_name || 'Admin',
-            orderNumber: order.order_number,
-            orderId: order.id,
-            fromStatus: 'new',
-            toStatus: order.status,
-            subject: title,
-            message,
-          }).catch(() => {})
-        }
-      }
+      await Promise.all(
+        (admins || []).flatMap((admin) => {
+          const tasks = [
+            NotificationService.createNotification({
+              user_id: admin.id,
+              type: 'in_app',
+              title,
+              message,
+              link: orderLink,
+              metadata: { order_id: order.id, order_number: order.order_number, status: order.status, audience: 'admin' },
+            }).catch(() => {}),
+          ]
+          if (admin.email) {
+            tasks.push(
+              EmailService.sendOrderStatusEmail({
+                to: admin.email,
+                recipientName: admin.full_name || 'Admin',
+                orderNumber: order.order_number,
+                orderId: order.id,
+                fromStatus: 'new',
+                toStatus: order.status,
+                subject: title,
+                message,
+              }).catch(() => {})
+            )
+          }
+          return tasks
+        })
+      )
     })().catch(err => console.error('Admin order notification error:', err))
 
     // Notify all active vendors (in-app + email) when a CPO order is open for bidding.

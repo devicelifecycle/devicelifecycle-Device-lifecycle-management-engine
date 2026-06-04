@@ -35,8 +35,8 @@ export function Providers({ children, initialUser }: { children: React.ReactNode
             staleTime: 30 * 1000,
             // Keep cache 5min so navigating back shows cached data instantly.
             gcTime: 5 * 60 * 1000,
-            refetchOnWindowFocus: true,
-            refetchOnReconnect: true,
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: false,
             // Skip refetch when navigating to a page whose data is still fresh.
             // Realtime subscriptions handle live updates; staleTime handles the rest.
             refetchOnMount: false,

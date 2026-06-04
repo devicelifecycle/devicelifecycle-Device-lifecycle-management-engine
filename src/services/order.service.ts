@@ -191,19 +191,19 @@ export class OrderService {
     if (search) {
       const safeSearch = sanitizeSearchInput(search)
       if (safeSearch) {
-        // Check order_items for matching IMEI or serial_number
-        const { data: matchingItems } = await supabase
-          .from('order_items')
-          .select('order_id')
-          .or(`imei.ilike.%${safeSearch}%,serial_number.ilike.%${safeSearch}%`)
-          .limit(200)
-
-        // Also check device catalog for matching make/model (e.g. "S23", "iPhone 14")
-        const { data: matchingDevices } = await supabase
-          .from('device_catalog')
-          .select('id')
-          .or(`make.ilike.%${safeSearch}%,model.ilike.%${safeSearch}%`)
-          .limit(100)
+        // Run IMEI/serial and device catalog lookups in parallel
+        const [{ data: matchingItems }, { data: matchingDevices }] = await Promise.all([
+          supabase
+            .from('order_items')
+            .select('order_id')
+            .or(`imei.ilike.%${safeSearch}%,serial_number.ilike.%${safeSearch}%`)
+            .limit(200),
+          supabase
+            .from('device_catalog')
+            .select('id')
+            .or(`make.ilike.%${safeSearch}%,model.ilike.%${safeSearch}%`)
+            .limit(100),
+        ])
 
         const deviceIds = (matchingDevices || []).map((d: { id: string }) => d.id).filter(Boolean)
         let deviceItemOrderIds: string[] = []

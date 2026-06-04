@@ -42,40 +42,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'All order_ids must be valid UUIDs' }, { status: 400 })
     }
 
+    // Batch-fetch all orders in one query instead of N sequential getOrderById calls
+    const { data: fetchedOrders } = await supabase
+      .from('orders')
+      .select('id, order_number, status, type, customer_id, vendor_id, assigned_to_id, created_by_id')
+      .in('id', order_ids)
+
+    const orderMap = new Map((fetchedOrders || []).map((o: { id: string }) => [o.id, o]))
+
+    // Validate each order, then run transitions in parallel
+    type TransitionItem = { orderId: string; currentOrder: (typeof fetchedOrders)[number] }
+    const toTransition: TransitionItem[] = []
     const results: { id: string; success: boolean; error?: string }[] = []
 
     for (const orderId of order_ids) {
-      try {
-        const currentOrder = await OrderService.getOrderById(orderId)
-        if (!currentOrder) {
-          results.push({ id: orderId, success: false, error: 'Not found' })
-          continue
-        }
+      const currentOrder = orderMap.get(orderId)
+      if (!currentOrder) {
+        results.push({ id: orderId, success: false, error: 'Not found' })
+        continue
+      }
+      const canTransition = OrderService.isValidTransition(
+        currentOrder.status as OrderStatus,
+        to_status as OrderStatus
+      )
+      if (!canTransition) {
+        results.push({ id: orderId, success: false, error: `Cannot transition from ${currentOrder.status} to ${to_status}` })
+        continue
+      }
+      if (to_status === 'sourcing' && currentOrder.type !== 'cpo') {
+        results.push({ id: orderId, success: false, error: 'Only CPO orders can be moved to sourcing' })
+        continue
+      }
+      toTransition.push({ orderId, currentOrder })
+    }
 
-        const canTransition = OrderService.isValidTransition(
-          currentOrder.status as OrderStatus,
-          to_status as OrderStatus
-        )
-        if (!canTransition) {
-          results.push({ id: orderId, success: false, error: `Cannot transition from ${currentOrder.status} to ${to_status}` })
-          continue
-        }
-
-        // Sourcing is CPO-only
-        if (to_status === 'sourcing' && currentOrder.type !== 'cpo') {
-          results.push({ id: orderId, success: false, error: 'Only CPO orders can be moved to sourcing' })
-          continue
-        }
-
+    // Run all valid transitions in parallel
+    const transitionResults = await Promise.allSettled(
+      toTransition.map(async ({ orderId, currentOrder }) => {
         await OrderService.transitionOrder(orderId, to_status as OrderStatus, authUser.id, notes)
-
-        await AuditService.logStatusChange(
+        AuditService.logStatusChange(
           authUser.id, 'order', orderId,
           currentOrder.status, to_status,
           { notes, order_number: currentOrder.order_number, bulk: true }
-        )
-
-        // Fire-and-forget notifications
+        ).catch(() => {})
         NotificationService.sendOrderTransitionNotifications(
           {
             id: orderId,
@@ -88,10 +97,17 @@ export async function POST(request: NextRequest) {
           currentOrder.status,
           to_status
         ).catch(err => console.error('Bulk notification error:', err))
+        return orderId
+      })
+    )
 
+    for (let i = 0; i < toTransition.length; i++) {
+      const { orderId } = toTransition[i]
+      const settled = transitionResults[i]
+      if (settled.status === 'fulfilled') {
         results.push({ id: orderId, success: true })
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Internal error'
+      } else {
+        const msg = settled.reason instanceof Error ? settled.reason.message : 'Internal error'
         results.push({ id: orderId, success: false, error: msg })
       }
     }

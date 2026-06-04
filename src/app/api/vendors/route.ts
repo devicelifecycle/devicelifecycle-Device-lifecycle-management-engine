@@ -67,27 +67,16 @@ export async function POST(request: NextRequest) {
 
     const input = validationResult.data
 
-    const { data: existingVendorOrgByEmail, error: existingVendorOrgByEmailError } = await supabase
-      .from('organizations')
-      .select('*')
-      .eq('type', 'vendor')
-      .eq('contact_email', input.contact_email)
-      .maybeSingle()
+    const [
+      { data: existingVendorOrgByEmail, error: existingVendorOrgByEmailError },
+      { data: existingVendorOrgByName, error: existingVendorOrgByNameError },
+    ] = await Promise.all([
+      supabase.from('organizations').select('*').eq('type', 'vendor').eq('contact_email', input.contact_email).maybeSingle(),
+      supabase.from('organizations').select('*').eq('type', 'vendor').eq('name', input.company_name).maybeSingle(),
+    ])
 
-    if (existingVendorOrgByEmailError) {
-      throw existingVendorOrgByEmailError
-    }
-
-    const { data: existingVendorOrgByName, error: existingVendorOrgByNameError } = await supabase
-      .from('organizations')
-      .select('*')
-      .eq('type', 'vendor')
-      .eq('name', input.company_name)
-      .maybeSingle()
-
-    if (existingVendorOrgByNameError) {
-      throw existingVendorOrgByNameError
-    }
+    if (existingVendorOrgByEmailError) throw existingVendorOrgByEmailError
+    if (existingVendorOrgByNameError) throw existingVendorOrgByNameError
 
     const vendorOrganization = existingVendorOrgByEmail || existingVendorOrgByName || await OrganizationService.createOrganization({
       name: input.company_name,
