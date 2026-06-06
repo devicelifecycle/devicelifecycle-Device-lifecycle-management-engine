@@ -92,6 +92,8 @@ export interface User extends BaseEntity {
   last_login_at?: string;
 }
 
+export type OrgPlan = 'starter' | 'growth' | 'enterprise';
+
 export interface Organization extends BaseEntity {
   name: string;
   type: OrganizationType;
@@ -100,6 +102,12 @@ export interface Organization extends BaseEntity {
   contact_phone?: string;
   settings?: Record<string, unknown>;
   is_active: boolean;
+  // SaaS billing fields — populated when subscription management is added
+  plan?: OrgPlan | null;
+  billing_customer_id?: string | null;
+  billing_subscription_id?: string | null;
+  trial_ends_at?: string | null;
+  is_trial?: boolean;
 }
 
 // ============================================================================
