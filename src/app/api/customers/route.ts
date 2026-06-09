@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
                  searchParams.get('is_active') === 'false' ? false : undefined,
       organization_id: (isInternal ? searchParams.get('organization_id') || undefined : profile.organization_id) as string | undefined,
       page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
-      page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '20'), 1), 100),
+      page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '20'), 1), 500),
     }
 
     const result = await CustomerService.getCustomers(filters)

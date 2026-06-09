@@ -215,7 +215,7 @@ export default function NewOrderPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { create, isCreating } = useOrders()
-  const { customers } = useCustomers()
+  const { customers } = useCustomers({ limit: 500 })
   const { customer: myCustomer, isLoading: myCustomerLoading, error: myCustomerError } = useMyCustomer()
   const isCustomer = user?.role === 'customer'
   const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
@@ -224,10 +224,15 @@ export default function NewOrderPage() {
 
   const [devices, setDevices] = useState<Device[]>([])
   const [customerId, setCustomerId] = useState('')
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
+  const [customerSearchResults, setCustomerSearchResults] = useState<Array<{ id: string; company_name: string }>>([])
+  const customerInputRef = useRef<HTMLInputElement | null>(null)
+  const customerSearchTimer = useRef<ReturnType<typeof setTimeout>>()
   const [items, setItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
   const [tab, setTab] = useState('manual')
-  
+
   // Multi-CSV state
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
@@ -397,6 +402,29 @@ export default function NewOrderPage() {
       }))
     }
   }, [isInternal])
+
+  // Customer search — fires when admin types in the customer search box
+  const searchCustomersFn = useCallback((query: string) => {
+    clearTimeout(customerSearchTimer.current)
+    const allCustomers = customers as Array<{ id: string; company_name: string }>
+    if (!query.trim()) {
+      setCustomerSearchResults(allCustomers)
+      return
+    }
+    // Client-side filter first (fast, covers loaded list)
+    const lower = query.toLowerCase()
+    const local = allCustomers.filter(c => c.company_name.toLowerCase().includes(lower))
+    setCustomerSearchResults(local)
+    // Also fire server search to catch customers beyond the loaded 500
+    customerSearchTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customers?search=${encodeURIComponent(query)}&limit=100`)
+        if (!res.ok) return
+        const d = await res.json()
+        setCustomerSearchResults(d.data || [])
+      } catch { /* silently ignore */ }
+    }, 250)
+  }, [customers])
 
   // Quick-add: create a device in the catalog and auto-select it (admin/coe_manager only)
   const handleQuickAddDevice = async (make: string, model: string, index: number) => {
@@ -1114,19 +1142,62 @@ export default function NewOrderPage() {
               <CardDescription>Select the organization this order is for</CardDescription>
             </CardHeader>
             <CardContent>
-              <Select value={customerId} onValueChange={setCustomerId}>
-                <SelectTrigger className="w-full sm:max-w-sm">
-                  <SelectValue placeholder="Select a customer…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(customers as Array<{ id: string; company_name: string }>).map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.company_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {!customerId && (
+              <div className="relative w-full sm:max-w-sm">
+                <Input
+                  ref={customerInputRef}
+                  placeholder="Search customer…"
+                  value={customerSearch}
+                  onChange={e => {
+                    setCustomerSearch(e.target.value)
+                    searchCustomersFn(e.target.value)
+                    setCustomerDropdownOpen(true)
+                    // Clear selection when user edits the text
+                    if (customerId) setCustomerId('')
+                  }}
+                  onFocus={() => {
+                    setCustomerSearchResults(customers as Array<{ id: string; company_name: string }>)
+                    setCustomerDropdownOpen(true)
+                  }}
+                  onBlur={() => setTimeout(() => setCustomerDropdownOpen(false), 150)}
+                  autoComplete="off"
+                />
+                {customerDropdownOpen && (() => {
+                  const rect = customerInputRef.current?.getBoundingClientRect()
+                  if (!rect) return null
+                  const results = customerSearchResults.length > 0
+                    ? customerSearchResults
+                    : (customers as Array<{ id: string; company_name: string }>)
+                  return createPortal(
+                    <div
+                      style={{ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 9999 }}
+                      className="max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg"
+                    >
+                      {results.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-muted-foreground">No customers found</p>
+                      ) : results.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-accent ${c.id === customerId ? 'bg-accent font-medium' : ''}`}
+                          onMouseDown={e => {
+                            e.preventDefault()
+                            setCustomerId(c.id)
+                            setCustomerSearch(c.company_name)
+                            setCustomerDropdownOpen(false)
+                          }}
+                        >
+                          {c.company_name}
+                        </button>
+                      ))}
+                    </div>,
+                    document.body
+                  )
+                })()}
+              </div>
+              {!customerId && customerSearch && (
+                <p className="text-xs text-amber-600 mt-1.5">Select a customer from the list above.</p>
+              )}
+              {!customerId && !customerSearch && (
                 <p className="text-xs text-muted-foreground mt-1.5">Required before submitting the order.</p>
               )}
             </CardContent>
