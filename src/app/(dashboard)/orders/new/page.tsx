@@ -29,7 +29,6 @@ import { formatCurrency } from '@/lib/utils'
 import {
   buildCsvContent,
   buildXlsxTemplateBlob,
-  parseTabularUpload,
 } from '@/lib/csv-templates'
 import type { Device, DeviceCondition } from '@/types'
 
@@ -150,6 +149,8 @@ interface CSVRow {
   order_type?: string // 'trade_in' | 'cpo' - optional column
   serial_number?: string // IMEI or serial for trade-in tracking
   color?: string // Device color for identification
+  device_id?: string | null  // pre-resolved from parse-trade-template
+  match_status?: string      // 'matched' | 'partial' | 'auto_added' | 'unmatched'
 }
 
 interface ParsedFile {
@@ -228,7 +229,7 @@ export default function NewOrderPage() {
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const [customerSearchResults, setCustomerSearchResults] = useState<Array<{ id: string; company_name: string }>>([])
   const customerInputRef = useRef<HTMLInputElement | null>(null)
-  const customerSearchTimer = useRef<ReturnType<typeof setTimeout>>()
+  const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [items, setItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
   const [tab, setTab] = useState('manual')
@@ -240,6 +241,7 @@ export default function NewOrderPage() {
   const nextLookupRequestIdRef = useRef(1)
   const submittedRef = useRef(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isParsingFile, setIsParsingFile] = useState(false)
 
   // Device search state — one entry per line item
   const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
@@ -638,227 +640,70 @@ export default function NewOrderPage() {
     toast.success('CPO Excel template downloaded')
   }
 
-  // Multi-CSV handling — auto-corrects column names and condition values
+  // Multi-CSV handling — sends file to parse-trade-template for server-side device matching
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
 
     for (const file of Array.from(files)) {
+      setIsParsingFile(true)
       try {
-        const { headers: rawHeaders, rows: rawRows } = await parseTabularUpload(file)
-
-        // Build header mapping: original → normalized canonical name
-        const headerMap: Record<string, string> = {}
-        const correctedHeaders: string[] = []
-        for (const h of rawHeaders) {
-          const canonical = normalizeHeader(h)
-          headerMap[h] = canonical
-          if (canonical !== h.toLowerCase().trim()) {
-            correctedHeaders.push(`"${h}" → ${canonical}`)
-          }
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch('/api/orders/parse-trade-template', { method: 'POST', body: form })
+        const data = await res.json()
+        if (!res.ok) {
+          toast.error(`Failed to parse ${file.name}: ${data.error || 'Unknown error'}`)
+          continue
         }
 
-        if (correctedHeaders.length > 0) {
-          toast.info(`Auto-corrected columns: ${correctedHeaders.join(', ')}`, { duration: 5000 })
+        type ServerRow = {
+          make: string; model: string; storage: string; condition: string
+          quantity: number; serials: string[]; imeis: string[]
+          device_id: string | null; match_status: string
+          notes?: string; color?: string
         }
+        const serverRows: ServerRow[] = data.rows || []
 
-        // Infer default order type from file name when column is missing
+        // Infer order type from filename; user can change per-row in the preview table
         const inferredOrderType: 'trade_in' | 'cpo' =
           file.name.toLowerCase().includes('cpo') ? 'cpo' : 'trade_in'
 
-        // Normalize each row using header mapping
-        const rows: CSVRow[] = rawRows.map(rawRow => {
-          const mapped: Record<string, string> = {}
-          for (const [origKey, value] of Object.entries(rawRow)) {
-            const canonical = headerMap[origKey] || normalizeHeader(origKey)
-            mapped[canonical] = (mapped[canonical] || '') || (value || '').trim()
-          }
+        const rows: CSVRow[] = serverRows.map(r => ({
+          device_make: r.make || '',
+          device_model: r.model || '',
+          quantity: String(r.quantity || 1),
+          condition: r.condition || 'good',
+          storage: r.storage || '',
+          notes: r.notes || '',
+          order_type: inferredOrderType,
+          serial_number: [...(r.imeis || []), ...(r.serials || [])].join(', '),
+          color: r.color || '',
+          device_id: r.device_id || null,
+          match_status: r.match_status || 'unmatched',
+        }))
 
-          if (!mapped.device_make && mapped.device_model) {
-            const lower = mapped.device_model.toLowerCase()
-            if (lower.match(/\b(iphone|ipad|macbook|imac|airpods|apple watch|apple)\b/)) {
-              mapped.device_make = 'Apple'
-            } else if (lower.match(/\b(galaxy|samsung)\b/)) {
-              mapped.device_make = 'Samsung'
-              mapped.device_model = mapped.device_model.replace(/^samsung\s+/i, '')
-            } else if (lower.match(/\b(pixel|google)\b/)) {
-              mapped.device_make = 'Google'
-              mapped.device_model = mapped.device_model.replace(/^google\s+/i, '')
-            } else if (lower.match(/\b(moto[a-z]*|motorola)\b/)) {
-              mapped.device_make = 'Motorola'
-              mapped.device_model = mapped.device_model.replace(/^motorola\s+/i, '')
-            } else if (lower.match(/\bsonim\b/)) {
-              mapped.device_make = 'Sonim'
-              mapped.device_model = mapped.device_model.replace(/^sonim\s+/i, '')
-            } else if (lower.match(/\b(surface|microsoft)\b/)) {
-              mapped.device_make = 'Microsoft'
-            } else if (lower.match(/\b(thinkpad|ideapad|yoga|lenovo)\b/)) {
-              mapped.device_make = 'Lenovo'
-            } else if (lower.match(/\b(dell|latitude|xps|inspiron|alienware)\b/)) {
-              mapped.device_make = 'Dell'
-            } else if (lower.match(/\b(kyocera)\b/)) {
-              mapped.device_make = 'Kyocera'
-            } else if (lower.match(/\b(nokia)\b/)) {
-              mapped.device_make = 'Nokia'
-              mapped.device_model = mapped.device_model.replace(/^nokia\s+/i, '')
-            } else if (lower.match(/\b(blackberry)\b/)) {
-              mapped.device_make = 'BlackBerry'
-              mapped.device_model = mapped.device_model.replace(/^blackberry\s+/i, '')
-            } else if (lower.match(/\b(lg\s|lg-|lg[a-z]|lm-|stylo|velvet|wing)\b/)) {
-              mapped.device_make = 'LG'
-              mapped.device_model = mapped.device_model.replace(/^lg\s+/i, '')
-            } else if (lower.match(/\b(oneplus|one plus|onep)\b/)) {
-              mapped.device_make = 'OnePlus'
-              mapped.device_model = mapped.device_model.replace(/^oneplus\s+/i, '')
-            } else if (lower.match(/\b(xperia|sony)\b/)) {
-              mapped.device_make = 'Sony'
-              mapped.device_model = mapped.device_model.replace(/^sony\s+/i, '')
-            } else if (lower.match(/\b(elitebook|probook|spectre|envy|pavilion|omen|hp\s|hp-)\b/)) {
-              mapped.device_make = 'HP'
-            } else if (lower.match(/\b(zenbook|vivobook|rog|asus)\b/)) {
-              mapped.device_make = 'Asus'
-              mapped.device_model = mapped.device_model.replace(/^asus\s+/i, '')
-            } else if (lower.match(/\b(aspire|swift|predator|chromebook|acer)\b/)) {
-              mapped.device_make = 'Acer'
-            } else if (lower.match(/\b(huawei|p\d+\s*pro|mate\s*\d|nova\s*\d)\b/)) {
-              mapped.device_make = 'Huawei'
-              mapped.device_model = mapped.device_model.replace(/^huawei\s+/i, '')
-            } else if (lower.match(/\b(xiaomi|redmi|poco)\b/)) {
-              mapped.device_make = 'Xiaomi'
-              mapped.device_model = mapped.device_model.replace(/^xiaomi\s+/i, '')
-            } else if (lower.match(/\b(tcl)\b/)) {
-              mapped.device_make = 'TCL'
-              mapped.device_model = mapped.device_model.replace(/^tcl\s+/i, '')
-            } else if (lower.match(/\b(alcatel)\b/)) {
-              mapped.device_make = 'Alcatel'
-              mapped.device_model = mapped.device_model.replace(/^alcatel\s+/i, '')
-            } else if (lower.match(/\b(zte|blade|axon)\b/)) {
-              mapped.device_make = 'ZTE'
-              mapped.device_model = mapped.device_model.replace(/^zte\s+/i, '')
-            } else {
-              // Last resort: first word matches known brand list
-              const KNOWN_BRANDS_LIST = ['Apple','Samsung','Google','Motorola','LG','Sony','OnePlus','Sonim','Kyocera','BlackBerry','Netgear','Novatel','Inseego','Microsoft','Lenovo','Dell','HP','Asus','Acer','Huawei','Xiaomi','Nokia','Alcatel','TCL','ZTE']
-              const firstWord = mapped.device_model.trim().split(/\s+/)[0] ?? ''
-              const matchedBrand = KNOWN_BRANDS_LIST.find(b => b.toLowerCase() === firstWord.toLowerCase())
-              if (matchedBrand) {
-                mapped.device_make = matchedBrand
-                mapped.device_model = mapped.device_model.slice(firstWord.length).trim()
-              } else {
-                // Cannot infer brand — use 'Unknown' so file submits; admin will review
-                mapped.device_make = 'Unknown'
-              }
-            }
-          }
-
-          // Model cleanup — runs regardless of whether make came from the column or inference
-          if (mapped.device_make && mapped.device_model) {
-            // 1. Strip brand prefix if model starts with the brand (e.g., "Apple iPhone 15" → "iPhone 15")
-            const brandLower = mapped.device_make.toLowerCase()
-            if (mapped.device_model.toLowerCase().startsWith(brandLower + ' ')) {
-              mapped.device_model = mapped.device_model.slice(mapped.device_make.length).trim()
-            }
-
-            // 2. Correct make when model strongly indicates a different brand (e.g., Samsung row with "Google Pixel 7a")
-            const modelLower = mapped.device_model.toLowerCase()
-            const makeLower = mapped.device_make.toLowerCase()
-            if (/\b(iphone|ipad|macbook|airpods)\b/.test(modelLower) && makeLower !== 'apple') {
-              mapped.device_make = 'Apple'
-            } else if (/\bgalaxy\b/.test(modelLower) && makeLower !== 'samsung') {
-              mapped.device_make = 'Samsung'
-            } else if (/\bpixel\b/.test(modelLower) && makeLower !== 'google') {
-              mapped.device_make = 'Google'
-            } else if (/\b(moto[a-z]*|motorola)\b/.test(modelLower) && makeLower !== 'motorola') {
-              mapped.device_make = 'Motorola'
-            }
-          }
-
-          // 3. Extract storage from model string when storage column is empty
-          if (mapped.device_model && !mapped.storage) {
-            const storageMatch = mapped.device_model.match(/\b(\d+\s*(?:GB|TB))\b/i)
-            if (storageMatch) {
-              mapped.storage = storageMatch[1].replace(/\s+/g, '').toUpperCase()
-              mapped.device_model = mapped.device_model.replace(storageMatch[0], '').replace(/\s+/g, ' ').trim()
-            }
-          }
-
-          // 4. Remove trailing color words from model (e.g., "iPhone 15 Black" → "iPhone 15")
-          if (mapped.device_model) {
-            const COLOR_RE = /\s+(Black|White|Silver|Gold|Red|Blue|Green|Yellow|Purple|Pink|Grey|Gray|Titanium|Natural|Midnight|Starlight|Graphite|Platinum|Coral|Lavender|Teal|Cream|Beige|Bronze|Burgundy|Champagne|Onyx|Rose|Violet|Sage|Blue Black|Space Gray|Space Grey|Rose Gold|Deep Purple|Product Red|Natural Titanium|White Titanium|Black Titanium|Desert Titanium)$/i
-            let cleaned = mapped.device_model
-            let prev: string
-            do {
-              prev = cleaned
-              cleaned = cleaned.replace(COLOR_RE, '').trim()
-            } while (cleaned !== prev)
-            mapped.device_model = cleaned
-          }
-
-          const rawCondition = mapped.condition || ''
-          mapped.condition = normalizeCondition(rawCondition)
-
-          if (!mapped.quantity || isNaN(Number(mapped.quantity))) {
-            mapped.quantity = '1'
-          }
-
-          const rowType = mapped.order_type?.toLowerCase()
-          const orderType = rowType === 'cpo' ? 'cpo' : inferredOrderType
-
-          return {
-            device_make: mapped.device_make || '',
-            device_model: mapped.device_model || '',
-            quantity: mapped.quantity || '1',
-            condition: mapped.condition || 'good',
-            storage: mapped.storage || '',
-            notes: mapped.notes || '',
-            order_type: orderType,
-            serial_number: mapped.serial_number || '',
-            color: mapped.color || '',
-          }
-        })
-
-        if (!canCreateCpoOrder && rows.some((row) => row.order_type === 'cpo')) {
+        if (!canCreateCpoOrder && rows.some(row => row.order_type === 'cpo')) {
           toast.error(cpoCreationBlockedMessage)
           continue
         }
 
-        // Brand is always set (either inferred or 'Unknown') — no hard error for missing make.
-        // Rows with 'Unknown' brand are flagged amber and admin-noted at submit time.
-        const errors: string[] = []
-
-        setParsedFiles(prev => [...prev, {
-          filename: file.name,
-          rows,
-          errors,
-        }])
+        setParsedFiles(prev => [...prev, { filename: file.name, rows, errors: [] }])
         setCsvPreviewPage(1)
 
-        if (errors.length === 0) {
-          toast.success(`${file.name}: ${rows.length} rows parsed successfully`)
+        const unmatched = rows.filter(r => r.match_status === 'unmatched').length
+        const autoAdded = rows.filter(r => r.match_status === 'auto_added').length
+        if (unmatched > 0) {
+          toast.warning(`${file.name}: ${rows.length} rows — ${unmatched} device(s) not in catalog (auto-added)`)
+        } else if (autoAdded > 0) {
+          toast.info(`${file.name}: ${rows.length} rows — ${autoAdded} new device(s) added to catalog`)
         } else {
-          toast.info(`${file.name}: ${rows.length} rows loaded — ${errors.length} flagged for admin review. You can still submit; flagged rows will be noted for your team.`)
-          if (errors.length === rows.length) {
-            // Try to give a targeted hint based on what columns were detected
-            const detectedNorm = rawHeaders.map(h => h.toLowerCase().trim())
-            const hasDescription = detectedNorm.some(h => h.includes('description'))
-            const hasMakeAlias = detectedNorm.some(h => COLUMN_ALIASES[h] === 'device_make')
-            if (hasDescription && !hasMakeAlias) {
-              toast.info(
-                'Your file uses a "Description" column — brand/make will be auto-detected from the description text (e.g., "Apple iPhone 12 64GB"). ' +
-                'Edit the Make cell in the table below if any row is wrong.',
-                { duration: 10000 }
-              )
-            } else {
-              const detectedNames = rawHeaders.slice(0, 8).join(', ')
-              toast.info(
-                `Detected columns: ${detectedNames}${rawHeaders.length > 8 ? '…' : ''}. ` +
-                'Add a "Make" column (or rename your column to "Make") to auto-fill brands.',
-                { duration: 10000 }
-              )
-            }
-          }
+          toast.success(`${file.name}: ${rows.length} rows parsed and matched`)
         }
       } catch {
         toast.error(`Failed to parse ${file.name}. Supported formats: CSV, TSV, Excel (.xlsx, .xls), ODS.`)
+      } finally {
+        setIsParsingFile(false)
       }
     }
 
@@ -877,9 +722,14 @@ export default function NewOrderPage() {
       if (fi !== fileIndex) return f
       const newRows = [...f.rows]
       const nextValue = field === 'order_type' && !canCreateCpoOrder ? 'trade_in' : value
-      newRows[rowIndex] = { ...newRows[rowIndex], [field]: nextValue }
+      const updatedRow = { ...newRows[rowIndex], [field]: nextValue }
+      // Clear pre-resolved device_id when user edits make/model — forces re-match on submit
+      if (field === 'device_make' || field === 'device_model') {
+        updatedRow.device_id = null
+        updatedRow.match_status = 'unmatched'
+      }
+      newRows[rowIndex] = updatedRow
       const errors: string[] = []
-      // Brand is always set (inferred or 'Unknown') — no hard error for missing make
       return { ...f, rows: newRows, errors }
     }))
   }
@@ -945,6 +795,7 @@ export default function NewOrderPage() {
               serial_number: row.serial_number || '',
               color: row.color || '',
               notes: combinedNotes,
+              ...(row.device_id ? { device_id: row.device_id } : {}),
             }
           })
 
@@ -1489,8 +1340,9 @@ export default function NewOrderPage() {
                         <FileSpreadsheet className="mr-2 h-4 w-4" />Download CPO Excel Template
                       </Button>
                     )}
-                    <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                      <Upload className="mr-2 h-4 w-4" />Upload Excel or CSV
+                    <Button type="button" variant="outline" onClick={() => !isParsingFile && fileRef.current?.click()} disabled={isParsingFile}>
+                      {isParsingFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                      {isParsingFile ? 'Parsing…' : 'Upload Excel or CSV'}
                     </Button>
                   </div>
                 </div>
@@ -1593,6 +1445,7 @@ export default function NewOrderPage() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-[90px]">Type</TableHead>
+                            <TableHead className="w-[60px]">Match</TableHead>
                             <TableHead>Make</TableHead>
                             <TableHead>Model</TableHead>
                             <TableHead className="w-[70px]">Qty</TableHead>
@@ -1623,6 +1476,17 @@ export default function NewOrderPage() {
                                   <div className="flex h-8 items-center rounded-md border border-green-200 bg-green-50 px-2 text-xs font-medium text-green-800">
                                     Trade-In
                                   </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="p-1">
+                                {row.match_status === 'matched' ? (
+                                  <Badge variant="outline" className="text-[10px] border-green-400 text-green-700 bg-green-50 px-1">✓</Badge>
+                                ) : row.match_status === 'partial' ? (
+                                  <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 bg-amber-50 px-1">~</Badge>
+                                ) : row.match_status === 'auto_added' ? (
+                                  <Badge variant="outline" className="text-[10px] border-blue-400 text-blue-700 bg-blue-50 px-1">+</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] border-slate-400 text-slate-500 px-1">?</Badge>
                                 )}
                               </TableCell>
                               <TableCell className="p-1">
