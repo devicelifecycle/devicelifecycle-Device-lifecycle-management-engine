@@ -852,7 +852,7 @@ export async function POST(request: NextRequest) {
       let unitPrice: number | null = row.customer_net
       if (!unitPrice) unitPrice = isFair ? (row.fair_price ?? row.gross_price) : row.gross_price
 
-      const key: AggKey = `${row.brand}|${row.model}|${row.storage}|${row.condition}`
+      const key: AggKey = `${row.brand.toLowerCase().trim()}|${row.model.toLowerCase().trim()}|${row.storage.toLowerCase().trim()}|${(row.condition || '').toLowerCase().trim()}`
 
       if (formatType === 'per_device') {
         const existing = agg.get(key)
