@@ -139,9 +139,9 @@ export function MotionCard({
 export function PageTransition({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(4px)' }}
-      animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-      transition={{ type: 'spring', stiffness: 240, damping: 22, mass: 0.8 }}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
       className={className}
     >
       {children}

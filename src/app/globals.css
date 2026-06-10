@@ -213,7 +213,8 @@
     @apply border-border;
   }
   html {
-    scroll-behavior: smooth;
+    /* scroll-behavior intentionally omitted: CSS smooth-scroll fights Framer Motion useScroll
+       causing double-smoothing lag. anchor-link scrolls are handled via scrollIntoView calls. */
     scroll-padding-top: 5rem;
   }
   body {
@@ -237,7 +238,9 @@
   }
   body::before {
     content: "";
-    position: fixed;
+    /* position: absolute instead of fixed — fixed elements force a repaint check on every
+       scroll frame as the compositor must re-composite them against scrolling content. */
+    position: absolute;
     inset: 0;
     pointer-events: none;
     background-image:
@@ -1593,10 +1596,12 @@ textarea {
 .welcome-header {
   background: rgba(255, 251, 246, 0.76);
   border: 1px solid rgba(17, 24, 39, 0.06);
-  backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(14px) saturate(130%);
   box-shadow:
     0 22px 50px -36px rgba(15, 23, 42, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  will-change: transform;
+  contain: layout style;
 }
 
 .landing-hero-halo {

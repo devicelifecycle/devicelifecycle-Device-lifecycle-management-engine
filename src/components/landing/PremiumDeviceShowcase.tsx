@@ -220,21 +220,8 @@ export function PremiumDeviceHero() {
               transition={{ delay: 0.1 + index * 0.08, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
               className={`premium-device-card ${device.className}`}
             >
-              <motion.div
-                animate={
-                  shouldReduceMotion
-                    ? undefined
-                    : {
-                        y: [0, -8 - index * 2, 0],
-                        rotateZ: [0, index === 1 ? 0 : index === 0 ? -1.5 : 1.5, 0],
-                      }
-                }
-                transition={{
-                  duration: 5.8 + index * 0.6,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-                className={`premium-device-frame overflow-hidden rounded-[2rem] ${index === 1 ? "aspect-[7/5]" : "aspect-[5/7]"}`}
+              <div
+                className={`premium-device-frame overflow-hidden rounded-[2rem] ${index === 1 ? "aspect-[7/5]" : "aspect-[5/7]"} ${shouldReduceMotion ? '' : index === 0 ? 'animate-device-float-1' : index === 2 ? 'animate-device-float-2' : 'animate-device-cinematic-float'}`}
               >
                 <Image
                   src={device.src}
@@ -246,7 +233,7 @@ export function PremiumDeviceHero() {
                   className="h-full w-full object-cover"
                 />
                 <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
-              </motion.div>
+              </div>
 
               <div className="premium-device-meta mt-4 rounded-[1.7rem] px-4 py-4">
                 <p className="text-[10px] uppercase tracking-[0.26em] text-[#8a7665]">
@@ -319,19 +306,9 @@ export function PremiumStoryShowcase({ chapterId }: { chapterId: LandingChapterI
 
           <div className="grid gap-4 md:grid-cols-[1.04fr_0.96fr]">
             {panel.cards.map((card, index) => (
-              <motion.article
+              <article
                 key={card.title}
-                animate={
-                  shouldReduceMotion
-                    ? undefined
-                    : { y: [0, index === 0 ? -8 : -5, 0] }
-                }
-                transition={{
-                  duration: 5.6 + index * 0.5,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-                className={`premium-story-card overflow-hidden rounded-[2rem] ${index === 0 ? "md:-rotate-[2deg]" : "md:translate-y-10 md:rotate-[2deg]"}`}
+                className={`premium-story-card overflow-hidden rounded-[2rem] ${index === 0 ? "md:-rotate-[2deg]" : "md:translate-y-10 md:rotate-[2deg]"} ${shouldReduceMotion ? '' : index === 0 ? 'animate-device-float-1' : 'animate-device-float-2'}`}
               >
                 <div className={`premium-story-media relative ${index === 0 ? "aspect-[5/6]" : "aspect-[16/10]"}`}>
                   <Image
@@ -356,7 +333,7 @@ export function PremiumStoryShowcase({ chapterId }: { chapterId: LandingChapterI
                     {card.caption}
                   </p>
                 </div>
-              </motion.article>
+              </article>
             ))}
           </div>
 

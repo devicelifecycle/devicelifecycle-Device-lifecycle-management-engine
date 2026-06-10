@@ -147,22 +147,22 @@ export default function LandingPage() {
   const heroCopyY = useTransform(
     heroScrollProgress,
     [0, 1],
-    [0, shouldReduceMotion ? 0 : 96],
+    [0, shouldReduceMotion ? 0 : 40],
   );
   const heroCopyOpacity = useTransform(
     heroScrollProgress,
-    [0, 0.75, 1],
-    [1, 1, shouldReduceMotion ? 1 : 0.72],
+    [0, 0.85, 1],
+    [1, 1, shouldReduceMotion ? 1 : 0.8],
   );
   const heroStageY = useTransform(
     heroScrollProgress,
     [0, 1],
-    [0, shouldReduceMotion ? 0 : 70],
+    [0, shouldReduceMotion ? 0 : 28],
   );
   const heroStageScale = useTransform(
     heroScrollProgress,
     [0, 1],
-    [1, shouldReduceMotion ? 1 : 0.95],
+    [1, shouldReduceMotion ? 1 : 0.97],
   );
   const stageShellY = useTransform(
     experienceScrollProgress,
@@ -389,17 +389,9 @@ export default function LandingPage() {
                   transition={{ delay: 0.38 }}
                   className="flex items-center gap-3 text-xs uppercase tracking-[0.26em] text-[#83786f]"
                 >
-                  <motion.div
-                    animate={shouldReduceMotion ? undefined : { y: [0, 8, 0] }}
-                    transition={{
-                      duration: 2.8,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                    }}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-black/8 bg-white/70"
-                  >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full border border-black/8 bg-white/70 ${shouldReduceMotion ? '' : 'animate-bounce-soft'}`}>
                     <ChevronDown className="h-4 w-4" />
-                  </motion.div>
+                  </div>
                   Scroll for the product reveal
                 </motion.div>
               </motion.div>
