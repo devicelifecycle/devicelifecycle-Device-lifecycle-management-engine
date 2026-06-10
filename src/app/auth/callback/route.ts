@@ -84,6 +84,46 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // No code provided or non-recovery callback failed → login
-  return NextResponse.redirect(new URL('/login', request.url))
+  // No code provided — the request may have come from a Supabase implicit-flow
+  // recovery link (e.g. old password-reset emails).  The access_token is in the
+  // URL hash fragment (#access_token=...&type=recovery) which the server never
+  // sees.  Return a tiny HTML shim that reads the fragment client-side and
+  // routes to the right page, preserving the hash so the Supabase JS client
+  // can pick up the PASSWORD_RECOVERY event.
+  const isRecoveryNext = safeNext === '/reset-password' || safeNext.startsWith('/reset-password')
+  if (isRecoveryNext) {
+    return new NextResponse(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Redirecting…</title>
+<script>
+(function(){
+  var h = window.location.hash;
+  if (h && h.includes('type=recovery')) {
+    window.location.replace('/reset-password' + h);
+  } else if (h && h.includes('access_token')) {
+    window.location.replace('/reset-password' + h);
+  } else {
+    window.location.replace('/forgot-password?reason=expired');
+  }
+})();
+</script></head><body></body></html>`,
+      { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    )
+  }
+
+  // Generic no-code case: also try to recover hash-fragment sessions for non-recovery flows
+  return new NextResponse(
+    `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Redirecting…</title>
+<script>
+(function(){
+  var h = window.location.hash;
+  var next = ${JSON.stringify(safeNext)};
+  if (h && h.includes('access_token')) {
+    window.location.replace(next + h);
+  } else {
+    window.location.replace('/login');
+  }
+})();
+</script></head><body></body></html>`,
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  )
 }

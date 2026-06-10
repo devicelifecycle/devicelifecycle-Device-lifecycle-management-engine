@@ -158,7 +158,11 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
     return {
       user,
       isLoading: false,
-      isInitializing: user === null && initialUser === undefined,
+      // isInitializing:true whenever no user is resolved yet — prevents the
+      // DashboardLayout from redirecting to /login before fetchUser() has read
+      // the Supabase localStorage session.  If cachedUser is present the check
+      // is instant (no spinner shown); if not, a brief loading state is correct.
+      isInitializing: user === null,
       isAuthenticated: !!user,
       activeRole: user ? getActiveRole(user) : null,
     }
@@ -364,7 +368,13 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         // Keep isLoading:true through router.replace so the login overlay stays
         // visible during navigation — prevents a flash of the bare login form.
         setState({ user: cachedUser, isLoading: true, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(cachedUser) })
-        router.replace(getDefaultAppPathForRole(cachedUser.role))
+        const dest = getDefaultAppPathForRole(cachedUser.role)
+        router.replace(dest)
+        // Hard-nav fallback: if Next.js soft navigation stalls (stale chunk, edge
+        // timeout, cookie timing race) force a full page reload after 2.5 s.
+        // The timer fires even after component unmount — if soft nav succeeded it
+        // just re-navigates to an already-loaded page (harmless).
+        setTimeout(() => { if (typeof window !== 'undefined') window.location.assign(dest) }, 2500)
         // Hydrate full profile in background — updates state without blocking nav
         fetchUser().catch(() => {})
         return
@@ -399,7 +409,10 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         // Keep isLoading:true through router.replace — overlay stays visible
         // during the navigation so the login form never flashes.
         setState({ user: profile, isLoading: true, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(profile) })
-        router.replace(getDefaultAppPathForRole(profile.role))
+        const dest = getDefaultAppPathForRole(profile.role)
+        router.replace(dest)
+        // Hard-nav fallback: force full-page reload if soft navigation stalls.
+        setTimeout(() => { if (typeof window !== 'undefined') window.location.assign(dest) }, 2500)
         return
       }
 
