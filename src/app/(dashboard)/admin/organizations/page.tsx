@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
-import { Plus, Building2, Search, Trash2, Pencil } from 'lucide-react'
+import { Plus, Building2, Search, Trash2, Pencil, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +53,7 @@ export default function AdminOrganizationsPage() {
   const [creating, setCreating] = useState(false)
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
   const [deletingOrg, setDeletingOrg] = useState<Organization | null>(null)
+  const [resendingOrgId, setResendingOrgId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '',
     type: 'customer' as OrganizationType,
@@ -163,6 +164,24 @@ export default function AdminOrganizationsPage() {
       country: addr.country || 'USA',
     })
     setDialogOpen(true)
+  }
+
+  const handleResendLogin = async (org: Organization) => {
+    setResendingOrgId(org.id)
+    try {
+      const res = await fetch(`/api/organizations/${org.id}/resend-login`, { method: 'POST' })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload.error || 'Failed to resend login')
+      if (payload.email_sent) {
+        toast.success(`Login credentials resent to ${payload.email_sent_to}`)
+      } else {
+        toast.warning(`Password reset but email could not be delivered to ${payload.email_sent_to}`)
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to resend login')
+    } finally {
+      setResendingOrgId(null)
+    }
   }
 
   const handleDelete = async () => {
@@ -292,6 +311,7 @@ export default function AdminOrganizationsPage() {
                   <TableHead>Linked Customer</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead>Portal Login</TableHead>
                   <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
@@ -326,6 +346,23 @@ export default function AdminOrganizationsPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(org.created_at)}
+                    </TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      {(org.type === 'customer' || org.type === 'vendor') ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => handleResendLogin(org)}
+                          disabled={resendingOrgId === org.id}
+                          title="Reset password and resend login credentials"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${resendingOrgId === org.id ? 'animate-spin' : ''}`} />
+                          Resend
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground/40 text-xs">—</span>
+                      )}
                     </TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
