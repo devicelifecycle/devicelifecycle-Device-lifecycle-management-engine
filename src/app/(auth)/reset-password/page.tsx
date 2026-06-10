@@ -47,10 +47,13 @@ export default function ResetPasswordPage() {
     // Immediate check: the Supabase client processes the URL hash on creation.
     // If the session is already established (hash was parsed before this effect ran),
     // getSession() returns it synchronously from the in-memory cache.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return
-      if (session) setSessionState('valid')
-    }).catch(() => {})
+    supabase.auth.getSession().then(
+      (res: Awaited<ReturnType<typeof supabase.auth.getSession>>) => {
+        if (cancelled) return
+        if (res.data.session) setSessionState('valid')
+      },
+      () => {}
+    )
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
