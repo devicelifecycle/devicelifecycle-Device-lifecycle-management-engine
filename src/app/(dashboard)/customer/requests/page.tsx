@@ -60,6 +60,9 @@ export default function CustomerRequestsPage() {
   const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null)
   const [tradePage, setTradePage] = useState(1)
 
+  const [isDraggingTrade, setIsDraggingTrade] = useState(false)
+  const [isDraggingCpo, setIsDraggingCpo] = useState(false)
+
   // ── CPO upload state ──────────────────────────────────────────────────────
   const [cpoUploadFile, setCpoUploadFile] = useState<File | null>(null)
   const [cpoParsing, setCpoParsing] = useState(false)
@@ -450,10 +453,16 @@ export default function CustomerRequestsPage() {
                 <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = '' }} />
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-muted px-6 py-8 cursor-pointer hover:border-green-400 transition-colors" onClick={() => fileInputRef.current?.click()}>
+              <div
+                className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 cursor-pointer transition-colors ${isDraggingTrade ? 'border-green-500 bg-green-50/30 dark:bg-green-950/20' : 'border-muted hover:border-green-400'}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); setIsDraggingTrade(true) }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingTrade(false) }}
+                onDrop={e => { e.preventDefault(); setIsDraggingTrade(false); const f = e.dataTransfer.files[0]; if (f) handleFileSelect(f) }}
+              >
                 {parsing ? (uploadProgress > 0 ? <FileCheck2 className="h-8 w-8 text-primary" /> : <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />) : <FileUp className="h-8 w-8 text-muted-foreground" />}
                 <p className="text-sm text-muted-foreground text-center">
-                  {parsing ? uploadProgress > 0 ? `Processing… ${uploadProgress}%` : 'Reading your file…' : 'Click to upload your device list (Excel or CSV)'}
+                  {parsing ? uploadProgress > 0 ? `Processing… ${uploadProgress}%` : 'Reading your file…' : isDraggingTrade ? 'Drop your file here' : 'Drag & drop or click to upload your device list (Excel or CSV)'}
                 </p>
                 {parsing && uploadProgress > 0 && (
                   <div className="w-full max-w-xs h-1.5 rounded-full bg-muted overflow-hidden">
@@ -534,9 +543,15 @@ export default function CustomerRequestsPage() {
                 <input ref={cpoFileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleCpoFileSelect(f); e.target.value = '' }} />
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-blue-200 dark:border-blue-800 px-6 py-6 cursor-pointer hover:border-blue-400 transition-colors" onClick={() => cpoFileInputRef.current?.click()}>
+              <div
+                className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-6 cursor-pointer transition-colors ${isDraggingCpo ? 'border-blue-500 bg-blue-50/30 dark:bg-blue-950/20' : 'border-blue-200 dark:border-blue-800 hover:border-blue-400'}`}
+                onClick={() => cpoFileInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); setIsDraggingCpo(true) }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingCpo(false) }}
+                onDrop={e => { e.preventDefault(); setIsDraggingCpo(false); const f = e.dataTransfer.files[0]; if (f) handleCpoFileSelect(f) }}
+              >
                 {cpoParsing ? <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /> : <FileUp className="h-7 w-7 text-muted-foreground" />}
-                <p className="text-sm text-muted-foreground text-center">{cpoParsing ? 'Reading your file…' : 'Click to upload your CPO device list'}</p>
+                <p className="text-sm text-muted-foreground text-center">{cpoParsing ? 'Reading your file…' : isDraggingCpo ? 'Drop your file here' : 'Drag & drop or click to upload your CPO device list'}</p>
                 <input ref={cpoFileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleCpoFileSelect(f); e.target.value = '' }} />
               </div>
             )}

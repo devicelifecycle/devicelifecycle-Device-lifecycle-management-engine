@@ -242,6 +242,7 @@ export default function NewOrderPage() {
   const submittedRef = useRef(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isParsingFile, setIsParsingFile] = useState(false)
+  const [isDraggingAdmin, setIsDraggingAdmin] = useState(false)
 
   // Device search state — one entry per line item
   const [deviceSearches, setDeviceSearches] = useState<Record<number, string>>({})
@@ -709,6 +710,11 @@ export default function NewOrderPage() {
 
     // Reset input
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const handleFileDrop = (files: FileList) => {
+    const syntheticEvent = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
+    handleFileUpload(syntheticEvent)
   }
 
   const removeFile = (index: number) => {
@@ -1317,10 +1323,15 @@ export default function NewOrderPage() {
                   </p>
                 </div>
 
-                <div className="rounded-lg border-2 border-dashed p-6 text-center">
+                <div
+                  className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDraggingAdmin ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                  onDragOver={e => { e.preventDefault(); setIsDraggingAdmin(true) }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingAdmin(false) }}
+                  onDrop={e => { e.preventDefault(); setIsDraggingAdmin(false); if (e.dataTransfer.files.length) handleFileDrop(e.dataTransfer.files) }}
+                >
                   <Files className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground mb-3">
-                    {canCreateCpoOrder ? 'Download a CSV or Excel template, or upload your own file.' : 'Download a trade-in CSV or Excel template, or upload your own file.'}
+                    {isDraggingAdmin ? 'Drop your file here' : canCreateCpoOrder ? 'Drag & drop a file here, or use the buttons below.' : 'Drag & drop a trade-in file here, or use the buttons below.'}
                   </p>
                   <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods" multiple onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
