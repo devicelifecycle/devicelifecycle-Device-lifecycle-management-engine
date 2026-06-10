@@ -361,7 +361,9 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       if (cachedUser && cachedUser.id === userId) {
         writeCachedUser(cachedUser)
         writeProfileCookie(cachedUser)
-        setState({ user: cachedUser, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(cachedUser) })
+        // Keep isLoading:true through router.replace so the login overlay stays
+        // visible during navigation — prevents a flash of the bare login form.
+        setState({ user: cachedUser, isLoading: true, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(cachedUser) })
         router.replace(getDefaultAppPathForRole(cachedUser.role))
         // Hydrate full profile in background — updates state without blocking nav
         fetchUser().catch(() => {})
@@ -394,7 +396,9 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         writeCachedUser(profile)
         setRoutingCookies(profile.role, profile.id)
         writeProfileCookie(profile)
-        setState({ user: profile, isLoading: false, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(profile) })
+        // Keep isLoading:true through router.replace — overlay stays visible
+        // during the navigation so the login form never flashes.
+        setState({ user: profile, isLoading: true, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(profile) })
         router.replace(getDefaultAppPathForRole(profile.role))
         return
       }
