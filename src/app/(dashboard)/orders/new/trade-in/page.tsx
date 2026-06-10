@@ -40,6 +40,8 @@ interface CSVRow {
   condition: string
   storage: string
   notes: string
+  device_id?: string | null
+  match_status?: string
 }
 
 interface LineItem {
@@ -348,7 +350,7 @@ export default function NewTradeInPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to parse file')
 
-      type ApiRow = { make: string; model: string; storage: string; condition: string; quantity: number; serials: string[]; imeis: string[] }
+      type ApiRow = { make: string; model: string; storage: string; condition: string; quantity: number; serials: string[]; imeis: string[]; device_id?: string | null; match_status?: string }
       const rows: CSVRow[] = (data.rows as ApiRow[] || []).map(r => ({
         device_make: r.make || '',
         device_model: r.model || '',
@@ -356,6 +358,8 @@ export default function NewTradeInPage() {
         condition: r.condition || 'good',
         storage: r.storage || '',
         notes: r.serials?.length ? `Serials: ${r.serials.slice(0, 5).join(', ')}${r.serials.length > 5 ? '…' : ''}` : '',
+        device_id: r.device_id || null,
+        match_status: r.match_status || undefined,
       }))
 
       const errors: string[] = []
@@ -383,11 +387,12 @@ export default function NewTradeInPage() {
     let orderItems: Record<string, unknown>[]
 
     if (tab === 'csv' && csvData.length > 0) {
-      // Match CSV rows to devices (flexible: aliases, storage stripping, trim)
+      // Use pre-resolved device_id from parse-trade-template when available;
+      // fall back to client-side catalog match for rows without one.
       const rows = csvData.map(row => {
-        const device = matchDeviceFromCsv(devices, row.device_make, row.device_model)
+        const deviceId = row.device_id || matchDeviceFromCsv(devices, row.device_make, row.device_model)?.id || ''
         return {
-          device_id: device?.id || '',
+          device_id: deviceId,
           quantity: parseInt(row.quantity) || 1,
           storage: row.storage || '128GB',
           condition: (row.condition?.toLowerCase() || 'good') as DeviceCondition,

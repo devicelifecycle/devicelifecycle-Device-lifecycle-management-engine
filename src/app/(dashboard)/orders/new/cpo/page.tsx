@@ -39,6 +39,7 @@ interface CSVRow {
   quantity: string
   storage: string
   notes: string
+  device_id?: string | null
 }
 
 // CPO condition options — user-facing labels mapped to DeviceCondition
@@ -443,13 +444,14 @@ export default function NewCPOOrderPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to parse file')
 
-      type ApiRow = { make: string; model: string; storage: string; condition: string; quantity: number; serials: string[] }
+      type ApiRow = { make: string; model: string; storage: string; condition: string; quantity: number; serials: string[]; device_id?: string | null }
       const rows: CSVRow[] = (data.rows as ApiRow[] || []).map(r => ({
         device_make: r.make || '',
         device_model: r.model || '',
         quantity: String(r.quantity || 1),
         storage: r.storage || '',
         notes: r.serials?.length ? `Serials: ${r.serials.slice(0, 5).join(', ')}${r.serials.length > 5 ? '…' : ''}` : '',
+        device_id: r.device_id || null,
       }))
 
       const errors: string[] = []
@@ -475,9 +477,9 @@ export default function NewCPOOrderPage() {
     let orderItems: { device_id: string; quantity: number; storage: string; condition: DeviceCondition; notes: string }[]
     if (tab === 'csv' && csvData.length > 0) {
       const rows = csvData.map(row => {
-        const device = matchDeviceFromCsv(devices, row.device_make, row.device_model)
+        const deviceId = row.device_id || matchDeviceFromCsv(devices, row.device_make, row.device_model)?.id || ''
         return {
-          device_id: device?.id || '',
+          device_id: deviceId,
           quantity: parseInt(row.quantity) || 1,
           storage: row.storage || '128GB',
           condition: 'good' as DeviceCondition,

@@ -37,8 +37,13 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
   'make': 'brand', 'brand': 'brand', 'manufacturer': 'brand', 'oem': 'brand',
   'mfr': 'brand', 'vendor': 'brand', 'device_make': 'brand',
   'model': 'model', 'device': 'model', 'device model': 'model', 'device_model': 'model',
-  'model name': 'model', 'phone model': 'model', 'product': 'model',
+  'model name': 'model', 'phone model': 'model',
   'description': 'model', 'existing phone': 'model', 'models': 'model',
+  // 'product' maps to product_number not model — in ITAD templates 'Product' is often
+  // an internal model identifier (e.g. Apple A1990) while a separate 'Model' column
+  // holds the human-readable name.  We fall back to product_number when model is empty.
+  'product': 'product_number', 'product number': 'product_number', 'product id': 'product_number',
+  'sku': 'product_number', 'part number': 'product_number', 'part #': 'product_number',
 
   // Storage
   'storage': 'storage', 'capacity': 'storage', 'gb': 'storage',
@@ -241,9 +246,11 @@ function inferBrand(modelStr: string): string {
   if (lower.match(/\bsonim\b/)) return 'Sonim'
   if (lower.match(/\b(surface|microsoft)\b/)) return 'Microsoft'
   if (lower.match(/\b(thinkpad|lenovo)\b/)) return 'Lenovo'
-  // Fallback: first word that isn't a number
+  // Fallback: first word that isn't a number or an Apple model identifier (A1990, A2141 etc.)
   const firstWord = modelStr.trim().split(/\s+/)[0]
-  return /^\d+$/.test(firstWord) ? '' : firstWord
+  if (/^\d+$/.test(firstWord)) return ''
+  if (/^A\d{4}$/.test(firstWord)) return 'Apple'  // Apple internal model numbers
+  return firstWord
 }
 
 // ── Pivot table detection + transposition ─────────────────────────────────────
@@ -428,7 +435,7 @@ Here are the column headers and 3 sample rows (pipe-separated):
 ${sampleText}
 
 Return ONLY a valid JSON object mapping each column header to one of these canonical fields:
-brand, model, storage, condition, quantity, customer_net, gross_price, fair_price, carrier_deduction, eg_deduction, imei, serial, color, notes, year, ignore
+brand, model, product_number, storage, condition, quantity, customer_net, gross_price, fair_price, carrier_deduction, eg_deduction, imei, serial, color, notes, year, ignore
 
 Example: {"Phone Model": "model", "Device Count": "quantity", "30 Days Good": "gross_price", "30 Days Fair": "fair_price"}
 
@@ -438,6 +445,7 @@ Rules:
 - If a column is "net", "customer", or the final customer take-home → customer_net
 - Bell/Rogers/spiff columns → carrier_deduction
 - EG/Evergreen/processing fee → eg_deduction
+- "Product" or "Part #" columns containing internal model codes (e.g. A1990) → product_number
 - Columns you cannot classify → ignore
 - Return ONLY the JSON, no explanation`
 
@@ -716,7 +724,7 @@ export async function POST(request: NextRequest) {
 
     // LLM fallback when less than 30% of columns mapped OR no model/brand found
     let llmAssisted = false
-    const hasEssentials = ('model' in colIndex || 'brand' in colIndex)
+    const hasEssentials = ('model' in colIndex || 'brand' in colIndex || 'product_number' in colIndex)
     if (!hasEssentials || mappedCount < Math.ceil(headers.length * 0.3)) {
       const llmMap = await inferColumnsWithLLM(headers, dataRows.slice(0, 3))
       if (llmMap) {
@@ -746,6 +754,9 @@ export async function POST(request: NextRequest) {
       let brand = get(cells, 'brand')
       let model = get(cells, 'model')
       let storage = get(cells, 'storage')
+      const productNum = get(cells, 'product_number')  // e.g. Apple A1990 / A2141 identifier
+      const screenSize = get(cells, 'screen_size')     // e.g. "15-inch", "16-inch"
+      const yearVal = get(cells, 'year')
 
       // Handle storage-as-column: find which storage col has a non-empty price
       if (!storage && Object.keys(storageColMap).length > 0) {
@@ -756,6 +767,22 @@ export async function POST(request: NextRequest) {
             break
           }
         }
+      }
+
+      // Build composite model name from Model + Screen Size + (Year) when available.
+      // e.g. "MacBook Pro" + "15-inch" + "2018" → "MacBook Pro 15-inch (2018)"
+      if (model) {
+        if (screenSize && !model.toLowerCase().includes(screenSize.toLowerCase())) {
+          model = `${model} ${screenSize}`
+        }
+        if (yearVal && !model.includes(`(${yearVal})`)) {
+          model = `${model} (${yearVal})`
+        }
+      }
+
+      // Fall back to product_number only when no dedicated model column was found
+      if (!model && productNum) {
+        model = productNum
       }
 
       // Handle combined make+model+storage+color in one column
