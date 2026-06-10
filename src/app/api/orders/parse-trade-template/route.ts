@@ -60,31 +60,65 @@ const KNOWN_BRANDS = ['apple', 'samsung', 'google', 'motorola', 'lg', 'sony',
 
 // ── Column aliases covering all trade quote formats seen in the wild ─────────
 const TRADE_COLUMN_MAP: Record<string, string> = {
-  // Device identification
+  // Device identification — brand/make
   'make': 'brand', 'brand': 'brand', 'manufacturer': 'brand', 'oem': 'brand',
-  'mfr': 'brand', 'vendor': 'brand', 'device_make': 'brand',
+  'mfr': 'brand', 'mfg': 'brand', 'mfg.': 'brand', 'vendor': 'brand',
+  'device_make': 'brand', 'device make': 'brand',
+  'device manufacturer': 'brand', 'device brand': 'brand',
+  'phone brand': 'brand', 'phone make': 'brand', 'phone_brand': 'brand',
+  'phone_make': 'brand', 'make/brand': 'brand', 'brand/make': 'brand',
+  'company': 'brand', 'oem/manufacturer': 'brand',
+
+  // Device identification — model
   'model': 'model', 'device': 'model', 'device model': 'model', 'device_model': 'model',
-  'model name': 'model', 'phone model': 'model',
-  'description': 'model', 'existing phone': 'model', 'models': 'model',
-  // 'product' maps to product_number not model — in ITAD templates 'Product' is often
-  // an internal model identifier (e.g. Apple A1990) while a separate 'Model' column
-  // holds the human-readable name.  We fall back to product_number when model is empty.
+  'model name': 'model', 'phone model': 'model', 'existing phone': 'model', 'models': 'model',
+  // Generic description columns (most common in corporate ITAD / TD Synnex files)
+  'description': 'model', 'desc': 'model',
+  'item description': 'model', 'item desc': 'model',
+  'product description': 'model', 'prod description': 'model', 'prod desc': 'model',
+  'asset description': 'model', 'asset desc': 'model',
+  'device description': 'model', 'device desc': 'model',
+  'hardware description': 'model', 'hardware desc': 'model',
+  'equipment description': 'model', 'equipment desc': 'model', 'equipment model': 'model',
+  'unit description': 'model', 'unit desc': 'model',
+  'article description': 'model',
+  'part description': 'model', 'part name': 'model',
+  'product name': 'model', 'item name': 'model',
+  'asset name': 'model', 'equipment name': 'model',
+  'device name': 'model', 'device_name': 'model',
+  'full description': 'model', 'full name': 'model',
+  'hardware model': 'model',
+
+  // 'product' and 'sku' map to product_number — these are typically internal IDs
+  // (e.g. Apple A1990, A2141) while a separate description column holds the model name.
+  // We fall back to product_number when model is empty (see extraction logic below).
   'product': 'product_number', 'product number': 'product_number', 'product id': 'product_number',
   'sku': 'product_number', 'part number': 'product_number', 'part #': 'product_number',
+  'part no': 'product_number', 'part no.': 'product_number',
+  'item number': 'product_number', 'item no': 'product_number', 'item no.': 'product_number',
+  'mfr part number': 'product_number', 'mfr part no': 'product_number',
 
   // Storage
   'storage': 'storage', 'capacity': 'storage', 'gb': 'storage',
   'storage/gb': 'storage', 'memory': 'storage',
+  'storage capacity': 'storage', 'disk size': 'storage',
+  'drive size': 'storage', 'internal storage': 'storage',
+  'device storage': 'storage', 'memory size': 'storage',
 
   // Condition (many customer aliases)
   'condition': 'condition', 'grade': 'condition', 'condtion': 'condition',
   'condiiton': 'condition', 'device condition': 'condition',
   'condition of device': 'condition', 'state': 'condition',
+  'cosmetic grade': 'condition', 'grading': 'condition',
 
   // Quantity
   'quantity': 'quantity', 'qty': 'quantity', 'count': 'quantity',
   'count of mobile': 'quantity', 'total': 'quantity', 'num': 'quantity',
   '#': 'quantity', 'device count': 'quantity', 'volume': 'quantity',
+  'units': 'quantity', 'unit count': 'quantity', 'unit qty': 'quantity',
+  'device qty': 'quantity', 'no of units': 'quantity',
+  'number of units': 'quantity', 'total units': 'quantity',
+  'total devices': 'quantity', 'no.': 'quantity',
 
   // Pricing — customer net is the canonical price
   'customer': 'customer_net', 'net customer': 'customer_net',
@@ -117,6 +151,10 @@ const TRADE_COLUMN_MAP: Record<string, string> = {
   'imei/sn': 'imei', 'imei/s/n': 'imei', 'imei/serial number': 'imei',
   'serial': 'serial', 'serial number': 'serial', 'serial_number': 'serial',
   'sample s/n': 'serial', 's/n': 'serial', 'sn': 'serial',
+  'asset tag': 'serial', 'asset #': 'serial', 'asset number': 'serial',
+  'device id': 'serial', 'barcode': 'serial',
+  'device serial': 'serial', 'device serial number': 'serial',
+  'unit serial': 'serial',
 
   // Extras
   'color': 'color', 'colour': 'color',
@@ -747,21 +785,45 @@ export async function POST(request: NextRequest) {
     // Detect storage-as-column headers (e.g. "32 GB", "128 GB")
     const storageColMap = detectStorageColumns(headers)
 
-    // LLM fallback when less than 30% of columns mapped OR no model/brand found
+    // LLM fallback when model column is missing OR less than 30% of columns mapped.
+    // brand alone is NOT sufficient — without model there's nothing to match against.
     let llmAssisted = false
-    const hasEssentials = ('model' in colIndex || 'brand' in colIndex || 'product_number' in colIndex)
-    if (!hasEssentials || mappedCount < Math.ceil(headers.length * 0.3)) {
+    const hasModel = 'model' in colIndex || 'product_number' in colIndex
+    if (!hasModel || mappedCount < Math.ceil(headers.length * 0.3)) {
       const llmMap = await inferColumnsWithLLM(headers, dataRows.slice(0, 3))
       if (llmMap) {
         llmAssisted = true
         for (const [rawHeader, canonical] of Object.entries(llmMap)) {
           if (!canonical || canonical === 'ignore') continue
           const idx = headers.findIndex(h => h.toLowerCase().trim() === rawHeader.toLowerCase().trim())
-          if (idx >= 0 && !(canonical in colIndex)) {
+          // Allow LLM to override model/brand even if already mapped (LLM has data context)
+          const shouldOverride = canonical === 'model' || canonical === 'brand'
+          if (idx >= 0 && (shouldOverride || !(canonical in colIndex))) {
             colIndex[canonical] = idx
             detectedColumns[rawHeader] = canonical
           }
         }
+      }
+    }
+
+    // Last-resort: if model is STILL not found after LLM, pick the unmapped column
+    // with the longest average text — device descriptions are almost always the longest
+    // text column in a trade quote spreadsheet.
+    if (!('model' in colIndex) && !('product_number' in colIndex)) {
+      const mappedIndices = new Set(Object.values(colIndex))
+      let bestCol = -1, bestAvgLen = 0
+      for (let i = 0; i < headers.length; i++) {
+        if (mappedIndices.has(i)) continue
+        const vals = dataRows.slice(0, 10).map(r => (r[i] ?? '').trim()).filter(Boolean)
+        if (vals.length === 0) continue
+        const avgLen = vals.reduce((s, v) => s + v.length, 0) / vals.length
+        // Exclude columns where values look like pure numbers (prices, quantities)
+        const allNumeric = vals.every(v => /^[\d.,$ ]+$/.test(v))
+        if (!allNumeric && avgLen > bestAvgLen) { bestAvgLen = avgLen; bestCol = i }
+      }
+      if (bestCol >= 0) {
+        colIndex['model'] = bestCol
+        detectedColumns[headers[bestCol]] = 'model (content-inferred)'
       }
     }
 
