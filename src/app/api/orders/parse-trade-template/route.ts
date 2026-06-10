@@ -26,6 +26,33 @@ import type { Device } from '@/types'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
+// ── Module-level catalog cache ────────────────────────────────────────────────
+// Serverless functions reuse the same Node.js module within a warm instance.
+// Caching the device catalog for 5 minutes eliminates a 100-200ms DB round-trip
+// on every file upload without requiring Redis or any external service.
+let _catalogCache: Device[] | null = null
+let _catalogCacheAt = 0
+const CATALOG_TTL_MS = 5 * 60 * 1000
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getCatalog(supabase: any): Promise<Device[]> {
+  const now = Date.now()
+  if (_catalogCache && now - _catalogCacheAt < CATALOG_TTL_MS) return _catalogCache
+  const { data } = await supabase
+    .from('device_catalog')
+    .select('id, make, model, specifications, category')
+    .eq('is_active', true)
+    .order('make')
+  _catalogCache = (data ?? []) as Device[]
+  _catalogCacheAt = now
+  return _catalogCache
+}
+
+/** Call when a new device is inserted so the next request gets a fresh catalog. */
+function invalidateCatalogCache() {
+  _catalogCache = null
+}
+
 // ── Known device brands (for combined-field splitting and brand inference) ───
 const KNOWN_BRANDS = ['apple', 'samsung', 'google', 'motorola', 'lg', 'sony',
   'oneplus', 'sonim', 'kyocera', 'blackberry', 'netgear', 'novatel',
@@ -539,10 +566,7 @@ export async function POST(request: NextRequest) {
       if (inputRows.length === 0) {
         return NextResponse.json({ error: 'No rows provided' }, { status: 400 })
       }
-      const { data: devices } = await supabase
-        .from('device_catalog').select('id, make, model, specifications, category')
-        .eq('is_active', true).order('make')
-      const catalog = (devices ?? []) as unknown as Device[]
+      const catalog = await getCatalog(supabase)
       const outputRows: TradeTemplateRow[] = inputRows.map(row => {
         const device = matchDeviceFromCsv(catalog, row.make, row.model)
         return {
@@ -555,6 +579,7 @@ export async function POST(request: NextRequest) {
         }
       })
       const finalRows = await autoAddUnmatched(outputRows)
+      if (finalRows.some(r => r.match_status === 'auto_added')) invalidateCatalogCache()
       const matched = finalRows.filter(r => r.device_id).length
       const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)
       return NextResponse.json({
@@ -666,8 +691,7 @@ export async function POST(request: NextRequest) {
       const pivotRows = parsePivot(headers, dataRows)
       if (pivotRows.length > 0) {
         // Go straight to aggregation with the transposed rows
-        const { data: devices } = await supabase.from('device_catalog').select('id, make, model, specifications, category').eq('is_active', true).order('make')
-        const catalog = (devices ?? []) as unknown as Device[]
+        const catalog = await getCatalog(supabase)
         const outputRows: TradeTemplateRow[] = pivotRows.map(row => {
           const device = matchDeviceFromCsv(catalog, row.brand, row.model)
           return {
@@ -684,6 +708,7 @@ export async function POST(request: NextRequest) {
           }
         })
         const finalRows = await autoAddUnmatched(outputRows)
+        if (finalRows.some(r => r.match_status === 'auto_added')) invalidateCatalogCache()
         const matched = finalRows.filter(r => r.device_id).length
         const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)
         return NextResponse.json({
@@ -853,14 +878,8 @@ export async function POST(request: NextRequest) {
     const hasExplicitQty = hasQty && validRows.some(r => r.quantity > 1)
     const formatType: 'batch' | 'per_device' | 'unknown' = hasExplicitQty ? 'batch' : hasSerials ? 'per_device' : hasQty ? 'batch' : 'unknown'
 
-    // ── Fetch device catalog ──────────────────────────────────────────────────
-    const { data: devices } = await supabase
-      .from('device_catalog')
-      .select('id, make, model, specifications, category')
-      .eq('is_active', true)
-      .order('make')
-
-    const catalog = (devices ?? []) as unknown as Device[]
+    // ── Fetch device catalog (cached 5 min per warm serverless instance) ────────
+    const catalog = await getCatalog(supabase)
 
     // ── Aggregate + match ─────────────────────────────────────────────────────
     type AggKey = string
@@ -931,6 +950,7 @@ export async function POST(request: NextRequest) {
     }
 
     const finalRows = await autoAddUnmatched(outputRows)
+    if (finalRows.some(r => r.match_status === 'auto_added')) invalidateCatalogCache()
     const matched = finalRows.filter(r => r.device_id).length
     const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)
     const totalValue = finalRows.some(r => r.unit_price != null)
