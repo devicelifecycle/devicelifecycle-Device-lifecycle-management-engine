@@ -29,11 +29,14 @@ export async function POST(request: NextRequest) {
     // Support Login ID: acme -> acme@login.local
     const email = emailRaw.includes('@') ? emailRaw : `${emailRaw}@login.local`
 
-    // Only allow reset links to return to this app's own origin(s).
+    // Send the recovery link directly to /reset-password so the Supabase client
+    // on that page can handle the recovery token from the hash fragment
+    // (#access_token=...&type=recovery). Routing through /auth/callback first
+    // fails because the hash is never sent to the server (it's client-side only).
     const redirectTo = resolveTrustedAppRedirect(
       typeof body.redirectTo === 'string' ? body.redirectTo : null,
       request,
-      '/auth/callback?next=/reset-password',
+      '/reset-password',
     )
 
     const supabase = createServiceRoleClient()
