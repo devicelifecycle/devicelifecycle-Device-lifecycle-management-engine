@@ -113,8 +113,8 @@ export default function OrdersPage() {
   const deletableSelectedCount = orders.filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled'].includes(order.status)).length
 
   const stats = useMemo(() => {
-    const active = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage'].includes(order.status)).length
-    const delivered = orders.filter((order) => ['delivered', 'closed'].includes(order.status)).length
+    const active = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage', 'qc_complete', 'mismatch_review', 'payment_processing'].includes(order.status)).length
+    const delivered = orders.filter((order) => ['delivered', 'payment_sent', 'closed'].includes(order.status)).length
     const totalValue = orders.reduce((sum, order) => sum + (order.quoted_amount ?? order.total_amount ?? 0), 0)
     return { active, delivered, totalValue }
   }, [orders])

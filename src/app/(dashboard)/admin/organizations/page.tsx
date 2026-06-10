@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
-import { Plus, Building2, Search, Trash2 } from 'lucide-react'
+import { Plus, Building2, Search, Trash2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -328,15 +328,26 @@ export default function AdminOrganizationsPage() {
                       {formatDate(org.created_at)}
                     </TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => setDeletingOrg(org)}
-                        title="Delete organization"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => openEdit(org)}
+                          title="Edit organization"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeletingOrg(org)}
+                          title="Delete organization"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

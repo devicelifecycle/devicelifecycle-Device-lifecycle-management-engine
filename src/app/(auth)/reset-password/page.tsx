@@ -43,6 +43,15 @@ export default function ResetPasswordPage() {
     let cancelled = false
 
     const supabase = getSupabase()
+
+    // Immediate check: the Supabase client processes the URL hash on creation.
+    // If the session is already established (hash was parsed before this effect ran),
+    // getSession() returns it synchronously from the in-memory cache.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return
+      if (session) setSessionState('valid')
+    }).catch(() => {})
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
         if (cancelled) return
@@ -55,16 +64,16 @@ export default function ResetPasswordPage() {
             setSessionState('valid')
           }
           // If INITIAL_SESSION fires with no session, wait for PASSWORD_RECOVERY
-          // (which fires slightly after for PKCE recovery links)
+          // (which fires slightly after for recovery links)
         }
       }
     )
 
-    // Fallback: if no auth event resolves in 5 s (slow network, no recovery token),
+    // Fallback: if no auth event resolves in 20 s (slow mobile network, no recovery token),
     // mark the session as invalid and redirect to forgot-password.
     const fallbackTimer = window.setTimeout(() => {
       if (!cancelled) setSessionState(prev => prev === 'checking' ? 'invalid' : prev)
-    }, 5000)
+    }, 20000)
 
     return () => {
       cancelled = true
