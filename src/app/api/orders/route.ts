@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
           ]
           if (admin.email) {
             tasks.push(
-              EmailService.sendOrderStatusEmail({
+              (EmailService.sendOrderStatusEmail({
                 to: admin.email,
                 recipientName: admin.full_name || 'Admin',
                 orderNumber: order.order_number,
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
                 toStatus: order.status,
                 subject: title,
                 message,
-              }).catch(() => {})
+              }).catch(() => {}) as Promise<void>)
             )
           }
           return tasks

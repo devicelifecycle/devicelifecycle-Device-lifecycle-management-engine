@@ -48,10 +48,11 @@ export async function POST(request: NextRequest) {
       .select('id, order_number, status, type, customer_id, vendor_id, assigned_to_id, created_by_id')
       .in('id', order_ids)
 
-    const orderMap = new Map((fetchedOrders || []).map((o: { id: string }) => [o.id, o]))
+    type FetchedOrder = { id: string; order_number: string; status: string; type: string; customer_id: string | null; vendor_id: string | null; assigned_to_id: string | null; created_by_id: string | null }
+    const orderMap = new Map((fetchedOrders || []).map((o: FetchedOrder) => [o.id, o]))
 
     // Validate each order, then run transitions in parallel
-    type TransitionItem = { orderId: string; currentOrder: (typeof fetchedOrders)[number] }
+    type TransitionItem = { orderId: string; currentOrder: FetchedOrder }
     const toTransition: TransitionItem[] = []
     const results: { id: string; success: boolean; error?: string }[] = []
 
@@ -89,10 +90,10 @@ export async function POST(request: NextRequest) {
           {
             id: orderId,
             order_number: currentOrder.order_number,
-            customer_id: currentOrder.customer_id,
-            vendor_id: currentOrder.vendor_id,
-            assigned_to_id: currentOrder.assigned_to_id,
-            created_by_id: currentOrder.created_by_id,
+            customer_id: currentOrder.customer_id ?? undefined,
+            vendor_id: currentOrder.vendor_id ?? undefined,
+            assigned_to_id: currentOrder.assigned_to_id ?? undefined,
+            created_by_id: currentOrder.created_by_id ?? '',
           },
           currentOrder.status,
           to_status
