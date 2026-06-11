@@ -89,8 +89,8 @@ function ForgotPasswordForm() {
     e.preventDefault()
     setError('')
     const trimmedCode = code.trim().replace(/\s/g, '')
-    if (trimmedCode.length !== 6) {
-      setError('Please enter the 6-digit code from your email.')
+    if (trimmedCode.length < 4) {
+      setError('Please enter the full verification code from your email.')
       return
     }
     setIsLoading(true)
@@ -229,24 +229,24 @@ function ForgotPasswordForm() {
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-400 flex items-start gap-2">
                     <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>A 6-digit code was sent to <strong>{email}</strong>. Enter it below.</span>
+                    <span>A verification code was sent to <strong>{email}</strong>. Enter it below.</span>
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="otp-code" className="text-sm font-medium">Verification Code</label>
                     <Input
                       id="otp-code"
                       type="text"
-                      inputMode="numeric"
-                      placeholder="123456"
+
+                      placeholder="Enter your code"
                       value={code}
-                      onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      onChange={e => setCode(e.target.value.replace(/\s/g, '').slice(0, 12))}
                       required
                       autoComplete="one-time-code"
                       className="h-11 text-center text-xl tracking-widest font-mono"
-                      maxLength={6}
+                      maxLength={12}
                     />
                   </div>
-                  <Button type="submit" className="w-full h-11 shadow-md shadow-primary/20" disabled={isLoading || code.length !== 6}>
+                  <Button type="submit" className="w-full h-11 shadow-md shadow-primary/20" disabled={isLoading || code.trim().length < 4}>
                     {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Verifying...</> : <><KeyRound className="mr-2 h-4 w-4" />Verify & Set New Password</>}
                   </Button>
                   <div className="text-center">
