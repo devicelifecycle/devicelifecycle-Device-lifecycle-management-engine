@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, ShoppingCart, CheckCircle, XCircle } from 'lucide-react'
+import { Search, ShoppingCart, CheckCircle, XCircle, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -22,6 +22,7 @@ export default function CustomerOrdersPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [transitioning, setTransitioning] = useState<Record<string, boolean>>({})
+  const [downloadingFile, setDownloadingFile] = useState<Record<string, boolean>>({})
   const debouncedSearch = useDebounce(search)
 
   const { orders, total, totalPages, isLoading, refetch } = useOrders({
@@ -31,6 +32,21 @@ export default function CustomerOrdersPage() {
     sort_by: 'updated_at',
     sort_order: 'desc',
   })
+
+  async function handleDownloadSourceFile(orderId: string) {
+    setDownloadingFile(prev => ({ ...prev, [orderId]: true }))
+    try {
+      const res = await fetch(`/api/uploads/order-file?order_id=${orderId}`)
+      if (!res.ok) { toast.error('Could not get download link.'); return }
+      const { signed_url, file_name } = await res.json()
+      const a = document.createElement('a')
+      a.href = signed_url; a.download = file_name || 'order-file'; a.click()
+    } catch {
+      toast.error('Download failed. Please try again.')
+    } finally {
+      setDownloadingFile(prev => ({ ...prev, [orderId]: false }))
+    }
+  }
 
   async function handleQuoteAction(orderId: string, action: 'accepted' | 'rejected') {
     setTransitioning(prev => ({ ...prev, [orderId]: true }))
@@ -114,6 +130,7 @@ export default function CustomerOrdersPage() {
                   const status = CUSTOMER_STATUS_CONFIG[order.status as OrderStatus] ?? ORDER_STATUS_CONFIG[order.status as OrderStatus]
                   const isQuoted = order.status === 'quoted'
                   const isBusy = transitioning[order.id]
+                  const hasSourceFile = !!(order.metadata?.source_file_path)
                   return (
                     <TableRow key={order.id} className={isQuoted ? 'bg-purple-50/40 dark:bg-purple-950/20' : ''}>
                       <TableCell className="whitespace-nowrap">
@@ -138,30 +155,46 @@ export default function CustomerOrdersPage() {
                         {formatRelativeTime(order.updated_at || order.created_at)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        {isQuoted && (
-                          <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-2 justify-end">
+                          {hasSourceFile && (
                             <Button
                               size="sm"
-                              variant="success"
-                              className="h-7 px-2 text-xs"
-                              disabled={isBusy}
-                              onClick={() => handleQuoteAction(order.id, 'accepted')}
+                              variant="ghost"
+                              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                              disabled={downloadingFile[order.id]}
+                              onClick={() => handleDownloadSourceFile(order.id)}
+                              title="Download original uploaded file"
                             >
-                              <CheckCircle className="mr-1 h-3 w-3" />
-                              Accept
+                              {downloadingFile[order.id]
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <Download className="h-3 w-3" />}
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-xs text-red-500 border-red-200 bg-background/70 hover:bg-red-50/60 hover:border-red-300 hover:text-red-600"
-                              disabled={isBusy}
-                              onClick={() => handleQuoteAction(order.id, 'rejected')}
-                            >
-                              <XCircle className="mr-1 h-3 w-3" />
-                              Decline
-                            </Button>
-                          </div>
-                        )}
+                          )}
+                          {isQuoted && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="success"
+                                className="h-7 px-2 text-xs"
+                                disabled={isBusy}
+                                onClick={() => handleQuoteAction(order.id, 'accepted')}
+                              >
+                                <CheckCircle className="mr-1 h-3 w-3" />
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs text-red-500 border-red-200 bg-background/70 hover:bg-red-50/60 hover:border-red-300 hover:text-red-600"
+                                disabled={isBusy}
+                                onClick={() => handleQuoteAction(order.id, 'rejected')}
+                              >
+                                <XCircle className="mr-1 h-3 w-3" />
+                                Decline
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )

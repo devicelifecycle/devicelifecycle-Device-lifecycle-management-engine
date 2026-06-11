@@ -213,6 +213,24 @@ export default function CustomerRequestsPage() {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ rows, summary, savedAt: new Date().toISOString() })) } catch { /* ignore */ }
   }
 
+  // ── Attach original file to order (fire-and-forget) ─────────────────────
+  async function attachFileToOrder(file: File, orderId: string) {
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('order_id', orderId)
+      await fetch('/api/uploads/order-file', { method: 'POST', body: form })
+    } catch { /* non-blocking — don't fail the order if file upload fails */ }
+  }
+
+  // ── Re-download the file that's currently loaded in state ─────────────────
+  function handleRedownload(file: File) {
+    const url = URL.createObjectURL(file)
+    const a = document.createElement('a')
+    a.href = url; a.download = file.name; a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ── Submit ────────────────────────────────────────────────────────────────
   async function handleSubmit(skipInvalidRows = false) {
     if (!customerId) { toast.error('Customer profile not found. Please refresh.'); return }
@@ -235,14 +253,20 @@ export default function CustomerRequestsPage() {
           if (res.status === 400 && Array.isArray(data.details) && data.details.length > 0) { setRowValidationErrors(data.details); return }
           throw new Error(data.error || 'Trade-in submission failed')
         }
-        if (data.order?.id) firstOrderId = data.order.id
+        if (data.order?.id) {
+          firstOrderId = data.order.id
+          if (uploadFile) attachFileToOrder(uploadFile, data.order.id)
+        }
         totalSubmitted += data.items_created ?? parsedRows.length
       }
       if (hasCpo) {
         const res = await fetch('/api/orders/upload-csv', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: toRows(cpoParsedRows), customer_id: customerId, order_type: 'cpo' }) })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'CPO submission failed')
-        if (!firstOrderId && data.order?.id) firstOrderId = data.order.id
+        if (data.order?.id) {
+          if (!firstOrderId) firstOrderId = data.order.id
+          if (cpoUploadFile) attachFileToOrder(cpoUploadFile, data.order.id)
+        }
         totalSubmitted += data.items_created ?? cpoParsedRows.length
       }
       const parts = [hasTradeIn ? `${parsedRows.length} trade-in` : '', hasCpo ? `${cpoParsedRows.length} CPO` : ''].filter(Boolean).join(' + ')
@@ -264,6 +288,7 @@ export default function CustomerRequestsPage() {
   function totalPages(rows: ParsedRow[]) { return Math.max(1, Math.ceil(rows.length / PAGE_SIZE)) }
 
   const matchedCount = parsedRows.filter(r => r.device_id).length
+  const zeroQtyCount = parsedRows.filter(r => r.quantity === 0).length
 
   // ── Paginated row editor ─────────────────────────────────────────────────
   function RowEditor({ rows, setRows, page, setPage, sectionColor }: {
@@ -282,7 +307,7 @@ export default function CustomerRequestsPage() {
           {visible.map((row, relIdx) => {
             const idx = offset + relIdx
             return (
-              <div key={idx} className={`flex items-center gap-2 px-4 py-2.5 ${!row.device_id ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}>
+              <div key={idx} className={`flex items-center gap-2 px-4 py-2.5 ${row.quantity === 0 ? 'bg-red-50/30 dark:bg-red-950/10' : !row.device_id ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}>
                 <div className="flex-1 min-w-0">
                   <span className="font-medium">{row.make} {row.model}</span>
                   <span className="ml-2 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">{row.quantity} unit{row.quantity !== 1 ? 's' : ''}</span>
@@ -307,9 +332,12 @@ export default function CustomerRequestsPage() {
                   type="number" min="0"
                   value={row.quantity}
                   onChange={e => setRows(prev => prev.map((r, i) => i === idx ? { ...r, quantity: Math.max(0, parseInt(e.target.value, 10) || 0) } : r))}
-                  className="w-14 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center"
+                  className={`w-14 rounded border px-1.5 py-0.5 text-xs text-center bg-background ${row.quantity === 0 ? 'border-red-400 text-red-600' : 'border-input'}`}
                   title="Quantity"
                 />
+                {row.quantity === 0 && (
+                  <span className="text-[10px] text-red-600 dark:text-red-400 font-medium shrink-0 whitespace-nowrap">qty=0 in file</span>
+                )}
                 {row.unit_price != null && (
                   <span className="text-xs tabular-nums shrink-0">{formatCurrency(row.unit_price)}/unit</span>
                 )}
@@ -447,6 +475,7 @@ export default function CustomerRequestsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <button type="button" onClick={() => handleRedownload(uploadFile!)} className="text-xs text-muted-foreground hover:text-foreground hover:underline">Re-download</button>
                   <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs text-primary hover:underline">Replace</button>
                   <button type="button" onClick={() => { setUploadFile(null); setParsedRows([]); setParsedSummary(null); setParseError(''); setRowValidationErrors(null); setDraftRestoredAt(null); try { localStorage.removeItem(DRAFT_KEY) } catch { /**/ } }} className="text-xs text-destructive hover:underline">Remove</button>
                 </div>
@@ -490,6 +519,7 @@ export default function CustomerRequestsPage() {
                     <span>{matchedCount}/{parsedRows.length} SKUs matched</span>
                     {parsedSummary.total_value != null && <span>Est. value: {formatCurrency(parsedSummary.total_value)}</span>}
                     {matchedCount < parsedRows.length && <span className="text-amber-600 dark:text-amber-400 font-medium">{parsedRows.length - matchedCount} unmatched — will be reviewed manually</span>}
+                    {zeroQtyCount > 0 && <span className="text-red-600 dark:text-red-400 font-medium">{zeroQtyCount} row{zeroQtyCount !== 1 ? 's' : ''} have quantity 0 in your file</span>}
                   </div>
                 </div>
                 <RowEditor rows={parsedRows} setRows={setParsedRows} page={tradePage} setPage={setTradePage} sectionColor="green" />
@@ -537,6 +567,7 @@ export default function CustomerRequestsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <button type="button" onClick={() => handleRedownload(cpoUploadFile!)} className="text-xs text-muted-foreground hover:text-foreground hover:underline">Re-download</button>
                   <button type="button" onClick={() => cpoFileInputRef.current?.click()} className="text-xs text-primary hover:underline">Replace</button>
                   <button type="button" onClick={() => { setCpoUploadFile(null); setCpoParsedRows([]); setCpoParsedSummary(null); setCpoParseError('') }} className="text-xs text-destructive hover:underline">Remove</button>
                 </div>

@@ -427,6 +427,61 @@ export class EmailService {
   }
 
   /**
+   * Send a 6-digit OTP code for password reset.
+   */
+  static async sendPasswordResetOtp(params: {
+    to: string
+    recipientName: string
+    otp: string
+  }): Promise<boolean> {
+    const { to, recipientName, otp } = params
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background:#18181b;padding:24px 32px;">
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password reset verification code is:</p>
+
+              <div style="margin:0 0 24px;text-align:center;">
+                <span style="display:inline-block;padding:16px 32px;background:#f4f4f5;border-radius:8px;font-size:32px;font-weight:700;letter-spacing:8px;color:#18181b;font-family:monospace;">${otp}</span>
+              </div>
+
+              <p style="margin:0 0 8px;color:#71717a;font-size:13px;">This code expires in 1 hour. Do not share it with anyone.</p>
+              <p style="margin:0;color:#71717a;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+    return this.sendEmail(to, `Your password reset code — ${APP_NAME}`, html)
+  }
+
+  /**
    * Send a confirmation email when the user changes or resets their password.
    * Only sent when the user has a real email (not @login.local).
    */

@@ -1,12 +1,11 @@
 // ============================================================================
-// FORGOT PASSWORD API
-// Generates reset link via Supabase admin, sends via Resend (not Supabase email).
-// This ensures emails work when Supabase SMTP is not configured.
-// For Login ID users (@login.local), sends to notification_email if set in profile.
+// SEND OTP FOR PASSWORD RESET
+// POST /api/auth/send-otp
+// Generates a 6-digit recovery OTP using admin API and sends it via our email
+// service. User then verifies the code client-side via supabase.auth.verifyOtp.
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { resolveTrustedAppRedirect } from '@/lib/app-url'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { EmailService } from '@/services/email.service'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
@@ -15,7 +14,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(`forgot-password:${getClientIp(request)}`, { ...RATE_LIMITS.api, limit: 10 })
+    const rl = checkRateLimit(`send-otp:${getClientIp(request)}`, { ...RATE_LIMITS.api, limit: 5 })
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 })
     }
@@ -29,37 +28,30 @@ export async function POST(request: NextRequest) {
     // Support Login ID: acme -> acme@login.local
     const email = emailRaw.includes('@') ? emailRaw : `${emailRaw}@login.local`
 
-    // Always route directly to /reset-password — admin.generateLink produces an
-    // implicit-flow (hash-based) recovery link. Routing through /auth/callback
-    // would cause a PKCE verifier mismatch and immediately expire the link.
-    const redirectTo = resolveTrustedAppRedirect(null, request, '/reset-password')
-
     const supabase = createServiceRoleClient()
+
+    // Generate a recovery link — the response includes email_otp (6-digit code)
     const { data, error } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email,
-      options: {
-        redirectTo,
-      },
     })
 
-    if (error) {
-      console.error('[forgot-password] generateLink error:', error.message)
+    if (error || !data) {
+      // Always return ok to avoid user enumeration
+      console.error('[send-otp] generateLink error:', error?.message)
       return NextResponse.json({ ok: true })
     }
 
-    const actionLink =
-      (data as { properties?: { action_link?: string }; action_link?: string })?.properties?.action_link ||
-      (data as { action_link?: string })?.action_link
-
-    if (!actionLink) {
-      console.error('[forgot-password] No action_link in generateLink response')
+    const props = (data as { properties?: { email_otp?: string } })?.properties
+    const otp = props?.email_otp
+    if (!otp) {
+      console.error('[send-otp] No email_otp in generateLink response')
       return NextResponse.json({ ok: true })
     }
 
     const userName = (data as { user?: { user_metadata?: { full_name?: string } } })?.user?.user_metadata?.full_name || 'User'
 
-    // Determine where to send: real email directly, or notification_email for Login ID users
+    // Determine where to send the code
     let sendTo: string | null = null
     if (email.endsWith('@login.local')) {
       const userId = (data as { user?: { id?: string } })?.user?.id
@@ -75,30 +67,24 @@ export async function POST(request: NextRequest) {
         }
       }
       if (!sendTo) {
-        console.warn('[forgot-password] Login ID user has no notification_email set — add it in Profile or ask admin')
+        console.warn('[send-otp] Login ID user has no notification_email — use link method instead')
         return NextResponse.json({ ok: true })
       }
     } else {
       sendTo = email
     }
 
-    if (!sendTo) {
-      return NextResponse.json({ ok: true })
-    }
+    if (!sendTo) return NextResponse.json({ ok: true })
 
-    const sent = await EmailService.sendPasswordResetEmail({
+    await EmailService.sendPasswordResetOtp({
       to: sendTo,
       recipientName: userName,
-      resetLink: actionLink,
-    })
-
-    if (!sent) {
-      console.error('[forgot-password] Resend failed - check RESEND_API_KEY')
-    }
+      otp,
+    }).catch(e => console.error('[send-otp] Email send failed:', e))
 
     return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('[forgot-password] Error:', err)
+    console.error('[send-otp] Error:', err)
     return NextResponse.json({ ok: true })
   }
 }

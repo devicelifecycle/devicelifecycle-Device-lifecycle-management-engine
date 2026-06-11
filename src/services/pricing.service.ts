@@ -550,6 +550,9 @@ export class PricingService {
           purpose: 'buy',
         }))
 
+        // Capture raw model price before any market-consensus overrides (used as Intelligence Pricing)
+        const rawModelPrice = modelResult.success ? round2(modelResult.trade_price ?? modelResult.final_price ?? 0) : 0
+
         if (modelResult.success && (modelResult.trade_price ?? modelResult.final_price) > 0) {
           const adapted = this.adaptModelResultToV2(
             modelResult,
@@ -612,16 +615,37 @@ export class PricingService {
           } catch {
             // non-fatal — model price still valid
           }
+          // Attach raw model price as Intelligence Pricing for UI display
+          if (rawModelPrice > 0) adapted.breakdown.intelligence_price = rawModelPrice
           return adapted
         }
       }
     }
 
-    const formulaResult = await this.calculatePriceV2(normalizedInput, supabase)
-    if (formulaResult.success && formulaResult.trade_price > 0) {
-      return formulaResult
+    // Formula path — also run data-driven model in parallel for Intelligence Pricing display
+    const ddModelForDisplay = PricingModelRegistry.get('data_driven')
+    const [formulaResult, intelligencePrice] = await Promise.all([
+      this.calculatePriceV2(normalizedInput, supabase),
+      ddModelForDisplay
+        ? (async () => {
+            try {
+              const r = await Promise.resolve(ddModelForDisplay.calculate({
+                device_id: normalizedInput.device_id,
+                storage: normalizedInput.storage ?? '128GB',
+                carrier: normalizedInput.carrier ?? 'Unlocked',
+                condition: normalizedInput.condition,
+                issues: normalizedInput.issues,
+                quantity: 1,
+                purpose: 'buy',
+              }))
+              return r.success ? round2(r.trade_price ?? r.final_price ?? 0) : 0
+            } catch { return 0 }
+          })()
+        : Promise.resolve(0),
+    ])
+    if (intelligencePrice > 0 && formulaResult.breakdown) {
+      formulaResult.breakdown.intelligence_price = intelligencePrice
     }
-
     return formulaResult
   }
 

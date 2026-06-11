@@ -69,6 +69,7 @@ interface ItemPrice {
   formula_trade_price?: number
   goRecell_fair_floor_applied?: boolean
   goRecell_fair_floor_price?: number
+  intelligence_price?: number
 }
 
 function mapCondition(c: DeviceCondition): 'excellent' | 'good' | 'fair' | 'broken' {
@@ -207,6 +208,7 @@ export default function NewTradeInPage() {
               formula_trade_price: data.breakdown?.formula_trade_price,
               goRecell_fair_floor_applied: data.breakdown?.goRecell_fair_floor_applied,
               goRecell_fair_floor_price: data.breakdown?.goRecell_fair_floor_price,
+              intelligence_price: data.breakdown?.intelligence_price,
             },
           }))
           return
@@ -914,9 +916,7 @@ export default function NewTradeInPage() {
                                     {price.goRecell_fair_floor_applied && price.formula_trade_price != null ? (
                                       <>
                                         <div className="flex items-center justify-between gap-2">
-                                          <span className="text-slate-600 dark:text-slate-400 font-medium">
-                                            {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
-                                          </span>
+                                          <span className="text-slate-600 dark:text-slate-400 font-medium">System Pricing</span>
                                           <span className="font-mono text-slate-500 dark:text-slate-400 line-through">{formatCurrency(price.formula_trade_price)}</span>
                                         </div>
                                         <div className="flex items-center justify-between gap-2">
@@ -926,12 +926,16 @@ export default function NewTradeInPage() {
                                       </>
                                     ) : (
                                       <div className="flex items-center justify-between gap-2">
-                                        <span className="text-slate-800 dark:text-slate-200 font-semibold">
-                                          {carrierAvg > 0 && goRecell ? '(carr + GoRecell) ÷ 2' : 'GoRecell'}
-                                        </span>
+                                        <span className="text-slate-800 dark:text-slate-200 font-semibold">System Pricing</span>
                                         <span className="font-mono font-bold text-violet-700 dark:text-violet-300">{formatCurrency(price.engine_price)}</span>
                                       </div>
                                     )}
+                                  {price.intelligence_price != null && price.intelligence_price > 0 && (
+                                    <div className="flex items-center justify-between gap-2 border-t border-indigo-200 dark:border-indigo-800 pt-0.5 mt-0.5">
+                                      <span className="text-indigo-700 dark:text-indigo-300 font-semibold">Intelligence Pricing</span>
+                                      <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(price.intelligence_price)}</span>
+                                    </div>
+                                  )}
                                   </div>
                                 </div>
                               )

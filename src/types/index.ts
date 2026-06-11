@@ -298,6 +298,8 @@ export interface PriceCalculationResultV2 {
     goRecell_fair_floor_applied?: boolean;
     /** The floor price that was applied */
     goRecell_fair_floor_price?: number;
+    /** Data-driven model's raw per-unit trade price (always computed for display alongside system pricing) */
+    intelligence_price?: number;
   };
   error?: string;
 }
