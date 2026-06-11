@@ -370,11 +370,14 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         setState({ user: cachedUser, isLoading: true, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(cachedUser) })
         const dest = getDefaultAppPathForRole(cachedUser.role)
         router.replace(dest)
-        // Hard-nav fallback: if Next.js soft navigation stalls (stale chunk, edge
-        // timeout, cookie timing race) force a full page reload after 2.5 s.
-        // The timer fires even after component unmount — if soft nav succeeded it
-        // just re-navigates to an already-loaded page (harmless).
-        setTimeout(() => { if (typeof window !== 'undefined') window.location.assign(dest) }, 2500)
+        // Hard-nav fallback: force full-page reload ONLY if soft navigation stalled
+        // (URL hasn't changed after 2.5 s). Checking the pathname first prevents
+        // an unnecessary reload when router.replace already succeeded.
+        setTimeout(() => {
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith(dest.split('?')[0])) {
+            window.location.assign(dest)
+          }
+        }, 2500)
         // Hydrate full profile in background — updates state without blocking nav
         fetchUser().catch(() => {})
         return
@@ -411,8 +414,12 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         setState({ user: profile, isLoading: true, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(profile) })
         const dest = getDefaultAppPathForRole(profile.role)
         router.replace(dest)
-        // Hard-nav fallback: force full-page reload if soft navigation stalls.
-        setTimeout(() => { if (typeof window !== 'undefined') window.location.assign(dest) }, 2500)
+        // Hard-nav fallback: force full-page reload ONLY if soft navigation stalled.
+        setTimeout(() => {
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith(dest.split('?')[0])) {
+            window.location.assign(dest)
+          }
+        }, 2500)
         return
       }
 
