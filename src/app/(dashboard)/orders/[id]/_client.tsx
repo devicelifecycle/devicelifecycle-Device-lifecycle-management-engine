@@ -2096,6 +2096,12 @@ export default function OrderDetailClient() {
                                   {item.serial_number && `S/N: ${item.serial_number}`}
                                 </p>
                               )}
+                              {item.notes && (() => {
+                                const displayNote = item.notes.replace(/\[Original qty:\s*\d+\]\s*\|?\s*/gi, '').replace(/^\s*\|\s*/, '').trim()
+                                return displayNote ? (
+                                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">{displayNote}</p>
+                                ) : null
+                              })()}
                             </TableCell>
                             <TableCell>{item.quantity}</TableCell>
                             <TableCell>

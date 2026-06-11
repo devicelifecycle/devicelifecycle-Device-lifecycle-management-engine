@@ -486,8 +486,8 @@ export async function POST(request: NextRequest) {
       // quantity=0 rows: DB uses qty=1 with an [Original qty: 0] note; not a hard error
 
       // Brand defaults to 'Unknown' when inference fails — never block the import.
-      // Missing model is the only remaining hard error (nothing to match against catalog).
-      if (!model) errors.push({ row: i + 1, message: 'Model is required' })
+      // Missing model rows are kept and flagged; nothing from the customer file is silently dropped.
+      const missingModelNote = !model ? 'Model not specified in your file' : ''
       // Flag 'Unknown' brand rows so admin can review and correct after import
       const unknownBrandNote = (brand === 'Unknown' || !brand) ? '⚠ Brand unknown — needs admin review' : ''
 
@@ -526,7 +526,14 @@ export async function POST(request: NextRequest) {
         model_number: sanitizeCsvCell(mapped.model_number || rawRow['Model Number'] || ''),
         accessories: sanitizeCsvCell(mapped.accessories || rawRow.accessories || rawRow.Accessories || rawRow['Accessories. Ex., Charger?'] || ''),
         faults: effectiveFaults || undefined,
-        notes: [isExplicitZero ? '[Original qty: 0]' : '', unknownBrandNote, sanitizeCsvCell(mapped.notes || rawRow.notes || rawRow.Notes || '')].filter(Boolean).join(' | '),
+        notes: (() => {
+          // Pre-computed notes from parse step; fallback to fresh detection for direct uploads
+          const rawUploadNotes = typeof rawRow.upload_notes === 'string' ? rawRow.upload_notes.trim() : ''
+          const generatedNotes = rawUploadNotes || [isExplicitZero ? 'Quantity was 0 in your file' : '', missingModelNote].filter(Boolean).join(' | ')
+          // Keep [Original qty: 0] as internal marker for parseItemQty in customer order view
+          const internalQtyMarker = isExplicitZero ? '[Original qty: 0]' : ''
+          return [internalQtyMarker, generatedNotes, unknownBrandNote, sanitizeCsvCell(mapped.notes || rawRow.notes || rawRow.Notes || '')].filter(Boolean).join(' | ')
+        })(),
         raw_condition: rawCondition || undefined,
       })
     }

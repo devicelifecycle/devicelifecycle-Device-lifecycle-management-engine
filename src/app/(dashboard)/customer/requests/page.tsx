@@ -21,6 +21,7 @@ type ParsedRow = {
   quantity: number; unit_price: number | null
   serials: string[]; imeis: string[]
   device_id: string | null; match_status: string
+  upload_notes?: string
 }
 type ParseSummary = {
   total_devices: number; matched: number; unmatched: number
@@ -243,6 +244,7 @@ export default function CustomerRequestsPage() {
       ...(r.device_id ? { device_id: r.device_id } : {}),
       ...(r.imeis.length > 0 ? { imei: r.imeis.join(', ') } : {}),
       ...(r.serials.length > 0 ? { serial_number: r.serials.join(', ') } : {}),
+      ...(r.upload_notes ? { upload_notes: r.upload_notes } : {}),
     }))
     try {
       let firstOrderId: string | undefined; let totalSubmitted = 0

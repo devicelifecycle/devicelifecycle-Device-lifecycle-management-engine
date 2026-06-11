@@ -565,6 +565,8 @@ export type TradeTemplateRow = {
   device_id: string | null
   match_status: 'matched' | 'catalog_matched' | 'not_in_catalog' | 'auto_added'
   row_error?: string
+  /** Upload-time warnings shown to customer and admin (e.g. qty was 0, model missing) */
+  upload_notes?: string
 }
 
 export type TradeTemplateSummary = {
@@ -606,14 +608,18 @@ export async function POST(request: NextRequest) {
       }
       const catalog = await getCatalog(supabase)
       const outputRows: TradeTemplateRow[] = inputRows.map(row => {
-        const device = matchDeviceFromCsv(catalog, row.make, row.model)
+        const rowNotes: string[] = []
+        if (row.quantity === 0) rowNotes.push('Quantity was 0 in your file')
+        if (!row.model) rowNotes.push('Model not specified in your file')
+        const device = row.model ? matchDeviceFromCsv(catalog, row.make, row.model) : null
         return {
-          make: row.make, model: row.model, storage: row.storage,
+          make: row.make || 'Unknown', model: row.model, storage: row.storage,
           condition: normalizeTradeCondition(row.condition),
           quantity: row.quantity, unit_price: null,
           serials: row.serials, imeis: row.imeis,
           device_id: device?.id ?? null,
           match_status: (device ? 'matched' : 'not_in_catalog') as 'matched' | 'catalog_matched' | 'not_in_catalog',
+          ...(rowNotes.length > 0 ? { upload_notes: rowNotes.join(' | ') } : {}),
         }
       })
       const finalRows = await autoAddUnmatched(outputRows)
@@ -921,9 +927,12 @@ export async function POST(request: NextRequest) {
     // Filter out rows with no device info.
     // Also exclude rows where model is a bare number (e.g. "0", "1") with no brand —
     // these are formatting artifacts from Excel cells that held a numeric value.
+    // Rows with a brand but no model, or rows with an IMEI/serial but no model, are
+    // kept and flagged with upload_notes so nothing from the customer file is silently dropped.
     const validRows = parsedRows.filter(r => {
       if (!r.brand && /^\d+$/.test((r.model ?? '').trim())) return false
-      return r.brand || r.model
+      // Keep row if any meaningful identifier is present (brand, model, IMEI, serial)
+      return r.brand || r.model || r.imei || r.serial
     })
     if (validRows.length === 0) {
       return NextResponse.json({
@@ -996,18 +1005,24 @@ export async function POST(request: NextRequest) {
     // ── Match each aggregated row against catalog ─────────────────────────────
     const outputRows: TradeTemplateRow[] = []
     for (const entry of agg.values()) {
-      const device = matchDeviceFromCsv(catalog, entry.make, entry.model)
+      const rowNotes: string[] = []
+      if (entry.quantity === 0) rowNotes.push('Quantity was 0 in your file')
+      if (!entry.model) rowNotes.push('Model not specified in your file')
+      else if (!entry.make) rowNotes.push('Make/brand not specified in your file')
+
+      const device = entry.model ? matchDeviceFromCsv(catalog, entry.make, entry.model) : null
       outputRows.push({
-        make: entry.make,
+        make: entry.make || 'Unknown',
         model: entry.model,
         storage: entry.storage,
         condition: entry.condition,
-        quantity: entry.quantity,
+        quantity: entry.quantity === 0 ? 0 : entry.quantity,
         unit_price: entry.unit_price,
         serials: entry.serials,
         imeis: entry.imeis,
         device_id: device?.id ?? null,
         match_status: (device ? 'matched' : 'not_in_catalog') as 'matched' | 'catalog_matched' | 'not_in_catalog',
+        ...(rowNotes.length > 0 ? { upload_notes: rowNotes.join(' | ') } : {}),
       })
     }
 

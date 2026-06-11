@@ -231,7 +231,7 @@ export default function CustomerOrderDetailPage() {
 
   function stripInternalNotes(notes: string | null | undefined): string {
     if (!notes) return ''
-    return notes.replace(/\[Original qty:\s*\d+\]\s*\|?\s*/gi, '').replace(/^\s*\|\s*/, '').trim()
+    return notes.replace(/\[[^\]]*\]\s*\|?\s*/g, '').replace(/^\s*\|\s*/, '').trim()
   }
 
   const timeline = [
@@ -686,7 +686,12 @@ export default function CustomerOrderDetailPage() {
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">
                           <div>{device}</div>
-                          {itemNote && <div className="text-xs text-muted-foreground mt-0.5">{itemNote}</div>}
+                          {itemNote && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                              <span className="text-xs text-amber-600 dark:text-amber-400">{itemNote}</span>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{item.storage || '—'}</TableCell>
                         <TableCell className="text-sm">
