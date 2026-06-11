@@ -41,12 +41,33 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     let cancelled = false
-
     const supabase = getSupabase()
 
-    // Immediate check: the Supabase client processes the URL hash on creation.
-    // If the session is already established (hash was parsed before this effect ran),
-    // getSession() returns it synchronously from the in-memory cache.
+    // Primary path for email reset links: explicitly parse URL hash and call setSession.
+    // This is more reliable than relying on Supabase client auto-detection because
+    // newer @supabase/ssr versions default to PKCE flow and ignore #access_token hash
+    // fragments entirely — causing the session to never be detected.
+    const hash = window.location.hash.slice(1)
+    if (hash) {
+      const params = new URLSearchParams(hash)
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      const tokenType = params.get('type')
+      if (tokenType === 'recovery' && accessToken && refreshToken) {
+        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then((res: { data: { session: import('@supabase/supabase-js').Session | null }; error: import('@supabase/supabase-js').AuthError | null }) => {
+            if (cancelled) return
+            if (res.data.session && !res.error) {
+              setSessionState('valid')
+              // Remove tokens from URL bar — they're in storage now
+              window.history.replaceState(null, '', window.location.pathname)
+            }
+            // If setSession fails, fall through to event-based detection below
+          })
+      }
+    }
+
+    // Fallback: session already in storage (OTP path) or Supabase auto-detected hash
     supabase.auth.getSession().then(
       (res: Awaited<ReturnType<typeof supabase.auth.getSession>>) => {
         if (cancelled) return
@@ -63,27 +84,22 @@ export default function ResetPasswordPage() {
         } else if (event === 'SIGNED_IN' && session) {
           setSessionState('valid')
         } else if (event === 'INITIAL_SESSION') {
-          if (session) {
-            setSessionState('valid')
-          }
-          // If INITIAL_SESSION fires with no session, wait for PASSWORD_RECOVERY
-          // (which fires slightly after for recovery links)
+          if (session) setSessionState('valid')
         }
       }
     )
 
-    // Fallback: if no auth event resolves in 20 s (slow mobile network, no recovery token),
-    // mark the session as invalid and redirect to forgot-password.
+    // Fallback: if nothing resolves in 8 s, mark invalid and redirect.
     const fallbackTimer = window.setTimeout(() => {
       if (!cancelled) setSessionState(prev => prev === 'checking' ? 'invalid' : prev)
-    }, 20000)
+    }, 8000)
 
     return () => {
       cancelled = true
       subscription.unsubscribe()
       window.clearTimeout(fallbackTimer)
     }
-  }, []) // intentional: runs once on mount only — supabase client is stable
+  }, []) // intentional: runs once on mount only
 
   // Redirect if session check resolves as invalid
   useEffect(() => {
