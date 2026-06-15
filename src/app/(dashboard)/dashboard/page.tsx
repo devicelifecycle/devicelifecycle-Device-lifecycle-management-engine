@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -35,6 +35,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomerDashboard } from '@/hooks/useCustomerDashboard'
 import { useDashboardCounts } from '@/hooks/useDashboardCounts'
+import { useOrderAnalytics } from '@/hooks/useOrderAnalytics'
 import { useQuery } from '@tanstack/react-query'
 import type { VendorBid, Order } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -43,6 +44,140 @@ import { AnimatedCounter } from '@/components/ui/motion'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { CUSTOMER_STATUS_CONFIG, ORDER_STATUS_CONFIG } from '@/lib/constants'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+
+function formatMonthLabel(month: string): string {
+  const [y, m] = month.split('-')
+  return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+}
+
+function MonthlyPerformanceSection({ isDark }: { isDark: boolean }) {
+  const [range, setRange] = useState<'12m' | 'all'>('12m')
+  const { data: analytics, isLoading } = useOrderAnalytics()
+
+  const monthly = analytics?.monthly ?? []
+  const allTime = analytics?.all_time
+  const chartData = (range === '12m' ? monthly.slice(-12) : monthly).map(p => ({
+    label: formatMonthLabel(p.month),
+    orders: p.order_count,
+    value: p.total_value,
+  }))
+
+  const tooltipStyle = {
+    background: isDark ? 'rgba(18,14,12,0.95)' : '#fff',
+    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e7e5e4',
+    borderRadius: '14px',
+    color: isDark ? '#f5f5f4' : '#1c1917',
+  }
+  const tickStyle = { fill: isDark ? '#a8a29e' : '#78716c', fontSize: 11 }
+  const gridStroke = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold text-foreground">Monthly Performance</h2>
+          <p className="text-sm text-muted-foreground mt-1">Order volume and value, grouped by month.</p>
+        </div>
+        <div className="flex items-center gap-1 rounded-xl border border-border dark:border-white/10 p-1">
+          <Button
+            variant={range === '12m' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 px-3 text-xs rounded-lg"
+            onClick={() => setRange('12m')}
+          >
+            Last 12 months
+          </Button>
+          <Button
+            variant={range === 'all' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 px-3 text-xs rounded-lg"
+            onClick={() => setRange('all')}
+          >
+            All time
+          </Button>
+        </div>
+      </div>
+
+      {/* All-time summary tiles */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="metric-tile p-5">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">All-Time Orders</p>
+          <div className="mt-2 text-3xl font-semibold text-foreground">
+            {isLoading ? '—' : (allTime?.total_orders ?? 0).toLocaleString()}
+          </div>
+        </div>
+        <div className="metric-tile p-5">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">All-Time Value</p>
+          <div className="mt-2 text-3xl font-semibold text-foreground">
+            {isLoading ? '—' : formatCurrency(allTime?.total_value ?? 0)}
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
+          <CardHeader>
+            <CardTitle className="text-xl text-foreground">Orders by Month</CardTitle>
+            <CardDescription className="text-muted-foreground">Non-cancelled orders per calendar month.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[240px]">
+            {isLoading ? (
+              <div className="h-full animate-pulse rounded-2xl bg-muted dark:bg-white/[0.04]" />
+            ) : chartData.length === 0 ? (
+              <p className="pt-16 text-center text-sm text-muted-foreground">No orders yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
+                  <YAxis tick={tickStyle} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [v, 'Orders']} />
+                  <Bar dataKey="orders" fill="#d17843" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
+          <CardHeader>
+            <CardTitle className="text-xl text-foreground">Order Value by Month</CardTitle>
+            <CardDescription className="text-muted-foreground">Total order value per calendar month.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[240px]">
+            {isLoading ? (
+              <div className="h-full animate-pulse rounded-2xl bg-muted dark:bg-white/[0.04]" />
+            ) : chartData.length === 0 ? (
+              <p className="pt-16 text-center text-sm text-muted-foreground">No order value yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="valueFill" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#6ec6b8" stopOpacity={0.5} />
+                      <stop offset="100%" stopColor="#6ec6b8" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={tickStyle}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`}
+                  />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Value']} />
+                  <Area type="monotone" dataKey="value" stroke="#6ec6b8" strokeWidth={2.5} fill="url(#valueFill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  )
+}
 
 const PIPELINE_COLORS = ['#f1d7af', '#d17843', '#6ec6b8', '#8da8d8', '#d95f5f', '#f0c36d']
 
@@ -278,6 +413,8 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           </CardContent>
         </Card>
       </section>
+
+      <MonthlyPerformanceSection isDark={isDark} />
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
