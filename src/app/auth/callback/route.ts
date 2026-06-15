@@ -110,13 +110,20 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Generic no-code case: also try to recover hash-fragment sessions for non-recovery flows
+  // Generic no-code case: also try to recover hash-fragment sessions for non-recovery flows.
+  // JSON.stringify does not HTML-escape < > & so we escape them to their Unicode escapes to
+  // prevent a </script> inside the string from breaking out of the script block (XSS).
+  const safeNextJson = JSON.stringify(safeNext)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+
   return new NextResponse(
     `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Redirecting…</title>
 <script>
 (function(){
   var h = window.location.hash;
-  var next = ${JSON.stringify(safeNext)};
+  var next = ${safeNextJson};
   if (h && h.includes('access_token')) {
     window.location.replace(next + h);
   } else {

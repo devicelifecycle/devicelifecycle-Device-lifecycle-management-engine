@@ -220,10 +220,11 @@ function MfaCard() {
               Scan this QR code with Google Authenticator, Authy, or any TOTP app, then enter the 6-digit code below.
             </p>
             <div className="flex justify-center">
-              {/* qr_code is an SVG string from Supabase — force it to fill the box */}
-              <div
-                className="h-48 w-48 rounded-lg border p-2 bg-white overflow-hidden [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
-                dangerouslySetInnerHTML={{ __html: qrCode }}
+              {/* Load SVG as a data URI so browser sandboxes any scripts inside it */}
+              <img
+                src={`data:image/svg+xml,${encodeURIComponent(qrCode)}`}
+                alt="TOTP QR code — scan with your authenticator app"
+                className="h-48 w-48 rounded-lg border p-2 bg-white"
               />
             </div>
             <div className="rounded-lg bg-muted px-4 py-3">
