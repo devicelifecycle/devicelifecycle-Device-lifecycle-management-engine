@@ -69,7 +69,7 @@ export default function CustomersPage() {
   const debouncedSearch = useDebounce(search)
   const organizationId = searchParams.get('organization_id') || undefined
 
-  const { customers, total, isLoading, totalPages, remove, isDeleting, refetch } = useCustomers({
+  const { customers, total, isLoading, error, totalPages, remove, isDeleting, refetch } = useCustomers({
     search: debouncedSearch,
     page,
     organization_id: organizationId,
@@ -214,6 +214,13 @@ export default function CustomersPage() {
               {Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="h-16 rounded-[1rem] bg-muted dark:bg-white/[0.04] animate-pulse" />
               ))}
+            </div>
+          ) : error ? (
+            <div className="rounded-[1.6rem] border border-dashed border-destructive/40 bg-destructive/5 px-6 py-16 text-center">
+              <Users className="mx-auto h-10 w-10 text-destructive/60" />
+              <p className="mt-4 text-lg font-semibold text-destructive">Failed to load customers</p>
+              <p className="mt-2 text-sm text-muted-foreground">{error instanceof Error ? error.message : 'An unexpected error occurred.'}</p>
+              <Button variant="outline" className="mt-5" onClick={() => refetch()}>Retry</Button>
             </div>
           ) : customers.length === 0 ? (
             <div className="rounded-[1.6rem] border border-dashed border-border dark:border-white/10 bg-muted/30 dark:bg-white/[0.025] px-6 py-16 text-center">

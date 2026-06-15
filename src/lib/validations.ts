@@ -241,7 +241,7 @@ export const updateDeviceSchema = createDeviceSchema.partial()
 // ============================================================================
 
 export const orderItemSchema = z.object({
-  device_id: z.string().uuid(),
+  device_id: z.string().uuid().optional().nullable(),
   quantity: z.coerce.number().min(1, 'Quantity must be at least 1').max(100000, 'Quantity too large'),
   storage: z.string().min(1, 'Storage is required'),
   color: z.string().optional(),

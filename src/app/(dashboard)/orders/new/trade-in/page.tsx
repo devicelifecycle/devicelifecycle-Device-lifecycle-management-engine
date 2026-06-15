@@ -411,19 +411,22 @@ export default function NewTradeInPage() {
       orderItems = rows.map(({ _row, ...r }) => r)
     } else {
       if (items.length === 0) { toast.error('Please add at least one item'); return }
-      const invalidItems = items.filter(i => !i.device_id)
-      if (invalidItems.length > 0) {
-        toast.error('Please select a device for all items')
-        return
-      }
-      orderItems = items.map((i, idx) => ({
-        device_id: i.device_id,
-        quantity: i.quantity,
-        storage: i.storage || '128GB',
-        condition: i.condition,
-        notes: i.notes,
-        ...(itemPrices[idx]?.engine_price > 0 ? { quoted_price: getFinalPrice(idx) } : {}),
-      }))
+      orderItems = items.map((i, idx) => {
+        // When a device was typed but not found in the catalog, preserve the typed
+        // name in notes so the COE team knows what device the customer intended.
+        const notInCatalogNote = !i.device_id && deviceSearches[idx]
+          ? `Not in catalog: ${deviceSearches[idx]}`
+          : ''
+        const combinedNotes = [notInCatalogNote, i.notes].filter(Boolean).join(' | ')
+        return {
+          device_id: i.device_id || null,
+          quantity: i.quantity,
+          storage: i.storage || '128GB',
+          condition: i.condition,
+          notes: combinedNotes || undefined,
+          ...(itemPrices[idx]?.engine_price > 0 ? { quoted_price: getFinalPrice(idx) } : {}),
+        }
+      })
     }
 
     submittedRef.current = true

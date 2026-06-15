@@ -17,10 +17,12 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createMiddlewareSupabaseClient } from '@/lib/supabase/middleware'
 
 // Auth pages — served to guests only; authenticated users are redirected to dashboard
-const AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password']
+const AUTH_PATHS = ['/login', '/register', '/forgot-password']
 
-// Public pages — accessible without authentication (no redirect either way)
-const PUBLIC_PATHS = ['/']
+// Public pages — accessible to anyone, authenticated or not (no redirect either way).
+// /reset-password must stay here: users click recovery email links regardless of
+// whether they already have an active session in the browser.
+const PUBLIC_PATHS = ['/', '/reset-password']
 
 function isAuthPath(pathname: string): boolean {
   return AUTH_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
