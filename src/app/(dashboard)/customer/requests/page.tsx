@@ -242,8 +242,8 @@ export default function CustomerRequestsPage() {
       make: r.make, model: r.model, storage: r.storage || '',
       condition: r.condition || 'good', quantity: String(r.quantity),
       ...(r.device_id ? { device_id: r.device_id } : {}),
-      ...(r.imeis.length > 0 ? { imei: r.imeis.join(', ') } : {}),
-      ...(r.serials.length > 0 ? { serial_number: r.serials.join(', ') } : {}),
+      ...(r.imeis.length > 0 ? { imei: r.imeis[0] } : {}),
+      ...(r.serials.length > 0 ? { serial_number: r.serials[0] } : {}),
       ...(r.upload_notes ? { upload_notes: r.upload_notes } : {}),
     }))
     try {

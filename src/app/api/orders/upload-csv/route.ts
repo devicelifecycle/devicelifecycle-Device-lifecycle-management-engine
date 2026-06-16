@@ -683,9 +683,9 @@ export async function POST(request: NextRequest) {
         notes: [deviceNameTag, row.notes, row.faults].filter(Boolean).join(' | ') || null,
       }
 
-      // Add extended fields if present
-      if (row.imei) item.imei = row.imei
-      if (row.serial_number) item.serial_number = row.serial_number
+      // Add extended fields if present — enforce column length limits
+      if (row.imei) item.imei = String(row.imei).slice(0, 20)
+      if (row.serial_number) item.serial_number = String(row.serial_number).slice(0, 100)
       if (row.colour) item.colour = row.colour
       if (row.cpu) item.cpu = row.cpu
       if (row.ram) item.ram = row.ram

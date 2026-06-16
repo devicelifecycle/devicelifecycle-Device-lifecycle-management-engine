@@ -678,7 +678,7 @@ export default function NewOrderPage() {
           storage: r.storage || '',
           notes: r.notes || '',
           order_type: inferredOrderType,
-          serial_number: [...(r.imeis || []), ...(r.serials || [])].join(', '),
+          serial_number: ([...(r.imeis || []), ...(r.serials || [])][0] ?? ''),
           color: r.color || '',
           device_id: r.device_id || null,
           match_status: r.match_status || 'unmatched',
