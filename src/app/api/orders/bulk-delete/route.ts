@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        if (!['draft', 'cancelled'].includes(order.status)) {
+        if (!['draft', 'cancelled', 'rejected'].includes(order.status)) {
           results.push({ id: orderId, success: false, error: `Cannot delete order in ${order.status} status` })
           continue
         }

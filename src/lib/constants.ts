@@ -279,10 +279,10 @@ export const USER_ROLE_CONFIG: Record<UserRole, {
 
 export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   // ── Common ────────────────────────────────────────────────────────────────
-  draft:              ['submitted', 'cancelled'],
-  submitted:          ['quoted', 'sourcing', 'cancelled'],
+  draft:              ['submitted', 'cancelled', 'rejected'],
+  submitted:          ['quoted', 'sourcing', 'cancelled', 'rejected'],
   quoted:             ['accepted', 'rejected'],
-  accepted:           ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled', 'ready_to_ship'],
+  accepted:           ['sourcing', 'sourced', 'shipped_to_coe', 'cancelled', 'ready_to_ship', 'rejected'],
   rejected:           [], // Terminal
 
   // ── CPO sourcing path ─────────────────────────────────────────────────────

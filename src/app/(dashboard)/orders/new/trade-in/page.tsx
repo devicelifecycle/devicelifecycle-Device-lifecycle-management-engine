@@ -359,7 +359,10 @@ export default function NewTradeInPage() {
         quantity: String(r.quantity || 1),
         condition: r.condition || 'good',
         storage: r.storage || '',
-        notes: r.serials?.length ? `Serials: ${r.serials.slice(0, 5).join(', ')}${r.serials.length > 5 ? '…' : ''}` : '',
+        notes: [
+          r.serials?.length ? `Serials: ${r.serials.slice(0, 5).join(', ')}${r.serials.length > 5 ? '…' : ''}` : '',
+          r.imeis?.length ? `IMEIs: ${r.imeis.slice(0, 5).join(', ')}${r.imeis.length > 5 ? '…' : ''}` : '',
+        ].filter(Boolean).join(' | '),
         device_id: r.device_id || null,
         match_status: r.match_status || undefined,
       }))
@@ -402,13 +405,22 @@ export default function NewTradeInPage() {
           _row: row,
         }
       })
-      const invalid = rows.filter(r => !r.device_id)
-      if (invalid.length > 0) {
-        const examples = invalid.slice(0, 3).map(r => `"${(r as { _row?: CSVRow })._row?.device_make || '?'} ${(r as { _row?: CSVRow })._row?.device_model || '?'}"`).join(', ')
-        toast.error(`Could not match ${invalid.length} row(s): ${examples}. Use exact make/model from catalog (e.g. Apple, iPhone 15 Pro).`)
-        return
-      }
-      orderItems = rows.map(({ _row, ...r }) => r)
+      // Don't block on unmatched rows — include them with device_id: null and a note
+      // so the COE team can review. autoAddUnmatched in the parser already tried to
+      // add them; if it still has no id (network error, empty make/model), we preserve
+      // whatever info we have and let the order proceed.
+      orderItems = rows.map(({ _row, ...r }) => {
+        if (!r.device_id) {
+          const deviceLabel = `${_row?.device_make || ''} ${_row?.device_model || ''}`.trim()
+          const catalogNote = deviceLabel ? `Not in catalog: ${deviceLabel}` : 'Unknown device'
+          return {
+            ...r,
+            device_id: null,
+            notes: [catalogNote, r.notes].filter(Boolean).join(' | '),
+          }
+        }
+        return r
+      })
     } else {
       if (items.length === 0) { toast.error('Please add at least one item'); return }
       orderItems = items.map((i, idx) => {

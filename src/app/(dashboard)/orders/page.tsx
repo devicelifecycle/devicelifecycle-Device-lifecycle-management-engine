@@ -110,7 +110,7 @@ export default function OrdersPage() {
   const hasFilters = statusFilter || typeFilter || customerIdFromUrl || vendorIdFromUrl
   const allSelected = orders.length > 0 && orders.every((order) => selectedIds.has(order.id))
   const someSelected = selectedIds.size > 0
-  const deletableSelectedCount = orders.filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled'].includes(order.status)).length
+  const deletableSelectedCount = orders.filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled', 'rejected'].includes(order.status)).length
 
   const stats = useMemo(() => {
     const active = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage', 'qc_complete', 'mismatch_review', 'payment_processing'].includes(order.status)).length
@@ -266,7 +266,7 @@ export default function OrdersPage() {
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return
     const deletableIds = orders
-      .filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled'].includes(order.status))
+      .filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled', 'rejected'].includes(order.status))
       .map((order) => order.id)
     if (deletableIds.length === 0) {
       toast.error('Only draft or cancelled orders can be deleted.')
