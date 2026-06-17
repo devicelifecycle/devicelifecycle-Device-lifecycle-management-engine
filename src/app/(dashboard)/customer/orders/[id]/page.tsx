@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -69,6 +69,16 @@ export default function CustomerOrderDetailPage() {
   const [shippingNotes, setShippingNotes] = useState('')
   const [isSubmittingShipment, setIsSubmittingShipment] = useState(false)
   const [exceptionProcessingId, setExceptionProcessingId] = useState<string | null>(null)
+  // Pending triage exceptions (fetched separately — triage_results.id, not order_items.id)
+  const [pendingExceptions, setPendingExceptions] = useState<Array<{id: string; imei_record?: Record<string, unknown> | null}>>([])
+
+  useEffect(() => {
+    if (!orderId || order?.status !== 'mismatch_review') { setPendingExceptions([]); return }
+    fetch(`/api/orders/${orderId}/exceptions`)
+      .then(r => r.json())
+      .then(d => setPendingExceptions(d.data || []))
+      .catch(() => setPendingExceptions([]))
+  }, [orderId, order?.status])
 
   async function handleQuoteAction(action: 'accepted' | 'rejected') {
     if (!order) return
@@ -164,12 +174,19 @@ export default function CustomerOrderDetailPage() {
         throw new Error(err.error || 'Failed to update device condition')
       }
       toast.success(approved ? 'Device condition approved' : 'Device condition rejected')
+      // Remove resolved exception from local state immediately
+      setPendingExceptions(prev => prev.filter(e => e.id !== triageResultId))
       refetch?.()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update device condition')
     } finally {
       setExceptionProcessingId(null)
     }
+  }
+
+  // Map order_item.id → pending triage_result for that item (via imei_record.order_item_id)
+  function getExceptionForItem(itemId: string) {
+    return pendingExceptions.find(e => e.imei_record?.['order_item_id'] === itemId) ?? null
   }
 
   if (isLoading) {
@@ -503,7 +520,9 @@ export default function CustomerOrderDetailPage() {
               ?.filter(i => i.actual_condition && i.claimed_condition && i.actual_condition !== i.claimed_condition)
               .map(item => {
                 const device = item.device ? `${item.device.make} ${item.device.model}` : 'Device'
-                const isProcessing = exceptionProcessingId === item.id
+                const pendingEx = getExceptionForItem(item.id)
+                const isProcessing = exceptionProcessingId === (pendingEx?.id ?? item.id)
+                const isResolved = !pendingEx
                 return (
                   <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white dark:bg-slate-900 p-3">
                     <div>
@@ -518,16 +537,22 @@ export default function CustomerOrderDetailPage() {
                       </p>
                     </div>
                     <div className="flex gap-2 shrink-0">
-                      <Button size="sm" variant="success" disabled={isProcessing}
-                        onClick={() => handleExceptionDecision(item.id, true)}>
-                        {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
-                        <span className="ml-1.5">Approve</span>
-                      </Button>
-                      <Button size="sm" variant="destructive" disabled={isProcessing}
-                        onClick={() => handleExceptionDecision(item.id, false)}>
-                        <ThumbsDown className="h-3.5 w-3.5" />
-                        <span className="ml-1.5">Dispute</span>
-                      </Button>
+                      {isResolved ? (
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Reviewed</span>
+                      ) : (
+                        <>
+                          <Button size="sm" variant="success" disabled={isProcessing}
+                            onClick={() => pendingEx && handleExceptionDecision(pendingEx.id, true)}>
+                            {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
+                            <span className="ml-1.5">Approve</span>
+                          </Button>
+                          <Button size="sm" variant="destructive" disabled={isProcessing}
+                            onClick={() => pendingEx && handleExceptionDecision(pendingEx.id, false)}>
+                            <ThumbsDown className="h-3.5 w-3.5" />
+                            <span className="ml-1.5">Dispute</span>
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )
@@ -539,7 +564,7 @@ export default function CustomerOrderDetailPage() {
               <Button
                 variant="success"
                 className="gap-2"
-                disabled={transitioning || hasMismatchItems}
+                disabled={transitioning || pendingExceptions.length > 0}
                 onClick={() => handleTransition('payment_processing', 'Customer approved revised quote after mismatch review')}
               >
                 {transitioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
