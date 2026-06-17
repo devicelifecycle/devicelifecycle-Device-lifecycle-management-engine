@@ -26,6 +26,10 @@ export async function GET(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (['customer', 'vendor'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const format = (request.nextUrl.searchParams.get('format') || 'excel').toLowerCase()
     const conditionParam = request.nextUrl.searchParams.get('condition')
     const condition = conditionParam === 'excellent' || conditionParam === 'good' || conditionParam === 'fair' || conditionParam === 'broken'

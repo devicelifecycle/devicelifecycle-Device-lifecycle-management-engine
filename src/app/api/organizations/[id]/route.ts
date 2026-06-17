@@ -49,6 +49,10 @@ export async function DELETE(
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden — admin role required' }, { status: 403 })
+    }
+
     const { error } = await supabase
       .from('organizations')
       .delete()
@@ -81,7 +85,10 @@ export async function PATCH(
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Check admin role
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     const body = await request.json()
     const validationResult = updateOrganizationSchema.safeParse(body)
     if (!validationResult.success) {

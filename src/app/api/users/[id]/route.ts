@@ -136,6 +136,10 @@ export async function DELETE(
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden — admin role required' }, { status: 403 })
+    }
+
     // Prevent self-deletion
     if (targetId === authUser.id) {
       return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })

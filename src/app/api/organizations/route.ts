@@ -54,7 +54,10 @@ export async function POST(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Check admin role
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     const body = await request.json()
 
     // Validate input

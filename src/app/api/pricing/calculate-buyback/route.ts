@@ -185,6 +185,10 @@ export async function POST(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (['customer', 'vendor'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const items = Array.isArray(body.items) ? body.items : body.items ? [body.items] : []
     const validMonths = Math.min(Math.max(parseInt(body.valid_months || '24', 10) || 24, 1), 60)

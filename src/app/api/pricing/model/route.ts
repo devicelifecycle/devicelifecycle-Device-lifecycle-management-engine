@@ -32,6 +32,10 @@ export async function GET() {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (['customer', 'vendor'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const models = PricingModelRegistry.list().map(m => ({
       id: m.id,
       name: m.name,
@@ -50,6 +54,10 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
+
+    if (['customer', 'vendor'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const body = await request.json()
     const validation = modelCalculateSchema.safeParse(body)

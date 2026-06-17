@@ -18,7 +18,10 @@ export async function PATCH(
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Check admin role
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     const body = await request.json()
     const validationResult = updatePricingTableSchema.safeParse(body)
     if (!validationResult.success) {
@@ -47,7 +50,10 @@ export async function DELETE(
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Check admin role
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     await PricingService.deletePricingEntry((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {

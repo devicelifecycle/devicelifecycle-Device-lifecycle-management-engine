@@ -22,7 +22,17 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid vendor ID format' }, { status: 400 })
     }
 
-    // Only internal roles can view vendor details
+    if (['customer'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (profile.role === 'vendor' && profile.organization_id) {
+      const vendor = await VendorService.getVendorById((await params).id)
+      if (!vendor || vendor.organization_id !== profile.organization_id) {
+        return NextResponse.json({ error: 'Forbidden — you can only view your own vendor profile' }, { status: 403 })
+      }
+      return NextResponse.json(vendor)
+    }
+
     const vendor = await VendorService.getVendorById((await params).id)
     if (!vendor) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
@@ -47,7 +57,10 @@ export async function PATCH(
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Only admin/coe_manager/sales can update vendors
+    if (!['admin', 'coe_manager', 'sales'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin, COE manager, or sales role required' }, { status: 403 })
+    }
+
     const body = await request.json()
 
     // Validate input
@@ -79,7 +92,10 @@ export async function DELETE(
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Only admin/coe_manager can delete vendors
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     await VendorService.deleteVendor((await params).id)
     return NextResponse.json({ success: true })
   } catch (error) {

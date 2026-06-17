@@ -39,9 +39,13 @@ export async function GET(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || undefined
-    const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)
+    const isInternal = true
     const organization_id = isInternal ? undefined : profile.organization_id ?? undefined
 
     const result = await CustomerService.getCustomers({

@@ -14,6 +14,10 @@ export async function POST() {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     const { data: deleted, error } = await supabase
       .from('competitor_prices')
       .delete()

@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (['customer', 'vendor'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const hoursParam = parseInt(request.nextUrl.searchParams.get('hours') || '24', 10)
     const hours = Math.max(1, Math.min(hoursParam, 720)) // clamp 1h–30d
     const format = request.nextUrl.searchParams.get('format') || 'json'

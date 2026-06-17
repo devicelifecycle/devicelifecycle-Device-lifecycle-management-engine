@@ -25,7 +25,10 @@ export async function POST(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Only internal roles
+    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — internal role required' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { order_ids, to_status, notes } = body
 

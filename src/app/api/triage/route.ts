@@ -28,6 +28,10 @@ export async function GET(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (!['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — COE or admin role required' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
 
@@ -61,6 +65,10 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
+
+    if (!['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — COE or admin role required' }, { status: 403 })
+    }
 
     const body = await request.json()
 

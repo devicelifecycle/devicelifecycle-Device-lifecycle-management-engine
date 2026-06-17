@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Only internal roles can view competitor prices
+    if (['customer', 'vendor'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const deviceId = request.nextUrl.searchParams.get('device_id') || undefined
     const search = request.nextUrl.searchParams.get('search')?.trim() || undefined
     const conditionParam = request.nextUrl.searchParams.get('condition')
