@@ -11,6 +11,10 @@ export async function GET() {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const twilioConfigured = EmailService.isTwilioConfigured()
 
     return NextResponse.json({
