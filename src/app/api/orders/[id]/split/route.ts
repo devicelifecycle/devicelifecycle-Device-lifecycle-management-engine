@@ -57,6 +57,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin and coe_manager can split orders
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     const body = await request.json()
 
     // Validate request body
@@ -96,6 +100,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin and coe_manager can undo splits
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     await OrderSplitService.undoSplit((await params).id, authUser.id)
 
     return NextResponse.json({ message: 'Order split has been undone' })

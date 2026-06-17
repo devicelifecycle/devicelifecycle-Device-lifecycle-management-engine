@@ -27,6 +27,10 @@ export async function PATCH(
     const { supabase, authUser, profile, effectiveRole } = auth
 
     // Only admin and coe_manager can accept/reject bids
+    if (!['admin', 'coe_manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin or COE manager role required' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { status, cpo_markup_percent } = body
 

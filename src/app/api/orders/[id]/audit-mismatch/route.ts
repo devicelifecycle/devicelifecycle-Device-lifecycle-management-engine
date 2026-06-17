@@ -11,6 +11,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — internal role required' }, { status: 403 })
+    }
+
     const logs = await AuditService.getEntityHistory('order', (await params).id)
     const mismatchLogs = logs.filter((log) => {
       if (log.action !== 'price_change') return false

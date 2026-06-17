@@ -11,6 +11,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
+    if (!['admin', 'coe_manager', 'sales'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin, COE manager, or sales role required' }, { status: 403 })
+    }
+
     const orderId = (await params).id
 
     const { data: order } = await supabase
