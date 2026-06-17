@@ -123,14 +123,11 @@ export class NotificationService {
 
     // If it's an email notification, send via Resend
     if (input.type === 'email' && input.metadata?.email) {
-      const sent = await EmailService.sendEmail(
+      await EmailService.sendEmail(
         input.metadata.email as string,
         input.title,
         input.message
       )
-      if (sent) {
-        await this.markAsSent(data.id)
-      }
     }
 
     return data as Notification
@@ -173,13 +170,6 @@ export class NotificationService {
     if (error) {
       throw new Error(error.message)
     }
-  }
-
-  /**
-   * Mark notification as sent
-   */
-  private static async markAsSent(_id: string): Promise<void> {
-    // Email was sent via Resend; in-app notification record exists
   }
 
   // ============================================================================

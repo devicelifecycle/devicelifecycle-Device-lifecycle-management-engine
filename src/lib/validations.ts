@@ -328,7 +328,9 @@ export const bulkUpdateOrderItemBuybackSchema = z.object({
         .union([z.coerce.number().min(0).max(100000).finite(), z.null()])
         .optional(),
       buyback_condition: z.enum(DEVICE_CONDITION_VALUES).nullable().optional(),
-      buyback_valid_until: z.string().optional().nullable(),
+      buyback_valid_until: z.string()
+        .refine(v => !v || !Number.isNaN(Date.parse(v)), { message: 'buyback_valid_until must be a valid date (YYYY-MM-DD)' })
+        .optional().nullable(),
     })
   ).min(1, 'At least one item is required')
 })

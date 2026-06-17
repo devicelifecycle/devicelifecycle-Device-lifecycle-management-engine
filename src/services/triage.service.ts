@@ -427,14 +427,42 @@ export class TriageService {
       updatePayload.exception_approved_at = new Date().toISOString()
     }
 
-    const { data, error } = await supabase
-      .from('triage_results')
-      .update(updatePayload)
-      .eq('id', triageResultId)
-      .select()
-      .single()
+    // Guard against concurrent approvals. For final decisions (non-customer-dispute),
+    // only update rows where exception_approved_at IS NULL — if a concurrent request
+    // already committed the decision, 0 rows match and we return the existing result
+    // without resending notifications (prevents duplicate emails to the customer).
+    let updateResult: { data: TriageResult | null; error: { code?: string; message: string } | null }
+    if (isCustomerDispute) {
+      updateResult = await supabase
+        .from('triage_results')
+        .update(updatePayload as never)
+        .eq('id', triageResultId)
+        .select()
+        .single() as unknown as typeof updateResult
+    } else {
+      updateResult = await supabase
+        .from('triage_results')
+        .update(updatePayload as never)
+        .eq('id', triageResultId)
+        .is('exception_approved_at', null)
+        .select()
+        .single() as unknown as typeof updateResult
+    }
+
+    const { data, error } = updateResult
 
     if (error) {
+      // PGRST116 = 0 rows matched — concurrent request already processed this exception.
+      // Return the committed row without resending notifications.
+      if ((error as { code?: string }).code === 'PGRST116') {
+        const { data: existing, error: fetchErr } = await supabase
+          .from('triage_results')
+          .select()
+          .eq('id', triageResultId)
+          .single()
+        if (fetchErr) throw new Error(fetchErr.message)
+        return existing as TriageResult
+      }
       throw new Error(error.message)
     }
 

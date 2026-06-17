@@ -66,7 +66,9 @@ export class SLAService {
     hoursRemaining: number | null
     slaRule: SLARule | null
   }> {
-    const supabase = await createServerSupabaseClient()
+    // Use service-role: this is called from cron context (no user session), and
+    // sla_rules RLS requires auth.uid() — anon client would return 0 rows silently.
+    const supabase = createServiceRoleClient()
 
     // Get applicable SLA rule
     const { data: slaRule } = await supabase
@@ -311,7 +313,9 @@ export class SLAService {
     const hoursSinceQuoted = (now.getTime() - quotedAt.getTime()) / (1000 * 60 * 60)
     let sent = 0
 
-    const supabase = await createServerSupabaseClient()
+    // Use service-role: cron context has no session; customers/notifications/users
+    // tables all have RLS that requires auth.uid() — anon client silently returns nothing.
+    const supabase = createServiceRoleClient()
 
     for (const intervalHours of CUSTOMER_REMINDER_INTERVALS_HOURS) {
       if (hoursSinceQuoted < intervalHours) continue

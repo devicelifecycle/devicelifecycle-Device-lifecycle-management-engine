@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getAppPath } from '@/lib/app-url'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
+import { AuditService } from '@/services/audit.service'
 import { PRICE_CHANGE_NOTIFICATION_THRESHOLD } from '@/lib/constants'
 import { readServerEnv } from '@/lib/server-env'
 import { timingSafeEqual } from 'crypto'
@@ -35,14 +36,13 @@ function getServiceSupabase() {
 export async function GET(request: NextRequest) {
   try {
     const cronSecret = readServerEnv('CRON_SECRET')
-
-    // Verify cron secret
-    if (cronSecret) {
-      const authHeader = request.headers.get('authorization') || ''
-      const expected = `Bearer ${cronSecret}`
-      if (!safeCompare(authHeader, expected)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+    if (!cronSecret) {
+      console.error('CRON_SECRET not set — quote-price-check cron disabled')
+      return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
+    }
+    const authHeader = request.headers.get('authorization') || ''
+    if (!safeCompare(authHeader, `Bearer ${cronSecret}`)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const supabase = getServiceSupabase()
@@ -78,11 +78,22 @@ export async function GET(request: NextRequest) {
 
       if (expiresAt && now > expiresAt) {
         // Auto-expire: move to rejected with note
+        const expiryNote = `Auto-expired: quote was valid for 30 days (quoted ${order.quoted_at}, expired ${expiresAt.toISOString()})`
         await supabase.from('orders').update({
           status: 'rejected',
-          internal_notes: `Auto-expired: quote was valid for 30 days (quoted ${order.quoted_at}, expired ${expiresAt.toISOString()})`,
+          internal_notes: expiryNote,
           updated_at: now.toISOString(),
         }).eq('id', order.id)
+
+        // Audit log — cron has no real user, use sentinel ID to distinguish from manual rejection
+        AuditService.logStatusChange(
+          'system-cron',
+          'order',
+          order.id,
+          'quoted',
+          'rejected',
+          { reason: 'quote_auto_expired', order_number: order.order_number, expired_at: expiresAt.toISOString() }
+        ).catch(err => console.error('[quote-price-check] audit log failed:', err))
 
         // Notify customer
         if (order.customer_id) {
