@@ -30,7 +30,10 @@ export async function POST(
     const body = await request.json()
     const { notes, override = false } = body
 
-    // Verify user is Admin
+    if (!['admin'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — admin role required' }, { status: 403 })
+    }
+
     // Verify exception belongs to order
     const { data: exception } = await supabase
       .from('order_exceptions')

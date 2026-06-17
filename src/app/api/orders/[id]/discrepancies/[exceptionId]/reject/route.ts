@@ -37,7 +37,10 @@ export async function POST(
       )
     }
 
-    // Verify user is COE or Admin
+    if (!['coe_manager', 'coe_tech', 'admin'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden — COE or admin role required' }, { status: 403 })
+    }
+
     // Verify exception belongs to order
     const { data: exception } = await supabase
       .from('order_exceptions')
