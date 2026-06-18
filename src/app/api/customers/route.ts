@@ -74,9 +74,11 @@ export async function POST(request: NextRequest) {
 
     let orgId: string | undefined = requestOrgId
 
-    // If no organization_id: create Organization (type customer) and link
+    // If no organization_id: create Organization (type customer) and link.
+    // Email reuse across orgs is allowed for the contact record itself — only
+    // portal login provisioning (below) needs a unique email, and that's
+    // handled gracefully so it never blocks creating the record.
     if (!orgId) {
-      await UserProvisioningService.assertEmailAvailable(customerInput.contact_email)
       const org = await (await import('@/services/organization.service')).OrganizationService.createOrganization({
         name: customerInput.company_name,
         type: 'customer',
@@ -115,13 +117,26 @@ export async function POST(request: NextRequest) {
     const customer = existingCustomerId
       ? await CustomerService.updateCustomer(existingCustomerId, customerInput)
       : await CustomerService.createCustomer(customerInput, orgId)
-    const provisioned = await UserProvisioningService.provisionUser({
-      fullName: customerInput.contact_name,
-      email: customerInput.contact_email,
-      role: 'customer',
-      organizationId: orgId,
-      oneUserPerRolePerOrganization: true,
-    })
+
+    // Portal login provisioning is best-effort: if this email already has a
+    // login elsewhere (Supabase Auth requires globally unique emails), the
+    // customer contact record is still saved — it just won't get its own
+    // portal account under this organization.
+    let provisioned: { created: boolean; emailSentTo?: string | null; emailSent?: boolean; skippedReason?: string | null }
+    try {
+      provisioned = await UserProvisioningService.provisionUser({
+        fullName: customerInput.contact_name,
+        email: customerInput.contact_email,
+        role: 'customer',
+        organizationId: orgId,
+        oneUserPerRolePerOrganization: true,
+      })
+    } catch (provisionError) {
+      provisioned = {
+        created: false,
+        skippedReason: provisionError instanceof Error ? provisionError.message : 'Portal login could not be created',
+      }
+    }
 
     return NextResponse.json(
       {

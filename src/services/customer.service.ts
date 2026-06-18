@@ -141,10 +141,22 @@ export class CustomerService {
   }
 
   /**
-   * Deactivate a customer (soft delete)
+   * Deactivate a customer (soft delete). Also frees up the associated portal
+   * login's email so the same address can be re-registered immediately —
+   * otherwise the org's customer user row keeps the email reserved forever.
    */
   static async deactivateCustomer(id: string): Promise<void> {
     const supabase = await createServerSupabaseClient()
+
+    const { data: customer, error: fetchError } = await supabase
+      .from('customers')
+      .select('organization_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError) {
+      throw new Error(fetchError.message)
+    }
 
     const { error } = await supabase
       .from('customers')
@@ -153,6 +165,11 @@ export class CustomerService {
 
     if (error) {
       throw new Error(error.message)
+    }
+
+    if (customer?.organization_id) {
+      const { releasePortalLoginEmail } = await import('./user-provisioning.service')
+      await releasePortalLoginEmail(customer.organization_id, 'customer')
     }
   }
 

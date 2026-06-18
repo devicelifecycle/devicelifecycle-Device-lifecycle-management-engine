@@ -206,10 +206,22 @@ export class VendorService {
   }
 
   /**
-   * Deactivate a vendor (soft delete)
+   * Deactivate a vendor (soft delete). Also frees up the associated portal
+   * login's email so the same address can be re-registered immediately —
+   * otherwise the org's vendor user row keeps the email reserved forever.
    */
   static async deleteVendor(id: string): Promise<void> {
     const supabase = await createServerSupabaseClient()
+
+    const { data: vendor, error: fetchError } = await supabase
+      .from('vendors')
+      .select('organization_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError) {
+      throw new Error(fetchError.message)
+    }
 
     const { error } = await supabase
       .from('vendors')
@@ -218,6 +230,11 @@ export class VendorService {
 
     if (error) {
       throw new Error(error.message)
+    }
+
+    if (vendor?.organization_id) {
+      const { releasePortalLoginEmail } = await import('./user-provisioning.service')
+      await releasePortalLoginEmail(vendor.organization_id, 'vendor')
     }
   }
 

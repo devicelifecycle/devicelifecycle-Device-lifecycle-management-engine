@@ -70,6 +70,53 @@ async function findUserByField(field: 'email' | 'notification_email', value: str
   return (data as User | null) ?? null
 }
 
+/**
+ * After a customer/vendor profile is soft-deleted, the org's portal login
+ * (users row, one per role per org) still holds the email, blocking re-use.
+ * Free it up: try a hard delete of the auth user; if historical foreign-key
+ * references (orders.created_by_id, audit_logs.actor_id, etc.) block that,
+ * archive the row instead (same fallback used by DELETE /api/users/[id]).
+ */
+export async function releasePortalLoginEmail(organizationId: string, role: ProvisionableRole): Promise<void> {
+  const supabase = createServiceRoleClient()
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('id, email')
+    .eq('organization_id', organizationId)
+    .eq('role', role)
+    .maybeSingle()
+
+  if (!user) return
+
+  const { error: authError } = await supabase.auth.admin.deleteUser(user.id)
+  if (!authError) return // users row removed via ON DELETE CASCADE
+
+  const archivedEmail = `deleted+${user.id}@login.local`
+  console.warn('Auth delete failed while releasing portal login, archiving instead:', authError)
+
+  await supabase.auth.admin.updateUserById(user.id, {
+    email: archivedEmail,
+    password: crypto.randomUUID(),
+    email_confirm: true,
+    user_metadata: {},
+    app_metadata: {},
+  }).catch((updateError) => {
+    console.warn('Failed to archive auth user credentials:', updateError)
+  })
+
+  await supabase
+    .from('users')
+    .update({
+      email: archivedEmail,
+      notification_email: null,
+      phone: null,
+      is_active: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', user.id)
+}
+
 export class UserProvisioningService {
   static async assertEmailAvailable(email: string, notificationEmail?: string) {
     const { authEmail, emailToSend } = buildAuthIdentity(email, notificationEmail)

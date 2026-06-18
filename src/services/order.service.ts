@@ -743,8 +743,13 @@ export class OrderService {
 
     const pricingSupabase = createServiceRoleClient()
 
-    for (const item of items) {
-      if (!item.device_id) continue
+    // Each item's pricing calc is several sequential DB round-trips; running
+    // them one item at a time made a 20+ item order take minutes to submit.
+    // Process in bounded-concurrency batches instead (matches the pattern
+    // used by /api/pricing/calculate-batch).
+    const CONCURRENCY = 8
+    const priceItem = async (item: typeof items[number]) => {
+      if (!item.device_id) return
       const storage = normalizeStorageForPricing(item.storage)
       const condition = mapCondition(item.claimed_condition)
       const qty = Math.max(1, item.quantity || 1)
@@ -758,7 +763,7 @@ export class OrderService {
           quantity: qty,
           risk_mode: riskMode,
         }, pricingSupabase)
-        if (!result.success || result.trade_price == null || result.trade_price <= 0) continue
+        if (!result.success || result.trade_price == null || result.trade_price <= 0) return
 
         const unitPrice = result.trade_price / qty
         const metadata = {
@@ -783,6 +788,11 @@ export class OrderService {
       } catch {
         // Skip item on error
       }
+    }
+
+    for (let i = 0; i < items.length; i += CONCURRENCY) {
+      const chunk = items.slice(i, i + CONCURRENCY)
+      await Promise.all(chunk.map(priceItem))
     }
 
     // Recalculate order totals

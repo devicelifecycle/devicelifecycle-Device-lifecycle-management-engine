@@ -13,6 +13,8 @@ import type { AuthContext } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
+import { matchDeviceFromCsv } from '@/lib/device-match'
+import type { Device } from '@/types'
 export const dynamic = 'force-dynamic'
 
 function incrementOrderNumber(orderNumber: string): string {
@@ -622,25 +624,30 @@ export async function POST(request: NextRequest) {
 
     if (!order) throw new Error('Failed to create order')
 
-    // Look up devices and create order items
+    // Look up devices and create order items.
+    // Fetch the catalog once and reuse the same fuzzy matcher used at parse
+    // time (matchDeviceFromCsv) — a plain exact ILIKE here (e.g. "S24 Ultra"
+    // vs catalog's "Samsung Galaxy S24 Ultra") would miss the existing row
+    // and spawn a duplicate device with no pricing data attached.
+    let catalogForMatch: Device[] | null = null
     const orderItems = []
     for (const row of normalizedRows) {
       let deviceId: string | null = null
 
       if (row.preresolved_device_id) {
-        // Parse step already matched the device — trust that result rather than
-        // re-running the weaker ILIKE substring query which can return a wrong row.
+        // Parse step already matched the device — trust that result.
         deviceId = row.preresolved_device_id
       } else {
-        // No pre-resolved ID — fall back to exact make + model substring search.
-        const { data: device } = await serviceRole
-          .from('device_catalog')
-          .select('id')
-          .ilike('make', row.brand)
-          .ilike('model', row.model)  // exact match, not substring
-          .limit(1)
-          .single()
-        deviceId = device?.id || null
+        if (!catalogForMatch) {
+          const { data } = await serviceRole
+            .from('device_catalog')
+            .select('id, make, model, specifications, category')
+            .eq('is_active', true)
+          catalogForMatch = (data ?? []) as Device[]
+        }
+
+        const matched = matchDeviceFromCsv(catalogForMatch, row.brand, row.model)
+        deviceId = matched?.id || null
 
         // Auto-add device to catalog when not found so future lookups succeed
         if (!deviceId && (row.brand || row.model)) {
@@ -650,19 +657,21 @@ export async function POST(request: NextRequest) {
             const { data: newDevice } = await serviceRole
               .from('device_catalog')
               .insert({ make: autoMake, model: autoModel, is_active: true })
-              .select('id')
+              .select('id, make, model, specifications, category')
               .single()
-            deviceId = newDevice?.id || null
+            if (newDevice) {
+              deviceId = newDevice.id
+              catalogForMatch.push(newDevice as Device)
+            }
           } catch {
-            // May already exist from a concurrent insert — retry lookup
-            const { data: existingDevice } = await serviceRole
+            // May already exist from a concurrent insert — retry match against a fresh catalog fetch
+            const { data: refreshed } = await serviceRole
               .from('device_catalog')
-              .select('id')
-              .ilike('make', autoMake)
-              .ilike('model', autoModel)
-              .limit(1)
-              .maybeSingle()
-            deviceId = existingDevice?.id || null
+              .select('id, make, model, specifications, category')
+              .eq('is_active', true)
+            catalogForMatch = (refreshed ?? []) as Device[]
+            const retryMatch = matchDeviceFromCsv(catalogForMatch, row.brand, row.model)
+            deviceId = retryMatch?.id || null
           }
         }
       }

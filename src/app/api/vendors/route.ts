@@ -103,16 +103,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    await UserProvisioningService.assertEmailAvailable(input.contact_email)
-
     const vendor = await VendorService.createVendor(input, vendorOrganization.id)
-    const provisioned = await UserProvisioningService.provisionUser({
-      fullName: input.contact_name,
-      email: input.contact_email,
-      role: 'vendor',
-      organizationId: vendorOrganization.id,
-      oneUserPerRolePerOrganization: true,
-    })
+
+    // Portal login provisioning is best-effort: if this email already has a
+    // login elsewhere (Supabase Auth requires globally unique emails), the
+    // vendor record is still saved — it just won't get its own portal
+    // account under this organization.
+    let provisioned: { created: boolean; emailSentTo?: string | null; emailSent?: boolean; skippedReason?: string | null }
+    try {
+      provisioned = await UserProvisioningService.provisionUser({
+        fullName: input.contact_name,
+        email: input.contact_email,
+        role: 'vendor',
+        organizationId: vendorOrganization.id,
+        oneUserPerRolePerOrganization: true,
+      })
+    } catch (provisionError) {
+      provisioned = {
+        created: false,
+        skippedReason: provisionError instanceof Error ? provisionError.message : 'Portal login could not be created',
+      }
+    }
 
     return NextResponse.json(
       {

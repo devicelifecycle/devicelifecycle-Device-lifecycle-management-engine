@@ -71,10 +71,6 @@ export async function POST(request: NextRequest) {
 
     const { address, city, state, zip_code, country, phone, email, website, ...rest } = validationResult.data
 
-    if ((validationResult.data.type === 'customer' || validationResult.data.type === 'vendor') && email) {
-      await UserProvisioningService.assertEmailAvailable(email)
-    }
-
     const organization = await OrganizationService.createOrganization({
       ...rest,
       address: { street: address, city, state, zip_code, country },
@@ -128,16 +124,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Portal login provisioning is best-effort: if this email already has a
+    // login elsewhere (Supabase Auth requires globally unique emails), the
+    // organization is still created — it just won't get its own portal
+    // account yet.
     const shouldProvisionPortalUser = organization.type === 'customer' || organization.type === 'vendor'
-    const provisioned = shouldProvisionPortalUser
-      ? await UserProvisioningService.provisionUser({
+    let provisioned: { created: boolean; emailSentTo?: string | null; emailSent?: boolean; skippedReason?: string | null } | null = null
+    if (shouldProvisionPortalUser) {
+      try {
+        provisioned = await UserProvisioningService.provisionUser({
           fullName: organization.name,
           email: organization.contact_email!,
           role: organization.type === 'customer' ? 'customer' : 'vendor',
           organizationId: organization.id,
           oneUserPerRolePerOrganization: true,
         })
-      : null
+      } catch (provisionError) {
+        provisioned = {
+          created: false,
+          skippedReason: provisionError instanceof Error ? provisionError.message : 'Portal login could not be created',
+        }
+      }
+    }
 
     return NextResponse.json(
       {
