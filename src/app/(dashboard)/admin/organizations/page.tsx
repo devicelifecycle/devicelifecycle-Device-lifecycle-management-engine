@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { formatDate } from '@/lib/utils'
+import { CA_PROVINCES } from '@/lib/constants'
 import type { Organization, OrganizationType } from '@/types'
 
 type OrganizationCreateResult = Organization & {
@@ -63,7 +64,7 @@ export default function AdminOrganizationsPage() {
     city: '',
     state: '',
     zip_code: '',
-    country: 'USA',
+    country: 'Canada',
   })
 
   const fetchOrganizations = useCallback(async () => {
@@ -88,7 +89,7 @@ export default function AdminOrganizationsPage() {
   useOnDbChange(fetchOrganizations)
 
   const resetForm = () => {
-    setForm({ name: '', type: 'customer', email: '', phone: '', address: '', city: '', state: '', zip_code: '', country: 'USA' })
+    setForm({ name: '', type: 'customer', email: '', phone: '', address: '', city: '', state: '', zip_code: '', country: 'Canada' })
     setEditingOrg(null)
   }
 
@@ -161,7 +162,7 @@ export default function AdminOrganizationsPage() {
       city: addr.city || '',
       state: addr.state || '',
       zip_code: addr.zip_code || '',
-      country: addr.country || 'USA',
+      country: addr.country || 'Canada',
     })
     setDialogOpen(true)
   }
@@ -254,12 +255,19 @@ export default function AdminOrganizationsPage() {
                   <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label>State</Label>
-                  <Input value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
+                  <Label>Province</Label>
+                  <Select value={form.state} onValueChange={v => setForm(f => ({ ...f, state: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      {CA_PROVINCES.map(p => (
+                        <SelectItem key={p.code} value={p.code}>{p.code}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>ZIP Code</Label>
-                  <Input value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value }))} />
+                  <Label>Postal Code</Label>
+                  <Input value={form.zip_code} onChange={e => setForm(f => ({ ...f, zip_code: e.target.value.toUpperCase() }))} placeholder="A1A 1A1" />
                 </div>
               </div>
             </div>

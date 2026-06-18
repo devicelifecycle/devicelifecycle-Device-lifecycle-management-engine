@@ -467,6 +467,29 @@ export const CARRIERS = [
 ]
 
 // ============================================================================
+// CANADIAN PROVINCES & TERRITORIES
+// ============================================================================
+
+export const CA_PROVINCES = [
+  { code: 'AB', name: 'Alberta' },
+  { code: 'BC', name: 'British Columbia' },
+  { code: 'MB', name: 'Manitoba' },
+  { code: 'NB', name: 'New Brunswick' },
+  { code: 'NL', name: 'Newfoundland and Labrador' },
+  { code: 'NS', name: 'Nova Scotia' },
+  { code: 'NT', name: 'Northwest Territories' },
+  { code: 'NU', name: 'Nunavut' },
+  { code: 'ON', name: 'Ontario' },
+  { code: 'PE', name: 'Prince Edward Island' },
+  { code: 'QC', name: 'Quebec' },
+  { code: 'SK', name: 'Saskatchewan' },
+  { code: 'YT', name: 'Yukon' },
+] as const
+
+/** Canadian postal code, e.g. "M5V 3A8" (also accepts no space: "M5V3A8") */
+export const CA_POSTAL_CODE_REGEX = /^[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d$/
+
+// ============================================================================
 // STORAGE OPTIONS
 // ============================================================================
 

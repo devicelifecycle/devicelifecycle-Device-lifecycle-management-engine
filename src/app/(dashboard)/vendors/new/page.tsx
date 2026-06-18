@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { CA_PROVINCES } from '@/lib/constants'
 
 type VendorCreateResult = {
   portal_account_created?: boolean
@@ -40,7 +41,7 @@ export default function NewVendorPage() {
     city: '',
     state: '',
     zip: '',
-    country: '',
+    country: 'Canada',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -135,14 +136,21 @@ export default function NewVendorPage() {
                 <Input id="city" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="state">State / Province *</Label>
-                <Input id="state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} required />
+                <Label htmlFor="state">Province *</Label>
+                <Select value={form.state} onValueChange={v => setForm(f => ({ ...f, state: v }))}>
+                  <SelectTrigger id="state"><SelectValue placeholder="Select province" /></SelectTrigger>
+                  <SelectContent>
+                    {CA_PROVINCES.map(p => (
+                      <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="zip">ZIP / Postal Code *</Label>
-                <Input id="zip" value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} required />
+                <Label htmlFor="zip">Postal Code *</Label>
+                <Input id="zip" value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value.toUpperCase() }))} required placeholder="A1A 1A1" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="country">Country *</Label>

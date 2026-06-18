@@ -37,10 +37,10 @@ const STATUSES = ['label_created', 'picked_up', 'in_transit', 'out_for_delivery'
 const COE_ADDRESS = {
   name: 'COE Warehouse',
   street1: '123 COE Dr',
-  city: 'Austin',
-  state: 'TX',
-  postal_code: '73301',
-  country: 'US',
+  city: 'Toronto',
+  state: 'ON',
+  postal_code: 'M5V 3A8',
+  country: 'CA',
 }
 
 export default function COEShippingPage() {
@@ -85,7 +85,7 @@ export default function COEShippingPage() {
       city: (source.city as string) || 'Unknown',
       state: (source.state as string) || 'Unknown',
       postal_code: (source.postal_code as string) || (source.zip_code as string) || (source.zip as string) || '00000',
-      country: (source.country as string) || 'US',
+      country: (source.country as string) || 'CA',
       phone: (customer?.contact_phone as string) || undefined,
       email: (customer?.contact_email as string) || undefined,
     }

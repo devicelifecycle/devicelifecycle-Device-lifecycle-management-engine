@@ -44,10 +44,10 @@ import type { Order } from '@/types'
 const COE_ADDRESS = {
   name: 'COE Warehouse',
   street1: '123 COE Dr',
-  city: 'Austin',
-  state: 'TX',
-  postal_code: '73301',
-  country: 'US',
+  city: 'Toronto',
+  state: 'ON',
+  postal_code: 'M5V 3A8',
+  country: 'CA',
 }
 
 const SHIPMENT_CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Canada Post', 'Other']
@@ -64,7 +64,7 @@ function buildShipToAddress(order: Order): Record<string, unknown> {
       city: (shipping.city as string) || 'Unknown',
       state: (shipping.state as string) || 'Unknown',
       postal_code: (shipping.postal_code || shipping.zip_code || shipping.zip) as string || '00000',
-      country: (shipping.country as string) || 'US',
+      country: (shipping.country as string) || 'CA',
       phone: customer.contact_phone as string | undefined,
       email: customer.contact_email as string | undefined,
     }
@@ -80,12 +80,12 @@ function buildShipToAddress(order: Order): Record<string, unknown> {
       city: (shipping.city as string) || 'Unknown',
       state: (shipping.state as string) || 'Unknown',
       postal_code: (shipping.postal_code || shipping.zip_code || shipping.zip) as string || '00000',
-      country: (shipping.country as string) || 'US',
+      country: (shipping.country as string) || 'CA',
       phone: customer.contact_phone as string | undefined,
       email: customer.contact_email as string | undefined,
     }
   }
-  return { name: 'Unknown', street1: 'Unknown', city: 'Unknown', state: 'Unknown', postal_code: '00000', country: 'US' }
+  return { name: 'Unknown', street1: 'Unknown', city: 'Unknown', state: 'Unknown', postal_code: '00000', country: 'CA' }
 }
 
 function mapOrderConditionToCompetitorCondition(condition?: string): 'excellent' | 'good' | 'fair' | 'broken' {
