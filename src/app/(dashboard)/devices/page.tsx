@@ -36,6 +36,7 @@ export default function DevicesPage() {
   const [makeFilter, setMakeFilter] = useState<string>('')
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [recyclingFilter, setRecyclingFilter] = useState<string>('')
+  const [catalogMakes, setCatalogMakes] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const debouncedSearch = useDebounce(search)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -81,6 +82,26 @@ export default function DevicesPage() {
 
   useEffect(() => { fetchDevices() }, [fetchDevices])
   useOnDbChange(fetchDevices)
+
+  // Keep the brand filter in sync with whatever brands actually exist in the
+  // catalog — a brand uploaded via CSV that isn't in the curated DEVICE_BRANDS
+  // list still shows up here automatically, instead of being unfilterable.
+  const fetchCatalogMakes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/devices?makes_only=true')
+      if (res.ok) {
+        const data = await res.json()
+        setCatalogMakes(data.makes || [])
+      }
+    } catch {
+      // silently fail — falls back to the curated DEVICE_BRANDS list
+    }
+  }, [])
+
+  useEffect(() => { fetchCatalogMakes() }, [fetchCatalogMakes])
+  useOnDbChange(fetchCatalogMakes)
+
+  const brandFilterOptions = Array.from(new Set([...DEVICE_BRANDS, ...catalogMakes])).sort((a, b) => a.localeCompare(b))
 
   const handleCreate = async () => {
     setCreating(true)
@@ -197,14 +218,6 @@ export default function DevicesPage() {
   }
 
   const MAKE_ORDER = ['Apple', 'Samsung', 'Google'] as const
-
-  const categoryColors: Record<string, { bg: string; text: string }> = {
-    phone: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400' },
-    tablet: { bg: 'bg-violet-500/10', text: 'text-violet-600 dark:text-violet-400' },
-    laptop: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400' },
-    watch: { bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400' },
-    other: { bg: 'bg-muted', text: 'text-muted-foreground' },
-  }
 
   const specs = (d: Device) => (d.specifications || {}) as { storage_options?: string[]; colors?: string[]; year?: string; cpu?: string; ram?: string; recommended_for_recycling?: boolean }
 
@@ -345,7 +358,7 @@ export default function DevicesPage() {
             <SelectContent>
               <SelectItem value="all">All brands</SelectItem>
               {MAKE_ORDER.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              {DEVICE_BRANDS.filter(b => !(MAKE_ORDER as readonly string[]).includes(b)).map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+              {brandFilterOptions.filter(b => !(MAKE_ORDER as readonly string[]).includes(b)).map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={categoryFilter || 'all'} onValueChange={v => { setCategoryFilter(v === 'all' ? '' : v); setPage(1) }}>
@@ -394,13 +407,10 @@ export default function DevicesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Make</TableHead>
+                  <TableHead>Brand</TableHead>
                   <TableHead>Model</TableHead>
-                  <TableHead>Year</TableHead>
-                  <TableHead>CPU / RAM</TableHead>
                   <TableHead>Storage</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>SKU</TableHead>
+                  <TableHead>RAM</TableHead>
                   <TableHead>Status</TableHead>
                   {canCreate && <TableHead className="w-12" />}
                 </TableRow>
@@ -409,7 +419,7 @@ export default function DevicesPage() {
                 {devices.map(device => {
                   const s = specs(device)
                   const storageList = s.storage_options?.join(', ') || '—'
-                  const cpuRam = [s.cpu, s.ram].filter(Boolean).join(' / ') || '—'
+                  const ram = s.ram || '—'
                   return (
                     <TableRow key={device.id}>
                       <TableCell className="max-w-[140px]">
@@ -422,17 +432,8 @@ export default function DevicesPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="max-w-[220px] truncate font-medium" title={device.model}>{device.model}{device.variant ? <span className="ml-1 text-xs text-muted-foreground">({device.variant})</span> : null}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{s.year || '—'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate" title={cpuRam}>{cpuRam}</TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[140px] truncate" title={storageList}>{storageList}</TableCell>
-                      <TableCell>
-                        {device.category && (
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${(categoryColors[device.category] || categoryColors.other).bg} ${(categoryColors[device.category] || categoryColors.other).text}`}>
-                            {device.category}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-[140px] truncate text-sm text-muted-foreground font-mono" title={device.sku || undefined}>{device.sku || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-[120px] truncate" title={ram}>{ram}</TableCell>
                       <TableCell><Badge variant={device.is_active ? 'default' : 'secondary'} className="text-[11px]">{device.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
                       {canCreate && (
                         <TableCell>

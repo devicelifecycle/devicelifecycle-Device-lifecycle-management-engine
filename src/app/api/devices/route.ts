@@ -21,6 +21,15 @@ export async function GET(request: NextRequest) {
     const { profile } = auth
 
     const searchParams = request.nextUrl.searchParams
+
+    // Distinct active brands actually in the catalog — used to keep the
+    // brand filter dropdown in sync with whatever was just uploaded,
+    // instead of only ever showing the static DEVICE_BRANDS list.
+    if (searchParams.get('makes_only') === 'true') {
+      const makes = await DeviceService.getMakes()
+      return NextResponse.json({ makes })
+    }
+
     const isInternal = ['admin', 'coe_manager', 'sales', 'coe_tech'].includes(profile.role)
     const forOrderCreation = searchParams.get('for_order_creation') === '1'
     const maxPageSize = isInternal ? 5000 : forOrderCreation ? 500 : 100
