@@ -135,20 +135,22 @@ const KNOWN_BRANDS = new Set([
 
 /**
  * Reject make values that aren't actually a brand — IMEIs/serials
- * ("89302720523083259790") or part numbers ("653957-001", "832414-B21")
- * ending up in a CSV's brand column. Used to stop the auto-add-to-catalog
- * fallback from polluting device_catalog with garbage make values; the
- * row instead stays "not in catalog" for manual review.
+ * ("89302720523083259790"), part/SKU codes ("653957-001", "832414-B21",
+ * "AL13SXB60ON") ending up in a CSV's brand column. Used to stop the
+ * auto-add-to-catalog fallback from polluting device_catalog with garbage
+ * make values; the row instead stays "not in catalog" for manual review.
  */
 export function isPlausibleBrand(make: string | undefined | null): boolean {
   const n = normalize(make ?? '')
   if (!n) return false
   if (KNOWN_BRANDS.has(resolveMake(n))) return true
 
-  const alnum = n.replace(/[^a-z0-9]/gi, '')
-  const digitCount = (alnum.match(/\d/g) || []).length
-  // Mostly-digit strings (IMEIs, serials, asset tags) are never a brand name
-  if (digitCount >= 4 && digitCount >= alnum.length * 0.5) return false
+  // None of DEVICE_BRANDS/MAKE_ALIASES contain a digit — real brand names
+  // never do. Part/SKU codes do ("AL13SXB60ON" has 3 consecutive letters,
+  // which used to slip past a "mostly digits" check that only looked at
+  // digit density, not presence). Any digit on an unrecognized string is
+  // now an automatic reject.
+  if (/\d/.test(n)) return false
   // A real brand has at least one recognizable alphabetic word
   if (!/[a-z]{3,}/i.test(n)) return false
 
