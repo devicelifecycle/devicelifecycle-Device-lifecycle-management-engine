@@ -135,9 +135,13 @@ export default function AdminOrganizationsPage() {
         body: JSON.stringify({
           name: form.name,
           type: form.type,
-          contact_email: form.email,
-          contact_phone: form.phone,
-          address: { street: form.address, city: form.city, state: form.state, zip_code: form.zip_code, country: form.country },
+          email: form.email,
+          phone: form.phone,
+          address: form.address,
+          city: form.city,
+          state: form.state,
+          zip_code: form.zip_code,
+          country: form.country,
         }),
       })
       const payload = await res.json().catch(() => ({}))
