@@ -446,6 +446,7 @@ export const DEVICE_BRANDS = [
   'Lenovo',
   'ASUS',
   'Acer',
+  'Framework',
   'Recycling',
   'Other',
 ]

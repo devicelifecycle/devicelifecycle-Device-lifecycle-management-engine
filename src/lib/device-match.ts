@@ -4,6 +4,7 @@
 // ============================================================================
 
 import type { Device } from '@/types'
+import { DEVICE_BRANDS } from '@/lib/constants'
 
 /** Make aliases: CSV value -> catalog make */
 const MAKE_ALIASES: Record<string, string> = {
@@ -95,6 +96,33 @@ function resolveMake(csvMake: string): string {
   const n = normalize(csvMake)
   if (!n) return ''
   return MAKE_ALIASES[n] ?? n
+}
+
+const KNOWN_BRANDS = new Set([
+  ...DEVICE_BRANDS.map((b) => b.toLowerCase()),
+  ...Object.values(MAKE_ALIASES),
+])
+
+/**
+ * Reject make values that aren't actually a brand — IMEIs/serials
+ * ("89302720523083259790") or part numbers ("653957-001", "832414-B21")
+ * ending up in a CSV's brand column. Used to stop the auto-add-to-catalog
+ * fallback from polluting device_catalog with garbage make values; the
+ * row instead stays "not in catalog" for manual review.
+ */
+export function isPlausibleBrand(make: string | undefined | null): boolean {
+  const n = normalize(make ?? '')
+  if (!n) return false
+  if (KNOWN_BRANDS.has(resolveMake(n))) return true
+
+  const alnum = n.replace(/[^a-z0-9]/gi, '')
+  const digitCount = (alnum.match(/\d/g) || []).length
+  // Mostly-digit strings (IMEIs, serials, asset tags) are never a brand name
+  if (digitCount >= 4 && digitCount >= alnum.length * 0.5) return false
+  // A real brand has at least one recognizable alphabetic word
+  if (!/[a-z]{3,}/i.test(n)) return false
+
+  return true
 }
 
 /**

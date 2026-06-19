@@ -412,15 +412,16 @@ export default function DevicesPage() {
                   const cpuRam = [s.cpu, s.ram].filter(Boolean).join(' / ') || '—'
                   return (
                     <TableRow key={device.id}>
-                      <TableCell>
+                      <TableCell className="max-w-[140px]">
                         <Link
                           href={`/devices/${device.id}`}
-                          className="font-medium text-primary hover:underline"
+                          className="block truncate font-medium text-primary hover:underline"
+                          title={device.make}
                         >
                           {device.make}
                         </Link>
                       </TableCell>
-                      <TableCell className="font-medium">{device.model}{device.variant ? <span className="ml-1 text-xs text-muted-foreground">({device.variant})</span> : null}</TableCell>
+                      <TableCell className="max-w-[220px] truncate font-medium" title={device.model}>{device.model}{device.variant ? <span className="ml-1 text-xs text-muted-foreground">({device.variant})</span> : null}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{s.year || '—'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate" title={cpuRam}>{cpuRam}</TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[140px] truncate" title={storageList}>{storageList}</TableCell>
@@ -431,7 +432,7 @@ export default function DevicesPage() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground font-mono">{device.sku || '—'}</TableCell>
+                      <TableCell className="max-w-[140px] truncate text-sm text-muted-foreground font-mono" title={device.sku || undefined}>{device.sku || '—'}</TableCell>
                       <TableCell><Badge variant={device.is_active ? 'default' : 'secondary'} className="text-[11px]">{device.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
                       {canCreate && (
                         <TableCell>

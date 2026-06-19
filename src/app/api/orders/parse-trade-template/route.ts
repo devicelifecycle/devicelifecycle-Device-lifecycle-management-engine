@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { matchDeviceFromCsv } from '@/lib/device-match'
+import { matchDeviceFromCsv, isPlausibleBrand } from '@/lib/device-match'
 import { normalizeTradeCondition } from '@/lib/condition'
 import type { Device } from '@/types'
 
@@ -433,10 +433,13 @@ function inferDeviceCategory(make: string, model: string): string {
 async function autoAddUnmatched(outputRows: TradeTemplateRow[]): Promise<TradeTemplateRow[]> {
   const serviceRole = createServiceRoleClient()
 
-  // Group unmatched rows by (make, model) to avoid duplicate inserts
+  // Group unmatched rows by (make, model) to avoid duplicate inserts.
+  // Skip rows whose "make" doesn't actually look like a brand (IMEI/serial/
+  // part number from a misidentified column) — leave them not_in_catalog
+  // for manual review instead of polluting device_catalog with garbage.
   const groups = new Map<string, { make: string; model: string; indices: number[] }>()
   outputRows.forEach((row, i) => {
-    if (row.device_id || !row.make) return
+    if (row.device_id || !row.make || !isPlausibleBrand(row.make)) return
     const key = `${row.make.toLowerCase()}|${row.model.toLowerCase()}`
     const entry = groups.get(key)
     if (entry) entry.indices.push(i)

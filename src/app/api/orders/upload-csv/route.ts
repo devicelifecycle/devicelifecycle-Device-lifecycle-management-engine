@@ -13,7 +13,7 @@ import type { AuthContext } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
-import { matchDeviceFromCsv } from '@/lib/device-match'
+import { matchDeviceFromCsv, isPlausibleBrand } from '@/lib/device-match'
 import type { Device } from '@/types'
 export const dynamic = 'force-dynamic'
 
@@ -649,9 +649,13 @@ export async function POST(request: NextRequest) {
         const matched = matchDeviceFromCsv(catalogForMatch, row.brand, row.model)
         deviceId = matched?.id || null
 
-        // Auto-add device to catalog when not found so future lookups succeed
-        if (!deviceId && (row.brand || row.model)) {
-          const autoMake = row.brand || 'Unknown'
+        // Auto-add device to catalog when not found so future lookups succeed.
+        // Only when row.brand actually looks like a brand — otherwise a
+        // misidentified column (serial number, part number) ends up as
+        // device_catalog.make, polluting the catalog instead of just
+        // leaving this item unmatched for manual review (deviceNameTag below).
+        if (!deviceId && row.brand && isPlausibleBrand(row.brand)) {
+          const autoMake = row.brand
           const autoModel = row.model || 'Unknown Model'
           try {
             const { data: newDevice } = await serviceRole
