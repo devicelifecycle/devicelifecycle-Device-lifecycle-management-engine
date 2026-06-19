@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
 import Link from 'next/link'
-import { Plus, Building2, Search, Trash2, Pencil, RefreshCw } from 'lucide-react'
+import { Plus, Building2, Search, Trash2, Pencil, RefreshCw, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +55,8 @@ export default function AdminOrganizationsPage() {
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
   const [deletingOrg, setDeletingOrg] = useState<Organization | null>(null)
   const [resendingOrgId, setResendingOrgId] = useState<string | null>(null)
+  const [addingRole, setAddingRole] = useState<{ org: Organization; role: 'customer' | 'vendor' } | null>(null)
+  const [addingRoleLoading, setAddingRoleLoading] = useState(false)
   const [form, setForm] = useState({
     name: '',
     type: 'customer' as OrganizationType,
@@ -189,6 +191,41 @@ export default function AdminOrganizationsPage() {
     }
   }
 
+  const handleAddRole = async () => {
+    if (!addingRole) return
+    setAddingRoleLoading(true)
+    try {
+      const { org, role } = addingRole
+      const res = await fetch('/api/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: org.name,
+          type: role,
+          email: org.contact_email || '',
+          phone: org.contact_phone || '',
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload.error || `Failed to add ${role} role`)
+      const result = payload as OrganizationCreateResult
+      const roleLabel = role === 'customer' ? 'Customer' : 'Vendor'
+      if (result.portal_account_created) {
+        toast.success(
+          `${roleLabel} role added to ${org.name}. A separate ${role} login was created — if you'd rather use one shared login with a Switch View button, set a Secondary Role on the existing user instead, in Admin → Users.`
+        )
+      } else {
+        toast.success(`${roleLabel} role added to ${org.name}.${result.portal_account_skipped_reason ? ` ${result.portal_account_skipped_reason}.` : ''}`)
+      }
+      setAddingRole(null)
+      fetchOrganizations()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to add role')
+    } finally {
+      setAddingRoleLoading(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deletingOrg) return
     try {
@@ -317,10 +354,10 @@ export default function AdminOrganizationsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead>Roles</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Linked Customer</TableHead>
+                  <TableHead>Linked Records</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Portal Login</TableHead>
@@ -335,21 +372,58 @@ export default function AdminOrganizationsPage() {
                     onClick={() => openEdit(org)}
                   >
                     <TableCell className="font-medium">{org.name}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${typeColors[org.type] || ''}`}>
-                        {org.type}
-                      </span>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {org.type === 'internal' ? (
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${typeColors.internal}`}>internal</span>
+                        ) : (
+                          <>
+                            {org.has_customer_role && (
+                              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${typeColors.customer}`}>customer</span>
+                            )}
+                            {org.has_vendor_role && (
+                              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${typeColors.vendor}`}>vendor</span>
+                            )}
+                            {!org.has_customer_role && (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40"
+                                onClick={() => setAddingRole({ org, role: 'customer' })}
+                                title="Add customer role to this organization"
+                              >
+                                <UserPlus className="h-3 w-3" />+ Customer
+                              </button>
+                            )}
+                            {!org.has_vendor_role && (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40"
+                                onClick={() => setAddingRole({ org, role: 'vendor' })}
+                                title="Add vendor role to this organization"
+                              >
+                                <UserPlus className="h-3 w-3" />+ Vendor
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{org.contact_email || '—'}</TableCell>
                     <TableCell>{org.contact_phone || '—'}</TableCell>
-                    <TableCell>
-                      {org.type === 'customer' ? (
-                        <Link href={`/customers?organization_id=${org.id}`} className="text-primary hover:underline" onClick={e => e.stopPropagation()}>
-                          View customer(s)
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <div className="flex flex-col gap-0.5">
+                        {org.has_customer_role && (
+                          <Link href={`/customers?organization_id=${org.id}`} className="text-primary hover:underline">
+                            View customer(s)
+                          </Link>
+                        )}
+                        {org.has_vendor_role && (
+                          <Link href="/vendors" className="text-primary hover:underline">
+                            View vendor
+                          </Link>
+                        )}
+                        {!org.has_customer_role && !org.has_vendor_role && '—'}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant={org.is_active ? 'default' : 'secondary'}>
@@ -360,7 +434,7 @@ export default function AdminOrganizationsPage() {
                       {formatDate(org.created_at)}
                     </TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
-                      {(org.type === 'customer' || org.type === 'vendor') ? (
+                      {(org.has_customer_role || org.has_vendor_role) ? (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -419,6 +493,26 @@ export default function AdminOrganizationsPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button variant="destructive" onClick={handleDelete}>
               Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!addingRole} onOpenChange={(open) => !open && setAddingRole(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Add {addingRole?.role === 'customer' ? 'customer' : 'vendor'} role?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This creates a linked {addingRole?.role} record for <strong>{addingRole?.org.name}</strong> — the
+              same organization, no duplicate company record — and provisions a {addingRole?.role} portal login for it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={addingRoleLoading}>Cancel</AlertDialogCancel>
+            <Button variant="success" onClick={handleAddRole} disabled={addingRoleLoading}>
+              {addingRoleLoading ? 'Adding...' : 'Add role'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

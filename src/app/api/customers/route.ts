@@ -74,28 +74,45 @@ export async function POST(request: NextRequest) {
 
     let orgId: string | undefined = requestOrgId
 
-    // If no organization_id: create Organization (type customer) and link.
-    // Email reuse across orgs is allowed for the contact record itself — only
-    // portal login provisioning (below) needs a unique email, and that's
-    // handled gracefully so it never blocks creating the record.
+    // If no organization_id: reuse an existing org by name/email regardless
+    // of its current type — a company that already exists as a vendor org
+    // should become dual-role (gain a customers row too), not get a second,
+    // duplicate organization row with the same name. Only create fresh when
+    // nothing matches. Email reuse across orgs is allowed for the contact
+    // record itself — only portal login provisioning (below) needs a unique
+    // email, and that's handled gracefully so it never blocks creating the record.
     if (!orgId) {
-      const org = await (await import('@/services/organization.service')).OrganizationService.createOrganization({
-        name: customerInput.company_name,
-        type: 'customer',
-        contact_email: customerInput.contact_email,
-        contact_phone: customerInput.contact_phone,
-      })
-      orgId = org.id
+      const [
+        { data: existingOrgByEmail, error: existingOrgByEmailError },
+        { data: existingOrgByName, error: existingOrgByNameError },
+      ] = await Promise.all([
+        supabase.from('organizations').select('id').eq('contact_email', customerInput.contact_email).maybeSingle(),
+        supabase.from('organizations').select('id').eq('name', customerInput.company_name).maybeSingle(),
+      ])
+      if (existingOrgByEmailError) throw existingOrgByEmailError
+      if (existingOrgByNameError) throw existingOrgByNameError
+
+      orgId = existingOrgByEmail?.id || existingOrgByName?.id
+      if (!orgId) {
+        const org = await (await import('@/services/organization.service')).OrganizationService.createOrganization({
+          name: customerInput.company_name,
+          type: 'customer',
+          contact_email: customerInput.contact_email,
+          contact_phone: customerInput.contact_phone,
+        })
+        orgId = org.id
+      }
     } else {
-      // Verify org exists and is type customer
+      // Verify the org exists — any type is fine; an org gaining a customers
+      // row is exactly how it becomes dual-role.
       const { data: org } = await supabase
         .from('organizations')
-        .select('id, type')
+        .select('id')
         .eq('id', orgId)
         .single()
-      if (!org || org.type !== 'customer') {
+      if (!org) {
         return NextResponse.json(
-          { error: 'Organization must exist and be of type customer' },
+          { error: 'Organization not found' },
           { status: 400 }
         )
       }

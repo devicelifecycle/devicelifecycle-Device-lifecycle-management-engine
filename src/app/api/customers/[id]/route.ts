@@ -40,7 +40,7 @@ export async function GET(
     }
 
     // Customer can only view their own customer record
-    if (role === 'customer') {
+    if (effectiveRole === 'customer') {
       if (customer.organization_id === organization_id) {
         let organization = null
         if (customer.organization_id) {
@@ -85,7 +85,7 @@ export async function PATCH(
       role === 'admin' ||
       role === 'coe_manager' ||
       role === 'sales' ||
-      (role === 'customer' && customer.organization_id === organization_id)
+      (effectiveRole === 'customer' && customer.organization_id === organization_id)
 
     if (!canUpdate) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })

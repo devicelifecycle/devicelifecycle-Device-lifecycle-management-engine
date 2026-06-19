@@ -18,10 +18,10 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { profile } = auth
+    const { profile, effectiveRole } = auth
 
     const allowedRoles = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer']
-    if (!allowedRoles.includes(profile.role)) {
+    if (!allowedRoles.includes(effectiveRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       const orgId = (order.customers as unknown as { organization_id: string } | null)?.organization_id
       if (!orgId || orgId !== profile.organization_id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { profile } = auth
+    const { profile, effectiveRole } = auth
 
     const orderId = request.nextUrl.searchParams.get('order_id')
     if (!orderId || !isValidUUID(orderId)) {
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       const orgId = (order.customers as unknown as { organization_id: string } | null)?.organization_id
       if (!orgId || orgId !== profile.organization_id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })

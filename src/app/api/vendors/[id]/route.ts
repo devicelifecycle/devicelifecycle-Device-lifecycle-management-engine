@@ -22,10 +22,10 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid vendor ID format' }, { status: 400 })
     }
 
-    if (['customer'].includes(profile.role)) {
+    if (effectiveRole === 'customer') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    if (profile.role === 'vendor' && profile.organization_id) {
+    if (effectiveRole === 'vendor' && profile.organization_id) {
       const vendor = await VendorService.getVendorById((await params).id)
       if (!vendor || vendor.organization_id !== profile.organization_id) {
         return NextResponse.json({ error: 'Forbidden — you can only view your own vendor profile' }, { status: 403 })

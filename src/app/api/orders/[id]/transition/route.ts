@@ -152,14 +152,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       )
     }
 
-    if (newStatus === 'shipped' && currentOrder.status === 'sourced' && profile.role !== 'vendor') {
+    if (newStatus === 'shipped' && currentOrder.status === 'sourced' && effectiveRole !== 'vendor') {
       return NextResponse.json(
         { error: 'Only vendors can move a sourced order directly to shipped' },
         { status: 400 }
       )
     }
 
-    if (profile.role === 'vendor' && newStatus === 'shipped' && currentOrder.status === 'sourced') {
+    if (effectiveRole === 'vendor' && newStatus === 'shipped' && currentOrder.status === 'sourced') {
       const shipments = (((currentOrder as unknown as { shipments?: VendorShipment[] }).shipments) || [])
         .filter((shipment) => shipment.direction === 'inbound' && shipment.tracking_number)
 

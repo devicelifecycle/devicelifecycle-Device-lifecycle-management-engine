@@ -108,6 +108,11 @@ export interface Organization extends BaseEntity {
   billing_subscription_id?: string | null;
   trial_ends_at?: string | null;
   is_trial?: boolean;
+  // Populated by GET /api/organizations — whether this org has a linked
+  // customers/vendors row, independent of its primary `type`. An org with
+  // both is dual-role (e.g. trades in its own fleet AND buys CPO devices).
+  has_customer_role?: boolean;
+  has_vendor_role?: boolean;
 }
 
 // ============================================================================

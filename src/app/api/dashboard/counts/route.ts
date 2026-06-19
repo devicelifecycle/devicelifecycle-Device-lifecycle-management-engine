@@ -8,7 +8,7 @@ export async function GET() {
     const auth = await requireAuth()
     if (!auth) return NextResponse.json({ counts: {} })
 
-    const { profile } = auth
+    const { profile, effectiveRole } = auth
 
     const service = createServiceRoleClient()
     const counts: Record<string, number> = {}
@@ -22,7 +22,7 @@ export async function GET() {
       counts.actionableOrders = actionableOrders ?? 0
     }
 
-    if (profile.role === 'vendor' && profile.organization_id) {
+    if (effectiveRole === 'vendor' && profile.organization_id) {
       const { data: vendor } = await service
         .from('vendors')
         .select('id')

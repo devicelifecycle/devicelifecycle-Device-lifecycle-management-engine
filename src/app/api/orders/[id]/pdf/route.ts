@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { authUser, profile } = auth
+    const { authUser, profile, effectiveRole } = auth
 
     const order = await OrderService.getOrderById((await params).id)
     if (!order) {
@@ -28,11 +28,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       if (order.created_by_id !== authUser.id && order.assigned_to_id !== authUser.id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
       }
-    } else if (role === 'customer') {
+    } else if (effectiveRole === 'customer') {
       if (order.customer?.organization_id !== organization_id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
       }
-    } else if (role === 'vendor') {
+    } else if (effectiveRole === 'vendor') {
       if (order.vendor?.organization_id !== organization_id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
       }

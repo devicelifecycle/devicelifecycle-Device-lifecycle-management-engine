@@ -12,9 +12,9 @@ export async function GET() {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { supabase, authUser, profile } = auth
+    const { supabase, authUser, profile, effectiveRole } = auth
 
-    if (profile.role !== 'customer') {
+    if (effectiveRole !== 'customer') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { role, organization_id } = profile
     const isInternalRole = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(role)
-    const isOwnCustomer = role === 'customer' && order.customer?.organization_id === organization_id
+    const isOwnCustomer = effectiveRole === 'customer' && order.customer?.organization_id === organization_id
     if (!isInternalRole && !isOwnCustomer) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }

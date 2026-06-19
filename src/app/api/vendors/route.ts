@@ -67,12 +67,15 @@ export async function POST(request: NextRequest) {
 
     const input = validationResult.data
 
+    // Match by name/email regardless of type — a company that already exists
+    // as a customer org should become dual-role (gain a vendors row too),
+    // not get a second, duplicate organization row with the same name.
     const [
       { data: existingVendorOrgByEmail, error: existingVendorOrgByEmailError },
       { data: existingVendorOrgByName, error: existingVendorOrgByNameError },
     ] = await Promise.all([
-      supabase.from('organizations').select('*').eq('type', 'vendor').eq('contact_email', input.contact_email).maybeSingle(),
-      supabase.from('organizations').select('*').eq('type', 'vendor').eq('name', input.company_name).maybeSingle(),
+      supabase.from('organizations').select('*').eq('contact_email', input.contact_email).maybeSingle(),
+      supabase.from('organizations').select('*').eq('name', input.company_name).maybeSingle(),
     ])
 
     if (existingVendorOrgByEmailError) throw existingVendorOrgByEmailError

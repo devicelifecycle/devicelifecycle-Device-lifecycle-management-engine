@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { authUser, profile } = auth
+    const { authUser, profile, effectiveRole } = auth
 
     const order = await OrderService.getOrderById((await params).id)
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Customer can only access orders for their organization
-    if (role === 'customer') {
+    if (effectiveRole === 'customer') {
       if (order.customer?.organization_id === organization_id) {
         return NextResponse.json(order)
       }
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // 1. Orders assigned to their organization
     // 2. Open CPO sourcing orders that are broadcast to all vendors for bidding
     // In both cases they only receive fulfillment-safe data.
-    if (role === 'vendor') {
+    if (effectiveRole === 'vendor') {
       const isAssignedVendorOrder = order.vendor?.organization_id === organization_id
       const isOpenVendorBidOrder =
         order.type === 'cpo' &&

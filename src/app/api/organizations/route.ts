@@ -38,7 +38,29 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await OrganizationService.getOrganizations(filters)
-    return NextResponse.json(result)
+
+    // Attach role flags so the admin UI can show "Customer + Vendor" for
+    // dual-role orgs instead of relying on the single (primary) type field,
+    // and decide whether to offer "Add Vendor role" / "Add Customer role".
+    const orgIds = result.data.map((org) => org.id)
+    let customerOrgIds = new Set<string>()
+    let vendorOrgIds = new Set<string>()
+    if (orgIds.length > 0) {
+      const [{ data: customerRows }, { data: vendorRows }] = await Promise.all([
+        supabase.from('customers').select('organization_id').in('organization_id', orgIds),
+        supabase.from('vendors').select('organization_id').in('organization_id', orgIds),
+      ])
+      customerOrgIds = new Set((customerRows || []).map((r) => r.organization_id))
+      vendorOrgIds = new Set((vendorRows || []).map((r) => r.organization_id))
+    }
+
+    const enrichedData = result.data.map((org) => ({
+      ...org,
+      has_customer_role: customerOrgIds.has(org.id),
+      has_vendor_role: vendorOrgIds.has(org.id),
+    }))
+
+    return NextResponse.json({ ...result, data: enrichedData })
   } catch (error) {
     console.error('Error fetching organizations:', error)
     return NextResponse.json(
@@ -71,71 +93,107 @@ export async function POST(request: NextRequest) {
 
     const { address, city, state, zip_code, country, phone, email, website, ...rest } = validationResult.data
 
-    const organization = await OrganizationService.createOrganization({
+    // Reuse an existing org by name/email regardless of its current type —
+    // a company that already exists as a vendor org and is now being added
+    // as a customer (or vice versa) should become dual-role (gain the other
+    // linked table row), not get a second, duplicate organization row with
+    // the same name.
+    const [
+      { data: existingOrgByEmail, error: existingOrgByEmailError },
+      { data: existingOrgByName, error: existingOrgByNameError },
+    ] = await Promise.all([
+      email ? supabase.from('organizations').select('*').eq('contact_email', email).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      supabase.from('organizations').select('*').eq('name', rest.name).maybeSingle(),
+    ])
+    if (existingOrgByEmailError) throw existingOrgByEmailError
+    if (existingOrgByNameError) throw existingOrgByNameError
+
+    const existingOrg = existingOrgByEmail || existingOrgByName
+    const organization = existingOrg || await OrganizationService.createOrganization({
       ...rest,
       address: { street: address, city, state, zip_code, country },
       contact_email: email,
       contact_phone: phone,
     })
 
-    // When type is 'customer', create linked Customer record for orders
-    if (organization.type === 'customer') {
-      const defaultEmail = `contact@${organization.name.toLowerCase().replace(/\s+/g, '')}.local`
-      await CustomerService.createCustomer(
-        {
-          company_name: organization.name,
-          contact_name: organization.name,
-          contact_email: organization.contact_email || defaultEmail,
-          contact_phone: organization.contact_phone,
-          billing_address: organization.address as Record<string, unknown> | undefined,
-          shipping_address: organization.address as Record<string, unknown> | undefined,
-        },
-        organization.id
-      )
+    // Create the linked record for the REQUESTED role (rest.type), not
+    // organization.type — when reusing an existing org that's becoming
+    // dual-role, organization.type still reflects its original/primary
+    // role, but the admin is asking to add a different one here.
+    const requestedType = rest.type
+    if (requestedType === 'customer') {
+      const { data: existingCustomerRow } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('organization_id', organization.id)
+        .maybeSingle()
+
+      if (!existingCustomerRow) {
+        const defaultEmail = `contact@${organization.name.toLowerCase().replace(/\s+/g, '')}.local`
+        await CustomerService.createCustomer(
+          {
+            company_name: organization.name,
+            contact_name: organization.name,
+            contact_email: organization.contact_email || defaultEmail,
+            contact_phone: organization.contact_phone,
+            billing_address: organization.address as Record<string, unknown> | undefined,
+            shipping_address: organization.address as Record<string, unknown> | undefined,
+          },
+          organization.id
+        )
+      }
     }
 
-    if (organization.type === 'vendor') {
-      await VendorService.createVendor(
-        {
-          company_name: organization.name,
-          contact_name: organization.name,
-          contact_email: organization.contact_email || `contact@${organization.name.toLowerCase().replace(/\s+/g, '')}.local`,
-          contact_phone: organization.contact_phone,
-          address: (organization.address as {
-            street?: string
-            city?: string
-            state?: string
-            zip?: string
-            zip_code?: string
-            country?: string
-          }) && {
-            street: String((organization.address as { street?: string }).street || ''),
-            city: String((organization.address as { city?: string }).city || ''),
-            state: String((organization.address as { state?: string }).state || ''),
-            zip: String(
-              (organization.address as { zip?: string; zip_code?: string }).zip ||
-              (organization.address as { zip?: string; zip_code?: string }).zip_code ||
-              ''
-            ),
-            country: String((organization.address as { country?: string }).country || 'USA'),
+    if (requestedType === 'vendor') {
+      const { data: existingVendorRow } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('organization_id', organization.id)
+        .maybeSingle()
+
+      if (!existingVendorRow) {
+        await VendorService.createVendor(
+          {
+            company_name: organization.name,
+            contact_name: organization.name,
+            contact_email: organization.contact_email || `contact@${organization.name.toLowerCase().replace(/\s+/g, '')}.local`,
+            contact_phone: organization.contact_phone,
+            address: (organization.address as {
+              street?: string
+              city?: string
+              state?: string
+              zip?: string
+              zip_code?: string
+              country?: string
+            }) && {
+              street: String((organization.address as { street?: string }).street || ''),
+              city: String((organization.address as { city?: string }).city || ''),
+              state: String((organization.address as { state?: string }).state || ''),
+              zip: String(
+                (organization.address as { zip?: string; zip_code?: string }).zip ||
+                (organization.address as { zip?: string; zip_code?: string }).zip_code ||
+                ''
+              ),
+              country: String((organization.address as { country?: string }).country || 'Canada'),
+            },
           },
-        },
-        organization.id
-      )
+          organization.id
+        )
+      }
     }
 
     // Portal login provisioning is best-effort: if this email already has a
     // login elsewhere (Supabase Auth requires globally unique emails), the
     // organization is still created — it just won't get its own portal
     // account yet.
-    const shouldProvisionPortalUser = organization.type === 'customer' || organization.type === 'vendor'
+    const shouldProvisionPortalUser = requestedType === 'customer' || requestedType === 'vendor'
     let provisioned: { created: boolean; emailSentTo?: string | null; emailSent?: boolean; skippedReason?: string | null } | null = null
     if (shouldProvisionPortalUser) {
       try {
         provisioned = await UserProvisioningService.provisionUser({
           fullName: organization.name,
           email: organization.contact_email!,
-          role: organization.type === 'customer' ? 'customer' : 'vendor',
+          role: requestedType === 'customer' ? 'customer' : 'vendor',
           organizationId: organization.id,
           oneUserPerRolePerOrganization: true,
         })

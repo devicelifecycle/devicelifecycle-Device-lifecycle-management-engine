@@ -34,7 +34,7 @@ export async function POST(
 
     const canApprove =
       ['admin', 'coe_manager'].includes(profile.role) ||
-      (profile.role === 'customer' && orderCustomerOrg === profile.organization_id)
+      (effectiveRole === 'customer' && orderCustomerOrg === profile.organization_id)
 
     if (!canApprove) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

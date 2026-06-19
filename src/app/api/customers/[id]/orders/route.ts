@@ -24,11 +24,11 @@ export async function GET(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
 
-    if (profile?.role === 'vendor') {
+    if (effectiveRole === 'vendor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    if (!INTERNAL_ROLES.includes(profile?.role || '')) {
+    if (!INTERNAL_ROLES.includes(effectiveRole)) {
       if (profile?.organization_id !== customer.organization_id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }

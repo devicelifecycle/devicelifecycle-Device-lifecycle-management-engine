@@ -38,7 +38,7 @@ export async function GET(
     const isAdmin = profile.role === 'admin'
     const isCOE = profile.role === 'coe_manager' || profile.role === 'coe_tech'
     const isOrderCreator = order.created_by_id === authUser.id
-    const isCustomer = profile.role === 'customer'
+    const isCustomer = effectiveRole === 'customer'
 
     if (!isAdmin && !isCOE && !isOrderCreator && !isCustomer) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })

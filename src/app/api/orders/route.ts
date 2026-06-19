@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
     )
 
     // Customers have already reviewed their order — auto-submit so it enters the pricing queue
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       try {
         order = await OrderService.transitionOrder(order.id, 'submitted', authUser.id, 'Auto-submitted by customer')
       } catch (err) {

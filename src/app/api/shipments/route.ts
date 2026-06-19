@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const orderId = searchParams.get('order_id')
 
     // Customers can only fetch shipments for their own orders
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       if (!orderId) {
         return NextResponse.json({ error: 'Customers must specify order_id' }, { status: 403 })
       }
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       if (!order || custOrg !== profile.organization_id) {
         return NextResponse.json({ error: 'You can only view shipments for your own orders' }, { status: 403 })
       }
-    } else if (profile.role === 'vendor') {
+    } else if (effectiveRole === 'vendor') {
       if (!orderId) {
         return NextResponse.json({ error: 'Vendors must specify order_id' }, { status: 403 })
       }
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
     let customerOrder: CustomerShipmentOrder | null = null
 
     // Customer can only create shipments for their own accepted orders
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       const { data: order } = await supabase
         .from('orders')
         .select('status, type, customer_id, customer:customers(organization_id)')
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
       if (order.status !== 'accepted') {
         return NextResponse.json({ error: 'You can only ship devices after accepting the quote' }, { status: 400 })
       }
-    } else if (profile.role === 'vendor') {
+    } else if (effectiveRole === 'vendor') {
       const { data: order } = await supabase
         .from('orders')
         .select('status, vendor:vendors(organization_id)')
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
     }
 
     const advanceTradeInToInboundTransit = async () => {
-      if (profile.role !== 'customer') return
+      if (effectiveRole !== 'customer') return
       if (body.direction !== 'inbound') return
       const currentCustomerOrder = customerOrder
       if (!currentCustomerOrder) return
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
     await advanceTradeInToInboundTransit()
 
     // Notify admins when a customer submits shipment details (fire-and-forget)
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       ;(async () => {
         const svc = createServiceRoleClient()
         const { data: order } = await svc.from('orders').select('order_number').eq('id', body.order_id).single()

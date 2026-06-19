@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
     // Customer: only their org's orders
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       const orderCustomerOrg = (order.customer as { organization_id?: string })?.organization_id
       if (orderCustomerOrg !== profile.organization_id) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })

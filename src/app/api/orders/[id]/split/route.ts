@@ -21,12 +21,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Role-based access control
     // Customers cannot view split details
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Vendors can only see splits for orders assigned to their org
-    if (profile.role === 'vendor' && profile.organization_id) {
+    if (effectiveRole === 'vendor' && profile.organization_id) {
       const { data: order } = await supabase
         .from('orders')
         .select('vendor_id, vendors:vendor_id(organization_id)')

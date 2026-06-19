@@ -390,7 +390,7 @@ export async function POST(request: NextRequest) {
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     if (!customer.is_active) return NextResponse.json({ error: 'Customer is inactive' }, { status: 400 })
 
-    if (profile.role === 'customer') {
+    if (effectiveRole === 'customer') {
       if (!profile.organization_id) {
         return NextResponse.json({ error: 'Your account is not linked to an organization. Please contact your administrator.' }, { status: 403 })
       }
@@ -399,7 +399,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (profile.role === 'sales' && profile.organization_id && customer.organization_id) {
+    if (effectiveRole === 'sales' && profile.organization_id && customer.organization_id) {
       if (customer.organization_id !== profile.organization_id) {
         return NextResponse.json({ error: 'Cannot create orders for customers in another organization' }, { status: 403 })
       }
