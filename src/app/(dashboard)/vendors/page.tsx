@@ -28,7 +28,10 @@ export default function VendorsPage() {
   const canCreate = user?.role === 'admin' || user?.role === 'coe_manager'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  // Default to active-only so a just-deleted (deactivated) vendor disappears
+  // from view immediately, instead of sitting there looking like delete did
+  // nothing. "All vendors" / "Inactive only" remain available to find it again.
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const debouncedSearch = useDebounce(search)
   const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null)
 
@@ -242,9 +245,9 @@ export default function VendorsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Vendor</AlertDialogTitle>
+            <AlertDialogTitle>Delete vendor?</AlertDialogTitle>
             <AlertDialogDescription>
-              Permanently delete <strong>{deleteTarget?.company_name}</strong>? This removes the vendor and all associated bids and records. This cannot be undone.
+              This will deactivate <strong>{deleteTarget?.company_name}</strong>. They'll disappear from the active vendor list and from order assignment, but their bid and order history is kept for audit and won't be easy to restore.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
