@@ -28,18 +28,16 @@ export default function VendorsPage() {
   const canCreate = user?.role === 'admin' || user?.role === 'coe_manager'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  // Default to active-only so a just-deleted (deactivated) vendor disappears
-  // from view immediately, instead of sitting there looking like delete did
-  // nothing. "All vendors" / "Inactive only" remain available to find it again.
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const debouncedSearch = useDebounce(search)
   const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null)
 
-  const isActiveFilter = statusFilter === 'all' ? undefined : statusFilter === 'active'
+  // Main list always shows active vendors only — deleted ones live on their
+  // own /vendors/deleted page (with a Restore action) instead of a filter
+  // dropdown, so there's one unambiguous place to find them.
   const { vendors, total, isLoading, totalPages, error, remove, isDeleting } = useVendors({
     search: debouncedSearch,
     page,
-    is_active: isActiveFilter,
+    is_active: true,
   })
 
   const handleDeleteVendor = async () => {
@@ -93,16 +91,21 @@ export default function VendorsPage() {
               asChild
             >
               <a
-                href={`/api/vendors/export${debouncedSearch || statusFilter !== 'all' ? `?${new URLSearchParams({
-                  ...(debouncedSearch && { search: debouncedSearch }),
-                  ...(statusFilter !== 'all' && { is_active: statusFilter === 'active' ? 'true' : 'false' }),
-                }).toString()}` : ''}`}
+                href={`/api/vendors/export${debouncedSearch ? `?${new URLSearchParams({ search: debouncedSearch }).toString()}` : ''}`}
                 download
               >
                 <Download className="mr-2 h-4 w-4" />
                 Download CSV
               </a>
             </Button>
+            {isAdmin && (
+              <Link href="/vendors/deleted">
+                <Button variant="outline">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Deleted
+                </Button>
+              </Link>
+            )}
             {canCreate && (
               <Link href="/vendors/new">
                 <Button>
@@ -129,31 +132,17 @@ export default function VendorsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search vendors..."
-                className="pl-11"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value)
-                  setPage(1)
-                }}
-              />
-            </div>
-            <select
-              className="h-11 rounded-2xl border border-input dark:border-white/[0.08] bg-background dark:bg-white/[0.04] px-4 text-sm text-foreground shadow-sm dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_12px_32px_-24px_rgba(0,0,0,0.45)]"
-              value={statusFilter}
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search vendors..."
+              className="pl-11"
+              value={search}
               onChange={(event) => {
-                setStatusFilter(event.target.value as 'all' | 'active' | 'inactive')
+                setSearch(event.target.value)
                 setPage(1)
               }}
-            >
-              <option value="all">All vendors</option>
-              <option value="active">Active only</option>
-              <option value="inactive">Inactive only</option>
-            </select>
+            />
           </div>
 
           {isLoading ? (
@@ -247,7 +236,7 @@ export default function VendorsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete vendor?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will deactivate <strong>{deleteTarget?.company_name}</strong>. They'll disappear from the active vendor list and from order assignment, but their bid and order history is kept for audit and won't be easy to restore.
+              This will deactivate <strong>{deleteTarget?.company_name}</strong>. They'll disappear from the active vendor list and from order assignment. Their bid and order history is kept for audit, and you can restore them later from the Deleted vendors page.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

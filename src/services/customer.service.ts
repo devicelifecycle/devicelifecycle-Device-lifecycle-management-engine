@@ -16,10 +16,10 @@ export class CustomerService {
    * Get customers with pagination
    */
   static async getCustomers(
-    params: PaginationParams & { search?: string; organization_id?: string }
+    params: PaginationParams & { search?: string; organization_id?: string; is_active?: boolean }
   ): Promise<PaginatedResponse<Customer>> {
     const supabase = await createServerSupabaseClient()
-    
+
     const {
       page = 1,
       page_size = 20,
@@ -27,12 +27,13 @@ export class CustomerService {
       sort_order = 'asc',
       search,
       organization_id,
+      is_active = true,
     } = params
 
     let query = supabase
       .from('customers')
       .select('*', { count: 'exact' })
-      .eq('is_active', true)
+      .eq('is_active', is_active)
 
     if (organization_id) {
       query = query.eq('organization_id', organization_id)

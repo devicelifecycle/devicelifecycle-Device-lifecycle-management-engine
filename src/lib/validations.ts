@@ -192,6 +192,7 @@ export const customerSchema = z.object({
   notes: z.string().optional(),
   default_risk_mode: z.enum(['retail', 'enterprise']).optional(),
   organization_id: z.string().uuid().optional(),
+  is_active: z.boolean().optional(),
 })
 
 export const createCustomerSchema = customerSchema
@@ -216,6 +217,7 @@ export const vendorSchema = z.object({
   payment_terms: z.string().optional(),
   warranty_period_days: z.coerce.number().min(0).optional(),
   notes: z.string().optional(),
+  is_active: z.boolean().optional(),
 })
 
 export const createVendorSchema = vendorSchema

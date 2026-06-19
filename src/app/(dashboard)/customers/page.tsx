@@ -155,6 +155,14 @@ export default function CustomersPage() {
                 Download CSV
               </a>
             </Button>
+            {canDelete && (
+              <Link href="/customers/deleted">
+                <Button variant="outline">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Deleted
+                </Button>
+              </Link>
+            )}
             {canCreate && (
               <Link href="/customers/new">
                 <Button>
@@ -372,7 +380,7 @@ export default function CustomersPage() {
               {deleteTarget ? (
                 <>
                   This will deactivate <strong>{deleteTarget.company_name}</strong>. They will disappear from the active
-                  customer list and won’t be easy to restore.
+                  customer list. You can restore them later from the Deleted customers page.
                 </>
               ) : null}
             </AlertDialogDescription>
