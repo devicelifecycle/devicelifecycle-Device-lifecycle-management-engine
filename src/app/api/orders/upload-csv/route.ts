@@ -13,7 +13,7 @@ import type { AuthContext } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
-import { matchDeviceFromCsv, isPlausibleBrand } from '@/lib/device-match'
+import { matchDeviceFromCsv, isPlausibleBrand, extractColor, stripColor } from '@/lib/device-match'
 import type { Device } from '@/types'
 export const dynamic = 'force-dynamic'
 
@@ -649,6 +649,23 @@ export async function POST(request: NextRequest) {
         const matched = matchDeviceFromCsv(catalogForMatch, row.brand, row.model)
         deviceId = matched?.id || null
 
+        if (matched) {
+          // Same device, just a color the catalog hasn't seen yet (e.g.
+          // catalog has "Galaxy S24", this row is "Galaxy S24 Black") —
+          // record the color on the existing entry instead of treating it
+          // as a new device.
+          const color = extractColor(row.model || '')
+          if (color) {
+            const existingColors = ((matched.specifications as { colors?: string[] } | null)?.colors) || []
+            if (!existingColors.some((c) => c.toLowerCase() === color.toLowerCase())) {
+              const updatedColors = [...existingColors, color]
+              const updatedSpecs = { ...(matched.specifications as Record<string, unknown> | null), colors: updatedColors }
+              await serviceRole.from('device_catalog').update({ specifications: updatedSpecs }).eq('id', matched.id)
+              matched.specifications = updatedSpecs
+            }
+          }
+        }
+
         // Auto-add device to catalog when not found so future lookups succeed.
         // Only when row.brand actually looks like a brand — otherwise a
         // misidentified column (serial number, part number) ends up as
@@ -656,11 +673,14 @@ export async function POST(request: NextRequest) {
         // leaving this item unmatched for manual review (deviceNameTag below).
         if (!deviceId && row.brand && isPlausibleBrand(row.brand)) {
           const autoMake = row.brand
-          const autoModel = row.model || 'Unknown Model'
+          const rawModel = row.model || 'Unknown Model'
+          const autoColor = extractColor(rawModel)
+          const autoModel = autoColor ? stripColor(rawModel) || rawModel : rawModel
+          const autoSpecs = autoColor ? { colors: [autoColor] } : undefined
           try {
             const { data: newDevice } = await serviceRole
               .from('device_catalog')
-              .insert({ make: autoMake, model: autoModel, is_active: true })
+              .insert({ make: autoMake, model: autoModel, specifications: autoSpecs, is_active: true })
               .select('id, make, model, specifications, category')
               .single()
             if (newDevice) {

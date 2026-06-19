@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { matchDeviceFromCsv, isPlausibleBrand } from '@/lib/device-match'
+import { matchDeviceFromCsv, isPlausibleBrand, extractColor, stripColor } from '@/lib/device-match'
 import { normalizeTradeCondition } from '@/lib/condition'
 import type { Device } from '@/types'
 
@@ -427,35 +427,76 @@ function inferDeviceCategory(make: string, model: string): string {
   return 'smartphone'
 }
 
+// ── Merge detected colors into already-matched devices ────────────────────────
+// "Galaxy S24" already in catalog, this row says "Galaxy S24 Black" — record
+// Black on the existing device instead of leaving it as dead-end metadata
+// (matchDeviceFromCsv already strips color before comparing, so this row
+// matched the existing device rather than spawning a duplicate).
+async function mergeDetectedColors(outputRows: TradeTemplateRow[]): Promise<void> {
+  const serviceRole = createServiceRoleClient()
+  const colorsByDevice = new Map<string, Set<string>>()
+
+  for (const row of outputRows) {
+    if (!row.device_id) continue
+    const color = extractColor(row.model || '')
+    if (!color) continue
+    if (!colorsByDevice.has(row.device_id)) colorsByDevice.set(row.device_id, new Set())
+    colorsByDevice.get(row.device_id)!.add(color)
+  }
+
+  if (colorsByDevice.size === 0) return
+
+  const { data: devices } = await serviceRole
+    .from('device_catalog')
+    .select('id, specifications')
+    .in('id', [...colorsByDevice.keys()])
+
+  for (const device of devices || []) {
+    const newColors = colorsByDevice.get(device.id)
+    if (!newColors) continue
+    const existingColors: string[] = ((device.specifications as { colors?: string[] } | null)?.colors) || []
+    const existingLower = new Set(existingColors.map((c) => c.toLowerCase()))
+    const toAdd = [...newColors].filter((c) => !existingLower.has(c.toLowerCase()))
+    if (toAdd.length === 0) continue
+    const updatedSpecs = { ...(device.specifications as Record<string, unknown> | null), colors: [...existingColors, ...toAdd] }
+    await serviceRole.from('device_catalog').update({ specifications: updatedSpecs }).eq('id', device.id)
+  }
+}
+
 // ── Auto-add unmatched devices to device_catalog via service role ─────────────
 // Runs after CSV matching. For each (make, model) not found in the catalog,
 // inserts a placeholder device entry so the order item can reference a device_id.
 async function autoAddUnmatched(outputRows: TradeTemplateRow[]): Promise<TradeTemplateRow[]> {
   const serviceRole = createServiceRoleClient()
+  await mergeDetectedColors(outputRows)
 
   // Group unmatched rows by (make, model) to avoid duplicate inserts.
   // Skip rows whose "make" doesn't actually look like a brand (IMEI/serial/
   // part number from a misidentified column) — leave them not_in_catalog
   // for manual review instead of polluting device_catalog with garbage.
-  const groups = new Map<string, { make: string; model: string; indices: number[] }>()
+  // Strip any trailing color so it doesn't get baked into the new catalog
+  // entry's model name — it's seeded into specifications.colors instead.
+  const groups = new Map<string, { make: string; model: string; color?: string; indices: number[] }>()
   outputRows.forEach((row, i) => {
     if (row.device_id || !row.make || !isPlausibleBrand(row.make)) return
-    const key = `${row.make.toLowerCase()}|${row.model.toLowerCase()}`
+    const color = extractColor(row.model || '')
+    const model = color ? (stripColor(row.model) || row.model) : row.model
+    const key = `${row.make.toLowerCase()}|${model.toLowerCase()}`
     const entry = groups.get(key)
     if (entry) entry.indices.push(i)
-    else groups.set(key, { make: row.make, model: row.model, indices: [i] })
+    else groups.set(key, { make: row.make, model, color, indices: [i] })
   })
 
   if (groups.size === 0) return outputRows
 
   const result = [...outputRows]
-  for (const { make, model, indices } of groups.values()) {
+  for (const { make, model, color, indices } of groups.values()) {
     try {
       let deviceId: string | null = null
 
       const { data: inserted, error: insertErr } = await serviceRole
         .from('device_catalog')
-        .insert({ make, model, category: inferDeviceCategory(make, model), is_active: true, specifications: {} })
+        .insert({ make, model, category: inferDeviceCategory(make, model), is_active: true, specifications: color ? { colors: [color] } : {} })
         .select('id')
         .single()
 

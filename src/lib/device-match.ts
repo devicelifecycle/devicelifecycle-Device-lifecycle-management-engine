@@ -52,6 +52,36 @@ function stripStorage(model: string): string {
     .trim()
 }
 
+// Known color names/phrases, longest-first so e.g. "Space Gray" matches
+// before the bare "Gray" inside it would. Covers plain colors plus the
+// common two-word marketing names (Apple/Samsung/Google). Deliberately
+// does NOT attempt abbreviated codes (BK, BLK, GRY) or slash-separated
+// multi-color lists ("BK/GR/VT") — that's a separate, harder problem.
+const COLOR_PHRASES = [
+  'natural titanium', 'titanium black', 'titanium gray', 'titanium grey', 'titanium blue', 'titanium violet', 'titanium yellow', 'titanium silver',
+  'space gray', 'space grey', 'space black', 'phantom black', 'phantom white', 'phantom violet', 'phantom green', 'phantom silver',
+  'sierra blue', 'alpine green', 'deep purple', 'pacific blue', 'product red', 'midnight green', 'graphite gray',
+  'rose gold', 'jet black',
+  'black', 'white', 'blue', 'red', 'green', 'gold', 'silver', 'gray', 'grey', 'purple', 'violet',
+  'pink', 'yellow', 'orange', 'coral', 'lavender', 'mint', 'cream', 'bronze', 'copper',
+  'graphite', 'obsidian', 'midnight', 'starlight', 'titanium', 'charcoal', 'navy', 'teal', 'beige',
+].sort((a, b) => b.length - a.length)
+
+const COLOR_PATTERN = new RegExp(`\\b(${COLOR_PHRASES.map((c) => c.replace(/ /g, '\\s+')).join('|')})\\b`, 'i')
+
+/** Pull a trailing color name out of a model string, if present. */
+export function extractColor(model: string): string | undefined {
+  const match = normalize(model).match(COLOR_PATTERN)
+  if (!match) return undefined
+  // Title-case each word: "space gray" -> "Space Gray"
+  return match[1].split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+/** Strip a known trailing color name from a model string (e.g. "S24 Black" -> "S24") */
+export function stripColor(model: string): string {
+  return model.replace(COLOR_PATTERN, '').replace(/\s+/g, ' ').trim()
+}
+
 /**
  * Remove common trailing noise tokens from free-typed model values.
  * Example: "iphone 14 s" -> "iphone 14".
@@ -180,7 +210,7 @@ function normalizeAppleModel(model: string): string {
  * catalog naming variants (e.g. "Pro Max" ↔ "Pro Max", Gen suffix variants).
  */
 function modelCandidates(rawModel: string, make: string): string[] {
-  const base = normalize(stripStorage(rawModel))
+  const base = normalize(stripColor(stripStorage(rawModel)))
   const candidates = new Set<string>([base])
 
   // For Apple, also try the iPhone-prefixed version
@@ -226,7 +256,7 @@ export function matchDeviceFromCsv(
   deviceModel: string | undefined | null
 ): Device | undefined {
   let csvMake = resolveMake(deviceMake ?? '')
-  let csvModelRaw = sanitizeModelNoise(stripStorage(deviceModel ?? ''))
+  let csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(deviceModel ?? '')))
 
   // When make has full name "Samsung Galaxy S24" and model is empty, split it
   if (!csvModelRaw && csvMake) {
@@ -234,7 +264,7 @@ export function matchDeviceFromCsv(
     const split = splitMakeModel(combined)
     if (split) {
       csvMake = split.make
-      csvModelRaw = sanitizeModelNoise(stripStorage(split.model))
+      csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(split.model)))
     }
   }
   // When model has full name "Samsung Galaxy S24" and make is empty, split it
@@ -243,7 +273,7 @@ export function matchDeviceFromCsv(
     if (split) {
       // Apply MAKE_ALIASES so "galaxy" → "samsung", "pixel" → "google", etc.
       csvMake = resolveMake(split.make)
-      csvModelRaw = sanitizeModelNoise(stripStorage(split.model))
+      csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(split.model)))
     }
   }
 
