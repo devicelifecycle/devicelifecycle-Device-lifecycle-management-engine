@@ -361,7 +361,6 @@ export default function AdminOrganizationsPage() {
                   <TableHead>Roles</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Linked Records</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Portal Login</TableHead>
@@ -383,10 +382,22 @@ export default function AdminOrganizationsPage() {
                         ) : (
                           <>
                             {org.has_customer_role && (
-                              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${typeColors.customer}`}>customer</span>
+                              <Link
+                                href={`/customers?organization_id=${org.id}`}
+                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium hover:underline ${typeColors.customer}`}
+                                title="View customer record"
+                              >
+                                customer
+                              </Link>
                             )}
                             {org.has_vendor_role && (
-                              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${typeColors.vendor}`}>vendor</span>
+                              <Link
+                                href="/vendors"
+                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium hover:underline ${typeColors.vendor}`}
+                                title="View vendor record"
+                              >
+                                vendor
+                              </Link>
                             )}
                             {!org.has_customer_role && (
                               <button
@@ -414,21 +425,6 @@ export default function AdminOrganizationsPage() {
                     </TableCell>
                     <TableCell>{org.contact_email || '—'}</TableCell>
                     <TableCell>{org.contact_phone || '—'}</TableCell>
-                    <TableCell onClick={e => e.stopPropagation()}>
-                      <div className="flex flex-col gap-0.5">
-                        {org.has_customer_role && (
-                          <Link href={`/customers?organization_id=${org.id}`} className="text-primary hover:underline">
-                            View customer(s)
-                          </Link>
-                        )}
-                        {org.has_vendor_role && (
-                          <Link href="/vendors" className="text-primary hover:underline">
-                            View vendor
-                          </Link>
-                        )}
-                        {!org.has_customer_role && !org.has_vendor_role && '—'}
-                      </div>
-                    </TableCell>
                     <TableCell>
                       <Badge variant={org.is_active ? 'default' : 'secondary'}>
                         {org.is_active ? 'Active' : 'Inactive'}
