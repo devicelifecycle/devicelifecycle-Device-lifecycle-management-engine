@@ -138,13 +138,17 @@ export default function AdminOrganizationsPage() {
           address: { street: form.address, city: form.city, state: form.state, zip_code: form.zip_code, country: form.country },
         }),
       })
-      if (!res.ok) throw new Error()
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const detail = Array.isArray(payload.details) && payload.details[0]?.message
+        throw new Error(detail || payload.error || 'Failed to update organization')
+      }
       toast.success('Organization updated')
       setDialogOpen(false)
       resetForm()
       fetchOrganizations()
-    } catch {
-      toast.error('Failed to update organization')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update organization')
     } finally {
       setCreating(false)
     }

@@ -159,7 +159,7 @@ const baseOrganizationSchema = z.object({
   zip_code: z.string().optional(),
   country: z.string().default('Canada'),
   phone: phoneSchema,
-  email: emailSchema.optional(),
+  email: emailSchema.optional().or(z.literal('')),
   website: z.string().url().optional().or(z.literal('')),
 })
 

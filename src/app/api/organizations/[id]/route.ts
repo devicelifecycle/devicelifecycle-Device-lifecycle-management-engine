@@ -53,16 +53,28 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden — admin role required' }, { status: 403 })
     }
 
-    const { error } = await supabase
+    // Postgres treats "0 rows matched" as success, not an error — whether
+    // that's a bad id or RLS silently excluding the row. Select the deleted
+    // row back so we can tell a true delete from a silent no-op and report
+    // it accurately instead of always returning { ok: true }.
+    const { data, error } = await supabase
       .from('organizations')
       .delete()
       .eq('id', (await params).id)
+      .select('id')
 
     if (error) {
       console.error('Error deleting organization:', error)
       return NextResponse.json(
         { error: error.message || 'Failed to delete organization' },
         { status: 500 }
+      )
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: 'Organization not found, or you do not have permission to delete it' },
+        { status: 404 }
       )
     }
 
