@@ -10,6 +10,8 @@ import { DEVICE_BRANDS } from '@/lib/constants'
 const MAKE_ALIASES: Record<string, string> = {
   iphone: 'apple',
   apple: 'apple',
+  apl: 'apple',
+  appl: 'apple',
   samsung: 'samsung',
   galaxy: 'samsung',
   google: 'google',
@@ -46,10 +48,23 @@ function normalize(s: string | undefined | null): string {
 
 /** Strip storage from model string (e.g. "iPhone 15 Pro 256GB" -> "iPhone 15 Pro") */
 function stripStorage(model: string): string {
-  return model
+  let m = model
     .replace(/\s*(128|256|512|64|32|16)\s*gb\s*/gi, '')
     .replace(/\s*(1|2|4|8)\s*tb\s*/gi, '')
     .trim()
+
+  // Bare trailing number, no GB/TB suffix (e.g. "iPhone XR 64"). Only strip
+  // it as storage if what's left isn't just the bare brand/product-line
+  // word on its own — otherwise "iPhone 16" misreads as "iPhone" + 16GB,
+  // confusing a generation number for a storage size.
+  const trailing = m.match(/^(.*\S)\s+(16|32|64|128|256|512|1024|2048)$/i)
+  if (trailing) {
+    const before = trailing[1].trim()
+    const looksLikeBareBrandOnly = /^(iphone|galaxy|pixel)$/i.test(before)
+    if (!looksLikeBareBrandOnly) m = before
+  }
+
+  return m
 }
 
 // Known color names/phrases, longest-first so e.g. "Space Gray" matches
