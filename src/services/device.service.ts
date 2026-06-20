@@ -45,7 +45,11 @@ export class DeviceService {
     if (search) {
       const tokens = sanitizeSearchInput(search).split(/\s+/).filter(Boolean)
       for (const token of tokens) {
-        query = query.or(`make.ilike.%${token}%,model.ilike.%${token}%`)
+        // Color/storage now live in specifications (not baked into model
+        // text), so "Black iPhone" or "128GB" need to match there too —
+        // otherwise color-based search regressed to zero results once the
+        // catalog was cleaned up to stop storing color in the model field.
+        query = query.or(`make.ilike.%${token}%,model.ilike.%${token}%,specifications->>colors.ilike.%${token}%,specifications->>storage_options.ilike.%${token}%`)
       }
     }
 
