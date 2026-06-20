@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { updateUserSchema } from '@/lib/validations'
 import { isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -74,9 +75,30 @@ export async function PATCH(
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    // Check admin role
-    const isSelf = authUser.id === (await params).id
-    if (!isSelf && profile?.role !== 'admin') {
+    const targetId = (await params).id
+    const isSelf = authUser.id === targetId
+    const isPlatformAdmin = profile?.role === 'admin'
+
+    // An org admin (designated by the platform admin via is_org_admin) may
+    // manage teammates of the same role within their own organization.
+    // RLS on `users` only permits a row's owner or a platform admin to
+    // SELECT/UPDATE it, so this lookup (and the eventual write below) must
+    // go through the service-role client — the org/role match performed
+    // here is the real authorization gate, not RLS.
+    let isOrgAdminManagingTeammate = false
+    if (!isSelf && !isPlatformAdmin && profile?.is_org_admin && ['customer', 'vendor'].includes(profile.role)) {
+      const serviceRole = createServiceRoleClient()
+      const { data: targetUser } = await serviceRole
+        .from('users')
+        .select('organization_id, role')
+        .eq('id', targetId)
+        .single()
+      isOrgAdminManagingTeammate = !!targetUser
+        && targetUser.organization_id === profile.organization_id
+        && targetUser.role === profile.role
+    }
+
+    if (!isSelf && !isPlatformAdmin && !isOrgAdminManagingTeammate) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -95,19 +117,35 @@ export async function PATCH(
     }
 
     // Non-admin users cannot change their own role or secondary_role
-    if (isSelf && profile?.role !== 'admin') {
+    if (isSelf && !isPlatformAdmin) {
       delete updateData.role
       delete updateData.secondary_role
     }
-    // Only admins can set secondary_role on any user
-    if (profile?.role !== 'admin') {
+    // Only admins can set secondary_role or is_org_admin on any user
+    if (!isPlatformAdmin) {
       delete updateData.secondary_role
+      delete updateData.is_org_admin
+    }
+    // An org admin managing a teammate may only toggle is_active — not role,
+    // phone, name, etc. on someone else's account.
+    if (isOrgAdminManagingTeammate) {
+      for (const key of Object.keys(updateData)) {
+        if (key !== 'is_active' && key !== 'updated_at') delete updateData[key]
+      }
+    }
+    // No one may deactivate their own account through this route (org admin
+    // or otherwise) — avoids an accidental lockout.
+    if (isSelf && updateData.is_active === false) {
+      return NextResponse.json({ error: 'Cannot deactivate your own account' }, { status: 400 })
     }
 
-    const { data: updatedUser, error } = await supabase
+    // The write itself needs the service-role client for the same RLS
+    // reason as the lookup above when an org admin targets a teammate.
+    const writeClient = isOrgAdminManagingTeammate ? createServiceRoleClient() : supabase
+    const { data: updatedUser, error } = await writeClient
       .from('users')
       .update(updateData)
-      .eq('id', (await params).id)
+      .eq('id', targetId)
       .select()
       .single()
 

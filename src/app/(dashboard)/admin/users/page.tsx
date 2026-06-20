@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [editForm, setEditForm] = useState({ full_name: '', role: '' as UserRole, secondary_role: '' as UserRole | '', notification_email: '', phone: '' })
+  const [editForm, setEditForm] = useState({ full_name: '', role: '' as UserRole, secondary_role: '' as UserRole | '', notification_email: '', phone: '', is_org_admin: false })
   const [saving, setSaving] = useState(false)
 
   // Deactivate state
@@ -112,7 +112,7 @@ export default function AdminUsersPage() {
 
   const handleOpenEdit = (user: User) => {
     setEditingUser(user)
-    setEditForm({ full_name: user.full_name, role: user.role, secondary_role: user.secondary_role ?? '', notification_email: user.notification_email ?? '', phone: user.phone ?? '' })
+    setEditForm({ full_name: user.full_name, role: user.role, secondary_role: user.secondary_role ?? '', notification_email: user.notification_email ?? '', phone: user.phone ?? '', is_org_admin: user.is_org_admin ?? false })
     setEditDialogOpen(true)
   }
 
@@ -125,6 +125,9 @@ export default function AdminUsersPage() {
         role: editForm.role,
         secondary_role: editForm.secondary_role || null,
         phone: editForm.phone?.trim() || null,
+      }
+      if (editForm.role === 'customer' || editForm.role === 'vendor') {
+        payload.is_org_admin = editForm.is_org_admin
       }
       if ((editingUser as { email?: string }).email?.endsWith('@login.local')) {
         payload.notification_email = editForm.notification_email?.trim() || null
@@ -341,6 +344,11 @@ export default function AdminUsersPage() {
                             +{USER_ROLE_CONFIG[u.secondary_role]?.label || u.secondary_role}
                           </span>
                         )}
+                        {u.is_org_admin && (
+                          <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700" title="Can manage their org's own teammates">
+                            Org Admin
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -428,6 +436,18 @@ export default function AdminUsersPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">Grants access to both portals with a switch button in the header.</p>
+              </div>
+            )}
+            {(editForm.role === 'customer' || editForm.role === 'vendor') && (
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label>Org Admin</Label>
+                  <p className="text-xs text-muted-foreground">Can invite and deactivate teammates of their own org from their portal&apos;s Team page, without going through you.</p>
+                </div>
+                <Switch
+                  checked={editForm.is_org_admin}
+                  onCheckedChange={(checked) => setEditForm(f => ({ ...f, is_org_admin: checked }))}
+                />
               </div>
             )}
             <div className="space-y-2">

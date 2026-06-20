@@ -124,7 +124,9 @@ export const createUserSchema = z
     full_name: z.string().min(2, 'Name must be at least 2 characters'),
     role: z.enum(USER_ROLE_VALUES),
     organization_id: z.string().uuid().optional(),
-    password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+    // Optional: org-admin teammate invites omit this and get an
+    // auto-generated temp password (UserProvisioningService.provisionUser).
+    password: z.string().min(8, 'Password must be at least 8 characters').max(128).optional(),
     notification_email: z.string().email().optional(),
     phone: z.string().max(30).optional(),
   })
@@ -141,6 +143,9 @@ export const updateUserSchema = z.object({
   role: z.enum(USER_ROLE_VALUES).optional(),
   secondary_role: z.enum(USER_ROLE_VALUES).optional().nullable(),
   is_active: z.boolean().optional(),
+  /** Only the platform admin may set this — stripped for any other caller
+   * in PATCH /api/users/[id] (src/app/api/users/[id]/route.ts). */
+  is_org_admin: z.boolean().optional(),
   /** For Login ID users: real email for notifications, forgot-password */
   notification_email: z.string().email().optional().nullable(),
   phone: z.string().max(30).optional().nullable(),

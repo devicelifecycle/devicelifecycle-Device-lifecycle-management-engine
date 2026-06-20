@@ -25,6 +25,7 @@ export interface AuthProfile {
   secondary_role: string | null
   organization_id: string | null
   is_active: boolean
+  is_org_admin: boolean
 }
 
 export interface AuthContext {
@@ -53,7 +54,7 @@ export async function requireAuth(): Promise<AuthContext | null> {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, role, secondary_role, organization_id, is_active')
+    .select('id, role, secondary_role, organization_id, is_active, is_org_admin')
     .eq('id', session.user.id)
     .single()
 

@@ -4,10 +4,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createUserSchema } from '@/lib/validations'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
 export const dynamic = 'force-dynamic'
 
+const ORG_ADMIN_ROLES = ['customer', 'vendor']
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,12 +17,21 @@ export async function GET(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, profile } = auth
 
-    if (profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const isOrgAdmin = profile.is_org_admin && ORG_ADMIN_ROLES.includes(profile.role)
+    if (profile.role !== 'admin' && !isOrgAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // An org admin only sees their own org/role's teammates. RLS on `users`
+    // only permits a row's owner or a platform admin to SELECT it, so this
+    // must go through the service-role client — the org/role filter below
+    // is the real authorization boundary, not RLS.
+    const client = isOrgAdmin ? createServiceRoleClient() : supabase
+    let query = client.from('users').select('*').order('created_at', { ascending: false })
+    if (isOrgAdmin) {
+      query = query.eq('organization_id', profile.organization_id).eq('role', profile.role)
+    }
+    const { data: users, error } = await query
 
     if (error) throw error
 
@@ -43,9 +54,23 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const { profile } = auth
+
+    const isOrgAdmin = profile.role !== 'admin' && profile.is_org_admin && ORG_ADMIN_ROLES.includes(profile.role)
+    if (profile.role !== 'admin' && !isOrgAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const body = await request.json()
+
+    // An org admin can only invite a teammate of their own role into their
+    // own org — force these regardless of what the client sent, so a
+    // tampered request can't create a different role or cross-org user.
+    if (isOrgAdmin) {
+      body.role = profile.role
+      body.organization_id = profile.organization_id
+      delete body.password
+    }
 
     // Validate input with Zod (enforces valid role enum, email format, etc.)
     const validationResult = createUserSchema.safeParse(body)

@@ -19,6 +19,7 @@ import {
   Shield,
   ShoppingCart,
   Truck,
+  UserCog,
   Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -31,6 +32,8 @@ interface NavItem {
   icon: React.ElementType
   roles?: string[]
   countKey?: 'pendingBids' | 'actionableOrders'
+  /** Only the org's designated org admin sees this item — checked alongside roles. */
+  requiresOrgAdmin?: boolean
 }
 
 interface NavSection {
@@ -55,6 +58,8 @@ const navSections: NavSection[] = [
       { title: 'Requests', href: '/customer/requests', icon: FilePlus2, roles: ['customer'] },
       { title: 'Vendor Orders', href: '/vendor/orders', icon: Truck, roles: ['vendor'] },
       { title: 'My Bids', href: '/vendor/bids', icon: Gavel, roles: ['vendor'], countKey: 'pendingBids' },
+      { title: 'Team', href: '/customer/team', icon: UserCog, roles: ['customer'], requiresOrgAdmin: true },
+      { title: 'Team', href: '/vendor/team', icon: UserCog, roles: ['vendor'], requiresOrgAdmin: true },
       { title: 'Customers', href: '/customers', icon: Users, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Vendors', href: '/vendors', icon: Building2, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Bids', href: '/bids', icon: Gavel, roles: ['admin', 'coe_manager', 'sales'], countKey: 'pendingBids' },
@@ -94,10 +99,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       navSections
         .map((section) => ({
           ...section,
-          items: section.items.filter((item) => !item.roles || item.roles.some((role) => hasRole(role as any))),
+          items: section.items.filter((item) =>
+            (!item.roles || item.roles.some((role) => hasRole(role as any))) &&
+            (!item.requiresOrgAdmin || !!user?.is_org_admin)
+          ),
         }))
         .filter((section) => section.items.length > 0),
-    [hasRole]
+    [hasRole, user]
   )
 
   const initials = user?.full_name
