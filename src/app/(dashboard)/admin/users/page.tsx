@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { Plus, Shield, Pencil, Copy, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,9 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ full_name: '', email: '', role: 'sales' as UserRole, password: '', organization_id: '', notification_email: '', phone: '' })
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; type: string }>>([])
+  // All orgs, for the Organization column — independent of the create
+  // dialog's role-filtered `organizations` state above.
+  const [orgNameById, setOrgNameById] = useState<Map<string, string>>(new Map())
 
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -62,6 +66,13 @@ export default function AdminUsersPage() {
   }, [])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
+
+  useEffect(() => {
+    fetch('/api/organizations?page_size=500')
+      .then(r => r.json())
+      .then(d => setOrgNameById(new Map((d.data || []).map((o: { id: string; name: string }) => [o.id, o.name]))))
+      .catch(() => setOrgNameById(new Map()))
+  }, [])
 
   // Re-fetch when users table changes on any device (via Supabase Realtime)
   useEffect(() => {
@@ -323,6 +334,7 @@ export default function AdminUsersPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Login ID</TableHead>
+                  <TableHead>Organization</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Access</TableHead>
                   <TableHead>Last Login</TableHead>
@@ -334,6 +346,15 @@ export default function AdminUsersPage() {
                   <TableRow key={u.id} className={!u.is_active ? 'opacity-60' : ''}>
                     <TableCell className="font-medium">{u.full_name}</TableCell>
                     <TableCell className="font-mono text-sm">{u.email?.endsWith('@login.local') ? u.email.slice(0, -12) : u.email}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {u.organization_id ? (
+                        <Link href="/admin/organizations" className="hover:underline hover:text-foreground" title="View organizations">
+                          {orgNameById.get(u.organization_id) || 'Unknown org'}
+                        </Link>
+                      ) : (
+                        <span className="text-xs">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleColors[u.role] || ''}`}>
