@@ -5,7 +5,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { NotificationService } from './notification.service'
-import { addHours, isPast, sanitizeSearchInput } from '@/lib/utils'
+import { addHours, isPast } from '@/lib/utils'
 import { CUSTOMER_REMINDER_INTERVALS_HOURS } from '@/lib/constants'
 import type { Order, SLARule } from '@/types'
 
@@ -70,13 +70,18 @@ export class SLAService {
     // sla_rules RLS requires auth.uid() — anon client would return 0 rows silently.
     const supabase = createServiceRoleClient()
 
-    // Get applicable SLA rule
+    // Get applicable SLA rule. order.type is a DB enum value (not user
+    // input), so it must NOT go through sanitizeSearchInput — that escapes
+    // underscores for ILIKE safety, which turns "trade_in" into the invalid
+    // enum literal "trade\_in" and silently errors the whole query (this
+    // broke SLA breach detection for every trade_in order until fixed here
+    // and in getDisplaySLA below).
     const { data: slaRule } = await supabase
       .from('sla_rules')
       .select('*')
       .eq('from_status', order.status)
       .eq('is_active', true)
-      .or(`order_type.is.null,order_type.eq.${sanitizeSearchInput(order.type)}`)
+      .or(`order_type.is.null,order_type.eq.${order.type}`)
       .limit(1)
       .single()
 
@@ -401,6 +406,50 @@ export class SLAService {
     }
 
     return sent
+  }
+
+  /**
+   * Customer/vendor-facing SLA info — read-only, no DB writes or
+   * notifications (unlike checkOrderSLA, which is cron-only and mutates
+   * state). Deliberately avoids internal "breach"/"escalation" language;
+   * callers should phrase this as "expected by" / "running long".
+   */
+  static async getDisplaySLA(order: Order): Promise<{
+    due_at: string | null
+    hours_remaining: number | null
+    is_at_risk: boolean
+  }> {
+    const supabase = createServiceRoleClient()
+
+    // See the comment on the identical lookup in checkOrderSLA above — must
+    // not sanitize order.type, it's a DB enum value, not user search input.
+    const { data: slaRule } = await supabase
+      .from('sla_rules')
+      .select('warning_hours, breach_hours')
+      .eq('from_status', order.status)
+      .eq('is_active', true)
+      .or(`order_type.is.null,order_type.eq.${order.type}`)
+      .limit(1)
+      .single()
+
+    if (!slaRule) {
+      return { due_at: null, hours_remaining: null, is_at_risk: false }
+    }
+
+    const statusEnteredAt = this.getStatusEnteredAt(order)
+    if (!statusEnteredAt) {
+      return { due_at: null, hours_remaining: null, is_at_risk: false }
+    }
+
+    const breachDeadline = addHours(statusEnteredAt, slaRule.breach_hours)
+    const warningDeadline = addHours(statusEnteredAt, slaRule.warning_hours)
+    const hoursRemaining = (breachDeadline.getTime() - Date.now()) / (1000 * 60 * 60)
+
+    return {
+      due_at: breachDeadline.toISOString(),
+      hours_remaining: Math.round(hoursRemaining * 10) / 10,
+      is_at_risk: isPast(warningDeadline),
+    }
   }
 
   /**

@@ -376,6 +376,9 @@ export interface Order extends BaseEntity {
   shipments?: Shipment[];
   parent_order?: Order;
   sub_orders?: Order[];
+
+  /** Customer-facing only — populated by GET /api/orders/[id] for effectiveRole === 'customer'. */
+  sla?: { due_at: string | null; hours_remaining: number | null; is_at_risk: boolean };
 }
 
 export interface PricingMetadata {

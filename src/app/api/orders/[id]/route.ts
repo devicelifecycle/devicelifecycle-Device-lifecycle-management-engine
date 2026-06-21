@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
+import { SLAService } from '@/services/sla.service'
 import { sanitizeOrderForVendor } from '@/lib/order-visibility'
 import { updateOrderSchema } from '@/lib/validations'
 import { isValidUUID } from '@/lib/utils'
@@ -49,7 +50,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Customer can only access orders for their organization
     if (effectiveRole === 'customer') {
       if (order.customer?.organization_id === organization_id) {
-        return NextResponse.json(order)
+        const sla = await SLAService.getDisplaySLA(order)
+        return NextResponse.json({ ...order, sla })
       }
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }

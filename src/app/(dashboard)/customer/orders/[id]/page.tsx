@@ -320,6 +320,25 @@ export default function CustomerOrderDetailPage() {
         </div>
       )}
 
+      {/* ── SLA transparency — friendly framing, never says "breach" ─────── */}
+      {!isCancelled && !isRejected && order.sla?.due_at && (
+        <div className={`flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm ${
+          order.sla.is_at_risk
+            ? 'border-amber-200 bg-amber-50/60 text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300'
+            : 'border-slate-200 bg-slate-50/60 text-muted-foreground dark:border-slate-800 dark:bg-slate-900/40'
+        }`}>
+          <Clock className="h-4 w-4 shrink-0" />
+          {(order.sla.hours_remaining ?? 0) > 0 ? (
+            <span>
+              {order.sla.is_at_risk ? 'This step is taking a bit longer than usual — ' : ''}
+              Expected by <strong>{formatDateTime(order.sla.due_at)}</strong>
+            </span>
+          ) : (
+            <span>This step is running longer than our usual turnaround — we&apos;re on it.</span>
+          )}
+        </div>
+      )}
+
       {/* ── QUOTE READY banner ──────────────────────────────────────────── */}
       {isQuoted && (
         <Card className="border-purple-200 bg-purple-50/60 dark:border-purple-800 dark:bg-purple-950/20">
