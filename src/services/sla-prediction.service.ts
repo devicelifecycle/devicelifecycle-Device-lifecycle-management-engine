@@ -1,13 +1,14 @@
 // ============================================================================
-// SLA EARLY-WARNING (HEURISTIC)
+// SLA EARLY-WARNING (HEURISTIC + TRAINED BASELINES)
 // ============================================================================
 // Complements the fixed-threshold sla_rules system (warning_hours/breach_hours)
 // with a data-driven signal: "this order is pacing slower than orders of this
 // type usually do at this stage" — flagged even before it crosses the fixed
-// threshold. No model training; just historical average duration per
-// (status, order_type), computed from orders that have already moved past
-// that stage. A trained model (mirroring the weekly pricing-training cron)
-// is a larger follow-on — this is the fast, explainable version.
+// threshold. Prefers the weekly-retrained, recency-weighted baseline in
+// trained_sla_baselines (src/services/sla-training.service.ts, mirrors
+// trained_pricing_baselines) for speed and recency-awareness; falls back to
+// computing a live unweighted average for any (status, order_type) the
+// trained table doesn't cover yet (cold start before the first cron run).
 // ============================================================================
 
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
@@ -92,9 +93,37 @@ export async function computeHistoricalBaselines(): Promise<SlaBaseline[]> {
   return baselines
 }
 
-export async function getEarlyWarnings(): Promise<{ baselines: SlaBaseline[]; warnings: SlaEarlyWarning[] }> {
-  const baselines = await computeHistoricalBaselines()
-  if (baselines.length === 0) return { baselines, warnings: [] }
+/**
+ * Trained baselines (recency-weighted, refreshed weekly) take priority;
+ * any (status, order_type) the trained table doesn't cover yet — e.g.
+ * before the first cron run, or too few historical samples for that
+ * combination — falls back to a live unweighted average.
+ */
+async function getBaselines(): Promise<{ baselines: SlaBaseline[]; source: 'trained' | 'live' | 'mixed' }> {
+  const service = createServiceRoleClient()
+  const { data: trainedRows } = await service
+    .from('trained_sla_baselines')
+    .select('status, order_type, weighted_avg_hours, sample_count')
+
+  const trained: SlaBaseline[] = (trainedRows || []).map((r: any) => ({
+    status: r.status,
+    order_type: r.order_type,
+    sample_size: r.sample_count,
+    avg_hours: r.weighted_avg_hours,
+  }))
+
+  const liveCandidates = await computeHistoricalBaselines()
+  const trainedKeys = new Set(trained.map((b) => `${b.status}|${b.order_type}`))
+  const liveOnly = liveCandidates.filter((b) => !trainedKeys.has(`${b.status}|${b.order_type}`))
+
+  const baselines = [...trained, ...liveOnly]
+  const source = liveOnly.length === 0 ? 'trained' : trained.length === 0 ? 'live' : 'mixed'
+  return { baselines, source }
+}
+
+export async function getEarlyWarnings(): Promise<{ baselines: SlaBaseline[]; baseline_source: string; warnings: SlaEarlyWarning[] }> {
+  const { baselines, source } = await getBaselines()
+  if (baselines.length === 0) return { baselines, baseline_source: source, warnings: [] }
 
   const baselineByKey = new Map(baselines.map((b) => [`${b.status}|${b.order_type}`, b]))
   const trackedStatuses = STAGE_DEFINITIONS.map((s) => s.status)
@@ -138,5 +167,5 @@ export async function getEarlyWarnings(): Promise<{ baselines: SlaBaseline[]; wa
   }
 
   warnings.sort((a, b) => b.pace_ratio - a.pace_ratio)
-  return { baselines, warnings }
+  return { baselines, baseline_source: source, warnings }
 }
