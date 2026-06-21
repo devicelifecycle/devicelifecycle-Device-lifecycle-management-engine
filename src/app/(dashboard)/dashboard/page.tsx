@@ -16,6 +16,7 @@ import {
   Package,
   Plus,
   ShoppingCart,
+  TrendingUp,
   Truck,
 } from 'lucide-react'
 import {
@@ -36,6 +37,7 @@ import { useOrders } from '@/hooks/useOrders'
 import { useCustomerDashboard } from '@/hooks/useCustomerDashboard'
 import { useDashboardCounts } from '@/hooks/useDashboardCounts'
 import { useOrderAnalytics, useCustomerOrderAnalytics } from '@/hooks/useOrderAnalytics'
+import { useSlaEarlyWarnings } from '@/hooks/useSlaEarlyWarnings'
 import { useQuery } from '@tanstack/react-query'
 import type { VendorBid, Order } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -492,7 +494,52 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           </CardContent>
         </Card>
       </section>
+
+      <SlaEarlyWarningsSection />
     </div>
+  )
+}
+
+function SlaEarlyWarningsSection() {
+  const { data, isLoading } = useSlaEarlyWarnings()
+  const warnings = data?.warnings ?? []
+
+  if (!isLoading && warnings.length === 0) return null
+
+  return (
+    <Card className="surface-panel overflow-hidden border-amber-500/20 dark:border-amber-500/15 bg-transparent">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-2xl text-foreground">
+            <TrendingUp className="h-5 w-5 text-amber-500" />
+            Pacing Behind Normal
+          </CardTitle>
+          <CardDescription className="mt-2 text-muted-foreground">
+            Orders taking noticeably longer at their current stage than similar orders typically do — flagged before the formal SLA threshold, based on historical averages, not a fixed cutoff.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6"><div className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
+        ) : (
+          warnings.slice(0, 8).map((w) => (
+            <Link key={w.order_id} href={`/orders/${w.order_id}`}>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border dark:border-white/8 bg-card dark:bg-white/[0.03] px-5 py-3 transition hover:bg-muted/60 dark:hover:bg-white/[0.05]">
+                <div>
+                  <p className="font-semibold text-foreground">{w.order_number}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 capitalize">{w.status.replace(/_/g, ' ')} · {w.order_type.replace(/_/g, ' ')}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-amber-500">{w.pace_ratio}x typical pace</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{w.hours_in_status}h vs ~{w.baseline_avg_hours}h usual</p>
+                </div>
+              </div>
+            </Link>
+          ))
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
