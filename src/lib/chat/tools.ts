@@ -120,6 +120,20 @@ export const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'compare_vendor_bids_for_order',
+      description: 'For a CPO order open for bidding, list every vendor bid with price, lead time, and that vendor\'s historical win rate and fulfillment record — use this to help decide which bid to accept. Internal roles only (reveals competing vendor pricing).',
+      parameters: {
+        type: 'object',
+        properties: {
+          order_identifier: { type: 'string', description: 'Order number (e.g. CPO-202606-0001) or order UUID' },
+        },
+        required: ['order_identifier'],
+      },
+    },
+  },
 ]
 
 // Tools available per role (customers/vendors get restricted set)
@@ -129,8 +143,9 @@ export function getToolsForRole(role: UserRole) {
   if (INTERNAL_ROLES.includes(role)) {
     return TOOL_DEFINITIONS
   }
-  // Customers/vendors: no platform stats
-  return TOOL_DEFINITIONS.filter(t => t.function.name !== 'get_platform_stats')
+  // Customers/vendors: no platform stats, no cross-vendor bid comparison
+  // (compare_vendor_bids_for_order would reveal competing vendors' pricing).
+  return TOOL_DEFINITIONS.filter(t => t.function.name !== 'get_platform_stats' && t.function.name !== 'compare_vendor_bids_for_order')
 }
 
 // ============================================================================
@@ -156,6 +171,8 @@ export async function executeTool(
         return await searchDevices(args)
       case 'get_shipment_tracking':
         return await getShipmentTracking(args, ctx)
+      case 'compare_vendor_bids_for_order':
+        return await compareVendorBidsForOrder(args, ctx)
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` })
     }
@@ -473,5 +490,55 @@ async function getShipmentTracking(args: Record<string, unknown>, ctx: ToolConte
       estimated_delivery: s.estimated_delivery || 'TBD',
       label_url: s.label_url || null,
     })),
+  })
+}
+
+async function compareVendorBidsForOrder(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+  if (!INTERNAL_ROLES.includes(ctx.role)) {
+    return JSON.stringify({ error: 'Access denied.' })
+  }
+
+  const supabase = getSupabase()
+  const identifier = String(args.order_identifier || '')
+
+  let orderQuery = supabase.from('orders').select('id, order_number, status, type')
+  orderQuery = identifier.toUpperCase().startsWith('CPO-') || identifier.toUpperCase().startsWith('TI-')
+    ? orderQuery.ilike('order_number', identifier)
+    : orderQuery.eq('id', identifier)
+
+  const { data: order } = await orderQuery.single()
+  if (!order) return JSON.stringify({ error: 'Order not found.' })
+
+  const { data: bids } = await supabase
+    .from('vendor_bids')
+    .select('id, vendor_id, quantity, unit_price, total_price, lead_time_days, status, created_at, vendor:vendors(company_name)')
+    .eq('order_id', order.id)
+    .order('unit_price', { ascending: true })
+
+  if (!bids || bids.length === 0) {
+    return JSON.stringify({ order_number: order.order_number, message: 'No bids submitted yet for this order.' })
+  }
+
+  const { computeVendorPerformance } = await import('@/lib/vendor-performance')
+  const compared = await Promise.all(
+    bids.map(async (b: Record<string, unknown>) => {
+      const perf = await computeVendorPerformance(supabase, b.vendor_id as string)
+      return {
+        vendor: (b.vendor as Record<string, unknown>)?.company_name || 'Unknown',
+        unit_price: `$${b.unit_price}`,
+        total_price: `$${b.total_price}`,
+        lead_time_days: b.lead_time_days ?? 'Not specified',
+        status: b.status,
+        vendor_win_rate: perf.bids.win_rate_percent != null ? `${perf.bids.win_rate_percent}%` : 'No bid history yet',
+        vendor_completed_orders: perf.orders.completed,
+      }
+    })
+  )
+
+  return JSON.stringify({
+    order_number: order.order_number,
+    order_status: order.status,
+    bid_count: compared.length,
+    bids_sorted_by_price: compared,
   })
 }

@@ -73,8 +73,63 @@ You are speaking to a vendor. They supply devices and can see their own orders. 
 IMPORTANT: Only show them data related to their own account. Never reveal internal pricing, margins, or other vendors' data.`,
 }
 
-export function getSystemPrompt(role: UserRole, userName?: string): string {
+// ============================================================================
+// CONTEXT-SPECIALIZED PERSONAS
+// ============================================================================
+// Layered on top of the role prompt based on which page the user is
+// chatting from (see ChatAssistant.tsx's pathname → context mapping).
+// Internal roles only — a customer/vendor browsing their own pages doesn't
+// need a different persona, and these personas reference internal-only
+// tools/data (compare_vendor_bids_for_order, platform-wide pricing trends).
+
+export type ChatContext = 'pricing' | 'triage' | 'sourcing'
+
+const INTERNAL_ROLES_FOR_CONTEXT: UserRole[] = ['admin', 'coe_manager', 'coe_tech', 'sales']
+
+const CONTEXT_PROMPTS: Record<ChatContext, string> = {
+  pricing: `
+
+You are currently acting as the PRICING AGENT — the user is on a pricing-related page. Lean into:
+- Competitor price comparisons and market trends (get_device_price)
+- Flagging if a price looks unusually low/high vs. typical patterns for that device/condition
+- Explaining the trade-in pricing formula (Bell/Telus average blended with GoRecell, then condition multiplier and margin) when asked
+Be proactive: don't just answer the literal question — mention anything price-related that looks off.`,
+
+  triage: `
+
+You are currently acting as the TRIAGE COPILOT — the user is on the device triage/inspection page, mid-inspection. Lean into:
+- IMEI lookups and condition-grading guidance (new/excellent/good/fair/poor/broken)
+- Interpreting battery health and carrier-lock results
+- Clarifying what counts as an "exception" (claimed condition doesn't match physical inspection)
+Be concise and procedural — short, actionable answers, not long explanations.`,
+
+  sourcing: `
+
+You are currently acting as the VENDOR SOURCING AGENT — the user is reviewing vendor bids or performance. Lean into:
+- Use compare_vendor_bids_for_order whenever a user is deciding between bids — compare price, lead time, AND that vendor's win rate/fulfillment history, never just the lowest price
+- Surfacing a vendor's track record before they accept a bid
+- Flagging if a bid looks like an outlier vs. that vendor's typical pricing
+When asked to help pick a bid, always pull vendor history first.`,
+}
+
+function contextAppliesForRole(role: UserRole, context?: ChatContext): context is ChatContext {
+  return !!context && INTERNAL_ROLES_FOR_CONTEXT.includes(role)
+}
+
+export function getSystemPrompt(role: UserRole, userName?: string, context?: ChatContext): string {
   const prompt = ROLE_PROMPTS[role] || ROLE_PROMPTS.customer
   const greeting = userName ? `\nThe user's name is ${userName}.` : ''
-  return prompt + greeting
+  const contextLayer = contextAppliesForRole(role, context) ? CONTEXT_PROMPTS[context] : ''
+  return prompt + greeting + contextLayer
+}
+
+const PERSONA_LABELS: Record<ChatContext, string> = {
+  pricing: 'Pricing Agent',
+  triage: 'Triage Copilot',
+  sourcing: 'Vendor Sourcing Agent',
+}
+
+/** Null when no specialized persona applies — caller should show the generalist "DLM Assistant" label. */
+export function getActivePersonaLabel(role: UserRole, context?: ChatContext): string | null {
+  return contextAppliesForRole(role, context) ? PERSONA_LABELS[context] : null
 }

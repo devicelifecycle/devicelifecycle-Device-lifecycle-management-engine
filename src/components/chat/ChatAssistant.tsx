@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { usePathname } from 'next/navigation'
 import { Bot, X, Send, Sparkles, Loader2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ChatMessage } from './ChatMessage'
@@ -17,7 +18,42 @@ const WELCOME_MSG: ChatMessageType = {
   timestamp: new Date().toISOString(),
 }
 
+// Which specialized persona applies, based on the page the user is on —
+// mirrors src/lib/chat/prompts.ts's ChatContext. Internal-role-only personas
+// (the backend re-checks role; a customer/vendor on these paths just gets
+// the generalist prompt back, no harm in sending the hint either way).
+function getContextForPath(pathname: string): 'pricing' | 'triage' | 'sourcing' | undefined {
+  if (pathname.startsWith('/admin/pricing')) return 'pricing'
+  if (pathname.startsWith('/coe/triage')) return 'triage'
+  if (pathname.startsWith('/bids') || pathname.startsWith('/vendors')) return 'sourcing'
+  return undefined
+}
+
+const DEFAULT_PERSONA = { label: 'DLM Assistant', subtitle: 'Powered by Llama 3.3' }
+const PERSONA_SUBTITLES: Record<string, string> = {
+  'Pricing Agent': 'Watching market & competitor prices',
+  'Triage Copilot': 'Helping with device inspection',
+  'Vendor Sourcing Agent': 'Comparing bids & vendor history',
+}
+
+const CONTEXT_PERSONA_LABEL: Record<string, string> = {
+  pricing: 'Pricing Agent',
+  triage: 'Triage Copilot',
+  sourcing: 'Vendor Sourcing Agent',
+}
+
 export function ChatAssistant() {
+  const pathname = usePathname()
+  const context = getContextForPath(pathname || '')
+  const [persona, setPersona] = useState(DEFAULT_PERSONA)
+
+  // Show the predicted persona for this page immediately (before the first
+  // reply confirms it) — the backend re-checks role, so this is just a guess
+  // for display; a customer/vendor would get DEFAULT_PERSONA back regardless.
+  useEffect(() => {
+    const label = context ? CONTEXT_PERSONA_LABEL[context] : undefined
+    setPersona(label ? { label, subtitle: PERSONA_SUBTITLES[label] || DEFAULT_PERSONA.subtitle } : DEFAULT_PERSONA)
+  }, [context])
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessageType[]>([WELCOME_MSG])
   const [input, setInput] = useState('')
@@ -64,7 +100,7 @@ export function ChatAssistant() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, context }),
       })
 
       const data = await res.json()
@@ -81,6 +117,11 @@ export function ChatAssistant() {
       }
 
       setMessages(prev => [...prev, assistantMsg])
+      setPersona(
+        data.persona
+          ? { label: data.persona, subtitle: PERSONA_SUBTITLES[data.persona] || DEFAULT_PERSONA.subtitle }
+          : DEFAULT_PERSONA
+      )
     } catch (e) {
       const errorMsg: ChatMessageType = {
         id: `error-${Date.now()}`,
@@ -92,7 +133,7 @@ export function ChatAssistant() {
     } finally {
       setIsLoading(false)
     }
-  }, [input, isLoading, messages])
+  }, [input, isLoading, messages, context])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -127,8 +168,8 @@ export function ChatAssistant() {
               <Sparkles className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-semibold">DLM Assistant</p>
-              <p className="text-[10px] text-white/70">Powered by Llama 3.3</p>
+              <p className="text-sm font-semibold">{persona.label}</p>
+              <p className="text-[10px] text-white/70">{persona.subtitle}</p>
             </div>
           </div>
           <div className="flex items-center gap-1">

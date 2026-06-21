@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server'
 import Groq from 'groq-sdk'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
-import { getSystemPrompt } from '@/lib/chat/prompts'
+import { getSystemPrompt, getActivePersonaLabel, type ChatContext } from '@/lib/chat/prompts'
 import { getToolsForRole, executeTool } from '@/lib/chat/tools'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import type { UserRole } from '@/types'
@@ -55,10 +55,13 @@ export async function POST(request: NextRequest) {
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
+    const ALLOWED_CONTEXTS: ChatContext[] = ['pricing', 'triage', 'sourcing']
+    const context = ALLOWED_CONTEXTS.includes(body.context) ? (body.context as ChatContext) : undefined
+    const persona = getActivePersonaLabel(role, context)
 
     // Build Groq messages
     const groq = new Groq({ apiKey: GROQ_API_KEY })
-    const systemPrompt = getSystemPrompt(role, userName)
+    const systemPrompt = getSystemPrompt(role, userName, context)
     const tools = getToolsForRole(role)
     const toolCtx = {
       userId: authUser.id,
@@ -95,7 +98,7 @@ export async function POST(request: NextRequest) {
       if (!message.tool_calls || message.tool_calls.length === 0) {
         const content = message.content || 'I couldn\'t generate a response. Please try again.'
         return new Response(
-          JSON.stringify({ role: 'assistant', content }),
+          JSON.stringify({ role: 'assistant', content, persona }),
           { headers: { 'Content-Type': 'application/json' } }
         )
       }
@@ -138,7 +141,7 @@ export async function POST(request: NextRequest) {
     const content = finalResponse.choices[0]?.message?.content || 'I processed your request but couldn\'t generate a summary. Please try again.'
 
     return new Response(
-      JSON.stringify({ role: 'assistant', content }),
+      JSON.stringify({ role: 'assistant', content, persona }),
       { headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {
