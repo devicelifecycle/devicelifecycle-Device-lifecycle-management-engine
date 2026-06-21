@@ -38,7 +38,19 @@ jobs:
           pip install -r scrapers_py/requirements_server.txt
 
       - name: Install Patchright browser (Chromium)
-        run: python -m patchright install chromium --with-deps
+        # Chromium/apt-mirror downloads occasionally hiccup in CI (saw one
+        # transient failure on 2026-06-20 after 9 straight days of success,
+        # nothing scraper-related changed in that commit) — retry before
+        # failing the whole job and sending a false-alarm email.
+        run: |
+          for attempt in 1 2 3; do
+            if python -m patchright install chromium --with-deps; then
+              exit 0
+            fi
+            echo "Patchright install attempt $attempt failed, retrying in 15s..."
+            sleep 15
+          done
+          exit 1
 
       - name: Run scrapers
         env:
