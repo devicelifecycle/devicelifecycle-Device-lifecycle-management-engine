@@ -203,6 +203,19 @@ export const customerSchema = z.object({
 export const createCustomerSchema = customerSchema
 export const updateCustomerSchema = customerSchema.partial()
 
+// Org self-service (PATCH /api/customers/me) — deliberately excludes
+// payment_terms, credit_limit, notes, default_risk_mode, organization_id,
+// is_active. Those stay admin-only; a customer can only edit their own
+// contact/address details.
+export const customerSelfServiceSchema = z.object({
+  company_name: z.string().min(2, 'Company name must be at least 2 characters').optional(),
+  contact_name: z.string().min(2, 'Contact name must be at least 2 characters').optional(),
+  contact_email: emailSchema.optional(),
+  contact_phone: phoneSchema.optional(),
+  billing_address: z.record(z.unknown()).optional(),
+  shipping_address: z.record(z.unknown()).optional(),
+})
+
 // ============================================================================
 // VENDOR SCHEMAS
 // ============================================================================
@@ -227,6 +240,23 @@ export const vendorSchema = z.object({
 
 export const createVendorSchema = vendorSchema
 export const updateVendorSchema = vendorSchema.partial()
+
+// Org self-service (PATCH /api/vendors/me) — deliberately excludes
+// payment_terms, notes, is_active. Those stay admin-only.
+export const vendorSelfServiceSchema = z.object({
+  company_name: z.string().min(2, 'Company name must be at least 2 characters').optional(),
+  contact_name: z.string().min(2, 'Contact name must be at least 2 characters').optional(),
+  contact_email: emailSchema.optional(),
+  contact_phone: phoneSchema.optional(),
+  address: z.object({
+    street: z.string().min(1, 'Street is required'),
+    city: z.string().min(1, 'City is required'),
+    state: z.string().min(1, 'State/Province is required'),
+    zip: z.string().min(1, 'ZIP/Postal code is required'),
+    country: z.string().min(1, 'Country is required'),
+  }).optional(),
+  warranty_period_days: z.coerce.number().min(0).optional(),
+})
 
 // ============================================================================
 // DEVICE CATALOG SCHEMAS

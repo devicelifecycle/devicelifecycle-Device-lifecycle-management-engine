@@ -3,5 +3,5 @@
 import { TeamManagement } from '@/components/team/TeamManagement'
 
 export default function CustomerTeamPage() {
-  return <TeamManagement roleLabel="customer" />
+  return <TeamManagement role="customer" />
 }

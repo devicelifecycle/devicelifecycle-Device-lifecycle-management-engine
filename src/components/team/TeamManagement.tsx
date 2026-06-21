@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Users, UserCog } from 'lucide-react'
+import { Plus, Users, UserCog, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,12 +25,37 @@ import { useAuth } from '@/hooks/useAuth'
 import { formatDateTime } from '@/lib/utils'
 import type { User } from '@/types'
 
+type CompanyProfile = {
+  id: string
+  company_name: string
+  contact_name: string
+  contact_email: string
+  contact_phone?: string | null
+  billing_address?: Record<string, unknown> | null
+  address?: Record<string, unknown> | null
+}
+
+type AddressForm = { street: string; city: string; state: string; zip: string; country: string }
+
+const EMPTY_ADDRESS: AddressForm = { street: '', city: '', state: '', zip: '', country: '' }
+
+function addressFromRecord(record: Record<string, unknown> | null | undefined): AddressForm {
+  const a = record || {}
+  return {
+    street: typeof a.street === 'string' ? a.street : '',
+    city: typeof a.city === 'string' ? a.city : '',
+    state: typeof a.state === 'string' ? a.state : '',
+    zip: typeof a.zip === 'string' ? a.zip : '',
+    country: typeof a.country === 'string' ? a.country : '',
+  }
+}
+
 /**
  * Shared by /customer/team and /vendor/team. The viewer's role and org are
  * locked server-side (POST /api/users, PATCH /api/users/[id]) — this UI
  * never sends role or organization_id, it only collects name/email/phone.
  */
-export function TeamManagement({ roleLabel }: { roleLabel: string }) {
+export function TeamManagement({ role }: { role: 'customer' | 'vendor' }) {
   const { user: viewer } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -38,6 +63,69 @@ export function TeamManagement({ roleLabel }: { roleLabel: string }) {
   const [inviting, setInviting] = useState(false)
   const [form, setForm] = useState({ full_name: '', email: '', notification_email: '', phone: '' })
   const [toggleTarget, setToggleTarget] = useState<User | null>(null)
+
+  const profileEndpoint = role === 'customer' ? '/api/customers/me' : '/api/vendors/me'
+  const [company, setCompany] = useState<CompanyProfile | null>(null)
+  const [companyLoading, setCompanyLoading] = useState(true)
+  const [savingCompany, setSavingCompany] = useState(false)
+  const [companyForm, setCompanyForm] = useState({
+    company_name: '', contact_name: '', contact_email: '', contact_phone: '',
+    address: EMPTY_ADDRESS,
+  })
+
+  const fetchCompany = useCallback(async () => {
+    setCompanyLoading(true)
+    try {
+      const res = await fetch(profileEndpoint)
+      if (res.ok) {
+        const data: CompanyProfile = await res.json()
+        setCompany(data)
+        setCompanyForm({
+          company_name: data.company_name || '',
+          contact_name: data.contact_name || '',
+          contact_email: data.contact_email || '',
+          contact_phone: data.contact_phone || '',
+          address: addressFromRecord(role === 'customer' ? data.billing_address : data.address),
+        })
+      }
+    } catch {} finally { setCompanyLoading(false) }
+  }, [profileEndpoint, role])
+
+  useEffect(() => { fetchCompany() }, [fetchCompany])
+
+  const handleSaveCompany = async () => {
+    setSavingCompany(true)
+    try {
+      const addressPayload = { ...companyForm.address }
+      const payload = role === 'customer'
+        ? {
+            company_name: companyForm.company_name,
+            contact_name: companyForm.contact_name,
+            contact_email: companyForm.contact_email,
+            contact_phone: companyForm.contact_phone || undefined,
+            billing_address: addressPayload,
+            shipping_address: addressPayload,
+          }
+        : {
+            company_name: companyForm.company_name,
+            contact_name: companyForm.contact_name,
+            contact_email: companyForm.contact_email,
+            contact_phone: companyForm.contact_phone || undefined,
+            address: addressPayload,
+          }
+      const res = await fetch(profileEndpoint, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to update company profile')
+      }
+      toast.success('Company profile updated')
+      fetchCompany()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to update company profile') }
+    finally { setSavingCompany(false) }
+  }
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true)
@@ -105,7 +193,7 @@ export function TeamManagement({ roleLabel }: { roleLabel: string }) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Team</h1>
-          <p className="text-muted-foreground">Invite and manage your organization&apos;s {roleLabel} logins</p>
+          <p className="text-muted-foreground">Invite and manage your organization&apos;s {role} logins</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button variant="success"><Plus className="mr-2 h-4 w-4" />Invite Teammate</Button></DialogTrigger>
@@ -165,6 +253,60 @@ export function TeamManagement({ roleLabel }: { roleLabel: string }) {
           </DialogContent>
         </Dialog>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Building2 className="h-4 w-4" />Company Profile</CardTitle>
+          <CardDescription>
+            {viewer?.is_org_admin
+              ? 'Your contact and address details, shown on quotes and shipments.'
+              : 'Your organization admin can edit these details.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {companyLoading ? (
+            <div className="flex items-center justify-center py-8"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Company Name</Label>
+                  <Input disabled={!viewer?.is_org_admin} value={companyForm.company_name} onChange={e => setCompanyForm(f => ({ ...f, company_name: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact Name</Label>
+                  <Input disabled={!viewer?.is_org_admin} value={companyForm.contact_name} onChange={e => setCompanyForm(f => ({ ...f, contact_name: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact Email</Label>
+                  <Input type="email" disabled={!viewer?.is_org_admin} value={companyForm.contact_email} onChange={e => setCompanyForm(f => ({ ...f, contact_email: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact Phone</Label>
+                  <Input type="tel" disabled={!viewer?.is_org_admin} value={companyForm.contact_phone} onChange={e => setCompanyForm(f => ({ ...f, contact_phone: e.target.value }))} placeholder="+1 416 555 1234" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Address</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input disabled={!viewer?.is_org_admin} value={companyForm.address.street} onChange={e => setCompanyForm(f => ({ ...f, address: { ...f.address, street: e.target.value } }))} placeholder="Street" />
+                  <Input disabled={!viewer?.is_org_admin} value={companyForm.address.city} onChange={e => setCompanyForm(f => ({ ...f, address: { ...f.address, city: e.target.value } }))} placeholder="City" />
+                  <Input disabled={!viewer?.is_org_admin} value={companyForm.address.state} onChange={e => setCompanyForm(f => ({ ...f, address: { ...f.address, state: e.target.value } }))} placeholder="State / Province" />
+                  <Input disabled={!viewer?.is_org_admin} value={companyForm.address.zip} onChange={e => setCompanyForm(f => ({ ...f, address: { ...f.address, zip: e.target.value } }))} placeholder="ZIP / Postal Code" />
+                  <Input disabled={!viewer?.is_org_admin} value={companyForm.address.country} onChange={e => setCompanyForm(f => ({ ...f, address: { ...f.address, country: e.target.value } }))} placeholder="Country" className="sm:col-span-2" />
+                </div>
+              </div>
+              {viewer?.is_org_admin && (
+                <div className="flex justify-end">
+                  <Button variant="success" onClick={handleSaveCompany} disabled={savingCompany || !companyForm.company_name || !companyForm.contact_name || !companyForm.contact_email}>
+                    {savingCompany ? 'Saving...' : 'Save Company Profile'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
