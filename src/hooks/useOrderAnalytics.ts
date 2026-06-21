@@ -27,3 +27,20 @@ export function useOrderAnalytics() {
     staleTime: 5 * 60 * 1000,
   })
 }
+
+/** Same shape as useOrderAnalytics, scoped to the logged-in customer's own orders. */
+export function useCustomerOrderAnalytics() {
+  const { user } = useAuth()
+  const enabled = !!user && user.role === 'customer'
+
+  return useQuery<OrderAnalytics>({
+    queryKey: ['analytics', 'orders', 'customer', user?.id],
+    queryFn: async () => {
+      const res = await fetch('/api/customer/dashboard/analytics')
+      if (!res.ok) throw new Error('Failed to fetch analytics')
+      return res.json()
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  })
+}

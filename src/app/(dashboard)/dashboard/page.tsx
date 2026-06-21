@@ -35,7 +35,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomerDashboard } from '@/hooks/useCustomerDashboard'
 import { useDashboardCounts } from '@/hooks/useDashboardCounts'
-import { useOrderAnalytics } from '@/hooks/useOrderAnalytics'
+import { useOrderAnalytics, useCustomerOrderAnalytics } from '@/hooks/useOrderAnalytics'
 import { useQuery } from '@tanstack/react-query'
 import type { VendorBid, Order } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -50,9 +50,8 @@ function formatMonthLabel(month: string): string {
   return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
 }
 
-function MonthlyPerformanceSection({ isDark }: { isDark: boolean }) {
+function MonthlyPerformanceSection({ isDark, analytics, isLoading }: { isDark: boolean; analytics?: { monthly: { month: string; order_count: number; total_value: number }[]; all_time: { total_orders: number; total_value: number } }; isLoading: boolean }) {
   const [range, setRange] = useState<'12m' | 'all'>('12m')
-  const { data: analytics, isLoading } = useOrderAnalytics()
 
   const monthly = analytics?.monthly ?? []
   const allTime = analytics?.all_time
@@ -217,6 +216,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   const isDark = resolvedTheme === 'dark'
   const { orders, total } = useOrders({ page_size: 50 })
   const counts = useDashboardCounts()
+  const { data: analytics, isLoading: analyticsLoading } = useOrderAnalytics()
   const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage', 'qc_complete', 'mismatch_review', 'payment_processing'].includes(order.status)).length
   const slaAlerts = orders.filter((order) => order.is_sla_breached).length
   const recentRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
@@ -414,7 +414,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
         </Card>
       </section>
 
-      <MonthlyPerformanceSection isDark={isDark} />
+      <MonthlyPerformanceSection isDark={isDark} analytics={analytics} isLoading={analyticsLoading} />
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
@@ -497,7 +497,10 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
 }
 
 function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
   const { summary, recentOrders, isLoading, error } = useCustomerDashboard()
+  const { data: analytics, isLoading: analyticsLoading } = useCustomerOrderAnalytics()
   const totalOrders = summary?.total_orders || 0
   const activeOrders = summary?.active_orders || 0
   const quotesReady = summary?.quotes_ready || 0
@@ -587,6 +590,8 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
           </motion.div>
         ))}
       </section>
+
+      <MonthlyPerformanceSection isDark={isDark} analytics={analytics} isLoading={analyticsLoading} />
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card className="surface-panel overflow-hidden border-border dark:border-white/8 bg-transparent">
