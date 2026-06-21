@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Users, UserCog, Building2 } from 'lucide-react'
+import { Plus, Users, UserCog, Building2, CalendarClock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -125,6 +126,55 @@ export function TeamManagement({ role }: { role: 'customer' | 'vendor' }) {
       fetchCompany()
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to update company profile') }
     finally { setSavingCompany(false) }
+  }
+
+  // Recurring trade-in reminders — customer-only, never auto-creates an order
+  const [schedule, setSchedule] = useState<{ frequency: string; next_reminder_at: string; is_active: boolean } | null>(null)
+  const [scheduleLoading, setScheduleLoading] = useState(role === 'customer')
+  const [scheduleFrequency, setScheduleFrequency] = useState('quarterly')
+  const [savingSchedule, setSavingSchedule] = useState(false)
+
+  const fetchSchedule = useCallback(async () => {
+    if (role !== 'customer') return
+    setScheduleLoading(true)
+    try {
+      const res = await fetch('/api/customers/me/recurring-schedule')
+      if (res.ok) {
+        const data = await res.json()
+        setSchedule(data)
+        if (data?.frequency) setScheduleFrequency(data.frequency)
+      }
+    } catch {} finally { setScheduleLoading(false) }
+  }, [role])
+
+  useEffect(() => { fetchSchedule() }, [fetchSchedule])
+
+  const handleSaveSchedule = async () => {
+    setSavingSchedule(true)
+    try {
+      const res = await fetch('/api/customers/me/recurring-schedule', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ frequency: scheduleFrequency }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to set reminder schedule')
+      }
+      toast.success('Reminder schedule set')
+      fetchSchedule()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to set reminder schedule') }
+    finally { setSavingSchedule(false) }
+  }
+
+  const handleTurnOffSchedule = async () => {
+    setSavingSchedule(true)
+    try {
+      const res = await fetch('/api/customers/me/recurring-schedule', { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      toast.success('Reminders turned off')
+      fetchSchedule()
+    } catch { toast.error('Failed to turn off reminders') }
+    finally { setSavingSchedule(false) }
   }
 
   const fetchUsers = useCallback(async () => {
@@ -307,6 +357,50 @@ export function TeamManagement({ role }: { role: 'customer' | 'vendor' }) {
           )}
         </CardContent>
       </Card>
+
+      {role === 'customer' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><CalendarClock className="h-4 w-4" />Recurring Trade-In Reminders</CardTitle>
+            <CardDescription>
+              We&apos;ll nudge you on this cadence to submit your next trade-in batch — this never creates an order automatically, since we don&apos;t know your devices in advance. You list and submit them yourself when it arrives.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {scheduleLoading ? (
+              <div className="flex items-center justify-center py-6"><div className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
+            ) : (
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-2">
+                  <Label>Remind us</Label>
+                  <Select value={scheduleFrequency} onValueChange={setScheduleFrequency} disabled={!viewer?.is_org_admin}>
+                    <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="semi_annually">Every 6 months</SelectItem>
+                      <SelectItem value="annually">Annually</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {viewer?.is_org_admin && (
+                  <Button variant="success" onClick={handleSaveSchedule} disabled={savingSchedule}>
+                    {savingSchedule ? 'Saving...' : schedule?.is_active ? 'Update Schedule' : 'Turn On Reminders'}
+                  </Button>
+                )}
+                {viewer?.is_org_admin && schedule?.is_active && (
+                  <Button variant="outline" onClick={handleTurnOffSchedule} disabled={savingSchedule}>Turn Off</Button>
+                )}
+                {schedule?.is_active && schedule.next_reminder_at && (
+                  <p className="text-sm text-muted-foreground w-full">
+                    Next reminder: {formatDateTime(schedule.next_reminder_at)}
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

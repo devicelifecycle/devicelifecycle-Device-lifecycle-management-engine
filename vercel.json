@@ -13,6 +13,7 @@
     {"path": "/api/cron/pricing-training", "schedule": "0 4 * * 0"},
     {"path": "/api/cron/sla-training", "schedule": "30 4 * * 0"},
     {"path": "/api/cron/shipping-tracking", "schedule": "0 10 * * *"},
-    {"path": "/api/cron/quote-price-check", "schedule": "0 11 * * *"}
+    {"path": "/api/cron/quote-price-check", "schedule": "0 11 * * *"},
+    {"path": "/api/cron/recurring-trade-in-reminders", "schedule": "0 13 * * *"}
   ]
 }

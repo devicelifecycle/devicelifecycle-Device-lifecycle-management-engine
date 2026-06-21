@@ -725,4 +725,62 @@ export class EmailService {
 
     return this.sendEmail(to, `${urgencyText}Quote Awaiting Response — Order #${orderNumber}`, html)
   }
+
+  static async sendRecurringTradeInReminderEmail(params: {
+    to: string
+    recipientName: string
+    organizationName?: string
+    frequency: string
+  }): Promise<boolean> {
+    const { to, recipientName, organizationName, frequency } = params
+    const newOrderUrl = getAppPath('/orders/new/trade-in')
+    const cadenceLabel = frequency.replace('_', '-')
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background:#18181b;padding:24px 32px;">
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">
+                Based on your ${cadenceLabel} reminder schedule${organizationName ? ` for ${organizationName}` : ''}, now's a good time to submit your next trade-in batch — whenever you're ready, just list the devices and we'll take it from there.
+              </p>
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background:#18181b;border-radius:6px;">
+                    <a href="${newOrderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Start a New Trade-In</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">You can change or turn off this reminder schedule any time from your Team page.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+    return this.sendEmail(to, 'Time for your next trade-in batch', html)
+  }
 }
