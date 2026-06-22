@@ -1071,7 +1071,7 @@ export default function COETriagePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Triage</h1>
           <p className="text-muted-foreground">Inspect and grade received devices</p>
@@ -1087,7 +1087,7 @@ export default function COETriagePage() {
       </div>
 
       <Tabs defaultValue="queue">
-        <TabsList>
+        <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
           <TabsTrigger value="queue">
             <ClipboardCheck className="mr-1.5 h-4 w-4" />
             Pending Queue
@@ -1195,8 +1195,8 @@ export default function COETriagePage() {
                     Manifest Summary
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-0 pb-0">
-                  <Table>
+                <CardContent className="px-0 pb-0 overflow-x-auto">
+                  <Table className="min-w-[640px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="pl-4">Device</TableHead>
@@ -1279,21 +1279,23 @@ export default function COETriagePage() {
                         </div>
                       </CardHeader>
                       <CardContent className="px-4 pb-3 space-y-3">
-                        {/* IMEI entry row */}
-                        <div className="flex gap-2">
+                        {/* IMEI entry row — stacks on mobile so the scan input,
+                            condition picker, and Add button each get full
+                            width instead of squeezing into ~375px. */}
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <Input
                             ref={el => { intakeImeiInputRefs.current[item.id] = el }}
                             placeholder="Scan or enter IMEI"
                             value={intakeDraft[item.id] || ''}
                             onChange={e => setIntakeDraft(prev => ({ ...prev, [item.id]: e.target.value }))}
                             onKeyDown={e => { if (e.key === 'Enter') handleAddIntakeImei(item) }}
-                            className="font-mono text-sm flex-1"
+                            className="font-mono text-sm w-full sm:flex-1"
                           />
                           <Select
                             value={intakeDraftCondition[item.id] || item.claimed_condition}
                             onValueChange={v => setIntakeDraftCondition(prev => ({ ...prev, [item.id]: v as DeviceCondition }))}
                           >
-                            <SelectTrigger className="w-[130px]">
+                            <SelectTrigger className="w-full sm:w-[130px]">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1308,6 +1310,7 @@ export default function COETriagePage() {
                             size="sm"
                             onClick={() => handleAddIntakeImei(item)}
                             disabled={!(intakeDraft[item.id] || '').trim()}
+                            className="w-full sm:w-auto"
                           >
                             <Plus className="h-4 w-4 mr-1" />Add
                           </Button>
@@ -1348,8 +1351,9 @@ export default function COETriagePage() {
                                 ) : null}
                                 <button
                                   onClick={() => handleRemoveIntakeSlot(item.id, slot.imei)}
-                                  className="text-muted-foreground hover:text-red-600 shrink-0"
+                                  className="-m-1.5 p-1.5 text-muted-foreground hover:text-red-600 shrink-0"
                                   title="Remove"
+                                  type="button"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
@@ -1927,7 +1931,8 @@ export default function COETriagePage() {
               <p className="text-xs mt-1">Devices will appear here after being received at COE.</p>
             </div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[720px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>IMEI</TableHead>
@@ -1985,6 +1990,7 @@ export default function COETriagePage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -2535,7 +2541,7 @@ export default function COETriagePage() {
             {/* Functional Checklist */}
             <div>
               <Label className="text-sm font-semibold">Functional Checklist ({passedCount}/{TRIAGE_CHECKLIST_ITEMS.length})</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                 {TRIAGE_CHECKLIST_ITEMS.map(item => (
                   <button
                     key={item.id}
@@ -2557,7 +2563,7 @@ export default function COETriagePage() {
             </div>
 
             {/* Condition Assessment */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Physical Condition</Label>
                 <Select value={physicalCondition} onValueChange={v => setPhysicalCondition(v as DeviceCondition)}>
@@ -2590,7 +2596,7 @@ export default function COETriagePage() {
                   <button
                     key={issue}
                     onClick={() => toggleIssue(issue)}
-                    className={`rounded-full px-2.5 py-1 text-xs border transition-all ${
+                    className={`rounded-full px-3 py-1.5 text-xs border transition-all ${
                       issues.includes(issue)
                         ? 'bg-red-50 border-red-200 text-red-700'
                         : 'hover:bg-muted/50'
@@ -2763,8 +2769,8 @@ export default function COETriagePage() {
             </div>
 
             {/* Per-device table */}
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
+            <div className="rounded-lg border overflow-x-auto">
+              <Table className="min-w-[640px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">IMEI</TableHead>

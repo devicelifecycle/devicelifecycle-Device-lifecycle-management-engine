@@ -14,8 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 
-// Password must be 12+ chars, with uppercase, lowercase, number, and special char
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/
+// Password must be 8+ chars — no complexity requirements
+const PASSWORD_REGEX = /^.{8,}$/
 
 type SessionState = 'checking' | 'valid' | 'invalid'
 
@@ -118,7 +118,7 @@ export default function ResetPasswordPage() {
     }
 
     if (!PASSWORD_REGEX.test(password)) {
-      setError('Password must be at least 12 characters and include uppercase, lowercase, number, and special character')
+      setError('Password must be at least 8 characters')
       return
     }
 
@@ -228,7 +228,7 @@ export default function ResetPasswordPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  minLength={12}
+                  minLength={8}
                   autoComplete="new-password"
                   className="h-11 pr-10"
                 />
@@ -242,7 +242,7 @@ export default function ResetPasswordPage() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground">
-                12+ characters — uppercase, lowercase, number, and special character
+                At least 8 characters
               </p>
             </div>
 
