@@ -371,6 +371,12 @@ export const bulkUpdateOrderItemBuybackSchema = z.object({
       buyback_condition: z.enum(DEVICE_CONDITION_VALUES).nullable().optional(),
       buyback_valid_until: z.string()
         .refine(v => !v || !Number.isNaN(Date.parse(v)), { message: 'buyback_valid_until must be a valid date (YYYY-MM-DD)' })
+        // A guarantee that's already expired the moment it's saved is
+        // meaningless — catch the "picked the wrong year" / stale-form-resubmit
+        // class of mistake here rather than silently accepting it.
+        .refine(v => !v || Number.isNaN(Date.parse(v)) || Date.parse(v) >= Date.now() - 24 * 60 * 60 * 1000, {
+          message: 'buyback_valid_until cannot be in the past',
+        })
         .optional().nullable(),
     })
   ).min(1, 'At least one item is required')

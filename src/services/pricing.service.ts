@@ -738,10 +738,12 @@ export class PricingService {
       input.trade_in_profit_percent != null || input.enterprise_margin_percent != null
     let brandOverrideApplied: { make: string; margin_percent: number } | undefined
     let _deviceMake = ''
+    let _deviceCategory = ''
     try {
       const { data: deviceRow } = await supabase
-        .from('device_catalog').select('make').eq('id', normalizedInput.device_id).maybeSingle()
+        .from('device_catalog').select('make, category').eq('id', normalizedInput.device_id).maybeSingle()
       _deviceMake = (deviceRow as { make?: string } | null)?.make ?? ''
+      _deviceCategory = (deviceRow as { category?: string } | null)?.category ?? ''
       if (_deviceMake && !callerHasMarginOverride) {
         const { data: bo } = await supabase
           .from('brand_pricing_overrides')
@@ -1245,11 +1247,20 @@ export class PricingService {
       const mpFeeRate = settings.marketplace_fee_percent / 100
       const mpNet = mpPrice > 0 ? mpPrice * (1 - mpFeeRate) : 0
 
-      // Get repair costs for value-add viability and D-grade formula
-      const { data: repairCosts } = await supabase
+      // Get repair costs for value-add viability and D-grade formula.
+      // Scoped to this device's own category (plus generic/null-category
+      // rows) where known — averaging e.g. laptop motherboard repairs in
+      // with phone screen repairs produced a meaningless blended number
+      // applied to every device regardless of type. Falls back to the
+      // unscoped query if the category lookup above didn't resolve.
+      let repairCostsQuery = supabase
         .from('repair_costs')
         .select('*')
         .eq('is_active', true)
+      if (_deviceCategory) {
+        repairCostsQuery = repairCostsQuery.or(`device_category.eq.${_deviceCategory},device_category.is.null`)
+      }
+      const { data: repairCosts } = await repairCostsQuery
 
       const avgRepairCost = repairCosts && repairCosts.length > 0
         ? repairCosts.reduce((sum: number, r: RepairCost) => sum + r.cost, 0) / repairCosts.length
