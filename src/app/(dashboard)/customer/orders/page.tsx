@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Pagination } from '@/components/ui/pagination'
 import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG } from '@/lib/constants'
@@ -23,6 +24,8 @@ export default function CustomerOrdersPage() {
   const [page, setPage] = useState(1)
   const [transitioning, setTransitioning] = useState<Record<string, boolean>>({})
   const [downloadingFile, setDownloadingFile] = useState<Record<string, boolean>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkActing, setBulkActing] = useState(false)
   const debouncedSearch = useDebounce(search)
 
   const { orders, total, totalPages, isLoading, refetch } = useOrders({
@@ -71,6 +74,54 @@ export default function CustomerOrdersPage() {
     }
   }
 
+  const quotedOrders = orders.filter((order) => order.status === 'quoted')
+  const allQuotedSelected = quotedOrders.length > 0 && quotedOrders.every((order) => selectedIds.has(order.id))
+
+  function toggleAllQuoted() {
+    setSelectedIds(allQuotedSelected ? new Set() : new Set(quotedOrders.map((order) => order.id)))
+  }
+
+  function toggleOne(orderId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(orderId)) next.delete(orderId)
+      else next.add(orderId)
+      return next
+    })
+  }
+
+  async function handleBulkQuoteAction(action: 'accepted' | 'rejected') {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkActing(true)
+    try {
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          fetch(`/api/orders/${id}/transition`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to_status: action }),
+          }).then((res) => {
+            if (!res.ok) throw new Error('Failed')
+          })
+        )
+      )
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.length - succeeded
+      if (succeeded > 0) {
+        toast.success(
+          `${succeeded} quote${succeeded === 1 ? '' : 's'} ${action === 'accepted' ? 'accepted' : 'declined'}${failed > 0 ? `, ${failed} failed` : ''}`
+        )
+      } else if (failed > 0) {
+        toast.error(`Could not update ${failed} quote${failed === 1 ? '' : 's'}. Please try again.`)
+      }
+      setSelectedIds(new Set())
+      refetch?.()
+    } finally {
+      setBulkActing(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -90,6 +141,35 @@ export default function CustomerOrdersPage() {
           }}
         />
       </div>
+
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3">
+          <Badge variant="secondary">{selectedIds.size} selected</Badge>
+          <Button
+            size="sm"
+            variant="success"
+            disabled={bulkActing}
+            onClick={() => handleBulkQuoteAction('accepted')}
+          >
+            <CheckCircle className="mr-2 h-3.5 w-3.5" />
+            Accept Selected
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-red-500 border-red-200 bg-background/70 hover:bg-red-50/60 hover:border-red-300 hover:text-red-600"
+            disabled={bulkActing}
+            onClick={() => handleBulkQuoteAction('rejected')}
+          >
+            <XCircle className="mr-2 h-3.5 w-3.5" />
+            Decline Selected
+          </Button>
+          <div className="flex-1" />
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+            Clear selection
+          </Button>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -117,6 +197,11 @@ export default function CustomerOrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    {quotedOrders.length > 0 && (
+                      <Checkbox checked={allQuotedSelected} onCheckedChange={toggleAllQuoted} />
+                    )}
+                  </TableHead>
                   <TableHead>Order #</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
@@ -133,6 +218,11 @@ export default function CustomerOrdersPage() {
                   const hasSourceFile = !!(order.metadata?.source_file_path)
                   return (
                     <TableRow key={order.id} className={isQuoted ? 'bg-purple-50/40 dark:bg-purple-950/20' : ''}>
+                      <TableCell>
+                        {isQuoted && (
+                          <Checkbox checked={selectedIds.has(order.id)} onCheckedChange={() => toggleOne(order.id)} />
+                        )}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Link href={`/customer/orders/${order.id}`} className="font-medium text-primary hover:underline">
                           {order.order_number}

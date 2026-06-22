@@ -395,6 +395,10 @@ export const bulkRepriceMismatchedItemsSchema = z.object({
   trade_in_profit_percent: z.coerce.number().min(0).max(100).optional(),
 })
 
+export const bulkRequoteOrdersSchema = z.object({
+  order_ids: z.array(z.string().uuid('Invalid order ID')).min(1, 'At least one order is required').max(25, 'Maximum 25 orders per batch'),
+})
+
 export const addManualMismatchSchema = z.object({
   items: z.array(
     z.object({

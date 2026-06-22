@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertCircle, ArrowRightLeft, CheckCircle2, Download, FileUp, Loader2, Plus, Search, ShoppingCart, Trash2, Upload, X } from 'lucide-react'
+import { AlertCircle, ArrowRightLeft, CheckCircle2, DollarSign, Download, FileUp, Loader2, Plus, Search, ShoppingCart, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useOrders } from '@/hooks/useOrders'
@@ -98,6 +98,8 @@ export default function OrdersPage() {
     isBulkTransitioning,
     bulkDelete,
     isBulkDeleting,
+    bulkRequote,
+    isBulkRequoting,
   } = useOrders({
     search: debouncedSearch,
     page,
@@ -111,6 +113,8 @@ export default function OrdersPage() {
   const allSelected = orders.length > 0 && orders.every((order) => selectedIds.has(order.id))
   const someSelected = selectedIds.size > 0
   const deletableSelectedCount = orders.filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled', 'rejected'].includes(order.status)).length
+  const requotableSelectedCount = orders.filter((order) => selectedIds.has(order.id) && order.status === 'quoted').length
+  const canBulkRequote = hasRole(['admin', 'coe_manager'])
 
   const stats = useMemo(() => {
     const active = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage', 'qc_complete', 'mismatch_review', 'payment_processing'].includes(order.status)).length
@@ -260,6 +264,30 @@ export default function OrdersPage() {
       setBulkStatus('')
     } catch {
       toast.error('Bulk transition failed')
+    }
+  }
+
+  async function handleBulkRequote() {
+    const requotableIds = orders
+      .filter((order) => selectedIds.has(order.id) && order.status === 'quoted')
+      .map((order) => order.id)
+    if (requotableIds.length === 0) {
+      toast.error('Only orders with status "Quoted" can be re-quoted.')
+      return
+    }
+    try {
+      const result = await bulkRequote(requotableIds)
+      const skipped = selectedIds.size - requotableIds.length
+      if (result.succeeded > 0) {
+        toast.success(`${result.succeeded} order(s) re-quoted${skipped > 0 ? `, ${skipped} skipped` : ''}${result.failed > 0 ? `, ${result.failed} failed` : ''}`)
+      }
+      if (result.failed > 0) {
+        const firstError = result.results?.find((row) => !row.success && row.error)?.error
+        toast.error(`${result.failed} order(s) could not be re-quoted${firstError ? `: ${firstError}` : ''}`)
+      }
+      setSelectedIds(new Set())
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Bulk re-quote failed')
     }
   }
 
@@ -466,6 +494,18 @@ export default function OrdersPage() {
                     <Download className="mr-2 h-3.5 w-3.5" />
                     Export CSV
                   </Button>
+
+                  {canBulkRequote && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isBulkRequoting || requotableSelectedCount === 0}
+                      onClick={handleBulkRequote}
+                    >
+                      <DollarSign className="mr-2 h-3.5 w-3.5" />
+                      {isBulkRequoting ? 'Re-quoting...' : `Re-quote Selected${requotableSelectedCount > 0 ? ` (${requotableSelectedCount})` : ''}`}
+                    </Button>
+                  )}
 
                   {isAdmin && (
                     <Button

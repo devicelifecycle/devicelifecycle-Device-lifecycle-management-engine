@@ -119,6 +119,25 @@ async function bulkDeleteOrders(orderIds: string[]): Promise<BulkResult> {
   return response.json()
 }
 
+interface BulkRequoteResult {
+  results: { id: string; success: boolean; error?: string; old_amount?: number; new_amount?: number; items_repriced?: number }[]
+  succeeded: number
+  failed: number
+}
+
+async function bulkRequoteOrders(orderIds: string[]): Promise<BulkRequoteResult> {
+  const response = await fetch('/api/orders/bulk-requote', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_ids: orderIds }),
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(typeof err?.error === 'string' ? err.error : 'Failed to bulk re-quote orders')
+  }
+  return response.json()
+}
+
 export function useOrders(filters: OrderFilters = {}) {
   const queryClient = useQueryClient()
 
@@ -226,6 +245,14 @@ export function useOrders(filters: OrderFilters = {}) {
     },
   })
 
+  // Bulk re-quote mutation
+  const bulkRequoteMutation = useMutation({
+    mutationFn: (orderIds: string[]) => bulkRequoteOrders(orderIds),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+
   return {
     orders: ordersQuery.data?.data || [],
     total: ordersQuery.data?.total || 0,
@@ -249,6 +276,9 @@ export function useOrders(filters: OrderFilters = {}) {
 
     bulkDelete: bulkDeleteMutation.mutateAsync,
     isBulkDeleting: bulkDeleteMutation.isPending,
+
+    bulkRequote: bulkRequoteMutation.mutateAsync,
+    isBulkRequoting: bulkRequoteMutation.isPending,
   }
 }
 
