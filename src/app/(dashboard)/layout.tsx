@@ -15,6 +15,11 @@ const ChatAssistant = dynamic(
   { ssr: false, loading: () => null }
 )
 
+const OnboardingTour = dynamic(
+  () => import('@/components/onboarding/OnboardingTour').then((m) => ({ default: m.OnboardingTour })),
+  { ssr: false, loading: () => null }
+)
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -120,6 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       <ChatAssistant />
+      <OnboardingTour />
     </div>
   )
 }

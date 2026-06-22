@@ -185,7 +185,7 @@ export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick,
           </button>
 
           {/* Notifications */}
-          <Link href={notificationsHref}>
+          <Link href={notificationsHref} data-tour="notifications">
             <button className="relative flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
               <Bell className="h-3.5 w-3.5" />
               {unreadCount > 0 && (
@@ -197,7 +197,7 @@ export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick,
           </Link>
 
           {/* Avatar dropdown */}
-          <div ref={avatarRef} className="relative ml-0.5">
+          <div ref={avatarRef} className="relative ml-0.5" data-tour="account-menu">
             <button
               onClick={() => setAvatarOpen(o => !o)}
               className="topbar-avatar flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-primary cursor-pointer transition-colors"

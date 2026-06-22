@@ -260,6 +260,7 @@ export function ChatAssistant() {
         onClick={() => setIsOpen(!isOpen)}
         title={isOpen ? 'Close assistant' : `Open ${persona.label}`}
         type="button"
+        data-tour="chat-assistant"
         className={cn(
           'fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-2xl ring-1 ring-inset transition-all duration-300 hover:scale-105 hover:-translate-y-0.5',
           isOpen

@@ -94,6 +94,8 @@ export interface User extends BaseEntity {
    * invite/deactivate teammates of the same role within their org. Only
    * the platform admin can set this (src/app/api/users/[id]/route.ts). */
   is_org_admin?: boolean;
+  /** Null until the user finishes (or skips) the first-login guided tour. */
+  onboarding_completed_at?: string | null;
 }
 
 export type OrgPlan = 'starter' | 'growth' | 'enterprise';

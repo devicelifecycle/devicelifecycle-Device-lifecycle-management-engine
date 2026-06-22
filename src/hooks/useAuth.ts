@@ -109,7 +109,7 @@ function writeProfileCookie(user: User) {
       id: user.id, email: user.email, full_name: user.full_name,
       role: user.role, secondary_role: user.secondary_role,
       organization_id: user.organization_id, is_active: user.is_active,
-      is_org_admin: user.is_org_admin,
+      is_org_admin: user.is_org_admin, onboarding_completed_at: user.onboarding_completed_at,
       notification_email: user.notification_email, last_login_at: user.last_login_at,
       created_at: user.created_at, updated_at: user.updated_at,
     }
@@ -200,7 +200,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
 
       const { data: profile } = await supabase
         .from('users')
-        .select('id, email, full_name, role, secondary_role, organization_id, is_active, is_org_admin, created_at, updated_at, notification_email, last_login_at')
+        .select('id, email, full_name, role, secondary_role, organization_id, is_active, is_org_admin, onboarding_completed_at, created_at, updated_at, notification_email, last_login_at')
         .eq('id', authUser.id)
         .single()
 
@@ -388,7 +388,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       const [profileResult, aalResult] = await Promise.all([
         supabase
           .from('users')
-          .select('id, email, full_name, role, secondary_role, organization_id, is_active, is_org_admin, created_at, updated_at, notification_email, last_login_at')
+          .select('id, email, full_name, role, secondary_role, organization_id, is_active, is_org_admin, onboarding_completed_at, created_at, updated_at, notification_email, last_login_at')
           .eq('id', userId)
           .single(),
         supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
@@ -489,7 +489,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
 
       const { data: profile } = await supabase
         .from('users')
-        .select('id, email, full_name, role, secondary_role, organization_id, is_active, is_org_admin, created_at, updated_at, notification_email, last_login_at')
+        .select('id, email, full_name, role, secondary_role, organization_id, is_active, is_org_admin, onboarding_completed_at, created_at, updated_at, notification_email, last_login_at')
         .eq('id', authUser.id)
         .single()
 

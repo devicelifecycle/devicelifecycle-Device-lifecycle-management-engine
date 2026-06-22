@@ -35,6 +35,8 @@ interface NavItem {
   countKey?: 'pendingBids' | 'actionableOrders'
   /** Only the org's designated org admin sees this item — checked alongside roles. */
   requiresOrgAdmin?: boolean
+  /** Onboarding tour anchor — matches a target in src/lib/onboarding/tours.ts. */
+  tourId?: string
 }
 
 interface NavSection {
@@ -54,10 +56,10 @@ const navSections: NavSection[] = [
   {
     title: 'Workflow',
     items: [
-      { title: 'Orders', href: '/orders', icon: ShoppingCart, roles: ['admin', 'coe_manager', 'coe_tech', 'sales'], countKey: 'actionableOrders' },
-      { title: 'My Orders', href: '/customer/orders', icon: ShoppingCart, roles: ['customer'] },
+      { title: 'Orders', href: '/orders', icon: ShoppingCart, roles: ['admin', 'coe_manager', 'coe_tech', 'sales'], countKey: 'actionableOrders', tourId: 'nav-orders' },
+      { title: 'My Orders', href: '/customer/orders', icon: ShoppingCart, roles: ['customer'], tourId: 'nav-my-orders' },
       { title: 'Requests', href: '/customer/requests', icon: FilePlus2, roles: ['customer'] },
-      { title: 'Vendor Orders', href: '/vendor/orders', icon: Truck, roles: ['vendor'] },
+      { title: 'Vendor Orders', href: '/vendor/orders', icon: Truck, roles: ['vendor'], tourId: 'nav-vendor-orders' },
       { title: 'My Bids', href: '/vendor/bids', icon: Gavel, roles: ['vendor'], countKey: 'pendingBids' },
       { title: 'Performance', href: '/vendor/performance', icon: Trophy, roles: ['vendor'] },
       { title: 'Team', href: '/customer/team', icon: UserCog, roles: ['customer'], requiresOrgAdmin: true },
@@ -72,7 +74,7 @@ const navSections: NavSection[] = [
     title: 'Operations',
     items: [
       { title: 'Receiving', href: '/coe/receiving', icon: Truck, roles: ['admin', 'coe_manager', 'coe_tech'] },
-      { title: 'Triage', href: '/coe/triage', icon: ClipboardCheck, roles: ['admin', 'coe_manager', 'coe_tech'] },
+      { title: 'Triage', href: '/coe/triage', icon: ClipboardCheck, roles: ['admin', 'coe_manager', 'coe_tech'], tourId: 'nav-triage' },
       { title: 'Exceptions', href: '/coe/exceptions', icon: AlertTriangle, roles: ['admin', 'coe_manager'] },
       { title: 'Shipping', href: '/coe/shipping', icon: Truck, roles: ['admin', 'coe_manager', 'coe_tech'] },
     ],
@@ -84,7 +86,7 @@ const navSections: NavSection[] = [
       { title: 'Organizations', href: '/admin/organizations', icon: Building2, roles: ['admin'] },
       { title: 'Pricing', href: '/admin/pricing', icon: DollarSign, roles: ['admin'] },
       { title: 'SLA Rules', href: '/admin/sla-rules', icon: FileText, roles: ['admin'] },
-      { title: 'Users', href: '/admin/users', icon: Shield, roles: ['admin'] },
+      { title: 'Users', href: '/admin/users', icon: Shield, roles: ['admin'], tourId: 'nav-users' },
       { title: 'Audit Log', href: '/admin/audit-log', icon: FileText, roles: ['admin'] },
     ],
   },
@@ -131,7 +133,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="mx-4 h-px bg-white/[0.06]" />
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4" data-tour="sidebar-nav">
         {filteredSections.map((section) => (
           <div key={section.title}>
             <p className="mb-1.5 px-2 font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
@@ -145,6 +147,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 return (
                   <Link key={item.title} href={item.href} onClick={onNavigate} prefetch={false} onMouseEnter={() => router.prefetch(item.href)}>
                     <div
+                      data-tour={item.tourId}
                       className={cn(
                         'group relative flex items-center gap-3 rounded-xl px-3 py-3 font-body text-sm transition-all duration-200',
                         isActive

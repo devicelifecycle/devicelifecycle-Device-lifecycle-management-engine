@@ -73,7 +73,7 @@ export default async function RootLayout({
       if (initialUser === undefined) {
         const { data: profile } = await supabase
           .from('users')
-          .select('id, email, full_name, role, secondary_role, organization_id, is_active, is_org_admin, created_at, updated_at, notification_email, last_login_at')
+          .select('id, email, full_name, role, secondary_role, organization_id, is_active, is_org_admin, onboarding_completed_at, created_at, updated_at, notification_email, last_login_at')
           .eq('id', session.user.id)
           .single()
         initialUser = (profile?.is_active ? profile : null) as User | null
