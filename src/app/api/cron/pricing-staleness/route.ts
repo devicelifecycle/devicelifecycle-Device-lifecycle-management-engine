@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await PricingHealthService.checkCompetitorPriceStaleness()
+    const providerResult = await PricingHealthService.checkScraperProviderStaleness()
 
     // Also purge rows that are beyond 2× the staleness threshold — these are
     // so old they will never be useful regardless of scraper schedule.
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       ...result,
+      provider_staleness: providerResult,
       cleanup: cleanup ?? { deleted: 0, cutoff_days: cleanupDays },
       timestamp: new Date().toISOString(),
     })

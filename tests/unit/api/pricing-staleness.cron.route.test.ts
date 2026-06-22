@@ -2,10 +2,18 @@ import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const checkCompetitorPriceStalenessMock = vi.fn()
+const checkScraperProviderStalenessMock = vi.fn().mockResolvedValue({
+  threshold_days: 5,
+  checked_providers: 5,
+  stale_providers: [],
+  notifications_sent: 0,
+  notifications_skipped: 0,
+})
 
 vi.mock('@/services/pricing-health.service', () => ({
   PricingHealthService: {
     checkCompetitorPriceStaleness: checkCompetitorPriceStalenessMock,
+    checkScraperProviderStaleness: checkScraperProviderStalenessMock,
     cleanupStaleRows: vi.fn().mockResolvedValue({ deleted: 0, cutoff_days: 14 }),
   },
 }))

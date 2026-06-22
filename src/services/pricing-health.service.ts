@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { SCRAPER_PROVIDERS } from '@/lib/scrapers/rollout-metadata'
 
 interface FreshnessEntry {
   device_id: string
@@ -25,6 +26,21 @@ export interface PricingStalenessResult {
 
 const DEFAULT_THRESHOLD_DAYS = 7
 const ALERT_TITLE = 'Pricing data stale alert'
+const PROVIDER_ALERT_TITLE = 'Scraper provider went silent'
+// Found 2026-06-22: Bell, Telus, and Universal had all gone silent for
+// ~2 months with zero alerting, while GoRecell/Apple kept running — the
+// device-level staleness check above didn't catch it because some devices
+// still had old-but-not-ancient rows from before the providers went quiet.
+// This checks each PROVIDER's last successful run directly instead.
+const PROVIDER_STALE_THRESHOLD_DAYS = 5
+
+export interface ProviderStalenessResult {
+  threshold_days: number
+  checked_providers: number
+  stale_providers: Array<{ id: string; name: string; last_run_at: string | null; age_days: number; last_status: string | null }>
+  notifications_sent: number
+  notifications_skipped: number
+}
 
 function daysBetween(now: Date, thenIso?: string | null): number {
   if (!thenIso) return Number.POSITIVE_INFINITY
@@ -190,6 +206,98 @@ export class PricingHealthService {
       stale_groups: stale.length,
       max_age_days: stale.length > 0 ? stale[0].age_days : null,
       stale_examples: stale.slice(0, 20),
+      notifications_sent: notificationsSent,
+      notifications_skipped: notificationsSkipped,
+    }
+  }
+
+  /**
+   * Checks each scraper provider's own last-run timestamp (written by
+   * /api/cron/price-scraper on every invocation, success or failure) —
+   * catches a provider going completely silent, which the device-level
+   * staleness check above can miss if some rows are old-but-not-stale-enough.
+   */
+  static async checkScraperProviderStaleness(): Promise<ProviderStalenessResult> {
+    const supabase = createServiceRoleClient()
+    const now = new Date()
+
+    const keys = SCRAPER_PROVIDERS.flatMap((p) => [`last_${p.settingsPrefix}_scraper_at`, `last_${p.settingsPrefix}_scraper_status`])
+    const { data: rows } = await supabase
+      .from('pricing_settings')
+      .select('setting_key, setting_value')
+      .in('setting_key', keys)
+
+    const settings = Object.fromEntries((rows || []).map((r: { setting_key: string; setting_value: string }) => [r.setting_key, r.setting_value]))
+
+    const staleProviders = SCRAPER_PROVIDERS
+      .map((p) => {
+        const lastRunAt = settings[`last_${p.settingsPrefix}_scraper_at`] || null
+        return {
+          id: p.id,
+          name: p.name,
+          last_run_at: lastRunAt,
+          age_days: daysBetween(now, lastRunAt),
+          last_status: settings[`last_${p.settingsPrefix}_scraper_status`] || null,
+        }
+      })
+      .filter((p) => p.age_days > PROVIDER_STALE_THRESHOLD_DAYS)
+      .sort((a, b) => b.age_days - a.age_days)
+
+    const recipientsQuery = await supabase
+      .from('users')
+      .select('id')
+      .in('role', ['admin', 'coe_manager'])
+    const recipients = (recipientsQuery.data || []) as Array<{ id: string }>
+
+    let notificationsSent = 0
+    let notificationsSkipped = 0
+
+    if (staleProviders.length > 0 && recipients.length > 0) {
+      const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+      const names = staleProviders.map((p) => `${p.name} (${Number.isFinite(p.age_days) ? `${p.age_days}d` : 'never'})`).join(', ')
+
+      for (const recipient of recipients) {
+        const { data: existingRecent } = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('user_id', recipient.id)
+          .eq('title', PROVIDER_ALERT_TITLE)
+          .gte('created_at', since)
+          .limit(1)
+          .maybeSingle()
+
+        if (existingRecent?.id) {
+          notificationsSkipped++
+          continue
+        }
+
+        const { error: insertError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: recipient.id,
+            type: 'in_app',
+            title: PROVIDER_ALERT_TITLE,
+            message: `${staleProviders.length} price scraper${staleProviders.length === 1 ? '' : 's'} haven't run successfully in over ${PROVIDER_STALE_THRESHOLD_DAYS} days: ${names}. Check the cron configuration and environment variables.`,
+            metadata: {
+              kind: 'scraper_provider_staleness_alert',
+              threshold_days: PROVIDER_STALE_THRESHOLD_DAYS,
+              stale_providers: staleProviders,
+              generated_at: now.toISOString(),
+            },
+          })
+
+        if (insertError) {
+          notificationsSkipped++
+          continue
+        }
+        notificationsSent++
+      }
+    }
+
+    return {
+      threshold_days: PROVIDER_STALE_THRESHOLD_DAYS,
+      checked_providers: SCRAPER_PROVIDERS.length,
+      stale_providers: staleProviders,
       notifications_sent: notificationsSent,
       notifications_skipped: notificationsSkipped,
     }
