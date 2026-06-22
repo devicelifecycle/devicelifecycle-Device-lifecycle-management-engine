@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
-import { Bot, X, Send, Sparkles, Loader2, Trash2 } from 'lucide-react'
+import { Sparkles, TrendingUp, ClipboardCheck, Gavel, X, Send, Loader2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ChatMessage } from './ChatMessage'
 import type { ChatMessage as ChatMessageType } from '@/types'
@@ -29,17 +29,23 @@ function getContextForPath(pathname: string): 'pricing' | 'triage' | 'sourcing' 
   return undefined
 }
 
-const DEFAULT_PERSONA = { label: 'DLM Assistant', subtitle: 'Powered by Llama 3.3' }
-const PERSONA_SUBTITLES: Record<string, string> = {
-  'Pricing Agent': 'Watching market & competitor prices',
-  'Triage Copilot': 'Helping with device inspection',
-  'Vendor Sourcing Agent': 'Comparing bids & vendor history',
+const DEFAULT_PERSONA = { label: 'DLM Assistant', subtitle: 'Powered by Llama 3.3', icon: Sparkles }
+const PERSONA_DETAILS: Record<string, { subtitle: string; icon: typeof Sparkles }> = {
+  'Pricing Agent': { subtitle: 'Watching market & competitor prices', icon: TrendingUp },
+  'Triage Copilot': { subtitle: 'Helping with device inspection', icon: ClipboardCheck },
+  'Vendor Sourcing Agent': { subtitle: 'Comparing bids & vendor history', icon: Gavel },
 }
 
 const CONTEXT_PERSONA_LABEL: Record<string, string> = {
   pricing: 'Pricing Agent',
   triage: 'Triage Copilot',
   sourcing: 'Vendor Sourcing Agent',
+}
+
+function resolvePersona(label?: string) {
+  if (!label) return DEFAULT_PERSONA
+  const details = PERSONA_DETAILS[label]
+  return details ? { label, ...details } : DEFAULT_PERSONA
 }
 
 export function ChatAssistant() {
@@ -51,8 +57,7 @@ export function ChatAssistant() {
   // reply confirms it) — the backend re-checks role, so this is just a guess
   // for display; a customer/vendor would get DEFAULT_PERSONA back regardless.
   useEffect(() => {
-    const label = context ? CONTEXT_PERSONA_LABEL[context] : undefined
-    setPersona(label ? { label, subtitle: PERSONA_SUBTITLES[label] || DEFAULT_PERSONA.subtitle } : DEFAULT_PERSONA)
+    setPersona(resolvePersona(context ? CONTEXT_PERSONA_LABEL[context] : undefined))
   }, [context])
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessageType[]>([WELCOME_MSG])
@@ -117,11 +122,7 @@ export function ChatAssistant() {
       }
 
       setMessages(prev => [...prev, assistantMsg])
-      setPersona(
-        data.persona
-          ? { label: data.persona, subtitle: PERSONA_SUBTITLES[data.persona] || DEFAULT_PERSONA.subtitle }
-          : DEFAULT_PERSONA
-      )
+      setPersona(resolvePersona(data.persona))
     } catch (e) {
       const errorMsg: ChatMessageType = {
         id: `error-${Date.now()}`,
@@ -162,10 +163,10 @@ export function ChatAssistant() {
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between rounded-t-2xl bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-3">
-          <div className="flex items-center gap-2 text-white">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
-              <Sparkles className="h-4 w-4" />
+        <div className="flex items-center justify-between rounded-t-2xl bg-gradient-to-r from-[#9a4a1f] to-[#d17843] px-4 py-3">
+          <div className="flex items-center gap-2.5 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/20">
+              <persona.icon className="h-4 w-4" />
             </div>
             <div>
               <p className="text-sm font-semibold">{persona.label}</p>
@@ -177,12 +178,15 @@ export function ChatAssistant() {
               onClick={clearChat}
               className="rounded-lg p-1.5 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
               title="Clear chat"
+              type="button"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setIsOpen(false)}
               className="rounded-lg p-1.5 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+              title="Close"
+              type="button"
             >
               <X className="h-4 w-4" />
             </button>
@@ -201,7 +205,7 @@ export function ChatAssistant() {
           ))}
           {isLoading && (
             <div className="flex items-center gap-2 text-muted-foreground">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-amber-600">
+              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#9a4a1f] to-[#d17843]">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
               </div>
               <div className="rounded-2xl rounded-tl-sm bg-muted/80 px-3.5 py-2.5">
@@ -225,16 +229,18 @@ export function ChatAssistant() {
               onKeyDown={handleKeyDown}
               placeholder="Ask about orders, pricing, devices..."
               rows={1}
-              className="flex-1 resize-none rounded-xl border bg-muted/30 px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
+              className="flex-1 resize-none rounded-xl border bg-muted/30 px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-[#d17843] focus:ring-1 focus:ring-[#d17843]/30 transition-colors"
               disabled={isLoading}
             />
             <button
               onClick={sendMessage}
               disabled={!input.trim() || isLoading}
+              title="Send message"
+              type="button"
               className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-xl transition-all',
                 input.trim() && !isLoading
-                  ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white hover:shadow-md'
+                  ? 'bg-gradient-to-r from-[#9a4a1f] to-[#d17843] text-white hover:shadow-md'
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
               )}
             >
@@ -247,20 +253,24 @@ export function ChatAssistant() {
         </div>
       </div>
 
-      {/* Floating Bubble */}
+      {/* Floating Bubble — rounded-square "squircle" matching the sidebar
+          logo's treatment, not a generic round chat-plugin circle, and the
+          persona's icon instead of a literal robot face. */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        title={isOpen ? 'Close assistant' : `Open ${persona.label}`}
+        type="button"
         className={cn(
-          'fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300 hover:scale-110 hover:translate-y-[-2px]',
+          'fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-2xl ring-1 ring-inset transition-all duration-300 hover:scale-105 hover:-translate-y-0.5',
           isOpen
-            ? 'bg-white/[0.06] text-muted-foreground shadow-[0_4px_16px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]'
-            : 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_8px_32px_-6px_rgba(34,211,238,0.4),inset_0_1px_0_rgba(255,255,255,0.2)]'
+            ? 'bg-white/[0.06] text-muted-foreground ring-white/10 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]'
+            : 'bg-gradient-to-br from-[#9a4a1f] to-[#d17843] text-white ring-white/20 shadow-[0_8px_28px_-6px_rgba(209,120,67,0.55),inset_0_1px_0_rgba(255,255,255,0.25)]'
         )}
       >
         {isOpen ? (
           <X className="h-5 w-5" />
         ) : (
-          <Bot className="h-6 w-6" />
+          <persona.icon className="h-6 w-6" />
         )}
       </button>
     </>
