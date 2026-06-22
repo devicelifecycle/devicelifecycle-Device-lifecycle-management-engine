@@ -62,6 +62,7 @@ const navSections: NavSection[] = [
       { title: 'Vendor Orders', href: '/vendor/orders', icon: Truck, roles: ['vendor'], tourId: 'nav-vendor-orders' },
       { title: 'My Bids', href: '/vendor/bids', icon: Gavel, roles: ['vendor'], countKey: 'pendingBids' },
       { title: 'Performance', href: '/vendor/performance', icon: Trophy, roles: ['vendor'] },
+      { title: 'Payouts', href: '/vendor/payouts', icon: DollarSign, roles: ['vendor'] },
       { title: 'Team', href: '/customer/team', icon: UserCog, roles: ['customer'], requiresOrgAdmin: true },
       { title: 'Team', href: '/vendor/team', icon: UserCog, roles: ['vendor'], requiresOrgAdmin: true },
       { title: 'Customers', href: '/customers', icon: Users, roles: ['admin', 'coe_manager', 'sales'] },
