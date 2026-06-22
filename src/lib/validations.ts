@@ -146,6 +146,10 @@ export const updateUserSchema = z.object({
   /** Only the platform admin may set this — stripped for any other caller
    * in PATCH /api/users/[id] (src/app/api/users/[id]/route.ts). */
   is_org_admin: z.boolean().optional(),
+  /** Admin-only "reset onboarding" — only null is ever a valid admin-set
+   * value here; the user's own completion goes through POST
+   * /api/users/me/onboarding instead. Stripped for non-admin callers. */
+  onboarding_completed_at: z.literal(null).optional(),
   /** For Login ID users: real email for notifications, forgot-password */
   notification_email: z.string().email().optional().nullable(),
   phone: z.string().max(30).optional().nullable(),

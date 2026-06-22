@@ -33,6 +33,18 @@ export function OnboardingTour() {
     }
   }, [user, phase])
 
+  // Manual replay from the Help panel — jumps straight to the spotlight
+  // tour (skips the welcome screen; a returning user doesn't need it
+  // re-explained), regardless of completion state.
+  useEffect(() => {
+    const handler = () => {
+      setStepIndex(0)
+      setPhase('touring')
+    }
+    window.addEventListener('dlm:replay-tour', handler)
+    return () => window.removeEventListener('dlm:replay-tour', handler)
+  }, [])
+
   const finish = useCallback(() => {
     setPhase('done')
     markOnboardingComplete()

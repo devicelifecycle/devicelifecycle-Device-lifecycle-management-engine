@@ -121,10 +121,11 @@ export async function PATCH(
       delete updateData.role
       delete updateData.secondary_role
     }
-    // Only admins can set secondary_role or is_org_admin on any user
+    // Only admins can set secondary_role, is_org_admin, or reset onboarding on any user
     if (!isPlatformAdmin) {
       delete updateData.secondary_role
       delete updateData.is_org_admin
+      delete updateData.onboarding_completed_at
     }
     // An org admin managing a teammate may only toggle is_active — not role,
     // phone, name, etc. on someone else's account.

@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Plus, Shield, Pencil, Copy, Trash2 } from 'lucide-react'
+import { Plus, Shield, Pencil, Copy, Trash2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -155,6 +155,18 @@ export default function AdminUsersPage() {
       fetchUsers()
     } catch { toast.error('Failed to update user') }
     finally { setSaving(false) }
+  }
+
+  const handleResetOnboarding = async (user: User) => {
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onboarding_completed_at: null }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`${user.full_name} will see the welcome tour again on next login`)
+      fetchUsers()
+    } catch { toast.error('Failed to reset onboarding') }
   }
 
   const handleHardDelete = async () => {
@@ -401,6 +413,16 @@ export default function AdminUsersPage() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
+                        {u.onboarding_completed_at && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleResetOnboarding(u)}
+                            title="Reset onboarding — show the welcome tour again next login"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"

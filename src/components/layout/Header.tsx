@@ -4,11 +4,17 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bell, ChevronRight, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun, User } from 'lucide-react'
+import { Bell, ChevronRight, HelpCircle, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun, User } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
 import { snakeToTitle } from '@/lib/utils'
+import dynamic from 'next/dynamic'
+
+const HelpPanel = dynamic(
+  () => import('@/components/onboarding/HelpPanel').then((m) => ({ default: m.HelpPanel })),
+  { ssr: false, loading: () => null }
+)
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
 
@@ -28,6 +34,7 @@ export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick,
   const { user, activeRole, switchRole, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
   const [avatarOpen, setAvatarOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const avatarRef = useRef<HTMLDivElement>(null)
 
   // Close dropdown on outside click
@@ -216,6 +223,13 @@ export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick,
                   Profile
                 </Link>
                 <button
+                  onClick={() => { setAvatarOpen(false); setHelpOpen(true) }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  Help
+                </button>
+                <button
                   onClick={() => { setAvatarOpen(false); logout() }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors"
                 >
@@ -227,6 +241,9 @@ export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick,
           </div>
         </div>
       </div>
+      <AnimatePresence>
+        {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
+      </AnimatePresence>
     </header>
   )
 }
