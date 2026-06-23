@@ -35,6 +35,26 @@ function getGmailTransporter(): Transporter | null {
   return gmailTransporter
 }
 
+/**
+ * Derive a plain-text fallback from an HTML email body. Sending HTML-only
+ * (no multipart text/plain alternative) is itself a spam-filter signal —
+ * most legitimate transactional mail includes both parts.
+ */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<\/(p|div|tr|h[1-6])>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function getResendClient(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey || apiKey === 're_placeholder') return null
@@ -73,6 +93,7 @@ export class EmailService {
           to: toList,
           subject,
           html,
+          text: htmlToPlainText(html),
         })
         return true
       } catch (err) {
@@ -94,6 +115,7 @@ export class EmailService {
         to: toList,
         subject,
         html,
+        text: htmlToPlainText(html),
       })
 
       if (error) {
@@ -130,6 +152,7 @@ export class EmailService {
           to: toList,
           subject,
           html,
+          text: htmlToPlainText(html),
           attachments: attachments.map(a => ({
             filename: a.filename,
             content: a.content,
@@ -155,6 +178,7 @@ export class EmailService {
         to: toList,
         subject,
         html,
+        text: htmlToPlainText(html),
         attachments: attachments.map(a => ({
           filename: a.filename,
           content: a.content,
