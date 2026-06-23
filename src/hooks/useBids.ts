@@ -56,7 +56,24 @@ export function useBids(filters: BidFilters = {}) {
   const updateMutation = useMutation({
     mutationFn: ({ id, status, cpo_markup_percent }: { id: string; status: 'accepted' | 'rejected'; cpo_markup_percent?: number }) =>
       updateBidStatus(id, status, cpo_markup_percent),
-    onSuccess: () => {
+    onMutate: async ({ id, status, cpo_markup_percent }) => {
+      await queryClient.cancelQueries({ queryKey: ['bids'] })
+      const snapshots = queryClient.getQueriesData<BidsResponse>({ queryKey: ['bids'] })
+      queryClient.setQueriesData<BidsResponse>({ queryKey: ['bids'] }, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          data: old.data.map((b) =>
+            b.id === id ? { ...b, status, ...(cpo_markup_percent != null ? { cpo_markup_percent } : {}) } : b
+          ),
+        }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['bids'] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['order'] })

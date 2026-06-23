@@ -88,7 +88,19 @@ export function useOrganizations(filters: OrganizationFilters = {}) {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Organization> }) =>
       updateOrganization(id, data),
-    onSuccess: () => {
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['organizations'] })
+      const snapshots = queryClient.getQueriesData<OrganizationsResponse>({ queryKey: ['organizations'] })
+      queryClient.setQueriesData<OrganizationsResponse>({ queryKey: ['organizations'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.map((o) => (o.id === id ? { ...o, ...data } : o)) }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      context?.snapshots.forEach(([key, value]) => queryClient.setQueryData(key, value))
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] })
     },
   })
@@ -122,7 +134,18 @@ export function useOrganization(id: string | null) {
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Organization>) => updateOrganization(id!, data),
-    onSuccess: () => {
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['organization', id] })
+      const prevOrganization = queryClient.getQueryData<Organization>(['organization', id])
+      queryClient.setQueryData<Organization>(['organization', id], (old) => (old ? { ...old, ...data } : old))
+      return { prevOrganization }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.prevOrganization) {
+        queryClient.setQueryData(['organization', id], context.prevOrganization)
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['organization', id] })
       queryClient.invalidateQueries({ queryKey: ['organizations'] })
     },

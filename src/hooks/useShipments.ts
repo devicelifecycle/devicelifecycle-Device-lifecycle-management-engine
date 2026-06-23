@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Shipment } from '@/types'
+import type { Shipment, ShipmentStatus } from '@/types'
 
 interface ShipmentsResponse {
   data: Shipment[]
@@ -114,7 +114,29 @@ export function useShipments(filters: ShipmentFilters = {}) {
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, ...payload }: { id: string; status?: string; action?: string; metadata?: Record<string, unknown> }) =>
       updateShipmentStatus(id, payload),
-    onSuccess: () => {
+    onMutate: async ({ id, status }) => {
+      if (!status) return undefined
+      await queryClient.cancelQueries({ queryKey: ['shipments'] })
+      await queryClient.cancelQueries({ queryKey: ['shipment', id] })
+      const listSnapshots = queryClient.getQueriesData<ShipmentsResponse>({ queryKey: ['shipments'] })
+      const prevShipment = queryClient.getQueryData<{ data: Shipment }>(['shipment', id])
+      const nextStatus = status as ShipmentStatus
+      queryClient.setQueriesData<ShipmentsResponse>({ queryKey: ['shipments'] }, (old) => {
+        if (!old) return old
+        return { ...old, data: old.data.map((s) => (s.id === id ? { ...s, status: nextStatus } : s)) }
+      })
+      queryClient.setQueryData<{ data: Shipment }>(['shipment', id], (old) =>
+        old ? { ...old, data: { ...old.data, status: nextStatus } } : old
+      )
+      return { listSnapshots, prevShipment, id }
+    },
+    onError: (_err, _vars, context) => {
+      context?.listSnapshots?.forEach(([key, value]) => queryClient.setQueryData(key, value))
+      if (context?.prevShipment) {
+        queryClient.setQueryData(['shipment', context.id], context.prevShipment)
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['shipments'] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },
