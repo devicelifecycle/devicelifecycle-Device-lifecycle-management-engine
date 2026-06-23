@@ -290,9 +290,14 @@ export default function CustomerOrderDetailPage() {
           <div className="flex items-start justify-between gap-2">
             {steps.map((step, i) => {
               const Icon = step.icon
-              const isDone = currentStepIdx > i
-              const isCurrent = currentStepIdx === i
               const isLast = i === steps.length - 1
+              // The final step has nothing "after" it, so currentStepIdx can
+              // never exceed its index — without this, a fully closed order
+              // would show its last stage as "current" (blue) forever
+              // instead of "done" (green).
+              const isOrderFullyComplete = order.status === 'closed'
+              const isDone = currentStepIdx > i || (isLast && currentStepIdx === i && isOrderFullyComplete)
+              const isCurrent = currentStepIdx === i && !isDone
               return (
                 <div key={step.label} className="flex flex-col items-center flex-1 gap-1.5 text-center">
                   <div className="relative flex items-center w-full justify-center">
