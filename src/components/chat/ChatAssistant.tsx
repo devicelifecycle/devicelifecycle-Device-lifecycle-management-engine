@@ -8,8 +8,26 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { Sparkles, TrendingUp, ClipboardCheck, Gavel, X, Send, Loader2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/hooks/useAuth'
 import { ChatMessage } from './ChatMessage'
 import type { ChatMessage as ChatMessageType } from '@/types'
+
+const CHAT_HISTORY_MAX_MESSAGES = 100
+
+function chatStorageKey(userId: string): string {
+  return `dlm_chat_history_${userId}`
+}
+
+function loadStoredMessages(userId: string): ChatMessageType[] | null {
+  try {
+    const raw = localStorage.getItem(chatStorageKey(userId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null
+  } catch {
+    return null
+  }
+}
 
 const WELCOME_MSG: ChatMessageType = {
   id: 'welcome',
@@ -51,6 +69,7 @@ function resolvePersona(label?: string) {
 export function ChatAssistant() {
   const pathname = usePathname()
   const context = getContextForPath(pathname || '')
+  const { user } = useAuth()
   const [persona, setPersona] = useState(DEFAULT_PERSONA)
 
   // Show the predicted persona for this page immediately (before the first
@@ -65,6 +84,27 @@ export function ChatAssistant() {
   const [isLoading, setIsLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const historyLoadedForUserId = useRef<string | null>(null)
+
+  // Restore this user's saved conversation once their id is known —
+  // keeps history across page reloads/navigation without a backend.
+  useEffect(() => {
+    if (!user?.id || historyLoadedForUserId.current === user.id) return
+    historyLoadedForUserId.current = user.id
+    const stored = loadStoredMessages(user.id)
+    if (stored) setMessages(stored)
+  }, [user?.id])
+
+  // Persist on every change (skip the single-welcome-message initial state
+  // so a user who never sends anything doesn't write a no-op entry).
+  useEffect(() => {
+    if (!user?.id) return
+    if (messages.length === 1 && messages[0].id.startsWith('welcome')) return
+    try {
+      const trimmed = messages.slice(-CHAT_HISTORY_MAX_MESSAGES)
+      localStorage.setItem(chatStorageKey(user.id), JSON.stringify(trimmed))
+    } catch { /* storage full or unavailable — non-fatal */ }
+  }, [messages, user?.id])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -149,6 +189,9 @@ export function ChatAssistant() {
       id: `welcome-${Date.now()}`,
       timestamp: new Date().toISOString(),
     }])
+    if (user?.id) {
+      try { localStorage.removeItem(chatStorageKey(user.id)) } catch { /* ignore */ }
+    }
   }
 
   return (
