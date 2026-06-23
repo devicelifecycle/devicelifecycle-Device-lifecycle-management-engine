@@ -631,8 +631,14 @@ export async function POST(request: NextRequest) {
     // and spawn a duplicate device with no pricing data attached.
     let catalogForMatch: Device[] | null = null
     const orderItems = []
+    // Unmatched devices needing a new catalog entry are queued here instead
+    // of inserted one at a time — a single batched insert runs once after
+    // this loop, instead of one DB round-trip per unrecognized device.
+    const pendingAutoAdds = new Map<string, { make: string; model: string; specifications?: Record<string, unknown> }>()
+    const pendingPatches: { orderItemIndex: number; key: string }[] = []
     for (const row of normalizedRows) {
       let deviceId: string | null = null
+      let pendingAutoAddKey: string | null = null
 
       if (row.preresolved_device_id) {
         // Parse step already matched the device — trust that result.
@@ -671,38 +677,26 @@ export async function POST(request: NextRequest) {
         // misidentified column (serial number, part number) ends up as
         // device_catalog.make, polluting the catalog instead of just
         // leaving this item unmatched for manual review (deviceNameTag below).
+        // Queued for a single batched insert after the loop instead of
+        // inserting immediately — see pendingAutoAdds.
         if (!deviceId && row.brand && isPlausibleBrand(row.brand)) {
           const autoMake = row.brand
           const rawModel = row.model || 'Unknown Model'
           const autoColor = extractColor(rawModel)
           const autoModel = autoColor ? stripColor(rawModel) || rawModel : rawModel
           const autoSpecs = autoColor ? { colors: [autoColor] } : undefined
-          try {
-            const { data: newDevice } = await serviceRole
-              .from('device_catalog')
-              .insert({ make: autoMake, model: autoModel, specifications: autoSpecs, is_active: true })
-              .select('id, make, model, specifications, category')
-              .single()
-            if (newDevice) {
-              deviceId = newDevice.id
-              catalogForMatch.push(newDevice as Device)
-            }
-          } catch {
-            // May already exist from a concurrent insert — retry match against a fresh catalog fetch
-            const { data: refreshed } = await serviceRole
-              .from('device_catalog')
-              .select('id, make, model, specifications, category')
-              .eq('is_active', true)
-            catalogForMatch = (refreshed ?? []) as Device[]
-            const retryMatch = matchDeviceFromCsv(catalogForMatch, row.brand, row.model)
-            deviceId = retryMatch?.id || null
+          const key = `${autoMake.toLowerCase()}|${autoModel.toLowerCase()}`
+          if (!pendingAutoAdds.has(key)) {
+            pendingAutoAdds.set(key, { make: autoMake, model: autoModel, specifications: autoSpecs })
           }
+          pendingAutoAddKey = key
         }
       }
 
-      // When catalog match still failed (auto-add also failed), embed the raw device name in notes
-      // so the quote email can display it instead of showing a blank.
-      const deviceNameTag = !deviceId && (row.brand || row.model)
+      // When catalog match still failed and there's no pending auto-add to
+      // resolve it after the loop, embed the raw device name in notes so
+      // the quote email can display it instead of showing a blank.
+      const deviceNameTag = !deviceId && !pendingAutoAddKey && (row.brand || row.model)
         ? `[Device: ${[row.brand, row.model].filter(Boolean).join(' ')}]`
         : null
 
@@ -730,6 +724,57 @@ export async function POST(request: NextRequest) {
       if (row.price) item.unit_price = row.price
 
       orderItems.push(item)
+      if (pendingAutoAddKey) {
+        pendingPatches.push({ orderItemIndex: orderItems.length - 1, key: pendingAutoAddKey })
+      }
+    }
+
+    // Resolve every queued auto-add in one batched insert, then patch the
+    // resulting device_id back onto each pending order item.
+    if (pendingAutoAdds.size > 0) {
+      const pendingEntries = [...pendingAutoAdds.entries()]
+      const idByKey = new Map<string, string>()
+      try {
+        const { data: insertedDevices, error: insertErr } = await serviceRole
+          .from('device_catalog')
+          .insert(pendingEntries.map(([, v]) => ({ make: v.make, model: v.model, specifications: v.specifications, is_active: true })))
+          .select('id, make, model, specifications, category')
+
+        if (insertErr) {
+          // May already exist from a concurrent insert — retry match against a fresh catalog fetch
+          const { data: refreshed } = await serviceRole
+            .from('device_catalog')
+            .select('id, make, model, specifications, category')
+            .eq('is_active', true)
+          const freshCatalog = (refreshed ?? []) as Device[]
+          for (const [key, v] of pendingEntries) {
+            const retryMatch = matchDeviceFromCsv(freshCatalog, v.make, v.model)
+            if (retryMatch?.id) idByKey.set(key, retryMatch.id)
+          }
+        } else if (insertedDevices) {
+          insertedDevices.forEach((row, i) => {
+            const key = pendingEntries[i]?.[0]
+            if (row?.id && key) idByKey.set(key, row.id)
+          })
+        }
+      } catch {
+        const { data: refreshed } = await serviceRole
+          .from('device_catalog')
+          .select('id, make, model, specifications, category')
+          .eq('is_active', true)
+        const freshCatalog = (refreshed ?? []) as Device[]
+        for (const [key, v] of pendingEntries) {
+          const retryMatch = matchDeviceFromCsv(freshCatalog, v.make, v.model)
+          if (retryMatch?.id) idByKey.set(key, retryMatch.id)
+        }
+      }
+
+      for (const { orderItemIndex, key } of pendingPatches) {
+        const resolvedId = idByKey.get(key)
+        if (resolvedId) {
+          orderItems[orderItemIndex].device_id = resolvedId
+        }
+      }
     }
 
     if (orderItems.length > 0) {

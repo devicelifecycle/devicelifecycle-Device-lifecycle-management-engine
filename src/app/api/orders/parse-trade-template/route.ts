@@ -490,40 +490,58 @@ async function autoAddUnmatched(outputRows: TradeTemplateRow[]): Promise<TradeTe
   if (groups.size === 0) return outputRows
 
   const result = [...outputRows]
-  for (const { make, model, color, indices } of groups.values()) {
-    try {
-      let deviceId: string | null = null
+  const groupEntries = [...groups.values()]
 
-      const { data: inserted, error: insertErr } = await serviceRole
-        .from('device_catalog')
-        .insert({ make, model, category: inferDeviceCategory(make, model), is_active: true, specifications: color ? { colors: [color] } : {} })
-        .select('id')
-        .single()
+  // Single batched insert instead of one round-trip per unique unmatched
+  // device — Postgres preserves row order in the RETURNING clause for a
+  // plain multi-row insert, so the response can be zipped back to
+  // groupEntries by index.
+  const payloads = groupEntries.map(({ make, model, color }) => ({
+    make,
+    model,
+    category: inferDeviceCategory(make, model),
+    is_active: true,
+    specifications: color ? { colors: [color] } : {},
+  }))
 
-      if (inserted?.id) {
-        deviceId = inserted.id
-      } else if ((insertErr as { code?: string } | null)?.code === '23505') {
-        // Unique conflict — device exists under a slightly different name; find it
-        const { data: existing } = await serviceRole
-          .from('device_catalog')
-          .select('id')
-          .ilike('make', make)
-          .ilike('model', model)
-          .limit(1)
-          .maybeSingle()
-        if (existing?.id) deviceId = existing.id
-      } else if (insertErr) {
-        console.error('[parse-trade-template] insert device failed:', make, model, insertErr)
-      }
+  try {
+    const { data: inserted, error: insertErr } = await serviceRole
+      .from('device_catalog')
+      .insert(payloads)
+      .select('id')
 
-      if (deviceId) {
-        for (const idx of indices) {
-          result[idx] = { ...result[idx], device_id: deviceId, match_status: 'auto_added' as const }
+    if (insertErr) {
+      if ((insertErr as { code?: string }).code === '23505') {
+        // Unique conflict somewhere in the batch — fall back to resolving
+        // each group individually against existing catalog rows.
+        for (const { make, model, indices } of groupEntries) {
+          const { data: existing } = await serviceRole
+            .from('device_catalog')
+            .select('id')
+            .ilike('make', make)
+            .ilike('model', model)
+            .limit(1)
+            .maybeSingle()
+          if (existing?.id) {
+            for (const idx of indices) {
+              result[idx] = { ...result[idx], device_id: existing.id, match_status: 'auto_added' as const }
+            }
+          }
         }
+      } else {
+        console.error('[parse-trade-template] batch auto-add devices failed:', insertErr)
       }
-    } catch (e) {
-      console.error('[parse-trade-template] auto-add device failed:', make, model, e)
+    } else if (inserted) {
+      inserted.forEach((row, i) => {
+        const group = groupEntries[i]
+        if (!row?.id || !group) return
+        for (const idx of group.indices) {
+          result[idx] = { ...result[idx], device_id: row.id, match_status: 'auto_added' as const }
+        }
+      })
     }
+  } catch (e) {
+    console.error('[parse-trade-template] batch auto-add devices failed:', e)
   }
 
   return result
