@@ -5,7 +5,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Clock, Lock, Mail, Save, Shield, Smartphone, User } from 'lucide-react'
+import { Bell, CheckCircle2, Clock, Lock, Mail, Save, Shield, Smartphone, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
@@ -298,6 +298,77 @@ function MfaCard() {
   )
 }
 
+function NotificationPreferencesCard({ user, onSaved }: { user: { id: string; notification_preferences?: { email?: boolean; sms?: boolean; in_app?: boolean } }; onSaved: () => Promise<void> }) {
+  const [prefs, setPrefs] = useState({
+    email: user.notification_preferences?.email !== false,
+    sms: user.notification_preferences?.sms !== false,
+    in_app: user.notification_preferences?.in_app !== false,
+  })
+  const [saving, setSaving] = useState(false)
+
+  async function toggle(channel: 'email' | 'sms' | 'in_app') {
+    const next = { ...prefs, [channel]: !prefs[channel] }
+    setPrefs(next)
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notification_preferences: next }),
+      })
+      if (!res.ok) throw new Error()
+      await onSaved()
+    } catch {
+      setPrefs(prefs) // revert
+      toast.error('Failed to update notification preference')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const CHANNELS: { key: 'email' | 'sms' | 'in_app'; label: string; desc: string; icon: typeof Mail }[] = [
+    { key: 'email', label: 'Email', desc: 'Order updates, quotes, and status changes', icon: Mail },
+    { key: 'sms', label: 'SMS', desc: 'Text alerts for urgent updates', icon: Smartphone },
+    { key: 'in_app', label: 'In-App', desc: 'Notification bell inside the platform', icon: Bell },
+  ]
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Bell className="h-4 w-4" /> Notification Preferences
+        </CardTitle>
+        <CardDescription>Choose which channels you want to hear from us on. Security and account emails always go through.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {CHANNELS.map(({ key, label, desc, icon: Icon }) => (
+          <div key={key} className="flex items-center justify-between rounded-lg border p-3">
+            <div className="flex items-center gap-3">
+              <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div>
+                <p className="text-sm font-medium">{label}</p>
+                <p className="text-xs text-muted-foreground">{desc}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={prefs[key] ? 'true' : 'false'}
+              aria-label={`${label} notifications`}
+              title={`${label} notifications: ${prefs[key] ? 'on' : 'off'}`}
+              disabled={saving}
+              onClick={() => toggle(key)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${prefs[key] ? 'bg-primary' : 'bg-muted'}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${prefs[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function ProfilePage() {
   const { user, refetch } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
@@ -468,6 +539,9 @@ export default function ProfilePage() {
       {(user.role === 'admin' || user.role === 'coe_manager') && (
         <MfaCard />
       )}
+
+      {/* Notification Preferences */}
+      <NotificationPreferencesCard user={user} onSaved={refetch} />
 
       {/* Account Info */}
       <Card>

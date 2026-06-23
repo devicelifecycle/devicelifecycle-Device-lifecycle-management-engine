@@ -153,6 +153,11 @@ export const updateUserSchema = z.object({
   /** For Login ID users: real email for notifications, forgot-password */
   notification_email: z.string().email().optional().nullable(),
   phone: z.string().max(30).optional().nullable(),
+  notification_preferences: z.object({
+    email: z.boolean(),
+    sms: z.boolean(),
+    in_app: z.boolean(),
+  }).partial().optional(),
 })
 
 // ============================================================================

@@ -88,6 +88,7 @@ export interface User extends BaseEntity {
   phone?: string;
   avatar_url?: string;
   notification_email?: string | null;
+  notification_preferences?: { email?: boolean; sms?: boolean; in_app?: boolean };
   is_active: boolean;
   last_login_at?: string;
   /** Designated admin for their own customer/vendor organization — can

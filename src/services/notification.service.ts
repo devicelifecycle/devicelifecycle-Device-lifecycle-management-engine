@@ -367,10 +367,32 @@ export class NotificationService {
 
     await Promise.all(lookups)
 
-    // Deduplicate by email
+    // Look up notification preferences for every platform-account recipient
+    // (not the external customer/vendor company contacts, which aren't tied
+    // to a login). Default to fully-on for anyone whose row predates this
+    // column or has no override.
+    const platformUserIds = Array.from(new Set([
+      ...emailTargets.filter(t => t.userId).map(t => t.userId as string),
+      ...inAppUserIds,
+    ]))
+    const prefsByUserId = new Map<string, { email?: boolean; in_app?: boolean }>()
+    if (platformUserIds.length > 0) {
+      const { data: prefRows } = await supabase
+        .from('users')
+        .select('id, notification_preferences')
+        .in('id', platformUserIds)
+      ;(prefRows || []).forEach(row => {
+        prefsByUserId.set((row as { id: string }).id, (row as { notification_preferences?: { email?: boolean; in_app?: boolean } }).notification_preferences || {})
+      })
+    }
+    const emailAllowed = (userId?: string) => !userId || prefsByUserId.get(userId)?.email !== false
+    const inAppAllowed = (userId: string) => prefsByUserId.get(userId)?.in_app !== false
+
+    // Deduplicate by email, honoring per-user email opt-out
     const seen = new Set<string>()
     const uniqueTargets = emailTargets.filter(t => {
       if (seen.has(t.email)) return false
+      if (!emailAllowed(t.userId)) return false
       seen.add(t.email)
       return true
     })
@@ -429,6 +451,7 @@ export class NotificationService {
     }
 
     for (const userId of Array.from(inAppUserIds)) {
+      if (!inAppAllowed(userId)) continue
       const link = customerInAppUserIds.has(userId) ? customerOrderLink : orderLink
       sends.push(
         this.createNotification({
