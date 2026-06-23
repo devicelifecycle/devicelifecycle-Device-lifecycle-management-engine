@@ -338,7 +338,25 @@ export function matchDeviceFromCsv(
     if (match) return match
   }
 
-  // 4. Word-boundary keyword match: CSV model token appears as a whole word inside catalog model.
+  // 4. Aggressive-normalized exact match: strip ALL punctuation/whitespace and
+  //    treat "generation" same as "gen", then compare for exact equality.
+  //    Catches naming-convention drift between an upload and the catalog
+  //    ("iPhone SE (2nd Gen)" vs "iPhone SE (2nd generation)", "iPhone SE2"
+  //    vs "iPhone SE 2") that the earlier tiers miss but that's still an
+  //    unambiguous match — without the false-positive risk of tier 5's loose
+  //    keyword search.
+  const stripForFuzzyCompare = (s: string) =>
+    s.replace(/generation/gi, 'gen').replace(/[^a-z0-9]/gi, '').toLowerCase()
+  for (const candidate of candidates) {
+    const candidateFuzzy = stripForFuzzyCompare(candidate)
+    if (!candidateFuzzy) continue
+    const match = devices.find(
+      (d) => normalize(d.make) === csvMake && stripForFuzzyCompare(normalize(d.model)) === candidateFuzzy
+    )
+    if (match) return match
+  }
+
+  // 5. Word-boundary keyword match: CSV model token appears as a whole word inside catalog model.
   //    Enables "S23" to match "Galaxy S23", "S23 Ultra" etc. when make is resolved to "samsung".
   //    Prefers shortest matching model name (most specific match) to avoid false positives.
   const keywordMatches: Device[] = []
