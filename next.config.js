@@ -7,7 +7,7 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'http', hostname: 'localhost' },
-      { protocol: 'https', hostname: 'jngokdqfqudyaykmsdjm.supabase.co' },
+      { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
     minimumCacheTTL: 60,
