@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, ShoppingCart, CheckCircle, XCircle, Download, Loader2 } from 'lucide-react'
+import { Search, ShoppingCart, CheckCircle, XCircle, Download, Loader2, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -26,7 +26,27 @@ export default function CustomerOrdersPage() {
   const [downloadingFile, setDownloadingFile] = useState<Record<string, boolean>>({})
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkActing, setBulkActing] = useState(false)
+  const [exportingFormat, setExportingFormat] = useState<'csv' | 'pdf' | null>(null)
   const debouncedSearch = useDebounce(search)
+
+  async function handleExportHistory(format: 'csv' | 'pdf') {
+    setExportingFormat(format)
+    try {
+      const res = await fetch(`/api/customers/me/orders/export?format=${format}`)
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `order-history.${format}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Could not export order history. Please try again.')
+    } finally {
+      setExportingFormat(null)
+    }
+  }
 
   const { orders, total, totalPages, isLoading, refetch } = useOrders({
     search: debouncedSearch,
@@ -124,9 +144,31 @@ export default function CustomerOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">My Orders</h1>
-        <p className="text-muted-foreground mt-1">Track quotes and order updates.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">My Orders</h1>
+          <p className="text-muted-foreground mt-1">Track quotes and order updates.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={exportingFormat !== null}
+            onClick={() => handleExportHistory('csv')}
+          >
+            {exportingFormat === 'csv' ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-2 h-3.5 w-3.5" />}
+            Export CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={exportingFormat !== null}
+            onClick={() => handleExportHistory('pdf')}
+          >
+            {exportingFormat === 'pdf' ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-2 h-3.5 w-3.5" />}
+            Export PDF
+          </Button>
+        </div>
       </div>
 
       <div className="relative">
