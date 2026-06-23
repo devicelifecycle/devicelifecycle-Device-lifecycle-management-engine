@@ -81,4 +81,6 @@ export const RATE_LIMITS = {
   api: { limit: 100, windowSeconds: 60 } as RateLimitConfig,
   /** Strict: 5 requests per 15 minutes (forgot password, etc.) */
   strict: { limit: 5, windowSeconds: 900 } as RateLimitConfig,
+  /** Public, unauthenticated endpoints (device value lookup, etc.): 20 requests per minute per IP */
+  public: { limit: 20, windowSeconds: 60 } as RateLimitConfig,
 }

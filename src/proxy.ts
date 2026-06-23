@@ -7,7 +7,7 @@ import type { NextRequest } from 'next/server'
 import { createMiddlewareSupabaseClient } from '@/lib/supabase/middleware'
 
 // Routes that don't require authentication
-const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/auth/callback', '/reset-password']
+const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/auth/callback', '/reset-password', '/value-lookup']
 
 // Routes that require specific roles (more specific routes first)
 const roleRoutes: [string, string[]][] = [
@@ -68,9 +68,7 @@ export async function proxy(request: NextRequest) {
       const activeRole = request.cookies.get(ACTIVE_ROLE_COOKIE)?.value
         ? decodeURIComponent(request.cookies.get(ACTIVE_ROLE_COOKIE)!.value)
         : rootRole
-      const dest = activeRole === 'customer' ? '/customer/orders'
-        : activeRole === 'vendor' ? '/vendor/orders'
-        : '/dashboard'
+      const dest = activeRole === 'vendor' ? '/vendor/orders' : '/dashboard'
       return NextResponse.redirect(new URL(dest, request.url))
     }
     return NextResponse.next()

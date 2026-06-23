@@ -22,7 +22,7 @@ const AUTH_PATHS = ['/login', '/register', '/forgot-password']
 // Public pages — accessible to anyone, authenticated or not (no redirect either way).
 // /reset-password must stay here: users click recovery email links regardless of
 // whether they already have an active session in the browser.
-const PUBLIC_PATHS = ['/', '/reset-password']
+const PUBLIC_PATHS = ['/', '/reset-password', '/value-lookup']
 
 function isAuthPath(pathname: string): boolean {
   return AUTH_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -66,8 +66,7 @@ export async function middleware(request: NextRequest) {
   if (authenticated && isAuthPath(pathname)) {
     const role = request.cookies.get('dlm_role')?.value
     let dest = '/dashboard'
-    if (role === 'customer') dest = '/customer/orders'
-    else if (role === 'vendor') dest = '/vendor/orders'
+    if (role === 'vendor') dest = '/vendor/orders'
     return NextResponse.redirect(new URL(dest, request.url))
   }
 
