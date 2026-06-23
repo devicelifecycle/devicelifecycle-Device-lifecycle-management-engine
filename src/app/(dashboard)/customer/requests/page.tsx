@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  AlertCircle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight,
+  AlertCircle, ArrowRight, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   ClipboardList, Download, FileSpreadsheet, FileUp, FilePlus2,
-  Loader2, FileCheck2, Clock, Package, BadgeCheck, Truck, CreditCard,
+  Loader2, FileCheck2, Clock, Package, BadgeCheck, Truck, CreditCard, HelpCircle,
 } from 'lucide-react'
 import { CSV_COLUMN_ALIASES, CPO_CSV_HEADERS, CPO_CSV_SAMPLE, TRADE_IN_CSV_HEADERS, TRADE_IN_CSV_SAMPLE, buildCsvContent, buildXlsxTemplateBlob } from '@/lib/csv-templates'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -63,6 +63,7 @@ export default function CustomerRequestsPage() {
 
   const [isDraggingTrade, setIsDraggingTrade] = useState(false)
   const [isDraggingCpo, setIsDraggingCpo] = useState(false)
+  const [showFormatHelp, setShowFormatHelp] = useState(false)
 
   // ── CPO upload state ──────────────────────────────────────────────────────
   const [cpoUploadFile, setCpoUploadFile] = useState<File | null>(null)
@@ -437,6 +438,72 @@ export default function CustomerRequestsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+
+          {/* ── Upload formatting help ──────────────────────────────────── */}
+          <div className="rounded-lg border border-blue-100 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-950/10">
+            <button
+              type="button"
+              onClick={() => setShowFormatHelp(prev => !prev)}
+              className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+            >
+              <span className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
+                <HelpCircle className="h-4 w-4 shrink-0" />
+                Using your own spreadsheet? Here&apos;s how to format it
+              </span>
+              <ChevronDown className={`h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400 transition-transform ${showFormatHelp ? 'rotate-180' : ''}`} />
+            </button>
+            {showFormatHelp && (
+              <div className="px-4 pb-4 space-y-3 text-sm text-slate-700 dark:text-slate-300">
+                <p>You have two options:</p>
+                <ol className="ml-5 list-decimal space-y-1">
+                  <li>Download one of our templates above and fill in your devices — this guarantees every required field is recognized.</li>
+                  <li>Upload your own spreadsheet. All your devices must be in one file, and the top row must contain a header title for each column.</li>
+                </ol>
+                <div className="rounded-md border bg-background px-3 py-2.5 space-y-1.5">
+                  <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground">Required fields for accurate, fast pricing</p>
+                  <p><strong>Cell Phones / Tablets</strong> — Model, Quantity, and Storage are required. Additional columns are used only if recognized.</p>
+                  <p className="text-xs text-muted-foreground">Model should be the model only — for Apple, that&apos;s &quot;iPhone 15&quot;, not &quot;Apple iPhone 15&quot;. For Samsung, that&apos;s &quot;Galaxy S24&quot;, not &quot;Samsung Galaxy S24&quot;.</p>
+                  <p className="pt-1"><strong>PC / Laptop</strong> — Make and Model are required. Quantity, Processor, RAM, and Storage improve quoting accuracy.</p>
+                  <p className="text-xs text-muted-foreground">If Processor, RAM, or Storage are left out, we default to the lowest version for quoting. If Quantity is left out, we assume 1.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-1.5">Example</p>
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          {['Make', 'Model', 'Quantity', 'Storage', 'Serial Number', 'Color', 'Condition'].map(h => (
+                            <th key={h} className="px-2.5 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        <tr>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap">Apple</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">iPhone 15</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">5</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">128GB</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">359876543210001</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Blue</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Excellent</td>
+                        </tr>
+                        <tr>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap">Apple</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">iPhone 16</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">2</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">128GB</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">—</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Black</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Good</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">Bold columns (Model, Quantity, Storage) are required — the rest are accepted but optional.</p>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* ── Trade-In section ────────────────────────────────────────── */}
           <div className="space-y-3">
