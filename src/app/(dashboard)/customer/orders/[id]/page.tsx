@@ -687,6 +687,9 @@ export default function CustomerOrderDetailPage() {
         </Card>
       )}
 
+      {/* ── Post-completion NPS survey ───────────────────────────────────── */}
+      {isClosed && orderId && <NpsSurveyCard orderId={orderId} />}
+
       {/* Order Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card><CardContent className="pt-5">
@@ -850,5 +853,93 @@ export default function CustomerOrderDetailPage() {
         </Card>
       )}
     </div>
+  )
+}
+
+function NpsSurveyCard({ orderId }: { orderId: string }) {
+  const [loading, setLoading] = useState(true)
+  const [existingResponse, setExistingResponse] = useState<{ score: number; comment: string | null } | null>(null)
+  const [score, setScore] = useState<number | null>(null)
+  const [comment, setComment] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/orders/${orderId}/nps`)
+      .then((r) => r.json())
+      .then((data) => setExistingResponse(data.response || null))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [orderId])
+
+  async function handleSubmit() {
+    if (score == null) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/orders/${orderId}/nps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ score, comment: comment || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to submit feedback')
+      setExistingResponse({ score, comment: comment || null })
+      toast.success('Thanks for your feedback!')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit feedback')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) return null
+
+  if (existingResponse) {
+    return (
+      <Card>
+        <CardContent className="py-4 text-sm text-muted-foreground">
+          Thanks for your feedback — you rated this order {existingResponse.score}/10.
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">How was your experience?</CardTitle>
+        <CardDescription>How likely are you to recommend us to a friend or colleague?</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          {Array.from({ length: 11 }, (_, i) => i).map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setScore(n)}
+              className={`h-9 w-9 rounded-md border text-sm font-medium transition-colors ${
+                score === n ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-between text-xs text-muted-foreground px-0.5">
+          <span>Not likely</span>
+          <span>Very likely</span>
+        </div>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Anything we could improve? (optional)"
+          rows={2}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        />
+        <Button onClick={handleSubmit} disabled={score == null || submitting}>
+          {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Submit Feedback
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
