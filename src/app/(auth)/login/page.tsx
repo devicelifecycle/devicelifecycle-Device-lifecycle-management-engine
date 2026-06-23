@@ -4,7 +4,6 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
-import { motion } from 'framer-motion'
 import {
   ArrowLeft,
   ArrowRight,
@@ -171,10 +170,9 @@ function LoginPageInner() {
 
               {/* Main headline */}
               <div className="mt-auto flex flex-col gap-6 pb-4">
-                <motion.div
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1], delay: 0.1 }}
+                <div
+                  className="animate-login-fade-up"
+                  style={{ '--fade-from-y': '24px', animationDuration: '0.6s', animationDelay: '0.1s' } as React.CSSProperties}
                 >
                   <h1 className="editorial-title text-5xl text-foreground xl:text-6xl">
                     Operational<br />
@@ -182,24 +180,20 @@ function LoginPageInner() {
                     <span className="text-primary/80">for Device</span><br />
                     Lifecycle
                   </h1>
-                </motion.div>
+                </div>
 
-                <motion.p
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.25 }}
-                  className="font-body text-sm font-light leading-relaxed text-muted-foreground"
+                <p
+                  className="animate-login-fade-up font-body text-sm font-light leading-relaxed text-muted-foreground"
+                  style={{ animationDelay: '0.25s' } as React.CSSProperties}
                 >
                   End-to-end trade-in processing, AI-powered pricing, COE operations,
                   and device lifecycle tracking — all in one platform.
-                </motion.p>
+                </p>
 
                 {/* Stat cards */}
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.35 }}
-                  className="grid grid-cols-3 gap-3"
+                <div
+                  className="animate-login-fade-up grid grid-cols-3 gap-3"
+                  style={{ '--fade-from-y': '12px', animationDelay: '0.35s' } as React.CSSProperties}
                 >
                   {STATS.map((stat) => (
                     <div
@@ -212,7 +206,7 @@ function LoginPageInner() {
                       </p>
                     </div>
                   ))}
-                </motion.div>
+                </div>
 
                 {/* Divider */}
                 <div className="copper-line h-px w-full opacity-50" />
@@ -238,11 +232,8 @@ function LoginPageInner() {
             </div>
 
             {/* Form card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.45, ease: [0.25, 0.1, 0.25, 1] }}
-              className="surface-panel w-full max-w-sm rounded-[2rem] p-8"
+            <div
+              className="animate-login-card-in surface-panel w-full max-w-sm rounded-[2rem] p-8"
             >
               {/* Card header */}
               <div className="mb-6 space-y-1.5">
@@ -265,11 +256,7 @@ function LoginPageInner() {
 
               {/* Shimmer bar */}
               <div className="mb-6 h-px w-full overflow-hidden rounded-full bg-white/[0.06]">
-                <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-transparent via-primary/50 to-transparent"
-                  animate={{ x: ['-100%', '200%'] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1 }}
-                />
+                <div className="animate-login-shimmer-sweep h-full rounded-full bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
               </div>
 
               {/* Alerts */}
@@ -403,7 +390,7 @@ function LoginPageInner() {
                   </p>
                 </form>
               )}
-            </motion.div>
+            </div>
 
           </div>
         </div>

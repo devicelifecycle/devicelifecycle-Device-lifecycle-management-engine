@@ -265,6 +265,27 @@
 }
 
 @layer utilities {
+  /* Login page entrance fades — plain CSS instead of framer-motion so the
+     login bundle doesn't have to ship a full animation engine just for
+     opacity/translateY fade-ins. Offset distance is set per-element via
+     the --fade-from-y custom property; falls back to 16px if unset. */
+  .animate-login-fade-up {
+    --fade-from-y: 16px;
+    opacity: 0;
+    animation: loginFadeUp 0.5s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    animation-fill-mode: both;
+  }
+  .animate-login-card-in {
+    opacity: 0;
+    animation: loginCardIn 0.45s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    animation-fill-mode: both;
+  }
+  .animate-login-shimmer-sweep {
+    /* 3s total period = 2s sweep + 1s pause, matching the original
+       repeat/repeatDelay timing. */
+    animation: loginShimmerSweep 3s ease-in-out infinite;
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -399,6 +420,40 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes loginFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(var(--fade-from-y, 16px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loginCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes loginShimmerSweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  66.67% {
+    transform: translateX(200%);
+  }
+  100% {
+    transform: translateX(200%);
   }
 }
 
