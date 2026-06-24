@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { matchDeviceFromCsv, isPlausibleBrand, extractColor, stripColor } from '@/lib/device-match'
+import { matchDeviceFromCsv, isPlausibleBrand, extractColor, stripColor, computeDeviceIdentityKey } from '@/lib/device-match'
 import { normalizeTradeCondition } from '@/lib/condition'
 import type { Device } from '@/types'
 
@@ -466,7 +466,7 @@ async function mergeDetectedColors(outputRows: TradeTemplateRow[]): Promise<void
 // ── Auto-add unmatched devices to device_catalog via service role ─────────────
 // Runs after CSV matching. For each (make, model) not found in the catalog,
 // inserts a placeholder device entry so the order item can reference a device_id.
-async function autoAddUnmatched(outputRows: TradeTemplateRow[]): Promise<TradeTemplateRow[]> {
+async function autoAddUnmatched(outputRows: TradeTemplateRow[], catalog: Device[]): Promise<TradeTemplateRow[]> {
   const serviceRole = createServiceRoleClient()
   await mergeDetectedColors(outputRows)
 
@@ -486,6 +486,28 @@ async function autoAddUnmatched(outputRows: TradeTemplateRow[]): Promise<TradeTe
     if (entry) entry.indices.push(i)
     else groups.set(key, { make: row.make, model, color, indices: [i] })
   })
+
+  // Recurrence guard: matchDeviceFromCsv already tried this make/model and
+  // failed, but its candidate list leans on Apple-specific normalization —
+  // it isn't brand-agnostic. Before creating a new row, do one more
+  // aggressive-fuzzy check (the same identity key the catalog-wide dedupe
+  // script uses) against every active catalog row regardless of brand.
+  // This is what would have stopped the Pixel 7a / Galaxy A54 / iPhone SE
+  // duplicates this session's dedupe pass found from ever being created.
+  const catalogByIdentity = new Map<string, Device>()
+  for (const d of catalog) {
+    catalogByIdentity.set(computeDeviceIdentityKey(d.make, d.model, d.category), d)
+  }
+  for (const [key, group] of groups) {
+    const identityKey = computeDeviceIdentityKey(group.make, group.model, inferDeviceCategory(group.make, group.model))
+    const existing = catalogByIdentity.get(identityKey)
+    if (existing) {
+      for (const idx of group.indices) {
+        outputRows[idx] = { ...outputRows[idx], device_id: existing.id, match_status: 'auto_added' as const }
+      }
+      groups.delete(key)
+    }
+  }
 
   if (groups.size === 0) return outputRows
 
@@ -684,7 +706,7 @@ export async function POST(request: NextRequest) {
           ...(rowNotes.length > 0 ? { upload_notes: rowNotes.join(' | ') } : {}),
         }
       })
-      const finalRows = await autoAddUnmatched(outputRows)
+      const finalRows = await autoAddUnmatched(outputRows, catalog)
       if (finalRows.some(r => r.match_status === 'auto_added')) invalidateCatalogCache()
       const matched = finalRows.filter(r => r.device_id).length
       const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)
@@ -813,7 +835,7 @@ export async function POST(request: NextRequest) {
             match_status: (device ? 'matched' : 'not_in_catalog') as 'matched' | 'catalog_matched' | 'not_in_catalog',
           }
         })
-        const finalRows = await autoAddUnmatched(outputRows)
+        const finalRows = await autoAddUnmatched(outputRows, catalog)
         if (finalRows.some(r => r.match_status === 'auto_added')) invalidateCatalogCache()
         const matched = finalRows.filter(r => r.device_id).length
         const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)
@@ -1088,7 +1110,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const finalRows = await autoAddUnmatched(outputRows)
+    const finalRows = await autoAddUnmatched(outputRows, catalog)
     if (finalRows.some(r => r.match_status === 'auto_added')) invalidateCatalogCache()
     const matched = finalRows.filter(r => r.device_id).length
     const totalDevices = finalRows.reduce((s, r) => s + r.quantity, 0)

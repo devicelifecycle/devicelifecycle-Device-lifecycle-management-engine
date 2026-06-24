@@ -13,7 +13,7 @@ import type { AuthContext } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
-import { matchDeviceFromCsv, isPlausibleBrand, extractColor, stripColor } from '@/lib/device-match'
+import { matchDeviceFromCsv, isPlausibleBrand, extractColor, stripColor, computeDeviceIdentityKey } from '@/lib/device-match'
 import type { Device } from '@/types'
 export const dynamic = 'force-dynamic'
 
@@ -732,16 +732,57 @@ export async function POST(request: NextRequest) {
     // Resolve every queued auto-add in one batched insert, then patch the
     // resulting device_id back onto each pending order item.
     if (pendingAutoAdds.size > 0) {
-      const pendingEntries = [...pendingAutoAdds.entries()]
       const idByKey = new Map<string, string>()
-      try {
-        const { data: insertedDevices, error: insertErr } = await serviceRole
-          .from('device_catalog')
-          .insert(pendingEntries.map(([, v]) => ({ make: v.make, model: v.model, specifications: v.specifications, is_active: true })))
-          .select('id, make, model, specifications, category')
 
-        if (insertErr) {
-          // May already exist from a concurrent insert — retry match against a fresh catalog fetch
+      // Recurrence guard: matchDeviceFromCsv already tried this make/model
+      // and failed, but its candidate list leans on Apple-specific
+      // normalization — it isn't brand-agnostic. Before creating a new row,
+      // do one more aggressive-fuzzy check (the same identity key the
+      // catalog-wide dedupe script uses) against every active catalog row
+      // regardless of brand. This is what would have stopped the Pixel 7a /
+      // Galaxy A54 / iPhone SE duplicates this session's dedupe pass found
+      // from ever being created.
+      const catalogByIdentity = new Map<string, Device>()
+      for (const d of catalogForMatch || []) {
+        catalogByIdentity.set(computeDeviceIdentityKey(d.make, d.model, d.category), d)
+      }
+      for (const [key, v] of [...pendingAutoAdds.entries()]) {
+        const identityKey = computeDeviceIdentityKey(v.make, v.model, null)
+        const existing = catalogByIdentity.get(identityKey)
+        if (existing) {
+          idByKey.set(key, existing.id)
+          pendingAutoAdds.delete(key)
+        }
+      }
+
+      // Anything still queued at this point genuinely has no existing
+      // catalog match — everything else resolved via the recurrence guard.
+      const pendingEntries = [...pendingAutoAdds.entries()]
+      if (pendingEntries.length > 0) {
+        try {
+          const { data: insertedDevices, error: insertErr } = await serviceRole
+            .from('device_catalog')
+            .insert(pendingEntries.map(([, v]) => ({ make: v.make, model: v.model, specifications: v.specifications, is_active: true })))
+            .select('id, make, model, specifications, category')
+
+          if (insertErr) {
+            // May already exist from a concurrent insert — retry match against a fresh catalog fetch
+            const { data: refreshed } = await serviceRole
+              .from('device_catalog')
+              .select('id, make, model, specifications, category')
+              .eq('is_active', true)
+            const freshCatalog = (refreshed ?? []) as Device[]
+            for (const [key, v] of pendingEntries) {
+              const retryMatch = matchDeviceFromCsv(freshCatalog, v.make, v.model)
+              if (retryMatch?.id) idByKey.set(key, retryMatch.id)
+            }
+          } else if (insertedDevices) {
+            insertedDevices.forEach((row, i) => {
+              const key = pendingEntries[i]?.[0]
+              if (row?.id && key) idByKey.set(key, row.id)
+            })
+          }
+        } catch {
           const { data: refreshed } = await serviceRole
             .from('device_catalog')
             .select('id, make, model, specifications, category')
@@ -751,21 +792,6 @@ export async function POST(request: NextRequest) {
             const retryMatch = matchDeviceFromCsv(freshCatalog, v.make, v.model)
             if (retryMatch?.id) idByKey.set(key, retryMatch.id)
           }
-        } else if (insertedDevices) {
-          insertedDevices.forEach((row, i) => {
-            const key = pendingEntries[i]?.[0]
-            if (row?.id && key) idByKey.set(key, row.id)
-          })
-        }
-      } catch {
-        const { data: refreshed } = await serviceRole
-          .from('device_catalog')
-          .select('id, make, model, specifications, category')
-          .eq('is_active', true)
-        const freshCatalog = (refreshed ?? []) as Device[]
-        for (const [key, v] of pendingEntries) {
-          const retryMatch = matchDeviceFromCsv(freshCatalog, v.make, v.model)
-          if (retryMatch?.id) idByKey.set(key, retryMatch.id)
         }
       }
 

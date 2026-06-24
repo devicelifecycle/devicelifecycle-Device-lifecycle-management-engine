@@ -6,8 +6,8 @@
 import type { Device } from '@/types'
 import { DEVICE_BRANDS } from '@/lib/constants'
 
-/** Make aliases: CSV value -> catalog make */
-const MAKE_ALIASES: Record<string, string> = {
+/** Make aliases: CSV value -> catalog make. Exported for scripts/dedupe-device-catalog.ts, which resolves brand from embedded model text when the make column itself is wrong (e.g. make="Samsung", model="Google Pixel 7a"). */
+export const MAKE_ALIASES: Record<string, string> = {
   iphone: 'apple',
   apple: 'apple',
   apl: 'apple',
@@ -36,7 +36,7 @@ const MAKE_ALIASES: Record<string, string> = {
 }
 
 /** Normalize string for matching: trim, lowercase, collapse spaces, expand '+' suffix */
-function normalize(s: string | undefined | null): string {
+export function normalize(s: string | undefined | null): string {
   if (s == null || typeof s !== 'string') return ''
   return s
     .toLowerCase()
@@ -46,8 +46,19 @@ function normalize(s: string | undefined | null): string {
     .trim()
 }
 
+/**
+ * Aggressive normalization for fuzzy duplicate detection: strips ALL
+ * punctuation/whitespace and treats "generation" same as "gen". Used both
+ * by matchDeviceFromCsv's tier 4 (catch naming-convention drift at
+ * upload/match time) and by scripts/dedupe-device-catalog.ts (retroactively
+ * find existing duplicates across the whole catalog using the same rule).
+ */
+export function stripForFuzzyCompare(s: string): string {
+  return s.replace(/generation/gi, 'gen').replace(/[^a-z0-9]/gi, '').toLowerCase()
+}
+
 /** Strip storage from model string (e.g. "iPhone 15 Pro 256GB" -> "iPhone 15 Pro") */
-function stripStorage(model: string): string {
+export function stripStorage(model: string): string {
   let m = model
     .replace(/\s*(128|256|512|64|32|16)\s*gb\s*/gi, '')
     .replace(/\s*(1|2|4|8)\s*tb\s*/gi, '')
@@ -201,7 +212,7 @@ function stripLeadingMakePrefix(make: string, model: string): string {
  *  - "12 mini", "13 mini" → "iphone 12 mini" / "iphone 13 mini"
  *  - Models that already start with "iphone" → unchanged
  */
-function normalizeAppleModel(model: string): string {
+export function normalizeAppleModel(model: string): string {
   const m = model.toLowerCase().trim()
   if (!m) return model
 
@@ -211,8 +222,31 @@ function normalizeAppleModel(model: string): string {
   // generic "starts with iphone" passthrough below, which would otherwise
   // return "iphone se 2nd" unchanged and never reach this normalization —
   // that gap let a fresh "iPhone SE 2nd" duplicate slip into the catalog.
-  if (/(^|\s)se\s*2(nd)?(\s*gen(eration)?)?(\s|$)/i.test(m)) return 'iphone se (2nd gen)'
-  if (/(^|\s)se\s*3(rd)?(\s*gen(eration)?)?(\s|$)/i.test(m)) return 'iphone se (3rd gen)'
+  // The separator between "se" and the ordinal, and the word boundary after
+  // "gen"/"generation", both tolerate an optional paren too — the catalog's
+  // OWN canonical spelling is "iPhone SE (2nd generation)", which has a "("
+  // directly after "se " and a ")" directly after "generation" with no
+  // surrounding whitespace; a whitespace-only `\s*` can't cross either, so
+  // the canonical string never normalized to match its own informal
+  // variants ("SE2", "SE 2nd Gen") and split what should be one catalog
+  // cluster into two.
+  //
+  // Each ordinal also accepts the spelled-out word ("second") and Apple's
+  // real release year (SE 1st gen released 2016, 2nd gen 2020, 3rd gen
+  // 2022) as equivalent labels — live data showed orders placed against
+  // "iPhone SE 2020" / "iPhone SE first" while all pricing data lived under
+  // "iPhone SE (2nd generation)" / "(1st generation)": same physical
+  // device, parallel naming conventions from different catalog imports,
+  // zero price visibility on the order side.
+  const SE_GENERATIONS: Array<[RegExp, string]> = [
+    [/(^|\s)se[\s(]*(1|1st|first|2016)(\s*gen(eration)?)?\)?(\s|$)/i, 'iphone se (1st gen)'],
+    [/(^|\s)se[\s(]*(2|2nd|second|2020)(\s*gen(eration)?)?\)?(\s|$)/i, 'iphone se (2nd gen)'],
+    [/(^|\s)se[\s(]*(3|3rd|third|2022)(\s*gen(eration)?)?\)?(\s|$)/i, 'iphone se (3rd gen)'],
+    [/(^|\s)se[\s(]*(4|4th|fourth)(\s*gen(eration)?)?\)?(\s|$)/i, 'iphone se (4th gen)'],
+  ]
+  for (const [pattern, canonical] of SE_GENERATIONS) {
+    if (pattern.test(m)) return canonical
+  }
 
   // Already starts with iphone, ipad, macbook, imac, airpods, mac → leave alone
   if (/^(iphone|ipad|macbook|imac|airpods|mac\s|apple\s*watch)/.test(m)) return m
@@ -224,6 +258,116 @@ function normalizeAppleModel(model: string): string {
   }
 
   return model
+}
+
+/**
+ * If model text leads with a recognized brand word, that's a more
+ * trustworthy signal than the make column — proven wrong on live data
+ * (rows with make="Samsung", model="Google Pixel 7a 128GB", an upload
+ * mistake that mistagged a real Google device as Samsung).
+ */
+function detectBrandFromModel(model: string | null | undefined): string | null {
+  const m = normalize(model ?? '')
+  for (const alias of Object.keys(MAKE_ALIASES)) {
+    if (m === alias || m.startsWith(alias + ' ')) return MAKE_ALIASES[alias]
+  }
+  return null
+}
+
+/**
+ * Strip leading brand alias words from already-normalized model text — in a
+ * loop, not just once. "Apple iPhone SE 2022" stacks two alias words that
+ * both resolve to "apple" ("apple" then "iphone"); a single-pass strip only
+ * removes "apple ", leaving a residual "iphone " prefix that the bare
+ * "iPhone SE 2022" catalog row never had — splitting one device into two
+ * different fuzzy keys. Looping until no alias word matches closes that gap.
+ */
+function stripLeadingBrandWords(normalizedModel: string): string {
+  let current = normalizedModel
+  for (;;) {
+    let matched = false
+    for (const alias of Object.keys(MAKE_ALIASES)) {
+      if (current === alias) return ''
+      if (current.startsWith(alias + ' ')) {
+        current = current.slice(alias.length + 1).trim()
+        matched = true
+        break
+      }
+    }
+    if (!matched) return current
+  }
+}
+
+function normalizeCategoryFamily(category: string | null | undefined): string {
+  const c = normalize(category ?? '')
+  if (c === 'phone' || c === 'smartphone') return 'phone'
+  return c || 'unknown'
+}
+
+/**
+ * The category column can be as unreliable as make (live proof: "Series SE
+ * (1st Gen) (40MM)" — an Apple Watch — stored as category="phone"). Detected
+ * from unmistakable watch-only signals in the model text itself: a
+ * case-size token ("40mm", "44mm", ...) is never used by any phone/tablet/
+ * laptop in this catalog.
+ */
+function detectCategoryOverride(model: string | null | undefined): string | null {
+  const m = normalize(model ?? '')
+  if (/\b\d{2}\s*mm\b/.test(m) && /\bseries\b/.test(m)) return 'watch'
+  if (/\bwatch\b/.test(m)) return 'watch'
+  return null
+}
+
+/**
+ * Single source of truth for "is this the same real device" across the
+ * whole catalog, independent of which column (make, model, category)
+ * happens to be wrong on a given row. Shared by scripts/dedupe-device-catalog.ts
+ * (retroactive catalog-wide merge) and the CSV auto-add insert paths
+ * (parse-trade-template, upload-csv), so a fresh duplicate can never slip
+ * in through the front door using a naming convention the back-of-house
+ * dedupe pass would have caught.
+ *
+ * Resolves brand from the model text itself when it disagrees with the
+ * make column, strips redundant brand-word stacking before stripping
+ * storage (order matters — see normalizeAppleModel), and applies
+ * Apple-specific generation-ordinal normalization (digit/word/year
+ * synonyms) before the final fuzzy strip.
+ */
+export type DeviceIdentity = {
+  key: string
+  brand: string
+  categoryFamily: string
+}
+
+export function computeDeviceIdentity(
+  make: string | null | undefined,
+  model: string | null | undefined,
+  category: string | null | undefined
+): DeviceIdentity {
+  const detected = detectBrandFromModel(model)
+  const brand = detected || (MAKE_ALIASES[normalize(make ?? '')] ?? normalize(make ?? ''))
+
+  let base = stripLeadingBrandWords(normalize(model ?? ''))
+  base = normalize(stripColor(stripStorage(base)))
+  if (brand === 'apple') base = normalizeAppleModel(base)
+
+  const categoryFamily = detectCategoryOverride(model) || normalizeCategoryFamily(category)
+  const fuzzyModel = stripForFuzzyCompare(base)
+
+  return { key: `${brand}||${categoryFamily}||${fuzzyModel}`, brand, categoryFamily }
+}
+
+export function computeDeviceIdentityKey(
+  make: string | null | undefined,
+  model: string | null | undefined,
+  category: string | null | undefined
+): string {
+  return computeDeviceIdentity(make, model, category).key
+}
+
+/** Resolve canonical lowercase brand from device_catalog.make (no model-text override). */
+export function resolveMakeColumn(make: string | null | undefined): string {
+  return MAKE_ALIASES[normalize(make ?? '')] ?? normalize(make ?? '')
 }
 
 /**
@@ -349,8 +493,6 @@ export function matchDeviceFromCsv(
   //    vs "iPhone SE 2") that the earlier tiers miss but that's still an
   //    unambiguous match — without the false-positive risk of tier 5's loose
   //    keyword search.
-  const stripForFuzzyCompare = (s: string) =>
-    s.replace(/generation/gi, 'gen').replace(/[^a-z0-9]/gi, '').toLowerCase()
   for (const candidate of candidates) {
     const candidateFuzzy = stripForFuzzyCompare(candidate)
     if (!candidateFuzzy) continue
