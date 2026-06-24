@@ -59,9 +59,15 @@ export function stripForFuzzyCompare(s: string): string {
 
 /** Strip storage from model string (e.g. "iPhone 15 Pro 256GB" -> "iPhone 15 Pro") */
 export function stripStorage(model: string): string {
+  // Replace with a single space, not '' — '' eats the whitespace on BOTH
+  // sides of the match, gluing the surrounding words together with no
+  // separator at all ("XR 64GB Unlocked" -> "XRUnlocked", a single fused
+  // token that then fails every matching tier). Collapsed back to one
+  // space + trimmed at the end.
   let m = model
-    .replace(/\s*(128|256|512|64|32|16)\s*gb\s*/gi, '')
-    .replace(/\s*(1|2|4|8)\s*tb\s*/gi, '')
+    .replace(/\s*(128|256|512|64|32|16)\s*gb\s*/gi, ' ')
+    .replace(/\s*(1|2|4|8)\s*tb\s*/gi, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
 
   // Bare trailing number, no GB/TB suffix (e.g. "iPhone XR 64"). Only strip
@@ -108,21 +114,34 @@ export function stripColor(model: string): string {
   return model.replace(COLOR_PATTERN, '').replace(/\s+/g, ' ').trim()
 }
 
+// Carrier-lock/condition words that show up baked into a model column on
+// real trade-in spreadsheets ("IPHONE XR 64GB UNLOCKED") instead of their
+// own column. None of these are ever part of a real device's identity, but
+// left in they defeat every matching tier — none strip arbitrary trailing
+// words — so the row falls through to "not_in_catalog" or, worse, the
+// auto-add fallback creates a fresh duplicate catalog row with the noise
+// baked into its name (computeDeviceIdentity didn't strip it either).
+const NOISE_WORDS_PATTERN = /\b(unlocked|locked|refurbished|renewed|open\s*box)\b/gi
+
 /**
  * Remove common trailing noise tokens from free-typed model values.
  * Example: "iphone 14 s" -> "iphone 14".
  */
-function sanitizeModelNoise(model: string): string {
+export function sanitizeModelNoise(model: string): string {
   const n = normalize(model)
   if (!n) return ''
 
+  let result = n
+
   // If the model ends with a standalone trailing "s" after a number,
   // treat it as typo/noise rather than a real variant suffix.
-  if (/\b\d+\s+s$/i.test(n)) {
-    return n.replace(/\s+s$/i, '').trim()
+  if (/\b\d+\s+s$/i.test(result)) {
+    result = result.replace(/\s+s$/i, '').trim()
   }
 
-  return n
+  result = normalize(result.replace(NOISE_WORDS_PATTERN, ''))
+
+  return result
 }
 
 /** Known brand prefixes for splitting "Samsung Galaxy S24" -> make=Samsung, model=Galaxy S24 */
@@ -348,7 +367,7 @@ export function computeDeviceIdentity(
   const brand = detected || (MAKE_ALIASES[normalize(make ?? '')] ?? normalize(make ?? ''))
 
   let base = stripLeadingBrandWords(normalize(model ?? ''))
-  base = normalize(stripColor(stripStorage(base)))
+  base = sanitizeModelNoise(stripColor(stripStorage(base)))
   if (brand === 'apple') base = normalizeAppleModel(base)
 
   const categoryFamily = detectCategoryOverride(model) || normalizeCategoryFamily(category)
