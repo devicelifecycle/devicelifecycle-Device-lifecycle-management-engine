@@ -562,16 +562,33 @@ export default function NewTradeInPage() {
                                 onBlur={() => setTimeout(() => setDeviceDropdownOpen(prev => ({ ...prev, [index]: false })), 150)}
                                 autoComplete="off"
                               />
-                              {deviceDropdownOpen[index] && dropdownRects[index] && createPortal(
+                              {deviceDropdownOpen[index] && dropdownRects[index] && (() => {
+                                // Flip the dropdown above the input when there isn't enough
+                                // room below in the viewport — without this, a search row
+                                // far down a long item list always renders the list downward
+                                // regardless of available space, covering the Notes textarea
+                                // and Cancel button below it instead of the content the user
+                                // is actually trying to see.
+                                const rect = dropdownRects[index]
+                                const desiredHeight = 224 // matches max-h-56
+                                const gap = 4
+                                const spaceBelow = window.innerHeight - rect.bottom
+                                const spaceAbove = rect.top
+                                const openUpward = spaceBelow < desiredHeight + gap && spaceAbove > spaceBelow
+                                const maxHeight = Math.max(120, Math.min(desiredHeight, (openUpward ? spaceAbove : spaceBelow) - gap))
+                                return createPortal(
                                 <div
                                   style={{
                                     position: 'fixed',
-                                    top: dropdownRects[index].bottom + 4,
-                                    left: dropdownRects[index].left,
-                                    width: dropdownRects[index].width,
+                                    ...(openUpward
+                                      ? { bottom: window.innerHeight - rect.top + gap }
+                                      : { top: rect.bottom + gap }),
+                                    left: rect.left,
+                                    width: rect.width,
+                                    maxHeight,
                                     zIndex: 9999,
                                   }}
-                                  className="max-h-56 overflow-y-auto rounded-md border bg-popover shadow-lg"
+                                  className="overflow-y-auto rounded-md border bg-popover shadow-lg"
                                 >
                                   {(() => {
                                     const q = (deviceSearches[index] || '').toLowerCase()
@@ -606,7 +623,8 @@ export default function NewTradeInPage() {
                                   })()}
                                 </div>,
                                 document.body
-                              )}
+                                )
+                              })()}
                             </div>
                             <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
                             <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>

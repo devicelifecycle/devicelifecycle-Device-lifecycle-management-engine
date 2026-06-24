@@ -634,7 +634,12 @@ export default function OrderDetailClient() {
     mode: 'trade' | 'cpo',
     options?: { silent?: boolean }
   ): Promise<boolean> => {
-    if (!item.device_id) {
+    // Prefer the in-progress edited device_id (set when the user picks a
+    // different device via the pencil/search icon in the pricing dialog) —
+    // item.device_id is only the originally-persisted value and goes stale
+    // the moment the device is changed but not yet saved.
+    const effectiveDeviceId = pricingItemEdits[item.id]?.device_id ?? item.device_id
+    if (!effectiveDeviceId) {
       if (!options?.silent) toast.error('Device not found for this item')
       return false
     }
@@ -647,7 +652,7 @@ export default function OrderDetailClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           version: 'v2',
-          device_id: item.device_id,
+          device_id: effectiveDeviceId,
           storage: getStorageForItem(item),
           carrier: 'Unlocked',
           condition: item.claimed_condition || 'good',
@@ -3479,7 +3484,8 @@ export default function OrderDetailClient() {
                     </div>
                   )}
                   {group.items.map(item => {
-              const ctxKey = `${item.device_id}_${getStorageForItem(item)}`
+              const effectiveDeviceId = pricingItemEdits[item.id]?.device_id ?? item.device_id
+              const ctxKey = `${effectiveDeviceId}_${getStorageForItem(item)}`
               const ctx = marketContext[ctxKey]
               const itemCondition = mapOrderConditionToCompetitorCondition(item.claimed_condition || 'good')
               const conditionSnapshot = ctx?.conditions.find(c => c.condition === itemCondition)
@@ -3506,7 +3512,12 @@ export default function OrderDetailClient() {
                       : <X className="h-3.5 w-3.5" />}
                   </button>
                   {/* Item header + price input + total */}
-                  <div className="grid grid-cols-[1fr_auto_auto_140px] gap-4 items-end">
+                  {/* items-start, not items-end: the first column grows an extra
+                      row while editing the device (search input above qty/
+                      condition/storage), and items-end was anchoring Unit
+                      Price/Total/Suggest to the bottom of that now-taller
+                      column instead of lining up with its top. */}
+                  <div className="grid grid-cols-[1fr_auto_auto_140px] gap-4 items-start">
                     <div className="space-y-1.5">
                       {deviceEditItemId === item.id ? (
                         <div className="space-y-1">
@@ -3538,6 +3549,11 @@ export default function OrderDetailClient() {
                                   onClick={() => {
                                     const label = `${d.make} ${d.model}`
                                     setPricingItemEdits(prev => ({ ...prev, [item.id]: { ...prev[item.id], device_id: d.id, deviceLabel: label } }))
+                                    // Clear any price/metadata computed for the OLD device — leaving it
+                                    // in place would silently carry a stale number into the new device,
+                                    // looking valid even though it was priced against the wrong item.
+                                    setItemPrices(prev => { const next = { ...prev }; delete next[item.id]; return next })
+                                    setItemMetadata(prev => { const next = { ...prev }; delete next[item.id]; return next })
                                     setDeviceEditItemId(null)
                                     setDeviceEditSearch('')
                                     setDeviceEditResults([])
@@ -3616,7 +3632,7 @@ export default function OrderDetailClient() {
                       {(() => {
                         const storage = pricingItemEdits[item.id]?.storage ?? getStorageForItem(item)
                         const cond = pricingItemEdits[item.id]?.condition ?? item.claimed_condition ?? 'good'
-                        const manualKey = `${item.device_id}|${storage}|${cond}`
+                        const manualKey = `${pricingItemEdits[item.id]?.device_id ?? item.device_id}|${storage}|${cond}`
                         const manualEntry = lastManualPrices[manualKey]
                         if (!manualEntry) return null
                         return (
