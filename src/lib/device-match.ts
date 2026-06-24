@@ -421,7 +421,16 @@ export function matchDeviceFromCsv(
   deviceModel: string | undefined | null
 ): Device | undefined {
   let csvMake = resolveMake(deviceMake ?? '')
-  let csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(deviceModel ?? '')))
+  // Strip a redundant leading make prefix (some templates include make
+  // twice across columns, e.g. make="apple", model="apple iphone 15")
+  // BEFORE stripping storage, not after. Order matters: stripStorage's bare
+  // trailing-number heuristic only recognizes "iPhone 16" as a generation
+  // number (not storage) when "iPhone" is the very first word — with
+  // "Apple" still attached ("Apple iPhone 16 128GB"), the guard fails and
+  // "16" gets misread as a second, already-stripped storage token, losing
+  // the generation number entirely and producing a candidate that matches
+  // the wrong device (or nothing at all).
+  let csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(stripLeadingMakePrefix(csvMake, deviceModel ?? ''))))
 
   // When make has full name "Samsung Galaxy S24" and model is empty, split it
   if (!csvModelRaw && csvMake) {
@@ -429,7 +438,7 @@ export function matchDeviceFromCsv(
     const split = splitMakeModel(combined)
     if (split) {
       csvMake = split.make
-      csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(split.model)))
+      csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(stripLeadingMakePrefix(csvMake, split.model))))
     }
   }
   // When model has full name "Samsung Galaxy S24" and make is empty, split it
@@ -438,7 +447,7 @@ export function matchDeviceFromCsv(
     if (split) {
       // Apply MAKE_ALIASES so "galaxy" → "samsung", "pixel" → "google", etc.
       csvMake = resolveMake(split.make)
-      csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(split.model)))
+      csvModelRaw = sanitizeModelNoise(stripColor(stripStorage(stripLeadingMakePrefix(csvMake, split.model))))
     }
   }
 
@@ -446,10 +455,6 @@ export function matchDeviceFromCsv(
   if (!csvMake && /^\d+(\s+(pro\s+max|pro|plus|mini|ultra|max))?$/i.test(csvModelRaw)) {
     csvMake = 'apple'
   }
-
-  // Some templates include make twice across columns, e.g.
-  // make="apple", model="apple iphone 15".
-  csvModelRaw = stripLeadingMakePrefix(csvMake, csvModelRaw)
 
   if (!csvMake || !csvModelRaw) return undefined
 
