@@ -63,7 +63,7 @@ export default function CustomerRequestsPage() {
 
   const [isDraggingTrade, setIsDraggingTrade] = useState(false)
   const [isDraggingCpo, setIsDraggingCpo] = useState(false)
-  const [showFormatHelp, setShowFormatHelp] = useState(false)
+  const [showFormatHelp, setShowFormatHelp] = useState(true)
 
   // ── CPO upload state ──────────────────────────────────────────────────────
   const [cpoUploadFile, setCpoUploadFile] = useState<File | null>(null)
@@ -461,9 +461,16 @@ export default function CustomerRequestsPage() {
                 </ol>
                 <div className="rounded-md border bg-background px-3 py-2.5 space-y-1.5">
                   <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground">Required fields for accurate, fast pricing</p>
-                  <p><strong>Cell Phones / Tablets</strong> — Model, Quantity, and Storage are required. Additional columns are used only if recognized.</p>
+                  <p>
+                    <strong>Cell Phones / Tablets</strong> — <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Model</span>,{' '}
+                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Quantity</span>, and{' '}
+                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Storage</span> are required. Additional columns are used only if recognized.
+                  </p>
                   <p className="text-xs text-muted-foreground">Model should be the model only — for Apple, that&apos;s &quot;iPhone 15&quot;, not &quot;Apple iPhone 15&quot;. For Samsung, that&apos;s &quot;Galaxy S24&quot;, not &quot;Samsung Galaxy S24&quot;.</p>
-                  <p className="pt-1"><strong>PC / Laptop</strong> — Make and Model are required. Quantity, Processor, RAM, and Storage improve quoting accuracy.</p>
+                  <p className="pt-1">
+                    <strong>PC / Laptop</strong> — <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Make</span> and{' '}
+                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Model</span> are required. Quantity, Processor, RAM, and Storage improve quoting accuracy.
+                  </p>
                   <p className="text-xs text-muted-foreground">If Processor, RAM, or Storage are left out, we default to the lowest version for quoting. If Quantity is left out, we assume 1.</p>
                 </div>
                 <div>
@@ -472,9 +479,19 @@ export default function CustomerRequestsPage() {
                     <table className="w-full text-xs">
                       <thead className="bg-muted/50">
                         <tr>
-                          {['Make', 'Model', 'Quantity', 'Storage', 'Serial Number', 'Color', 'Condition'].map(h => (
-                            <th key={h} className="px-2.5 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>
-                          ))}
+                          {['Make', 'Model', 'Quantity', 'Storage', 'Serial Number', 'Color', 'Condition'].map(h => {
+                            const required = ['Model', 'Quantity', 'Storage'].includes(h)
+                            return (
+                              <th
+                                key={h}
+                                className={`px-2.5 py-1.5 text-left font-semibold whitespace-nowrap ${
+                                  required ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : ''
+                                }`}
+                              >
+                                {h}{required && <span className="ml-1 text-[9px] font-bold uppercase tracking-wide">●</span>}
+                              </th>
+                            )
+                          })}
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -499,7 +516,9 @@ export default function CustomerRequestsPage() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">Bold columns (Model, Quantity, Storage) are required — the rest are accepted but optional.</p>
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Highlighted</span> columns (Model, Quantity, Storage) are required — the rest are accepted but optional.
+                  </p>
                 </div>
               </div>
             )}
