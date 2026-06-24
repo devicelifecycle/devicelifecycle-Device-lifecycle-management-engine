@@ -284,14 +284,19 @@ function splitCombinedField(cell: string): { brand: string; model: string; stora
   const brand = KNOWN_BRANDS.includes(firstLower) ? parts[0] : ''
 
   const remaining = brand ? parts.slice(1) : parts
+  const remainingStr = remaining.join(' ')
 
-  // Find color (last word if it's all-alpha and not a model keyword)
-  const lastWord = remaining[remaining.length - 1] ?? ''
-  const looksLikeColor = /^[A-Za-z]+$/.test(lastWord) && !['pro', 'max', 'plus', 'ultra', 'mini', 'lite'].includes(lastWord.toLowerCase())
-  const color = (remaining.length > 1 && looksLikeColor) ? lastWord : ''
-
-  const modelParts = color ? remaining.slice(0, -1) : remaining
-  const model = modelParts.join(' ')
+  // Find a trailing color using the same curated color-name list as the
+  // rest of the matching pipeline (extractColor/stripColor) — NOT "any
+  // trailing all-alpha word that isn't pro/max/plus/ultra/mini/lite".
+  // That heuristic wrongly stripped real model-variant codes as if they
+  // were colors: "iPhone XR" -> model "iPhone" + color "XR" (same for
+  // "XS", "SE", "iPad Air" -> "Air"), losing the device's identity
+  // entirely. None of those are colors, just short words the blocklist
+  // hadn't anticipated — a curated allowlist of real colors is far more
+  // reliable than a blocklist of known-not-colors.
+  const color = (remaining.length > 1 && extractColor(remainingStr)) || ''
+  const model = color ? stripColor(remainingStr) : remainingStr
 
   // If no brand found but cell starts with a known Apple model prefix, infer Apple
   const finalBrand = brand || (lower.match(/\b(iphone|ipad|macbook|imac|airpods)/) ? 'Apple' : '')
