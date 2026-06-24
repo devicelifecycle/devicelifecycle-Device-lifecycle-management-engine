@@ -205,13 +205,17 @@ function normalizeAppleModel(model: string): string {
   const m = model.toLowerCase().trim()
   if (!m) return model
 
+  // SE + generation ordinal, with or without a leading "iphone" and with or
+  // without a trailing "gen"/"generation" word — "se 2", "se2nd", "iphone se
+  // 2nd", "iphone se 2nd gen" all mean the same device. Checked before the
+  // generic "starts with iphone" passthrough below, which would otherwise
+  // return "iphone se 2nd" unchanged and never reach this normalization —
+  // that gap let a fresh "iPhone SE 2nd" duplicate slip into the catalog.
+  if (/(^|\s)se\s*2(nd)?(\s*gen(eration)?)?(\s|$)/i.test(m)) return 'iphone se (2nd gen)'
+  if (/(^|\s)se\s*3(rd)?(\s*gen(eration)?)?(\s|$)/i.test(m)) return 'iphone se (3rd gen)'
+
   // Already starts with iphone, ipad, macbook, imac, airpods, mac → leave alone
   if (/^(iphone|ipad|macbook|imac|airpods|mac\s|apple\s*watch)/.test(m)) return m
-
-  // SE2 / SE 2 / SE2nd → iphone se (2nd gen)
-  if (/^se\s*2/i.test(m)) return 'iphone se (2nd gen)'
-  // SE3 / SE 3 → iphone se (3rd gen)
-  if (/^se\s*3/i.test(m)) return 'iphone se (3rd gen)'
 
   // Pure number OR number followed by pro/max/plus/mini/ultra/fe/se variants
   // e.g. "11", "12 Pro", "13 Pro Max", "14 Plus", "15 Pro Max"
