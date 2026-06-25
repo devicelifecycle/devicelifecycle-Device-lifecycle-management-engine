@@ -439,42 +439,49 @@ export default function CustomerRequestsPage() {
         </CardHeader>
         <CardContent className="space-y-6">
 
-          {/* ── Upload formatting help ──────────────────────────────────── */}
+          {/* ── Upload formatting help — mirrors "COE Engine upload tutorial.xlsx" verbatim ── */}
           <div className="rounded-lg border border-blue-100 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-950/10">
             <button
               type="button"
               onClick={() => setShowFormatHelp(prev => !prev)}
               className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
             >
-              <span className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
+              <span className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
                 <HelpCircle className="h-4 w-4 shrink-0" />
-                Using your own spreadsheet? Here&apos;s how to format it
+                Bulk Upload Options
               </span>
               <ChevronDown className={`h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400 transition-transform ${showFormatHelp ? 'rotate-180' : ''}`} />
             </button>
             {showFormatHelp && (
               <div className="px-4 pb-4 space-y-3 text-sm text-slate-700 dark:text-slate-300">
-                <p>You have two options:</p>
-                <ol className="ml-5 list-decimal space-y-1">
-                  <li>Download one of our templates above and fill in your devices — this guarantees every required field is recognized.</li>
-                  <li>Upload your own spreadsheet. All your devices must be in one file, and the top row must contain a header title for each column.</li>
-                </ol>
+                <div>
+                  <p className="font-semibold">1. Download one of our two templates and record your assets in this format</p>
+                  <p className="text-xs text-muted-foreground">This method ensures compliance with the required fields and inputs for best accuracy.</p>
+                </div>
+                <div>
+                  <p className="font-semibold">2. Using your own spreadsheet? Need help importing your asset list?</p>
+                  <ul className="ml-5 list-disc space-y-1 mt-1">
+                    <li>All your asset information must be in one file.</li>
+                    <li>The top row of your file must contain a header title for each column of information.</li>
+                    <li>Required fields — for accurate and quick pricing here are the required fields:</li>
+                  </ul>
+                </div>
                 <div className="rounded-md border bg-background px-3 py-2.5 space-y-1.5">
-                  <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground">Required fields for accurate, fast pricing</p>
                   <p>
                     <strong>Cell Phones / Tablets</strong> — <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Model</span>,{' '}
                     <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Quantity</span>, and{' '}
-                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Storage</span> are required. Additional columns are used only if recognized.
+                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Storage</span> are required, additional columns will be uploaded only if recognized.
                   </p>
-                  <p className="text-xs text-muted-foreground">Model should be the model only — for Apple, that&apos;s &quot;iPhone 15&quot;, not &quot;Apple iPhone 15&quot;. For Samsung, that&apos;s &quot;Galaxy S24&quot;, not &quot;Samsung Galaxy S24&quot;.</p>
+                  <p className="text-xs text-muted-foreground">For further reference model should be model only i.e. for Apple products model would be &quot;iPhone 15&quot;, for Samsung products model would be &quot;Galaxy S24&quot;.</p>
                   <p className="pt-1">
-                    <strong>PC / Laptop</strong> — <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Make</span> and{' '}
-                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Model</span> are required. Quantity, Processor, RAM, and Storage improve quoting accuracy.
+                    <strong>PC / Laptop</strong> — <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Make</span> &{' '}
+                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Model</span> are absolutely necessary, Quantity, Processor, RAM & Storage will ensure more accurate quoting.
                   </p>
-                  <p className="text-xs text-muted-foreground">If Processor, RAM, or Storage are left out, we default to the lowest version for quoting. If Quantity is left out, we assume 1.</p>
+                  <p className="text-xs text-muted-foreground">* If Processor, RAM and Storage are not included our system will default to the lowest version for quoting purposes.</p>
+                  <p className="text-xs text-muted-foreground">* If Quantity is unknown or not entered, a quantity of 1 will be assumed.</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-1.5">Example</p>
+                  <p className="font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-1.5">Example (the system will accept all of this data, but only requires the highlighted columns)</p>
                   <div className="overflow-x-auto rounded-md border">
                     <table className="w-full text-xs">
                       <thead className="bg-muted/50">
@@ -502,7 +509,7 @@ export default function CustomerRequestsPage() {
                           <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">128GB</td>
                           <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">359876543210001</td>
                           <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Blue</td>
-                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Excellent</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">excellent</td>
                         </tr>
                         <tr>
                           <td className="px-2.5 py-1.5 whitespace-nowrap">Apple</td>
@@ -511,14 +518,20 @@ export default function CustomerRequestsPage() {
                           <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">128GB</td>
                           <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">—</td>
                           <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Black</td>
-                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Good</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">good</td>
+                        </tr>
+                        <tr>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap">Samsung</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">Galaxy S24</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">7</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap font-medium">128GB</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">—</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">Black</td>
+                          <td className="px-2.5 py-1.5 whitespace-nowrap text-muted-foreground">good</td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">
-                    <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Highlighted</span> columns (Model, Quantity, Storage) are required — the rest are accepted but optional.
-                  </p>
                 </div>
               </div>
             )}

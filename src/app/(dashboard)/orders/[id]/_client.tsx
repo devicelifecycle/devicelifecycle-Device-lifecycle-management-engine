@@ -3549,11 +3549,18 @@ export default function OrderDetailClient() {
                                   onClick={() => {
                                     const label = `${d.make} ${d.model}`
                                     setPricingItemEdits(prev => ({ ...prev, [item.id]: { ...prev[item.id], device_id: d.id, deviceLabel: label } }))
-                                    // Clear any price/metadata computed for the OLD device — leaving it
-                                    // in place would silently carry a stale number into the new device,
-                                    // looking valid even though it was priced against the wrong item.
+                                    // Clear any price/metadata/consensus-suggestion computed for the
+                                    // OLD device — leaving it in place would silently carry a stale
+                                    // number into the new device, looking valid even though it was
+                                    // priced against the wrong item. lineItemSuggestions is a SEPARATE
+                                    // cache from itemPrices (populated once when the dialog opens, read
+                                    // by "Apply All Consensus" / "Apply to group") — clearing only
+                                    // itemPrices/itemMetadata still left a trap: changing the device,
+                                    // then clicking Apply Consensus, re-stamped the old device's cached
+                                    // suggestion straight back into itemPrices.
                                     setItemPrices(prev => { const next = { ...prev }; delete next[item.id]; return next })
                                     setItemMetadata(prev => { const next = { ...prev }; delete next[item.id]; return next })
+                                    setLineItemSuggestions(prev => { const next = { ...prev }; delete next[item.id]; return next })
                                     setDeviceEditItemId(null)
                                     setDeviceEditSearch('')
                                     setDeviceEditResults([])
