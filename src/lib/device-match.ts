@@ -330,10 +330,19 @@ function normalizeCategoryFamily(category: string | null | undefined): string {
  * case-size token ("40mm", "44mm", ...) is never used by any phone/tablet/
  * laptop in this catalog.
  */
+// Laptop/PC product-line names that are never used by any phone/tablet —
+// catches the same "category column is wrong" pattern as the watch case
+// below, found live: "Dell Latitude 5420"/"Precision 5560" rows existing
+// with category="phone" on one row and category="laptop" on the other,
+// splitting one real device into two fuzzy-match buckets purely because
+// the dedup script (correctly) doesn't merge across different categories.
+const LAPTOP_PRODUCT_LINES = /\b(latitude|precision|inspiron|xps|optiplex|thinkpad|thinkcentre|elitebook|probook|pavilion|surface\s*(laptop|book|pro)|macbook|chromebook|zbook)\b/i
+
 function detectCategoryOverride(model: string | null | undefined): string | null {
   const m = normalize(model ?? '')
   if (/\b\d{2}\s*mm\b/.test(m) && /\bseries\b/.test(m)) return 'watch'
   if (/\bwatch\b/.test(m)) return 'watch'
+  if (LAPTOP_PRODUCT_LINES.test(m)) return 'laptop'
   return null
 }
 
