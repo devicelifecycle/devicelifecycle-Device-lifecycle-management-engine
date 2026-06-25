@@ -301,10 +301,24 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       }
     }, 5 * 60 * 1000)
 
+    // Re-check on tab refocus — a tab left open since before login (or since
+    // the session expired) never re-derives its auth state on its own; only
+    // the mount-time fetchUser() and the 5-minute interval above did, so an
+    // idle tab could sit on a stale unauthenticated render indefinitely until
+    // a manual reload. Reuses fetchUser() (same outcomes as the interval),
+    // just triggered by visibility instead of only by time.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        fetchUser().catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
     return () => {
       mountedRef.current = false
       subscription.unsubscribe()
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [fetchUser, router])
 
@@ -365,6 +379,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       const cachedUser = readTrustedCachedUser()
       if (cachedUser && cachedUser.id === userId) {
         writeCachedUser(cachedUser)
+        setRoutingCookies(cachedUser.role, cachedUser.id)
         writeProfileCookie(cachedUser)
         // Keep isLoading:true through router.replace so the login overlay stays
         // visible during navigation — prevents a flash of the bare login form.
