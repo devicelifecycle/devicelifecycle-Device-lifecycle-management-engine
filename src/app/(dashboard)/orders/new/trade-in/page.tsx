@@ -22,6 +22,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { CsvUploadGuide } from '@/components/orders/CsvUploadGuide'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import { matchDeviceFromCsv } from '@/lib/device-match'
 import {
@@ -696,6 +697,8 @@ export default function NewTradeInPage() {
               </TabsContent>
 
               <TabsContent value="csv" className="space-y-4">
+                <CsvUploadGuide defaultOpen={isCustomer} />
+
                 {/* Clear Trade-In template label at top */}
                 <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 p-4">
                   <p className="font-semibold text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>

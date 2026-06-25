@@ -22,6 +22,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Separator } from '@/components/ui/separator'
+import { CsvUploadGuide } from '@/components/orders/CsvUploadGuide'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { STORAGE_OPTIONS } from '@/lib/constants'
 import { matchDeviceFromCsv } from '@/lib/device-match'
@@ -760,6 +761,8 @@ export default function NewCPOOrderPage() {
               </TabsContent>
 
               <TabsContent value="csv" className="space-y-4">
+                <CsvUploadGuide defaultOpen={isCustomer} />
+
                 <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-4">
                   <p className="font-semibold text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
                   <p className="text-xs text-muted-foreground mt-1">Use this template for Certified Pre-Owned bulk purchases. Columns: device_make, device_model, quantity, storage, notes (Make/Model also accepted). Download template to ensure correct format.</p>
