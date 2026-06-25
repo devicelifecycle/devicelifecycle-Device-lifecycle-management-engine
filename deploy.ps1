@@ -45,7 +45,9 @@ npx supabase db push 2>&1
 if ($LASTEXITCODE -eq 0) {
   Write-Host "Supabase in sync." -ForegroundColor Green
 } else {
-  Write-Host "Supabase push issue — check above." -ForegroundColor Yellow
+  Write-Host "`nSupabase migration push FAILED — check the output above." -ForegroundColor Red
+  Write-Host "Code was pushed to GitHub/Vercel, but the database migration did NOT apply. Fix and re-run before assuming this deploy is complete." -ForegroundColor Red
+  exit 1
 }
 
 Write-Host "`nAll done. Changes are live." -ForegroundColor Green
