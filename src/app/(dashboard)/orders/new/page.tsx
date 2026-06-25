@@ -22,6 +22,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { CsvUploadGuide } from '@/components/orders/CsvUploadGuide'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
@@ -1299,6 +1300,8 @@ export default function NewOrderPage() {
               </TabsContent>
 
               <TabsContent value="csv" className="space-y-4">
+                <CsvUploadGuide defaultOpen={isCustomer} />
+
                 {/* Clear template labels at top */}
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
                   <p className="font-semibold text-sm">
