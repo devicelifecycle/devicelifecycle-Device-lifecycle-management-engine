@@ -5,9 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from 'recharts'
+import dynamic from 'next/dynamic'
 import {
   ShoppingCart, DollarSign, TrendingUp, TrendingDown,
   Package, AlertTriangle, CheckCircle2, Clock, BarChart3,
@@ -19,6 +17,10 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
 import { ORDER_STATUS_CONFIG } from '@/lib/constants'
+
+const chartSkeleton = <div className="h-[200px] animate-pulse rounded-2xl bg-muted dark:bg-white/[0.04]" />
+const OrderVolumeChart = dynamic(() => import('./_charts').then(m => m.OrderVolumeChart), { ssr: false, loading: () => chartSkeleton })
+const RevenueTrendChart = dynamic(() => import('./_charts').then(m => m.RevenueTrendChart), { ssr: false, loading: () => chartSkeleton })
 
 interface DailyPoint { date: string; count: number; revenue: number }
 interface TopDevice { make: string; model: string; count: number; total: number }
@@ -126,12 +128,6 @@ export default function ReportsPage() {
 
   useEffect(() => { load(period) }, [load, period])
   useEffect(() => { loadRecon(period, reconType) }, [loadRecon, period, reconType])
-
-  // Format date label for chart — show "Apr 10" style
-  const fmtDay = (d: string) => {
-    const dt = new Date(d + 'T00:00:00')
-    return dt.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
-  }
 
   // Show every Nth label so the axis doesn't crowd
   const tickEvery = period === '7' ? 1 : period === '30' ? 5 : 14
@@ -258,28 +254,7 @@ export default function ReportsPage() {
                 <CardDescription>Orders created per day</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data.revenue.daily} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={(v, i) => i % tickEvery === 0 ? fmtDay(v) : ''}
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                      axisLine={false} tickLine={false}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                      axisLine={false} tickLine={false}
-                    />
-                    <Tooltip
-                      labelFormatter={v => fmtDay(String(v))}
-                      formatter={(v: number) => [v, 'Orders']}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--popover))' }}
-                    />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <OrderVolumeChart daily={data.revenue.daily} tickEvery={tickEvery} />
               </CardContent>
             </Card>
 
@@ -293,28 +268,7 @@ export default function ReportsPage() {
                 <CardDescription>Order value created per day</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data.revenue.daily} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={(v, i) => i % tickEvery === 0 ? fmtDay(v) : ''}
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                      axisLine={false} tickLine={false}
-                    />
-                    <YAxis
-                      tickFormatter={v => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                      axisLine={false} tickLine={false}
-                    />
-                    <Tooltip
-                      labelFormatter={v => fmtDay(String(v))}
-                      formatter={(v: number) => [formatCurrency(v), 'Revenue']}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--popover))' }}
-                    />
-                    <Bar dataKey="revenue" fill="#10b981" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <RevenueTrendChart daily={data.revenue.daily} tickEvery={tickEvery} />
               </CardContent>
             </Card>
           </div>

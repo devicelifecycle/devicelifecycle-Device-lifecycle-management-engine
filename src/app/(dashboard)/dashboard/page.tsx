@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useTheme } from 'next-themes'
@@ -19,18 +20,12 @@ import {
   TrendingUp,
   Truck,
 } from 'lucide-react'
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+
+const chartSkeleton = <div className="h-full animate-pulse rounded-2xl bg-muted dark:bg-white/[0.04]" />
+const MonthlyOrdersChart = dynamic(() => import('./_charts').then(m => m.MonthlyOrdersChart), { ssr: false, loading: () => chartSkeleton })
+const MonthlyValueChart = dynamic(() => import('./_charts').then(m => m.MonthlyValueChart), { ssr: false, loading: () => chartSkeleton })
+const OrderMomentumChart = dynamic(() => import('./_charts').then(m => m.OrderMomentumChart), { ssr: false, loading: () => chartSkeleton })
+const PipelineWeightChart = dynamic(() => import('./_charts').then(m => m.PipelineWeightChart), { ssr: false, loading: () => chartSkeleton })
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrders } from '@/hooks/useOrders'
@@ -128,15 +123,7 @@ function MonthlyPerformanceSection({ isDark, analytics, isLoading }: { isDark: b
             ) : chartData.length === 0 ? (
               <p className="pt-16 text-center text-sm text-muted-foreground">No orders yet.</p>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
-                  <YAxis tick={tickStyle} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [v, 'Orders']} />
-                  <Bar dataKey="orders" fill="#d17843" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <MonthlyOrdersChart chartData={chartData} gridStroke={gridStroke} tickStyle={tickStyle} tooltipStyle={tooltipStyle} />
             )}
           </CardContent>
         </Card>
@@ -152,26 +139,7 @@ function MonthlyPerformanceSection({ isDark, analytics, isLoading }: { isDark: b
             ) : chartData.length === 0 ? (
               <p className="pt-16 text-center text-sm text-muted-foreground">No order value yet.</p>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 4, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="valueFill" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#6ec6b8" stopOpacity={0.5} />
-                      <stop offset="100%" stopColor="#6ec6b8" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
-                  <YAxis
-                    tick={tickStyle}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`}
-                  />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatCurrency(v), 'Value']} />
-                  <Area type="monotone" dataKey="value" stroke="#6ec6b8" strokeWidth={2.5} fill="url(#valueFill)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              <MonthlyValueChart chartData={chartData} gridStroke={gridStroke} tickStyle={tickStyle} tooltipStyle={tooltipStyle} />
             )}
           </CardContent>
         </Card>
@@ -367,28 +335,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
             <CardDescription className="text-muted-foreground">Volume over the last seven days.</CardDescription>
           </CardHeader>
           <CardContent className="h-[260px] sm:h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="momentumFill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#d17843" stopOpacity={0.55} />
-                    <stop offset="100%" stopColor="#d17843" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke={isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'} vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: isDark ? '#a8a29e' : '#78716c', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: isDark ? '#a8a29e' : '#78716c', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    background: isDark ? 'rgba(18,14,12,0.95)' : '#fff',
-                    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e7e5e4',
-                    borderRadius: '18px',
-                    color: isDark ? '#f5f5f4' : '#1c1917',
-                  }}
-                />
-                <Area type="monotone" dataKey="orders" stroke="#d17843" strokeWidth={2.5} fill="url(#momentumFill)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <OrderMomentumChart trendData={trendData} isDark={isDark} />
           </CardContent>
         </Card>
 
@@ -398,26 +345,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
             <CardDescription className="text-muted-foreground">Where operational effort is concentrated now.</CardDescription>
           </CardHeader>
           <CardContent className="h-[260px] sm:h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={pipelineData}>
-                <CartesianGrid stroke={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'} vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: isDark ? '#a8a29e' : '#78716c', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: isDark ? '#a8a29e' : '#78716c', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    background: isDark ? 'rgba(18,14,12,0.95)' : '#fff',
-                    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e7e5e4',
-                    borderRadius: '18px',
-                    color: isDark ? '#f5f5f4' : '#1c1917',
-                  }}
-                />
-                <Bar dataKey="count" radius={[10, 10, 0, 0]}>
-                  {pipelineData.map((entry) => (
-                    <Cell key={entry.label} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <PipelineWeightChart pipelineData={pipelineData} isDark={isDark} />
           </CardContent>
         </Card>
       </section>
