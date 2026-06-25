@@ -619,6 +619,12 @@ export class NotificationService {
     device_name?: string
     exception_reason: string
     adjustment_amount?: number
+    // When true, this is a technician's opt-in "FYI" notice for a condition
+    // difference that did NOT cross the real exception threshold — softer
+    // subject/copy, and scoped to the primary contact only (not a full
+    // org-wide in-app fan-out + SMS) since it isn't an action-required event
+    // the way a real exception is.
+    notice_only?: boolean
   }): Promise<void> {
     try {
       const supabase = createServiceRoleClient()
@@ -632,6 +638,39 @@ export class NotificationService {
 
       if (!customer?.organization_id) return
 
+      const deviceInfo = input.device_name || (input.imei ? `IMEI: ${input.imei}` : 'Item')
+      const title = input.notice_only
+        ? `Condition Update — Order ${input.order_number}`
+        : `Exception Required — Order ${input.order_number}`
+
+      let message = input.notice_only
+        ? `${deviceInfo}: ${input.exception_reason}`
+        : `${deviceInfo} requires review due to: ${input.exception_reason}`
+      if (input.adjustment_amount && input.adjustment_amount !== 0) {
+        const direction = input.adjustment_amount < 0 ? 'decrease' : 'increase'
+        message += ` Price ${direction}: $${Math.abs(input.adjustment_amount).toFixed(2)}.`
+      }
+      message += input.notice_only
+        ? ' This is for your information — no action is needed.'
+        : ' Our team will review and update you shortly.'
+
+      if (input.notice_only) {
+        // Primary contact only — email, no org-wide in-app fan-out or SMS.
+        if (customer.contact_email) {
+          await EmailService.sendOrderStatusEmail({
+            to: customer.contact_email,
+            recipientName: customer.contact_name || customer.company_name || 'Customer',
+            orderNumber: input.order_number,
+            orderId: input.order_id,
+            fromStatus: 'in_triage',
+            toStatus: 'in_triage',
+            subject: title,
+            message,
+          })
+        }
+        return
+      }
+
       // Get all users in the customer's organization
       const { data: orgUsers } = await supabase
         .from('users')
@@ -640,16 +679,6 @@ export class NotificationService {
         .eq('is_active', true)
 
       if (!orgUsers || orgUsers.length === 0) return
-
-      const deviceInfo = input.device_name || (input.imei ? `IMEI: ${input.imei}` : 'Item')
-      const title = `Exception Required — Order ${input.order_number}`
-      
-      let message = `${deviceInfo} requires review due to: ${input.exception_reason}`
-      if (input.adjustment_amount && input.adjustment_amount !== 0) {
-        const direction = input.adjustment_amount < 0 ? 'decrease' : 'increase'
-        message += ` Price ${direction}: $${Math.abs(input.adjustment_amount).toFixed(2)}.`
-      }
-      message += ' Our team will review and update you shortly.'
 
       // Send in-app notification to all org users — parallel to avoid O(n) sequential DB round-trips
       await Promise.all(orgUsers.map(user => this.createNotification({

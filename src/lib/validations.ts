@@ -563,6 +563,7 @@ export const triageSubmitSchema = z.object({
     gps: z.boolean(),
   }),
   notes: z.string(),
+  notify_customer: z.boolean().optional(),
 })
 
 // ============================================================================

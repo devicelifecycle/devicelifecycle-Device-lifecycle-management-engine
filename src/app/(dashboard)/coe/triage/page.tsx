@@ -18,6 +18,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -30,6 +31,27 @@ import type { IMEIRecord, DeviceCondition, Device } from '@/types'
 
 const conditions: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
 const screenConditions = ['good', 'cracked', 'damaged', 'dead'] as const
+
+/**
+ * Client-side-only heuristic for the "notify customer" checkbox's INITIAL
+ * default — not a reimplementation of TriageService.calculateTriageOutcome,
+ * which remains the server-side source of truth for whether a real
+ * exception fires. Used once, when TestPod data resolves, to suggest a
+ * sensible starting value; the technician can always override it afterward
+ * without this re-asserting itself.
+ */
+function looksLikeLikelyDowngrade(
+  claimedCondition: DeviceCondition | null | undefined,
+  physicalCondition: DeviceCondition,
+  screenCondition: string,
+  batteryHealth: string
+): boolean {
+  if (claimedCondition && physicalCondition !== claimedCondition) return true
+  if (screenCondition === 'cracked' || screenCondition === 'damaged' || screenCondition === 'dead') return true
+  const battery = parseInt(batteryHealth, 10)
+  if (Number.isFinite(battery) && battery < 80) return true
+  return false
+}
 const TRIAGE_TEMPLATE_HEADERS = [
   'order_number',
   'imei',
@@ -135,6 +157,12 @@ export default function COETriagePage() {
   const [batteryHealth, setBatteryHealth] = useState('85')
   const [issues, setIssues] = useState<string[]>([])
   const [notes, setNotes] = useState('')
+  // Tracks which of physical_condition/screen_condition/battery_health were
+  // auto-filled by TestPod vs entered/overridden by the technician — cleared
+  // per-field the moment that field is manually edited, so a stale
+  // "Auto-filled" badge can never linger on a value the tech changed.
+  const [testpodFilledFields, setTestpodFilledFields] = useState<Set<string>>(new Set())
+  const [notifyCustomer, setNotifyCustomer] = useState(false)
 
   // ── IMEI lookup (inside triage dialog) ─────────────────────────────────
   const [imeiLookup, setImeiLookup] = useState<ImeiLookupResult | null>(null)
@@ -904,6 +932,8 @@ export default function COETriagePage() {
     setNotes('')
     setImeiLookup(null)
     setTestpodData(null)
+    setTestpodFilledFields(new Set())
+    setNotifyCustomer(false)
     setTriageDialogOpen(true)
 
     // Auto-fetch TestPod diagnostics if we have an IMEI
@@ -914,18 +944,33 @@ export default function COETriagePage() {
         .then((data: TestPodResult) => {
           setTestpodData(data)
           if (!data.found) return
+          const filled = new Set<string>()
           // Auto-fill battery health
           if (data.battery_max_capacity_pct != null) {
             setBatteryHealth(String(data.battery_max_capacity_pct))
+            filled.add('battery_health')
           }
           // Auto-fill condition from cosmetic grade
           if (data.suggested_condition) {
             setPhysicalCondition(data.suggested_condition as DeviceCondition)
+            filled.add('physical_condition')
           }
           // Auto-fill screen condition
           if (data.screen_condition) {
             setScreenCondition(data.screen_condition)
+            filled.add('screen_condition')
           }
+          setTestpodFilledFields(filled)
+          // Suggest a default for "notify customer" from the values TestPod
+          // just supplied (not the React state vars above, which won't
+          // reflect these setX calls until the next render) — a one-time
+          // default, not continuously re-asserted once the tech can see it.
+          setNotifyCustomer(looksLikeLikelyDowngrade(
+            item.claimed_condition as DeviceCondition,
+            (data.suggested_condition as DeviceCondition) || 'good',
+            data.screen_condition || 'good',
+            data.battery_max_capacity_pct != null ? String(data.battery_max_capacity_pct) : '85'
+          ))
           // Auto-fill checklist from diagnostics
           if (data.checklist) {
             setChecklist(prev => ({ ...prev, ...data.checklist }))
@@ -987,6 +1032,7 @@ export default function COETriagePage() {
             gps: true,
           },
           notes: `${notes}${issues.length > 0 ? `\nIssues found: ${issues.join(', ')}` : ''}`,
+          notify_customer: notifyCustomer,
         }),
       })
       if (!res.ok) {
@@ -2404,6 +2450,8 @@ export default function COETriagePage() {
           setNotes('')
           setImeiLookup(null)
           setTestpodData(null)
+          setTestpodFilledFields(new Set())
+          setNotifyCustomer(false)
         }
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -2540,8 +2588,9 @@ export default function COETriagePage() {
           <div className="space-y-6 py-2">
             {/* Functional Checklist */}
             <div>
-              <Label className="text-sm font-semibold">Functional Checklist ({passedCount}/{TRIAGE_CHECKLIST_ITEMS.length})</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+              <Label className="text-sm font-semibold">1. Functional Checklist ({passedCount}/{TRIAGE_CHECKLIST_ITEMS.length})</Label>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">Test each function below. Failing more than one drops the condition grade; failing more than three sets it to Poor regardless of cosmetic appearance.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {TRIAGE_CHECKLIST_ITEMS.map(item => (
                   <button
                     key={item.id}
@@ -2563,34 +2612,82 @@ export default function COETriagePage() {
             </div>
 
             {/* Condition Assessment */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Physical Condition</Label>
-                <Select value={physicalCondition} onValueChange={v => setPhysicalCondition(v as DeviceCondition)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {conditions.map(c => <SelectItem key={c} value={c}>{CONDITION_CONFIG[c].label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Screen Condition</Label>
-                <Select value={screenCondition} onValueChange={setScreenCondition}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {screenConditions.map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Battery Health (%)</Label>
-                <Input type="number" min="0" max="100" value={batteryHealth} onChange={e => setBatteryHealth(e.target.value)} />
+            <div>
+              <Label className="text-sm font-semibold">2. Your Condition Assessment</Label>
+              {selectedItem?.claimed_condition && (
+                <p className="text-xs mt-0.5 mb-2 rounded-md bg-muted/50 px-2.5 py-1.5">
+                  Customer reported: <span className={`font-semibold ${CONDITION_CONFIG[selectedItem.claimed_condition]?.color ?? ''}`}>
+                    {CONDITION_CONFIG[selectedItem.claimed_condition]?.label}
+                  </span> — record what you actually find below.
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    Physical Condition
+                    {testpodFilledFields.has('physical_condition') && (
+                      <span className="rounded-full bg-blue-100 text-blue-800 px-1.5 py-0.5 text-[10px] font-medium dark:bg-blue-900 dark:text-blue-200">Auto-filled</span>
+                    )}
+                  </Label>
+                  <Select
+                    value={physicalCondition}
+                    onValueChange={v => {
+                      setPhysicalCondition(v as DeviceCondition)
+                      setTestpodFilledFields(prev => { const next = new Set(prev); next.delete('physical_condition'); return next })
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {conditions.map(c => <SelectItem key={c} value={c}>{CONDITION_CONFIG[c].label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    Screen Condition
+                    {testpodFilledFields.has('screen_condition') && (
+                      <span className="rounded-full bg-blue-100 text-blue-800 px-1.5 py-0.5 text-[10px] font-medium dark:bg-blue-900 dark:text-blue-200">Auto-filled</span>
+                    )}
+                  </Label>
+                  <Select
+                    value={screenCondition}
+                    onValueChange={v => {
+                      setScreenCondition(v)
+                      setTestpodFilledFields(prev => { const next = new Set(prev); next.delete('screen_condition'); return next })
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {screenConditions.map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    Battery Health (% of original capacity)
+                    {testpodFilledFields.has('battery_health') && (
+                      <span className="rounded-full bg-blue-100 text-blue-800 px-1.5 py-0.5 text-[10px] font-medium dark:bg-blue-900 dark:text-blue-200">Auto-filled</span>
+                    )}
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={batteryHealth}
+                    onChange={e => {
+                      setBatteryHealth(e.target.value)
+                      setTestpodFilledFields(prev => { const next = new Set(prev); next.delete('battery_health'); return next })
+                    }}
+                  />
+                </div>
               </div>
             </div>
 
             {/* Common Issues */}
             <div>
-              <Label className="text-sm font-semibold">Issues Found ({issues.length})</Label>
+              <Label className="text-sm font-semibold">3. Issues & Notes</Label>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">Tap any issues found below, and add free-text notes for anything else the customer or admin should know.</p>
+              <Label className="text-xs text-muted-foreground">Issues Found ({issues.length})</Label>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {COMMON_DEVICE_ISSUES.map(issue => (
                   <button
@@ -2613,6 +2710,19 @@ export default function COETriagePage() {
               <Label>Technician Notes</Label>
               <Textarea placeholder="Additional observations..." value={notes} onChange={e => setNotes(e.target.value)} rows={3} />
             </div>
+
+            {/* Customer notice — only meaningful when there's an actual condition
+                difference; a real exception (>$50 adjustment) always notifies
+                regardless of this checkbox, so it's scoped to smaller differences. */}
+            <label className="flex items-start gap-2.5 rounded-lg border bg-muted/30 p-3 text-sm cursor-pointer">
+              <Checkbox checked={notifyCustomer} onCheckedChange={setNotifyCustomer} className="mt-0.5" />
+              <span>
+                <span className="font-medium">Notify customer about this condition difference</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Sends a short email to the customer if your assessment differs from what they reported. Larger price adjustments (over $50) always notify the customer automatically — this is only for smaller differences you want to flag.
+                </span>
+              </span>
+            </label>
           </div>
 
           <DialogFooter>

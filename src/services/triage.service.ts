@@ -39,6 +39,9 @@ export interface TriageInput {
   }
   notes: string
   triaged_by_id: string
+  // Technician opt-in to notify the customer about a condition difference
+  // that's below the automatic exception threshold (see calculateTriageOutcome).
+  notify_customer?: boolean
 }
 
 export interface TriageOutcome {
@@ -149,8 +152,12 @@ export class TriageService {
       })
       .eq('id', input.imei_record_id)
 
-    // If exception required, notify the customer organization
-    if (outcome.exception_required && imeiRecord.order) {
+    // If exception required, notify the customer organization. Otherwise,
+    // if the technician opted in via notify_customer, send a softer
+    // "condition update" notice instead — scoped to differences that didn't
+    // cross the real exception threshold, so a real exception's full
+    // notification never gets duplicated by this branch.
+    if ((outcome.exception_required || input.notify_customer) && imeiRecord.order) {
       const order = imeiRecord.order as unknown as Order
       if (order.customer_id) {
         // Get device info for notification
@@ -164,15 +171,31 @@ export class TriageService {
           if (device) deviceName = `${device.make} ${device.model}`
         }
 
-        await NotificationService.sendExceptionNotification({
-          order_id: order.id,
-          order_number: order.order_number,
-          customer_id: order.customer_id,
-          imei: imeiRecord.imei,
-          device_name: deviceName,
-          exception_reason: outcome.exception_reason || 'Condition mismatch detected during triage',
-          adjustment_amount: outcome.price_adjustment,
-        })
+        if (outcome.exception_required) {
+          await NotificationService.sendExceptionNotification({
+            order_id: order.id,
+            order_number: order.order_number,
+            customer_id: order.customer_id,
+            imei: imeiRecord.imei,
+            device_name: deviceName,
+            exception_reason: outcome.exception_reason || 'Condition mismatch detected during triage',
+            adjustment_amount: outcome.price_adjustment,
+          })
+        } else {
+          const noticeReason = outcome.condition_changed
+            ? `Inspection found this device's condition to be ${outcome.final_condition}, differing from the reported ${imeiRecord.claimed_condition}.`
+            : 'A technician flagged a minor condition note on this device during inspection.'
+          await NotificationService.sendExceptionNotification({
+            order_id: order.id,
+            order_number: order.order_number,
+            customer_id: order.customer_id,
+            imei: imeiRecord.imei,
+            device_name: deviceName,
+            exception_reason: noticeReason,
+            adjustment_amount: outcome.price_adjustment,
+            notice_only: true,
+          })
+        }
       }
     }
 
