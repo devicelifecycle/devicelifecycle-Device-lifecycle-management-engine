@@ -690,7 +690,7 @@ export class OrderService {
     }
     // If transitioning a sub-order → check if parent should auto-transition
     if (order.parent_order_id) {
-      await OrderSplitService.checkParentAutoTransition(id)
+      await OrderSplitService.checkParentAutoTransition(id, userId)
     }
 
     return updatedOrder as Order

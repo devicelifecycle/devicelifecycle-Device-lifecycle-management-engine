@@ -5,10 +5,13 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { generateOrderNumber } from '@/lib/utils'
+import { AuditService } from '@/services/audit.service'
+import { VALID_ORDER_TRANSITIONS } from '@/lib/constants'
 import type {
   Order,
   OrderSplitConfig,
   OrderSplitAllocation,
+  OrderStatus,
 } from '@/types'
 
 export class OrderSplitService {
@@ -397,7 +400,7 @@ export class OrderSplitService {
   /**
    * Check if parent order should auto-transition based on sub-order states
    */
-  static async checkParentAutoTransition(subOrderId: string): Promise<void> {
+  static async checkParentAutoTransition(subOrderId: string, userId: string): Promise<void> {
     const supabase = await createServerSupabaseClient()
 
     const { data: subOrder } = await supabase
@@ -430,6 +433,25 @@ export class OrderSplitService {
     }
 
     if (parentStatus) {
+      const { data: parentOrder } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', subOrder.parent_order_id)
+        .single()
+      const currentParentStatus = parentOrder?.status as OrderStatus | undefined
+
+      // This is a derived rollup, not a manual transition request — it still
+      // gets applied even if it skips a step the graph wouldn't normally allow
+      // (sub-orders can race ahead of the parent's own recorded status), but
+      // an out-of-graph jump is flagged in the audit metadata rather than
+      // applied silently, since that was previously undetectable after the fact.
+      const isGraphValid = currentParentStatus
+        ? (VALID_ORDER_TRANSITIONS[currentParentStatus] || []).includes(parentStatus as OrderStatus)
+        : false
+      if (currentParentStatus && !isGraphValid) {
+        console.warn(`[OrderSplitService] Parent ${subOrder.parent_order_id} auto-transitioned ${currentParentStatus} -> ${parentStatus}, which is outside the normal transition graph for ${currentParentStatus}.`)
+      }
+
       const updateData: Record<string, any> = {
         status: parentStatus,
         updated_at: new Date().toISOString(),
@@ -444,6 +466,23 @@ export class OrderSplitService {
         .from('orders')
         .update(updateData)
         .eq('id', subOrder.parent_order_id)
+
+      await supabase.from('order_timeline').insert({
+        order_id: subOrder.parent_order_id,
+        event: 'Status Changed',
+        description: `Auto-transitioned to ${parentStatus} — all sub-orders reached an equivalent state`,
+        actor_id: userId,
+        timestamp: new Date().toISOString(),
+      })
+
+      AuditService.logStatusChange(
+        userId,
+        'order',
+        subOrder.parent_order_id,
+        currentParentStatus || 'unknown',
+        parentStatus,
+        { reason: 'split_order_auto_rollup', sub_order_id: subOrderId, graph_valid: isGraphValid }
+      ).catch(err => console.error('[OrderSplitService] audit log failed:', err))
     }
   }
 
@@ -462,6 +501,12 @@ export class OrderSplitService {
     if (!subOrders || subOrders.length === 0) return
 
     for (const subOrder of subOrders) {
+      const { data: beforeUpdate } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', subOrder.id)
+        .single()
+
       await supabase
         .from('orders')
         .update({
@@ -478,6 +523,15 @@ export class OrderSplitService {
         actor_id: userId,
         timestamp: new Date().toISOString(),
       })
+
+      AuditService.logStatusChange(
+        userId,
+        'order',
+        subOrder.id,
+        beforeUpdate?.status || 'unknown',
+        'cancelled',
+        { reason: 'parent_order_cancelled', parent_order_id: parentOrderId }
+      ).catch(err => console.error('[OrderSplitService] audit log failed:', err))
     }
   }
 }
