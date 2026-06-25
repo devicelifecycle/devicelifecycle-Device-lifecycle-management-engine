@@ -641,8 +641,8 @@ export class ShipmentService {
           .eq('role', 'admin')
           .eq('is_active', true)
 
-        for (const admin of admins || []) {
-          await NotificationService.createNotification({
+        await Promise.all((admins || []).map((admin) =>
+          NotificationService.createNotification({
             user_id: admin.id,
             type: 'in_app',
             title,
@@ -659,7 +659,7 @@ export class ShipmentService {
               audience: 'admin',
             },
           }).catch(() => {})
-        }
+        ))
 
         const { data: salesUsers } = await supabase
           .from('users')
@@ -667,8 +667,8 @@ export class ShipmentService {
           .eq('role', 'sales')
           .eq('is_active', true)
 
-        for (const salesUser of salesUsers || []) {
-          await NotificationService.createNotification({
+        await Promise.all((salesUsers || []).map((salesUser) =>
+          NotificationService.createNotification({
             user_id: salesUser.id,
             type: 'in_app',
             title,
@@ -685,7 +685,7 @@ export class ShipmentService {
               audience: 'sales',
             },
           }).catch(() => {})
-        }
+        ))
 
         const customerRecord = order.customer as {
           contact_email?: string | null
@@ -703,8 +703,8 @@ export class ShipmentService {
             .eq('role', 'customer')
             .eq('is_active', true)
 
-          for (const customerUser of customerUsers || []) {
-            await NotificationService.createNotification({
+          await Promise.all((customerUsers || []).map((customerUser) =>
+            NotificationService.createNotification({
               user_id: customerUser.id,
               type: 'in_app',
               title,
@@ -721,7 +721,7 @@ export class ShipmentService {
                 audience: 'customer',
               },
             }).catch(() => {})
-          }
+          ))
 
           const recipientLabel = customerRecord.contact_name || customerRecord.company_name || 'Customer'
           const orderUrl = `/orders/${orderId}`
