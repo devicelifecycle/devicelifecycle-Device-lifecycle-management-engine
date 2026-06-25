@@ -513,6 +513,11 @@ export class PricingTrainingService {
     const nowIso = new Date().toISOString()
     let baselinesUpserted = 0
 
+    // Built as one array and upserted in chunks instead of one round-trip per
+    // key — at 10x catalog size this loop can reach tens of thousands of
+    // entries, and a sequential await-per-row upsert would risk exceeding
+    // the cron's time budget long before finishing.
+    const baselineRows: Record<string, unknown>[] = []
     for (const [key, entries] of Array.from(priceMap.entries())) {
       if (entries.length === 0) continue
       const [deviceId, storage, condition] = key.split('|')
@@ -526,26 +531,31 @@ export class PricingTrainingService {
       const p75 = percentile(prices, 75)
 
       const sources = Array.from(new Set(effectiveEntries.map(e => e.source)))
-      const totalWeight = effectiveEntries.reduce((s, e) => s + e.weight, 0)
 
+      baselineRows.push({
+        device_id: deviceId,
+        storage: storage === 'default' ? '128GB' : storage,
+        carrier: 'Unlocked',
+        condition,
+        median_trade_price: Math.round(wMedian * 100) / 100,
+        p25_trade_price: Math.round(p25 * 100) / 100,
+        p75_trade_price: Math.round(p75 * 100) / 100,
+        sample_count: effectiveEntries.length,
+        last_trained_at: nowIso,
+        data_sources: sources,
+        updated_at: nowIso,
+      })
+    }
+
+    const BASELINE_CHUNK_SIZE = 500
+    for (let i = 0; i < baselineRows.length; i += BASELINE_CHUNK_SIZE) {
+      const chunk = baselineRows.slice(i, i + BASELINE_CHUNK_SIZE)
       const { error } = await supabase.from('trained_pricing_baselines').upsert(
-        {
-          device_id: deviceId,
-          storage: storage === 'default' ? '128GB' : storage,
-          carrier: 'Unlocked',
-          condition,
-          median_trade_price: Math.round(wMedian * 100) / 100,
-          p25_trade_price: Math.round(p25 * 100) / 100,
-          p75_trade_price: Math.round(p75 * 100) / 100,
-          sample_count: effectiveEntries.length,
-          last_trained_at: nowIso,
-          data_sources: sources,
-          updated_at: nowIso,
-        },
+        chunk,
         { onConflict: 'device_id,storage,carrier,condition' }
       )
-      if (!error) baselinesUpserted++
-      else errors.push(`baseline upsert ${key}: ${error.message}`)
+      if (!error) baselinesUpserted += chunk.length
+      else errors.push(`baseline upsert chunk ${i}-${i + chunk.length}: ${error.message}`)
     }
 
     // ------------------------------------------------------------------
