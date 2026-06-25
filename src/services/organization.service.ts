@@ -109,6 +109,13 @@ export class OrganizationService {
       .single()
 
     if (error) {
+      // 23505 = unique_violation. The case/whitespace-insensitive name index
+      // can be hit even when the exact-match duplicate-name check upstream
+      // passed (e.g. "Acme Inc" vs "acme inc ") — translate to a clear
+      // message instead of surfacing the raw Postgres constraint error.
+      if (error.code === '23505' && error.message.includes('idx_organizations_name_unique')) {
+        throw new Error(`An organization named "${input.name}" already exists.`)
+      }
       throw new Error(error.message)
     }
 
@@ -143,6 +150,9 @@ export class OrganizationService {
       .single()
 
     if (error) {
+      if (error.code === '23505' && error.message.includes('idx_organizations_name_unique') && input.name) {
+        throw new Error(`An organization named "${input.name}" already exists.`)
+      }
       throw new Error(error.message)
     }
 
