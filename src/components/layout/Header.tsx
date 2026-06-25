@@ -231,7 +231,7 @@ export function Header({ onToggleSidebar, sidebarOpen = true, onMobileMenuClick,
                 </button>
                 <button
                   onClick={() => { setAvatarOpen(false); logout() }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm font-semibold text-destructive hover:bg-muted transition-colors"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                   Log out

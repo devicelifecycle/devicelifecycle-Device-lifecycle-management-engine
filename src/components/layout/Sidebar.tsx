@@ -200,7 +200,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </Link>
           <button
             onClick={logout}
-            className="shrink-0 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-all"
+            className="shrink-0 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold text-white/70 hover:text-white hover:bg-white/[0.06] transition-all"
             title="Log out"
           >
             <LogOut className="h-3.5 w-3.5" />
