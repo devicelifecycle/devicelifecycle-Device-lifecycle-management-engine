@@ -909,6 +909,24 @@ export class OrderService {
   }
 
   /**
+   * Add a timeline event for a cron/system-initiated change — no actorId
+   * since there's no authenticated user; actor_id stays null (the column
+   * is a nullable UUID FK, so a sentinel string like 'system-cron' would
+   * violate its type and silently drop the insert).
+   */
+  static async addSystemTimelineEvent(orderId: string, event: string, description: string): Promise<void> {
+    const supabase = createServiceRoleClient()
+    await supabase.from('order_timeline').insert({
+      order_id: orderId,
+      event,
+      description,
+      actor_id: null,
+      actor_name: 'System',
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  /**
    * Log to audit trail
    */
   private static async logAudit(

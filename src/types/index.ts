@@ -679,7 +679,7 @@ export interface Notification extends BaseEntity {
 
 export interface AuditLog {
   id: string;
-  user_id: string;
+  user_id: string | null;
   action: AuditAction;
   
   entity_type: string;

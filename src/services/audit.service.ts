@@ -7,7 +7,11 @@ import { sanitizeCsvCell } from '@/lib/utils'
 import type { AuditLog, AuditAction } from '@/types'
 
 export interface AuditLogInput {
-  user_id: string
+  // null for system/cron-initiated actions with no real authenticated user —
+  // audit_logs.user_id is a nullable UUID FK, so this must be an actual null,
+  // never a sentinel string like 'system-cron' (which fails the column's
+  // UUID type check and silently drops the whole insert).
+  user_id: string | null
   action: AuditAction
   entity_type: string
   entity_id: string
@@ -138,7 +142,7 @@ export class AuditService {
    * Log a status change
    */
   static async logStatusChange(
-    userId: string,
+    userId: string | null,
     entityType: string,
     entityId: string,
     oldStatus: string,

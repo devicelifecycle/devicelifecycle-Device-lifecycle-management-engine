@@ -15,6 +15,7 @@ import { getAppPath } from '@/lib/app-url'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { AuditService } from '@/services/audit.service'
+import { OrderService } from '@/services/order.service'
 import { PRICE_CHANGE_NOTIFICATION_THRESHOLD } from '@/lib/constants'
 import { readServerEnv } from '@/lib/server-env'
 import { timingSafeEqual } from 'crypto'
@@ -85,15 +86,23 @@ export async function GET(request: NextRequest) {
           updated_at: now.toISOString(),
         }).eq('id', order.id)
 
-        // Audit log — cron has no real user, use sentinel ID to distinguish from manual rejection
+        // Audit log — cron has no real authenticated user, so user_id is null
+        // (a sentinel string here would violate the column's UUID type and
+        // silently drop the insert — confirmed that was happening before this fix)
         AuditService.logStatusChange(
-          'system-cron',
+          null,
           'order',
           order.id,
           'quoted',
           'rejected',
           { reason: 'quote_auto_expired', order_number: order.order_number, expired_at: expiresAt.toISOString() }
         ).catch(err => console.error('[quote-price-check] audit log failed:', err))
+
+        // Timeline event — the canonical OrderService.transitionOrder() path always
+        // writes one on status change; this cron updates status directly, so it needs
+        // its own call to avoid a visible gap in the order's history view.
+        OrderService.addSystemTimelineEvent(order.id, 'Status Changed', expiryNote)
+          .catch(err => console.error('[quote-price-check] timeline event failed:', err))
 
         // Notify customer
         if (order.customer_id) {
