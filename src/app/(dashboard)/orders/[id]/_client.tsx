@@ -7,7 +7,7 @@
 import { useState, Fragment, useEffect, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2, GitBranch, ExternalLink, Truck, Package, Shield, RotateCcw, Pencil, Check, Plus, TrendingDown, UserPlus, ThumbsUp, ThumbsDown, X } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, DollarSign, Send, FileDown, Sparkles, Loader2, GitBranch, ExternalLink, Truck, Package, Shield, RotateCcw, Pencil, Check, Plus, TrendingDown, UserPlus, ThumbsUp, ThumbsDown, X, ClipboardCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrder } from '@/hooks/useOrders'
 import { Button } from '@/components/ui/button'
@@ -260,6 +260,12 @@ export default function OrderDetailClient() {
   const [pendingExceptions, setPendingExceptions] = useState<TriageResult[]>([])
   const [exceptionsLoading, setExceptionsLoading] = useState(false)
   const [exceptionProcessingId, setExceptionProcessingId] = useState<string | null>(null)
+
+  // Internal-only: full triage history (not just pending exceptions) — see
+  // fetchTriageHistory below. Never shown to customers or vendors.
+  const [triageHistory, setTriageHistory] = useState<TriageResult[]>([])
+  const [triageHistoryLoading, setTriageHistoryLoading] = useState(false)
+  const [triageHistoryOpen, setTriageHistoryOpen] = useState(false)
 
   const fetchMarketContext = async (items: OrderItem[]) => {
     const normalizeStorageToken = (value: unknown): string =>
@@ -1562,6 +1568,30 @@ export default function OrderDetailClient() {
     fetchPendingExceptions()
   }, [fetchPendingExceptions])
 
+  // Full triage history for internal staff — every submission for this
+  // order, not just unresolved exceptions. Reuses the same /exceptions
+  // route + its existing role/org-scoping auth (TriageService.
+  // getTriageResultsForOrder is already service-role-backed).
+  const fetchTriageHistory = useCallback(async () => {
+    if (!order?.id || isCustomer || isVendor) return
+    setTriageHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/exceptions?history=true`)
+      if (res.ok) {
+        const data = await res.json()
+        setTriageHistory((data.data || []) as TriageResult[])
+      }
+    } catch {
+      setTriageHistory([])
+    } finally {
+      setTriageHistoryLoading(false)
+    }
+  }, [order?.id, isCustomer, isVendor])
+
+  useEffect(() => {
+    fetchTriageHistory()
+  }, [fetchTriageHistory])
+
   const handleExceptionDecision = async (triageResultId: string, approved: boolean) => {
     setExceptionProcessingId(triageResultId)
     try {
@@ -1881,6 +1911,74 @@ export default function OrderDetailClient() {
               )
             })}
           </CardContent>
+        </Card>
+      )}
+
+      {/* Triage History — internal staff only. Every triage submission for
+          this order, not just unresolved exceptions: technician notes and
+          condition-change detail otherwise disappear from the UI entirely
+          once an exception resolves (or never appear at all if no exception
+          was ever triggered), even though the data is still in the DB. */}
+      {!isCustomer && !isVendor && !triageHistoryLoading && triageHistory.length > 0 && (
+        <Card>
+          <button
+            type="button"
+            onClick={() => setTriageHistoryOpen(prev => !prev)}
+            className="flex w-full items-center justify-between gap-2 p-6 text-left"
+          >
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+                Triage History ({triageHistory.length})
+              </CardTitle>
+              <CardDescription className="mt-1">Every inspection submitted for this order's devices, including resolved exceptions.</CardDescription>
+            </div>
+            <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${triageHistoryOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {triageHistoryOpen && (
+            <CardContent className="space-y-3 pt-0">
+              {triageHistory.map(result => {
+                const imei = result.imei_record as unknown as { imei?: string; claimed_condition?: string; device?: { make?: string; model?: string } } | null
+                const deviceName = imei?.device ? `${imei.device.make || ''} ${imei.device.model || ''}`.trim() : ''
+                const label = deviceName || (imei?.imei ? `IMEI: ${imei.imei}` : 'Device')
+                const claimedLabel = imei?.claimed_condition ? (CONDITION_CONFIG[imei.claimed_condition as keyof typeof CONDITION_CONFIG]?.label || imei.claimed_condition) : '—'
+                const finalLabel = result.final_condition ? (CONDITION_CONFIG[result.final_condition as keyof typeof CONDITION_CONFIG]?.label || result.final_condition) : '—'
+                const triagedBy = (result as unknown as { triaged_by?: { full_name?: string } | null }).triaged_by
+                const statusBadge = !result.exception_required
+                  ? { label: 'Passed', className: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' }
+                  : result.exception_approved_at == null
+                    ? { label: 'Exception pending', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' }
+                    : result.exception_approved
+                      ? { label: 'Exception approved', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' }
+                      : { label: 'Exception rejected', className: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' }
+                return (
+                  <div key={result.id} className="rounded-lg border p-3 text-sm space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="font-medium">{label}</p>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge.className}`}>{statusBadge.label}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Reported: <span className="font-medium">{String(claimedLabel)}</span>
+                      {' → '}Found: <span className="font-medium">{String(finalLabel)}</span>
+                      {result.price_adjustment != null && result.price_adjustment !== 0 && (
+                        <span className="ml-1.5">({result.price_adjustment > 0 ? '+' : ''}{formatCurrency(result.price_adjustment)})</span>
+                      )}
+                      {result.battery_health != null && <span className="ml-1.5">· Battery {result.battery_health}%</span>}
+                    </p>
+                    {result.exception_reason && (
+                      <p className="text-xs text-muted-foreground">{result.exception_reason}</p>
+                    )}
+                    {result.notes && (
+                      <p className="text-xs text-muted-foreground italic">&quot;{result.notes}&quot;</p>
+                    )}
+                    <p className="text-[11px] text-muted-foreground/70">
+                      {triagedBy?.full_name ? `${triagedBy.full_name} · ` : ''}{result.triaged_at ? formatDateTime(result.triaged_at) : ''}
+                    </p>
+                  </div>
+                )
+              })}
+            </CardContent>
+          )}
         </Card>
       )}
 

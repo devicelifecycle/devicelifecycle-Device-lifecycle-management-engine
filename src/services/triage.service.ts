@@ -330,7 +330,7 @@ export class TriageService {
       .from('triage_results')
       .select(`
         *,
-        imei_record:imei_records(*),
+        imei_record:imei_records(*, device:device_catalog(make, model)),
         triaged_by:users!triage_results_triaged_by_id_fkey(full_name, email)
       `)
       .eq('order_id', orderId)

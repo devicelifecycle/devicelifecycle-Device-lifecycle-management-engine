@@ -30,7 +30,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const exceptions = await TriageService.getPendingExceptionsForOrder((await params).id)
+    // ?history=true returns every triage submission for this order (passed,
+    // pending, approved, rejected) — reuses the same auth/role-scoping above
+    // rather than adding a new endpoint. Default (no param) keeps the
+    // existing pending-only behavior so nothing else calling this route
+    // changes shape.
+    const showHistory = request.nextUrl.searchParams.get('history') === 'true'
+    const exceptions = showHistory
+      ? await TriageService.getTriageResultsForOrder((await params).id)
+      : await TriageService.getPendingExceptionsForOrder((await params).id)
     return NextResponse.json({ data: exceptions })
   } catch (error) {
     console.error('Error fetching order exceptions:', error)
