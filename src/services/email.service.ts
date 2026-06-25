@@ -7,9 +7,36 @@ import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import { getAppPath } from '@/lib/app-url'
 import { getTwilioClient, getTwilioConfig, isTwilioConfigured } from '@/lib/twilio/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 if (typeof window !== 'undefined') {
   throw new Error('EmailService cannot be imported in the browser')
+}
+
+// Fire-and-forget — a logging failure must never affect the actual send result.
+function logNotificationAttempt(input: {
+  channel: 'email' | 'sms'
+  recipient: string
+  subject?: string
+  provider?: string
+  status: 'sent' | 'failed'
+  errorMessage?: string
+}): void {
+  try {
+    const supabase = createServiceRoleClient()
+    void supabase.from('notification_attempts').insert({
+      channel: input.channel,
+      recipient: input.recipient,
+      subject: input.subject,
+      provider: input.provider,
+      status: input.status,
+      error_message: input.errorMessage,
+    }).then(({ error }) => {
+      if (error) console.error('[EmailService] failed to log notification attempt:', error)
+    })
+  } catch (err) {
+    console.error('[EmailService] failed to log notification attempt:', err)
+  }
 }
 
 let resendClient: Resend | null = null
@@ -81,6 +108,7 @@ export class EmailService {
     html: string
   ): Promise<boolean> {
     const toList = Array.isArray(to) ? to : [to]
+    const recipient = toList.join(', ')
     const from = getFromEmail()
 
     // Prefer Gmail SMTP — easiest path, sends to anyone with no domain verification
@@ -95,9 +123,11 @@ export class EmailService {
           html,
           text: htmlToPlainText(html),
         })
+        logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'gmail', status: 'sent' })
         return true
       } catch (err) {
         console.error('[EmailService] Gmail error:', err)
+        logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'gmail', status: 'failed', errorMessage: err instanceof Error ? err.message : String(err) })
         return false
       }
     }
@@ -106,6 +136,7 @@ export class EmailService {
     const resend = getResendClient()
     if (!resend) {
       console.warn('[EmailService] No email provider configured. Set GMAIL_USER+GMAIL_APP_PASSWORD or RESEND_API_KEY')
+      logNotificationAttempt({ channel: 'email', recipient, subject, status: 'failed', errorMessage: 'No email provider configured' })
       return false
     }
 
@@ -120,12 +151,15 @@ export class EmailService {
 
       if (error) {
         console.error('[EmailService] Resend error:', error)
+        logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'resend', status: 'failed', errorMessage: error.message })
         return false
       }
 
+      logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'resend', status: 'sent' })
       return true
     } catch (err) {
       console.error('[EmailService] Failed to send email:', err)
+      logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'resend', status: 'failed', errorMessage: err instanceof Error ? err.message : String(err) })
       return false
     }
   }
@@ -141,6 +175,7 @@ export class EmailService {
     attachments: Array<{ filename: string; content: Buffer; contentType: string }>
   ): Promise<boolean> {
     const toList = Array.isArray(to) ? to : [to]
+    const recipient = toList.join(', ')
     const from = getFromEmail()
 
     const gmail = getGmailTransporter()
@@ -159,9 +194,11 @@ export class EmailService {
             contentType: a.contentType,
           })),
         })
+        logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'gmail', status: 'sent' })
         return true
       } catch (err) {
         console.error('[EmailService] Gmail attachment error:', err)
+        logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'gmail', status: 'failed', errorMessage: err instanceof Error ? err.message : String(err) })
         return false
       }
     }
@@ -169,6 +206,7 @@ export class EmailService {
     const resend = getResendClient()
     if (!resend) {
       console.warn('[EmailService] No email provider configured for attachments')
+      logNotificationAttempt({ channel: 'email', recipient, subject, status: 'failed', errorMessage: 'No email provider configured' })
       return false
     }
 
@@ -186,11 +224,14 @@ export class EmailService {
       })
       if (error) {
         console.error('[EmailService] Resend attachment error:', error)
+        logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'resend', status: 'failed', errorMessage: error.message })
         return false
       }
+      logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'resend', status: 'sent' })
       return true
     } catch (err) {
       console.error('[EmailService] Failed to send email with attachments:', err)
+      logNotificationAttempt({ channel: 'email', recipient, subject, provider: 'resend', status: 'failed', errorMessage: err instanceof Error ? err.message : String(err) })
       return false
     }
   }
@@ -207,6 +248,7 @@ export class EmailService {
     const digits = phoneNumber.replace(/\D/g, '')
     if (digits.length < 10) {
       console.warn(`[EmailService] Invalid phone number: ${phoneNumber}`)
+      logNotificationAttempt({ channel: 'sms', recipient: phoneNumber, status: 'failed', errorMessage: 'Invalid phone number' })
       return false
     }
 
@@ -223,14 +265,17 @@ export class EmailService {
           to: e164,
         })
         console.log(`[SMS] Twilio sent to ${e164}`)
+        logNotificationAttempt({ channel: 'sms', recipient: e164, provider: 'twilio', status: 'sent' })
         return true
       } catch (err) {
         console.error('[SMS] Twilio failed:', err)
+        logNotificationAttempt({ channel: 'sms', recipient: e164, provider: 'twilio', status: 'failed', errorMessage: err instanceof Error ? err.message : String(err) })
         return false
       }
     }
 
     console.warn('[EmailService] Twilio SMS is not configured — set TWILIO_* env vars')
+    logNotificationAttempt({ channel: 'sms', recipient: e164, status: 'failed', errorMessage: 'Twilio not configured' })
     return false
   }
 
