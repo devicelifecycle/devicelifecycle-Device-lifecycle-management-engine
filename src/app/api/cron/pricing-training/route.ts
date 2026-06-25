@@ -8,6 +8,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { PricingTrainingService } from '@/services/pricing-training.service'
+import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
+
+const CRON_NAME = 'pricing-training'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -15,6 +18,7 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = new Date()
   try {
     const cronSecret = readServerEnv('CRON_SECRET')
     const trainingEnabled = readBooleanServerEnv('PRICING_TRAINING_ENABLED')
@@ -28,6 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!trainingEnabled) {
+      await logCronSuccess(CRON_NAME, startedAt, { skipped: true, reason: 'training_disabled' })
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -38,6 +43,10 @@ export async function GET(request: NextRequest) {
 
     const result = await PricingTrainingService.train()
 
+    await logCronSuccess(CRON_NAME, startedAt, {
+      baselines_upserted: result.baselines_upserted,
+      errors: result.errors.length,
+    })
     return NextResponse.json({
       success: true,
       baselines_upserted: result.baselines_upserted,
@@ -49,6 +58,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Pricing training error:', error)
+    await logCronFailure(CRON_NAME, startedAt, error)
     const { safeErrorMessage } = await import('@/lib/utils')
     return NextResponse.json(
       { error: safeErrorMessage(error, 'Training failed') },

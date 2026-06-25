@@ -6,6 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SLAService } from '@/services/sla.service'
 import { readServerEnv } from '@/lib/server-env'
 import { timingSafeEqual } from 'crypto'
+import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
+
+const CRON_NAME = 'sla-check'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -13,6 +16,7 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = new Date()
   try {
     const cronSecret = readServerEnv('CRON_SECRET')
 
@@ -30,6 +34,7 @@ export async function GET(request: NextRequest) {
 
     const result = await SLAService.checkAllOrders()
 
+    await logCronSuccess(CRON_NAME, startedAt, { ...result })
     return NextResponse.json({
       success: true,
       ...result,
@@ -37,6 +42,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error running SLA check:', error)
+    await logCronFailure(CRON_NAME, startedAt, error)
     return NextResponse.json(
       { error: 'Failed to run SLA check' },
       { status: 500 }

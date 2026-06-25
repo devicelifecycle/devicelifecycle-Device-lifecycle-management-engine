@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readServerEnv } from '@/lib/server-env'
 import { ShipmentService, isShippingConfigured } from '@/services/shipment.service'
 import { ShippingProviderService } from '@/services/shipping-provider.service'
+import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
 
 export const dynamic = 'force-dynamic'
+const CRON_NAME = 'shipping-tracking'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -15,6 +17,7 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = new Date()
   try {
     const cronSecret = readServerEnv('CRON_SECRET')
 
@@ -29,6 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!isShippingConfigured()) {
+      await logCronSuccess(CRON_NAME, startedAt, { skipped: true, reason: 'shipping_not_configured' })
       return NextResponse.json({ skipped: true, reason: 'Shipping provider is not configured' }, { status: 200 })
     }
 
@@ -82,6 +86,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    await logCronSuccess(CRON_NAME, startedAt, {
+      processed: shipments?.length || 0,
+      updated,
+      failed,
+    })
     return NextResponse.json({
       success: true,
       provider: 'shipping_provider',
@@ -92,6 +101,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Tracking cron error:', error)
+    await logCronFailure(CRON_NAME, startedAt, error)
     return NextResponse.json({ error: 'Failed to sync tracking' }, { status: 500 })
   }
 }

@@ -6,6 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { PricingHealthService, type StaleCleanupResult } from '@/services/pricing-health.service'
+import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
+
+const CRON_NAME = 'pricing-staleness'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -13,6 +16,7 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = new Date()
   try {
     const cronSecret = readServerEnv('CRON_SECRET')
     const monitorEnabled = readBooleanServerEnv('PRICING_STALENESS_MONITOR_ENABLED', true)
@@ -27,6 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!monitorEnabled) {
+      await logCronSuccess(CRON_NAME, startedAt, { skipped: true, reason: 'monitor_disabled' })
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -46,6 +51,10 @@ export async function GET(request: NextRequest) {
       cleanup = await PricingHealthService.cleanupStaleRows(cleanupDays)
     }
 
+    await logCronSuccess(CRON_NAME, startedAt, {
+      stale_groups: result.stale_groups,
+      cleanup_deleted: cleanup?.deleted ?? 0,
+    })
     return NextResponse.json({
       success: true,
       ...result,
@@ -55,6 +64,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Pricing staleness cron error:', error)
+    await logCronFailure(CRON_NAME, startedAt, error)
     const { safeErrorMessage } = await import('@/lib/utils')
     return NextResponse.json(
       { error: safeErrorMessage(error, 'Pricing staleness check failed') },

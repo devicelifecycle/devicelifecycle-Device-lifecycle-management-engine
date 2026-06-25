@@ -7,6 +7,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { readBooleanServerEnv, readServerEnv } from '@/lib/server-env'
 import { timingSafeEqual } from 'crypto'
+import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
+
+const CRON_NAME = 'competitor-sync'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -92,6 +95,7 @@ async function upsertCompetitorRow(supabase: ReturnType<typeof createServiceRole
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = new Date()
   try {
     const cronSecret = readServerEnv('CRON_SECRET')
     const syncEnabled = readBooleanServerEnv('COMPETITOR_SYNC_ENABLED')
@@ -106,6 +110,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!syncEnabled) {
+      await logCronSuccess(CRON_NAME, startedAt, { skipped: true, reason: 'sync_disabled' })
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -115,6 +120,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!csvUrl) {
+      await logCronSuccess(CRON_NAME, startedAt, { skipped: true, reason: 'csv_url_missing' })
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -129,6 +135,7 @@ export async function GET(request: NextRequest) {
 
     const lines = csvText.split('\n').filter(Boolean)
     if (lines.length < 2) {
+      await logCronSuccess(CRON_NAME, startedAt, { imported: 0, reason: 'csv_empty_or_header_only' })
       return NextResponse.json({
         success: true,
         imported: 0,
@@ -204,6 +211,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    await logCronSuccess(CRON_NAME, startedAt, { imported, errors: errors.length })
     return NextResponse.json({
       success: true,
       imported,
@@ -212,6 +220,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Competitor sync error:', error)
+    await logCronFailure(CRON_NAME, startedAt, error)
     const { safeErrorMessage } = await import('@/lib/utils')
     return NextResponse.json(
       { error: safeErrorMessage(error, 'Sync failed') },

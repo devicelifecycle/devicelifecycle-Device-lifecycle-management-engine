@@ -11,7 +11,9 @@ import { timingSafeEqual } from 'crypto'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { formatCurrency } from '@/lib/utils'
+import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
 export const dynamic = 'force-dynamic'
+const CRON_NAME = 'bid-expiry'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -35,6 +37,7 @@ type ExpiredBid = {
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = new Date()
   try {
     const cronSecret = readServerEnv('CRON_SECRET')
     if (!cronSecret) {
@@ -58,6 +61,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     if (!expiredBids?.length) {
+      await logCronSuccess(CRON_NAME, startedAt, { expired: 0 })
       return NextResponse.json({ success: true, expired: 0, timestamp: new Date().toISOString() })
     }
 
@@ -133,6 +137,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    await logCronSuccess(CRON_NAME, startedAt, { expired: expiredBids.length })
     return NextResponse.json({
       success: true,
       expired: expiredBids.length,
@@ -140,6 +145,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error running bid expiry cron:', error)
+    await logCronFailure(CRON_NAME, startedAt, error)
     return NextResponse.json({ error: 'Failed to run bid expiry check' }, { status: 500 })
   }
 }

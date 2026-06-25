@@ -12,9 +12,11 @@ import { SCRAPER_PROVIDERS, getPersistedScraperImplementation } from '@/lib/scra
 import { runPostScrapeCleanup } from '@/lib/scrapers/post-scrape'
 import { auditCompetitorPricesHealth } from '@/lib/scrapers/health-audit'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
 
 // Allow up to 300 s on Vercel Pro; Hobby plan is capped at 60 s by the platform.
 export const maxDuration = 300
+const CRON_NAME = 'price-scraper'
 
 const VALID_PROVIDERS: ScraperProviderId[] = ['gorecell', 'telus', 'bell', 'universal', 'apple']
 
@@ -144,6 +146,7 @@ async function persistScraperRolloutHealth(
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = new Date()
   try {
     const cronSecret = readServerEnv('CRON_SECRET')
     const scraperEnabled = readBooleanServerEnv('PRICE_SCRAPER_ENABLED')
@@ -158,6 +161,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!scraperEnabled) {
+      await logCronSuccess(CRON_NAME, startedAt, { skipped: true, reason: 'scraper_disabled' })
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -225,6 +229,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    await logCronSuccess(CRON_NAME, startedAt, {
+      total_scraped: result.total_scraped,
+      total_upserted: result.total_upserted,
+      partial_failure: partialFailure,
+    })
     return NextResponse.json({
       success: true,
       partial_failure: partialFailure,
@@ -255,6 +264,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Price scraper error:', error)
+    await logCronFailure(CRON_NAME, startedAt, error)
     const { safeErrorMessage } = await import('@/lib/utils')
     return NextResponse.json(
       { error: safeErrorMessage(error, 'Scraper failed') },
