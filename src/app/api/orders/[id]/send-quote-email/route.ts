@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
-import { generateOrderPDF } from '@/lib/pdf'
+import { generateOrderPDF, buildPriceAdjustmentNote } from '@/lib/pdf'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
@@ -62,9 +62,9 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
   // Line Items sheet
   const ws2 = wb.addWorksheet('Line Items')
   ws2.columns = [
-    { width: 30 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 14 }, { width: 14 },
+    { width: 30 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 50 },
   ]
-  ws2.addRow(['Device', 'Storage', 'Condition', 'Quantity', 'Unit Price', 'Total'])
+  ws2.addRow(['Device', 'Storage', 'Condition', 'Quantity', 'Unit Price', 'Total', 'Actual Condition', 'Adjustment Reason'])
   for (const item of order!.items || []) {
     const rawLabel = item.device ? `${item.device.make || ''} ${item.device.model || ''}`.trim() : ''
     const deviceFromNotes = !rawLabel && item.notes
@@ -74,6 +74,7 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
     const qty = item.quantity ?? 1
     const unit = item.unit_price ?? item.guaranteed_buyback_price ?? 0
     const total = unit * qty
+    const adjustmentNote = buildPriceAdjustmentNote(item)
     ws2.addRow([
       device,
       item.storage || '—',
@@ -81,6 +82,8 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
       qty,
       unit > 0 ? unit : '—',
       total > 0 ? total : '—',
+      adjustmentNote ? (item.actual_condition || '—').replace(/_/g, ' ') : '—',
+      adjustmentNote || '—',
     ])
   }
 
@@ -139,7 +142,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         quantity: item.quantity,
         storage: item.storage,
         claimed_condition: item.claimed_condition,
+        actual_condition: item.actual_condition,
         unit_price: item.unit_price,
+        quoted_price: item.quoted_price,
+        final_price: item.final_price,
         guaranteed_buyback_price: item.guaranteed_buyback_price,
         buyback_condition: item.buyback_condition,
         buyback_valid_until: item.buyback_valid_until,
@@ -199,6 +205,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     <tbody>${itemRows}</tbody>
   </table>` : ''
 
+    // Passive heads-up only — full per-device reason/before/after lives in
+    // the attached PDF's "Price Adjustment Details" section and the Excel's
+    // extra columns, not duplicated here.
+    const adjustedCount = (order.items || []).filter(item => buildPriceAdjustmentNote(item) != null).length
+    const adjustmentNotice = adjustedCount > 0
+      ? `<p style="margin:8px 0;font-size:13px;color:#555">Note: ${adjustedCount} device${adjustedCount === 1 ? '' : 's'} had a price adjustment after inspection — see the attached ${docType} for full details.</p>`
+      : ''
+
     const html = `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
   <h2 style="color:#111">Your ${docType} — Order ${safeOrderNumHtml}</h2>
@@ -210,6 +224,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Date</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${formatDate(order.quoted_at || order.created_at)}</td></tr>
   </table>
   ${lineItemsTable}
+  ${adjustmentNotice}
   ${order.notes ? `<div style="margin:16px 0;padding:12px 16px;background:#f9f9f9;border-left:4px solid #e0a96d;border-radius:4px">
     <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.06em">Notes</p>
     <p style="margin:0;font-size:13px;color:#333;white-space:pre-wrap">${escapeHtml(order.notes)}</p>

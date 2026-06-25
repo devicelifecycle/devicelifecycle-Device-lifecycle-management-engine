@@ -32,7 +32,10 @@ interface OrderPDFData {
     quantity: number
     storage?: string
     claimed_condition?: string
+    actual_condition?: string
     unit_price?: number
+    quoted_price?: number
+    final_price?: number
     guaranteed_buyback_price?: number
     buyback_condition?: string
     buyback_valid_until?: string
@@ -48,6 +51,37 @@ function formatDate(dateStr: string): string {
     year: 'numeric', month: 'long', day: 'numeric',
     timeZone: 'America/Toronto',
   })
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/**
+ * Single source of truth for "why did this item's price change" — used by
+ * both the PDF (appended section, see generateOrderPDF) and the Excel
+ * Line Items sheet (buildExcelBuffer, send-quote-email/route.ts) so the two
+ * documents never describe the same adjustment two different ways. Returns
+ * null when there's nothing to explain (actual_condition unset or matches
+ * claimed_condition — the common case for items that passed triage as-is).
+ */
+export function buildPriceAdjustmentNote(item: {
+  claimed_condition?: string
+  actual_condition?: string
+  quoted_price?: number
+  final_price?: number
+  unit_price?: number
+}): string | null {
+  if (!item.actual_condition || !item.claimed_condition || item.actual_condition === item.claimed_condition) {
+    return null
+  }
+  const before = item.quoted_price
+  const after = item.final_price ?? item.unit_price
+  let note = `Condition reassessed during inspection: claimed ${capitalize(item.claimed_condition)}, found ${capitalize(item.actual_condition)}.`
+  if (before != null && after != null && before !== after) {
+    note += ` Price adjusted from ${formatCurrency(before)} to ${formatCurrency(after)}.`
+  }
+  return note
 }
 
 export function generateOrderPDF(order: OrderPDFData): Buffer {
@@ -204,6 +238,35 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     doc.text('Total:', totalsX, y)
     doc.text(formatCurrency(displayAmount), pageWidth - 14, y, { align: 'right' })
     y += 10
+  }
+
+  // --- Price Adjustment Details (devices where inspection found a
+  //     different condition than reported) — appended after the table
+  //     rather than interleaved into it, same approach as Buyback
+  //     Guarantee below: autoTable's column alignment shouldn't have to
+  //     accommodate a variable-height explanation row. ---
+  const adjustedItems = (order.items || []).filter((item) => buildPriceAdjustmentNote(item) != null)
+  if (adjustedItems.length > 0) {
+    y += 4
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(24, 24, 27)
+    doc.text('Price Adjustment Details', 14, y)
+    y += 6
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(63, 63, 70)
+    for (const item of adjustedItems) {
+      const deviceName = item.device
+        ? `${item.device.make || ''} ${item.device.model || ''}${item.storage ? ` (${item.storage})` : ''}`
+        : 'Unknown'
+      const note = buildPriceAdjustmentNote(item)
+      const line = `• ${deviceName}: ${note}`
+      const lines = doc.splitTextToSize(line, pageWidth - 28)
+      doc.text(lines, 14, y)
+      y += 6 * lines.length
+    }
+    y += 4
   }
 
   // --- Buyback Guarantee (CPO orders with buyback set) ---
