@@ -20,74 +20,32 @@ export async function GET(request: NextRequest) {
 
     const days = Math.min(parseInt(request.nextUrl.searchParams.get('days') || '30'), 365)
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
-    const prevSince = new Date(Date.now() - days * 2 * 24 * 60 * 60 * 1000).toISOString()
 
-    // ── Fetch all orders (paginate to get full count) ────────────────────────
-    const allOrders: Array<{
-      id: string; status: string; type: string;
-      total_amount: number | null; created_at: string;
-    }> = []
+    // ── Order summary — computed server-side via a single aggregate RPC ─────
+    // instead of paginating the entire orders table into this route and
+    // reducing it in JS. Field names/values verified identical to the
+    // previous JS computation across multiple `days` values before cutover.
+    const { data: summary, error: summaryError } = await supabase.rpc('get_reports_summary', { p_days: days })
+    if (summaryError) throw summaryError
 
-    let from = 0
-    const pageSize = 1000
-    for (;;) {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id,status,type,total_amount,created_at')
-        .order('created_at', { ascending: true })
-        .range(from, from + pageSize - 1)
-      if (error) break
-      allOrders.push(...(data || []))
-      if ((data || []).length < pageSize) break
-      from += pageSize
-    }
-
-    // ── Order summary ────────────────────────────────────────────────────────
-    const byStatus: Record<string, number> = {}
-    let tradeIn = 0, cpo = 0, totalValue = 0
-    let periodOrders = 0, prevPeriodOrders = 0
-    let periodRevenue = 0, prevPeriodRevenue = 0
+    const total = summary.total as number
+    const active = summary.active as number
+    const tradeIn = summary.trade_in as number
+    const cpo = summary.cpo as number
+    const totalValue = Number(summary.total_value)
+    const valuedOrderCount = summary.valued_order_count as number
+    const periodOrders = summary.period_orders as number
+    const prevPeriodOrders = summary.prev_period_orders as number
+    const periodRevenue = Number(summary.period_revenue)
+    const prevPeriodRevenue = Number(summary.prev_period_revenue)
+    const completed = summary.completed as number
+    const cancelled = summary.cancelled as number
+    const byStatus = summary.by_status as Record<string, number>
+    const daily = summary.daily as Array<{ date: string; count: number; revenue: number }>
+    // 'completed' isn't a real order_status enum value (same as the RPC's own
+    // active/completed filters) — kept here only because terminal_total is a
+    // separate response field never covered by the RPC's own `completed`.
     const TERMINAL = ['completed', 'closed', 'delivered', 'cancelled', 'rejected']
-    const ACTIVE_STATUSES = ['submitted', 'quoted', 'customer_accepted', 'received',
-      'triaged', 'priced', 'approved', 'on_hold', 'awaiting_parts', 'flagged', 'exception']
-
-    for (const o of allOrders) {
-      byStatus[o.status] = (byStatus[o.status] || 0) + 1
-      if (o.type === 'trade_in') tradeIn++; else cpo++
-      totalValue += o.total_amount || 0
-      if (o.created_at >= since) {
-        periodOrders++
-        periodRevenue += o.total_amount || 0
-      } else if (o.created_at >= prevSince) {
-        prevPeriodOrders++
-        prevPeriodRevenue += o.total_amount || 0
-      }
-    }
-
-    const total = allOrders.length
-    const active = allOrders.filter(o => ACTIVE_STATUSES.includes(o.status)).length
-    const completed = (byStatus['completed'] || 0) + (byStatus['closed'] || 0) + (byStatus['delivered'] || 0)
-    const cancelled = byStatus['cancelled'] || 0
-    // Only count orders that have been priced (total_amount > 0) in the avg denominator.
-    // Unpriced orders (submitted/quoted with no amount yet) contribute 0 to the sum but
-    // would inflate the count, making avg_value look much lower than it actually is.
-    const valuedOrderCount = allOrders.filter(o => (o.total_amount || 0) > 0).length
-
-    // ── Daily trend (last N days) ────────────────────────────────────────────
-    const dailyMap = new Map<string, { count: number; revenue: number }>()
-    const today = new Date()
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(d.getDate() - i)
-      dailyMap.set(d.toISOString().slice(0, 10), { count: 0, revenue: 0 })
-    }
-    for (const o of allOrders) {
-      if (o.created_at < since) continue
-      const day = o.created_at.slice(0, 10)
-      const entry = dailyMap.get(day)
-      if (entry) { entry.count++; entry.revenue += o.total_amount || 0 }
-    }
-    const daily = Array.from(dailyMap.entries()).map(([date, v]) => ({ date, ...v }))
 
     // ── Top devices + coverage counts — all independent, run in parallel ────
     const [
