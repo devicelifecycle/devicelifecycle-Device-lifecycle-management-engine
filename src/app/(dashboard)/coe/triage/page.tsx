@@ -1151,7 +1151,7 @@ export default function COETriagePage() {
           </TabsTrigger>
           <TabsTrigger value="match">
             <Search className="mr-1.5 h-4 w-4" />
-            Match with File/Order
+            Reference Lookup
           </TabsTrigger>
         </TabsList>
 
@@ -1553,6 +1553,7 @@ export default function COETriagePage() {
           </CardTitle>
           <CardDescription className="text-xs">
             Enter an order or quote number to see expected devices and quoted prices before triaging.
+            Picking a recent order here also re-links and rematches any file already uploaded in the Upload Devices tab.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -2305,7 +2306,8 @@ export default function COETriagePage() {
                 Order / Quote Reference Lookup
               </CardTitle>
               <CardDescription className="text-xs">
-                Enter an order or quote number to see expected devices and quoted prices. Pick a recent order to auto-link file uploads.
+                Read-only preview — enter an order or quote number to see expected devices and quoted prices before triaging.
+                Picking a recent order here also re-links and rematches any file already uploaded in the Upload Devices tab.
               </CardDescription>
             </CardHeader>
             <CardContent>
