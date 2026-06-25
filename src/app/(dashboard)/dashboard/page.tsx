@@ -219,26 +219,32 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   const { orders, total } = useOrders({ page_size: 50 })
   const counts = useDashboardCounts()
   const { data: analytics, isLoading: analyticsLoading } = useOrderAnalytics()
-  const pendingOrders = orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage', 'qc_complete', 'mismatch_review', 'payment_processing'].includes(order.status)).length
-  const slaAlerts = orders.filter((order) => order.is_sla_breached).length
-  const recentRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0)
+  // Previously recomputed on every render (sidebar toggle, theme switch, any
+  // unrelated state change in this component) by re-scanning the full orders
+  // array each time — memoized so these three only recompute when `orders`
+  // actually changes.
+  const { pendingOrders, slaAlerts, recentRevenue } = useMemo(() => ({
+    pendingOrders: orders.filter((order) => ['submitted', 'quoted', 'sourcing', 'received', 'in_triage', 'qc_complete', 'mismatch_review', 'payment_processing'].includes(order.status)).length,
+    slaAlerts: orders.filter((order) => order.is_sla_breached).length,
+    recentRevenue: orders.reduce((sum, order) => sum + (order.total_amount || 0), 0),
+  }), [orders])
   const trendData = useTrend(orders)
   const pipelineData = usePipeline(orders)
   const recentOrders = orders.slice(0, 6)
 
-  const stats = [
+  const stats = useMemo(() => [
     { label: 'Total Orders', value: total, icon: ShoppingCart, tone: 'text-primary' },
     { label: 'Active Queue', value: pendingOrders, icon: Activity, tone: 'text-amber-400' },
     { label: 'SLA Alerts', value: slaAlerts, icon: AlertTriangle, tone: 'text-red-400' },
     { label: 'Revenue', value: formatCurrency(recentRevenue), icon: DollarSign, tone: 'text-emerald-400' },
-  ]
+  ], [total, pendingOrders, slaAlerts, recentRevenue])
 
-  const quickActions = [
+  const quickActions = useMemo(() => [
     { href: '/orders/new/trade-in', label: 'Create Trade-In', icon: Plus, description: 'Start a fresh device intake' },
     { href: '/orders/new/cpo', label: 'Create CPO Quote', icon: Package, description: 'Build a resale purchase flow' },
     { href: '/coe/triage', label: 'Open Triage', icon: ClipboardCheck, description: 'Review condition and exceptions' },
     { href: '/coe/shipping', label: 'Check Shipping', icon: Truck, description: 'Finalize outbound operations' },
-  ]
+  ], [])
 
   return (
     <div className="relative space-y-8">
@@ -554,17 +560,17 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   const completedOrders = summary?.completed_orders || 0
   const visibleValue = summary?.visible_value || 0
 
-  const stats = [
+  const stats = useMemo(() => [
     { label: 'Total Orders', value: totalOrders, icon: ShoppingCart, tone: 'text-primary' },
     { label: 'Active Orders', value: activeOrders, icon: Activity, tone: 'text-amber-400' },
     { label: 'Quotes Ready', value: quotesReady, icon: ClipboardCheck, tone: 'text-blue-400' },
     { label: 'Completed', value: completedOrders, icon: Truck, tone: 'text-emerald-400' },
-  ]
+  ], [totalOrders, activeOrders, quotesReady, completedOrders])
 
-  const quickActions = [
+  const quickActions = useMemo(() => [
     { href: '/orders/new', label: 'New Order', icon: Plus, description: 'Create a request.' },
     { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, description: 'See latest updates.' },
-  ]
+  ], [])
 
   return (
     <div className="relative space-y-8">
@@ -748,14 +754,16 @@ function VendorDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth
   const { orders: assignedOrders, total: assignedTotal } = useOrders({ page_size: 20 })
 
   const allBids: BidWithOrder[] = bidsData?.data || []
-  const pendingBids = allBids.filter(b => b.status === 'pending')
-  const acceptedBids = allBids.filter(b => b.status === 'accepted')
-  const actionableOrders = assignedOrders.filter(o => ['accepted', 'sourcing', 'sourced'].includes(o.status))
+  const { pendingBids, acceptedBids, actionableOrders } = useMemo(() => ({
+    pendingBids: allBids.filter(b => b.status === 'pending'),
+    acceptedBids: allBids.filter(b => b.status === 'accepted'),
+    actionableOrders: assignedOrders.filter(o => ['accepted', 'sourcing', 'sourced'].includes(o.status)),
+  }), [allBids, assignedOrders])
 
-  const quickActions = [
+  const quickActions = useMemo(() => [
     { href: '/vendor/orders', label: 'Browse Open Orders', icon: Package, description: 'Find CPO orders to bid on' },
     { href: '/vendor/bids', label: 'My Bids', icon: Gavel, description: 'Track all your submitted bids' },
-  ]
+  ], [])
 
   return (
     <div className="relative space-y-8">

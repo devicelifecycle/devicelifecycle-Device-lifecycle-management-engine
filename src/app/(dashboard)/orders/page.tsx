@@ -112,8 +112,10 @@ export default function OrdersPage() {
   const hasFilters = statusFilter || typeFilter || customerIdFromUrl || vendorIdFromUrl
   const allSelected = orders.length > 0 && orders.every((order) => selectedIds.has(order.id))
   const someSelected = selectedIds.size > 0
-  const deletableSelectedCount = orders.filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled', 'rejected'].includes(order.status)).length
-  const requotableSelectedCount = orders.filter((order) => selectedIds.has(order.id) && order.status === 'quoted').length
+  const { deletableSelectedCount, requotableSelectedCount } = useMemo(() => ({
+    deletableSelectedCount: orders.filter((order) => selectedIds.has(order.id) && ['draft', 'cancelled', 'rejected'].includes(order.status)).length,
+    requotableSelectedCount: orders.filter((order) => selectedIds.has(order.id) && order.status === 'quoted').length,
+  }), [orders, selectedIds])
   const canBulkRequote = hasRole(['admin', 'coe_manager'])
 
   const stats = useMemo(() => {
