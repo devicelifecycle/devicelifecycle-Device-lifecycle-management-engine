@@ -99,27 +99,39 @@ export class RecurringTradeInService {
           .eq('role', 'customer')
           .eq('is_active', true)
 
-        for (const user of customerUsers || []) {
-          await NotificationService.createNotification({
-            user_id: user.id,
-            type: 'in_app',
-            title: 'Time for your next trade-in batch',
-            message: `It's been a while — based on your ${schedule.frequency.replace('_', '-')} reminder schedule, this is a good time to submit your next trade-in batch${org?.name ? ` for ${org.name}` : ''}.`,
-            link: '/orders/new/trade-in',
-            metadata: { type: 'recurring_trade_in_reminder', organization_id: schedule.organization_id },
-          })
-
-          const emailTo = user.email?.endsWith('@login.local') ? user.notification_email : user.email
-          if (emailTo) {
-            await EmailService.sendRecurringTradeInReminderEmail({
-              to: emailTo,
-              recipientName: user.full_name || 'there',
-              organizationName: org?.name,
-              frequency: schedule.frequency,
+        // Batched instead of sequential — was one createNotification + one email
+        // awaited per user, one at a time. Each user's notify is isolated with its
+        // own catch so one failure can't abort the rest of the org's reminders (the
+        // previous sequential version aborted the whole schedule on the first
+        // throw, which skipped the next_reminder_at update below and would have
+        // re-reminded already-succeeded users on the next cron run).
+        const results = await Promise.all((customerUsers || []).map(async (user) => {
+          try {
+            await NotificationService.createNotification({
+              user_id: user.id,
+              type: 'in_app',
+              title: 'Time for your next trade-in batch',
+              message: `It's been a while — based on your ${schedule.frequency.replace('_', '-')} reminder schedule, this is a good time to submit your next trade-in batch${org?.name ? ` for ${org.name}` : ''}.`,
+              link: '/orders/new/trade-in',
+              metadata: { type: 'recurring_trade_in_reminder', organization_id: schedule.organization_id },
             })
+
+            const emailTo = user.email?.endsWith('@login.local') ? user.notification_email : user.email
+            if (emailTo) {
+              await EmailService.sendRecurringTradeInReminderEmail({
+                to: emailTo,
+                recipientName: user.full_name || 'there',
+                organizationName: org?.name,
+                frequency: schedule.frequency,
+              })
+            }
+            return true
+          } catch (e) {
+            errors.push(`schedule ${schedule.id} user ${user.id}: ${e instanceof Error ? e.message : 'Unknown'}`)
+            return false
           }
-          reminded++
-        }
+        }))
+        reminded += results.filter(Boolean).length
 
         const now = new Date()
         await service
