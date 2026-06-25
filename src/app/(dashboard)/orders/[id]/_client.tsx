@@ -50,7 +50,28 @@ const COE_ADDRESS = {
   country: 'CA',
 }
 
-const SHIPMENT_CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Canada Post', 'Other']
+const SHIPMENT_CARRIERS = ['FedEx', 'UPS', 'USPS', 'DHL', 'Canada Post', 'Pickup by Person', 'Other']
+
+/**
+ * Pickup-by-person shipments have no real tracking number, but the
+ * shipments.tracking_number column is NOT NULL — rather than a migration
+ * to relax that for one carrier type, the pickup person's name/phone are
+ * encoded into the existing notes field with a parseable prefix (same
+ * convention already used for "[Device: ...]" elsewhere in this app) and
+ * a synthetic tracking value satisfies the constraint.
+ */
+const PICKUP_PERSON_NOTE_PREFIX = '[Pickup Person: '
+
+function buildPickupPersonNote(name: string, phone: string): string {
+  return `${PICKUP_PERSON_NOTE_PREFIX}${name.trim()}, ${phone.trim()}]`
+}
+
+function parsePickupPerson(notes: string | null | undefined): { name: string; phone: string } | null {
+  if (!notes) return null
+  const match = notes.match(/\[Pickup Person: ([^,]+), ([^\]]+)\]/)
+  if (!match) return null
+  return { name: match[1].trim(), phone: match[2].trim() }
+}
 
 function buildShipToAddress(order: Order): Record<string, unknown> {
   if (order.type === 'trade_in' && order.customer) {
@@ -228,6 +249,8 @@ export default function OrderDetailClient() {
   const [shipmentCustomCarrier, setShipmentCustomCarrier] = useState('')
   const [shipmentTrackingNumber, setShipmentTrackingNumber] = useState('')
   const [shipmentNotes, setShipmentNotes] = useState('')
+  const [pickupPersonName, setPickupPersonName] = useState('')
+  const [pickupPersonPhone, setPickupPersonPhone] = useState('')
 
   // Customer ship-to-us form
   const [customerShipCarrier, setCustomerShipCarrier] = useState('FedEx')
@@ -1380,12 +1403,22 @@ export default function OrderDetailClient() {
 
   const handleCreateShipment = async () => {
     if (!order) return
+    const isPickup = shipmentCarrier === 'Pickup by Person'
     const resolvedCarrier = shipmentCarrier === 'Other' ? shipmentCustomCarrier.trim() : shipmentCarrier.trim()
     if (!resolvedCarrier) {
       toast.error('Carrier or shipping platform is required')
       return
     }
-    if (!shipmentTrackingNumber.trim()) {
+    if (isPickup) {
+      if (!pickupPersonName.trim()) {
+        toast.error('Pickup person name is required')
+        return
+      }
+      if (!pickupPersonPhone.trim()) {
+        toast.error('Pickup person mobile number is required')
+        return
+      }
+    } else if (!shipmentTrackingNumber.trim()) {
       toast.error('Tracking number is required')
       return
     }
@@ -1393,13 +1426,20 @@ export default function OrderDetailClient() {
     try {
       const direction = isVendor ? 'inbound' : shipmentDirection
       const isInboundToCoe = direction === 'inbound'
+      // Pickup-by-person has no real tracking number (the column is
+      // NOT NULL) — a synthetic placeholder satisfies the constraint, and
+      // the actual pickup person's name/phone live in notes (see
+      // buildPickupPersonNote/parsePickupPerson above).
+      const combinedNotes = isPickup
+        ? [buildPickupPersonNote(pickupPersonName, pickupPersonPhone), shipmentNotes.trim()].filter(Boolean).join(' ')
+        : shipmentNotes.trim() || undefined
       const payload: Record<string, unknown> = {
         order_id: params.id,
         direction,
         carrier: shipmentCarrier.trim(),
         custom_carrier: shipmentCarrier === 'Other' ? resolvedCarrier : undefined,
-        tracking_number: shipmentTrackingNumber.trim(),
-        notes: shipmentNotes.trim() || undefined,
+        tracking_number: isPickup ? `PICKUP-${Date.now()}` : shipmentTrackingNumber.trim(),
+        notes: combinedNotes,
         from_address: isInboundToCoe ? buildShipToAddress(order) : COE_ADDRESS,
         to_address: isInboundToCoe ? COE_ADDRESS : buildShipToAddress(order),
       }
@@ -1410,12 +1450,14 @@ export default function OrderDetailClient() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Failed to create shipment')
-      toast.success(isVendor ? 'Tracking uploaded' : 'Shipment tracking saved')
+      toast.success(isVendor ? 'Tracking uploaded' : isPickup ? 'Pickup recorded' : 'Shipment tracking saved')
       setShipmentDialogOpen(false)
       setShipmentCarrier('FedEx')
       setShipmentCustomCarrier('')
       setShipmentTrackingNumber('')
       setShipmentNotes('')
+      setPickupPersonName('')
+      setPickupPersonPhone('')
       refetch()
       refetchShipments()
     } catch (e) {
@@ -1431,6 +1473,8 @@ export default function OrderDetailClient() {
     setShipmentCustomCarrier('')
     setShipmentTrackingNumber('')
     setShipmentNotes('')
+    setPickupPersonName('')
+    setPickupPersonPhone('')
     setShipmentDialogOpen(true)
   }
 
@@ -2786,7 +2830,8 @@ export default function OrderDetailClient() {
                       delivered: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
                       exception: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
                     }
-                    const trackingUrl = getCarrierTrackingUrl(shipment.carrier, shipment.tracking_number)
+                    const pickupPerson = shipment.carrier === 'Pickup by Person' ? parsePickupPerson(shipment.notes) : null
+                    const trackingUrl = pickupPerson ? null : getCarrierTrackingUrl(shipment.carrier, shipment.tracking_number)
                     const receivingMismatchNote = shipment.exception_details || shipment.receiving_notes || ''
                     const hasReceivingMismatch = /quantity mismatch|discrepancy/i.test(receivingMismatchNote)
                     return (
@@ -2794,7 +2839,11 @@ export default function OrderDetailClient() {
                         <div className="flex items-center gap-3">
                           <Package className="h-4 w-4 text-muted-foreground" />
                           <div>
-                            <p className="text-sm font-mono font-medium">{shipment.tracking_number}</p>
+                            {pickupPerson ? (
+                              <p className="text-sm font-medium">Picked up by {pickupPerson.name} ({pickupPerson.phone})</p>
+                            ) : (
+                              <p className="text-sm font-mono font-medium">{shipment.tracking_number}</p>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {shipment.carrier} · {shipment.direction}
                               {shipment.estimated_delivery && ` · ETA ${formatDateTime(shipment.estimated_delivery)}`}
@@ -2900,15 +2949,39 @@ export default function OrderDetailClient() {
                     <p className="text-xs text-muted-foreground">Enter the tracking number from any carrier or platform.</p>
                   </div>
                 )}
-                <div className="space-y-2">
-                  <Label htmlFor="shipment-tracking">Tracking Number</Label>
-                  <Input
-                    id="shipment-tracking"
-                    placeholder="Enter tracking number from any carrier or platform"
-                    value={shipmentTrackingNumber}
-                    onChange={(e) => setShipmentTrackingNumber(e.target.value)}
-                  />
-                </div>
+                {shipmentCarrier === 'Pickup by Person' ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="pickup-person-name">Pickup Person Name</Label>
+                      <Input
+                        id="pickup-person-name"
+                        placeholder="Full name of the person picking up"
+                        value={pickupPersonName}
+                        onChange={(e) => setPickupPersonName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="pickup-person-phone">Pickup Person Mobile Number</Label>
+                      <Input
+                        id="pickup-person-phone"
+                        type="tel"
+                        placeholder="Mobile number to reach them"
+                        value={pickupPersonPhone}
+                        onChange={(e) => setPickupPersonPhone(e.target.value)}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="shipment-tracking">Tracking Number</Label>
+                    <Input
+                      id="shipment-tracking"
+                      placeholder="Enter tracking number from any carrier or platform"
+                      value={shipmentTrackingNumber}
+                      onChange={(e) => setShipmentTrackingNumber(e.target.value)}
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="shipment-notes">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
                   <Textarea
@@ -2929,7 +3002,9 @@ export default function OrderDetailClient() {
                   disabled={
                     isCreatingShipment ||
                     !(shipmentCarrier === 'Other' ? shipmentCustomCarrier.trim() : shipmentCarrier.trim()) ||
-                    !shipmentTrackingNumber.trim()
+                    (shipmentCarrier === 'Pickup by Person'
+                      ? !pickupPersonName.trim() || !pickupPersonPhone.trim()
+                      : !shipmentTrackingNumber.trim())
                   }
                 >
                   {isCreatingShipment ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Truck className="h-4 w-4 mr-1" />}
