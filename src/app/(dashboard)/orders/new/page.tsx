@@ -573,15 +573,8 @@ export default function NewOrderPage() {
 
   // CSV and Excel template downloads - separate for Trade-In and CPO (demo data for Apple & Samsung)
   const handleDownloadTradeInTemplate = () => {
-    const headers = ['device_make', 'device_model', 'quantity', 'condition', 'storage', 'serial_number', 'color', 'notes']
-    const sampleData = [
-      ['Apple', 'iPhone 15', '5', 'excellent', '128GB', '359876543210001', 'Blue', 'Demo trade-in'],
-      ['Apple', 'iPhone 15', '3', 'good', '256GB', '', 'Black', ''],
-      ['Apple', 'iPhone 15 Pro', '2', 'fair', '256GB', '', 'Natural Titanium', 'Bulk buyback'],
-      ['Samsung', 'Galaxy S24', '4', 'excellent', '128GB', '350123456789012', 'Onyx Black', ''],
-      ['Samsung', 'Galaxy S24 Ultra', '2', 'good', '512GB', '', 'Titanium Gray', 'Demo Samsung'],
-    ]
-    const csvContent = [headers.join(','), ...sampleData.map(row => row.join(','))].join('\n')
+    const headers = ['Make', 'Model', 'quantity', 'condition', 'storage', 'serial_number', 'color', 'notes']
+    const csvContent = headers.join(',')
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -592,15 +585,8 @@ export default function NewOrderPage() {
   }
 
   const handleDownloadTradeInExcelTemplate = async () => {
-    const headers = ['device_make', 'device_model', 'quantity', 'condition', 'storage', 'serial_number', 'color', 'notes']
-    const sampleData = [
-      ['Apple', 'iPhone 15', '5', 'excellent', '128GB', '359876543210001', 'Blue', 'Demo trade-in'],
-      ['Apple', 'iPhone 15', '3', 'good', '256GB', '', 'Black', ''],
-      ['Apple', 'iPhone 15 Pro', '2', 'fair', '256GB', '', 'Natural Titanium', 'Bulk buyback'],
-      ['Samsung', 'Galaxy S24', '4', 'excellent', '128GB', '350123456789012', 'Onyx Black', ''],
-      ['Samsung', 'Galaxy S24 Ultra', '2', 'good', '512GB', '', 'Titanium Gray', 'Demo Samsung'],
-    ]
-    const blob = await buildXlsxTemplateBlob('Trade-In Template', headers, sampleData)
+    const headers = ['Make', 'Model', 'quantity', 'condition', 'storage', 'serial_number', 'color', 'notes']
+    const blob = await buildXlsxTemplateBlob('Trade-In Template', headers, [])
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = 'trade-in-template.xlsx'
@@ -610,13 +596,8 @@ export default function NewOrderPage() {
   }
 
   const handleDownloadCpoTemplate = () => {
-    const headers = ['device_make', 'device_model', 'quantity', 'storage', 'notes']
-    const sampleData = [
-      ['Apple', 'iPhone 15', '150', '128GB', 'CPO bulk - corporate devices'],
-      ['Apple', 'iPhone 15 Pro', '100', '256GB', ''],
-      ['Samsung', 'Galaxy S24 Ultra', '50', '512GB', 'CPO bulk purchase'],
-    ]
-    const csvContent = [headers.join(','), ...sampleData.map(row => row.join(','))].join('\n')
+    const headers = ['Make', 'Model', 'quantity', 'storage', 'notes']
+    const csvContent = headers.join(',')
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -627,13 +608,8 @@ export default function NewOrderPage() {
   }
 
   const handleDownloadCpoExcelTemplate = async () => {
-    const headers = ['device_make', 'device_model', 'quantity', 'storage', 'notes']
-    const sampleData = [
-      ['Apple', 'iPhone 15', '150', '128GB', 'CPO bulk - corporate devices'],
-      ['Apple', 'iPhone 15 Pro', '100', '256GB', ''],
-      ['Samsung', 'Galaxy S24 Ultra', '50', '512GB', 'CPO bulk purchase'],
-    ]
-    const blob = await buildXlsxTemplateBlob('CPO Template', headers, sampleData)
+    const headers = ['Make', 'Model', 'quantity', 'storage', 'notes']
+    const blob = await buildXlsxTemplateBlob('CPO Template', headers, [])
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = 'cpo-template.xlsx'
@@ -1339,7 +1315,7 @@ export default function NewOrderPage() {
                   <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods" multiple onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={handleDownloadTradeInTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
-                      <Download className="mr-2 h-4 w-4" />Download Trade-In Template
+                      <Download className="mr-2 h-4 w-4" />Download CSV Template
                     </Button>
                     <Button type="button" variant="outline" onClick={handleDownloadTradeInExcelTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <FileSpreadsheet className="mr-2 h-4 w-4" />Download Trade-In Excel Template

@@ -9,10 +9,13 @@ export interface ParsedTabularUpload {
   rows: Record<string, string>[]
 }
 
-/** Trade-In template: device_make, device_model, quantity, condition, storage, serial_number, color, notes */
+/** Trade-In template: Make, Model, quantity, condition, storage, serial_number, color, notes.
+ *  Header labels are display-only — CSV_COLUMN_ALIASES below already maps
+ *  'make'/'model' to the internal device_make/device_model keys used by the
+ *  upload parser, so this rename needed no parsing-logic change. */
 export const TRADE_IN_CSV_HEADERS = [
-  'device_make',
-  'device_model',
+  'Make',
+  'Model',
   'quantity',
   'condition',
   'storage',
@@ -21,30 +24,20 @@ export const TRADE_IN_CSV_HEADERS = [
   'notes',
 ] as const
 
-/** Trade-In sample rows - Apple only for reliable demo (always in first 100 devices) */
-export const TRADE_IN_CSV_SAMPLE: string[][] = [
-  ['Apple', 'iPhone 15', '5', 'excellent', '128GB', '359876543210001', 'Blue', 'Demo trade-in'],
-  ['Apple', 'iPhone 15', '3', 'good', '256GB', '', 'Black', ''],
-  ['Apple', 'iPhone 15 Pro', '2', 'fair', '256GB', '', 'Natural Titanium', 'Bulk buyback'],
-  ['Apple', 'iPhone 15 Pro Max', '4', 'excellent', '256GB', '350123456789012', 'Natural Titanium', ''],
-  ['Apple', 'iPhone 16', '2', 'good', '128GB', '', 'Black', 'Demo video-ready'],
-]
+/** Empty on purpose — downloaded templates ship as a blank header row only, no demo data. */
+export const TRADE_IN_CSV_SAMPLE: string[][] = []
 
-/** CPO template: device_make, device_model, quantity, storage, notes */
+/** CPO template: Make, Model, quantity, storage, notes */
 export const CPO_CSV_HEADERS = [
-  'device_make',
-  'device_model',
+  'Make',
+  'Model',
   'quantity',
   'storage',
   'notes',
 ] as const
 
-/** CPO sample rows - Apple only for reliable demo (always in first 100 devices) */
-export const CPO_CSV_SAMPLE: string[][] = [
-  ['Apple', 'iPhone 15', '150', '128GB', 'CPO bulk - corporate devices'],
-  ['Apple', 'iPhone 15 Pro', '100', '256GB', ''],
-  ['Apple', 'iPhone 15 Pro Max', '50', '512GB', 'CPO bulk purchase - demo ready'],
-]
+/** Empty on purpose — downloaded templates ship as a blank header row only, no demo data. */
+export const CPO_CSV_SAMPLE: string[][] = []
 
 /** Alternate column names accepted during CSV parse (Make→device_make, etc.) */
 export const CSV_COLUMN_ALIASES: Record<string, string> = {

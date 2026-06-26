@@ -713,7 +713,7 @@ export default function NewTradeInPage() {
                   <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
                   <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={handleDownloadTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
-                      <Download className="mr-2 h-4 w-4" />Download Trade-In Template
+                      <Download className="mr-2 h-4 w-4" />Download CSV Template
                     </Button>
                     <Button type="button" variant="outline" onClick={handleDownloadExcelTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <FileSpreadsheet className="mr-2 h-4 w-4" />Download Trade-In Excel Template
