@@ -19,7 +19,7 @@ const nextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: *.supabase.co https://images.unsplash.com",
       "font-src 'self' data:",
-      "connect-src 'self' *.supabase.co https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com",
+      "connect-src 'self' *.supabase.co https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://*.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -54,4 +54,15 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
+// withSentryConfig only adds build-time source-map upload/release tracking —
+// it's a no-op for runtime behavior when SENTRY_AUTH_TOKEN isn't set (e.g.
+// local dev, or before a Sentry project exists), so this is safe to wrap
+// unconditionally.
+const { withSentryConfig } = require('@sentry/nextjs')
+
+module.exports = withSentryConfig(nextConfig, {
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  widenClientFileUpload: false,
+})
