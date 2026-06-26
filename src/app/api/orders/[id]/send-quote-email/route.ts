@@ -55,6 +55,7 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
     ['Total Quantity', order!.total_quantity ?? '—'],
     ['Quoted Amount', formatCurrency(order!.quoted_amount ?? order!.total_amount)],
     ['Final Amount', formatCurrency(order!.final_amount)],
+    ...(isQuote ? [['Quote Valid Until', order!.quote_expires_at ? formatDate(order!.quote_expires_at) : '30 days from quote date']] as (string | number | null | undefined)[][] : []),
     ...(order!.notes ? [[], ['Notes', order!.notes]] as (string | number | null | undefined)[][] : []),
   ]
   summaryData.forEach(row => ws1.addRow(row))
@@ -128,6 +129,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       total_amount: order.total_amount,
       quoted_amount: order.quoted_amount,
       final_amount: order.final_amount,
+      quote_expires_at: order.quote_expires_at,
       customer_notes: order.notes,
       customer: order.customer ? {
         company_name: order.customer.company_name,
@@ -218,6 +220,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   <h2 style="color:#111">Your ${docType} — Order ${safeOrderNumHtml}</h2>
   <p>Hi ${customerName},</p>
   <p>Please find your <strong>${docType.toLowerCase()}</strong> for order <strong>${safeOrderNumHtml}</strong> attached as a PDF and Excel file.</p>
+  ${isQuote ? `<p style="margin:8px 0;font-size:13px;color:#b65d2f;font-weight:600">This quote is valid for 30 days${order.quote_expires_at ? ` (expires ${formatDate(order.quote_expires_at)})` : ''}.</p>` : ''}
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Order Number</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeOrderNumHtml}</td></tr>
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Total Amount</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeTotalFormatted}</td></tr>

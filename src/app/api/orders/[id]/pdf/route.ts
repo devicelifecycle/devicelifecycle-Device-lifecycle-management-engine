@@ -66,6 +66,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       total_amount: order.total_amount,
       quoted_amount: order.quoted_amount,
       final_amount: order.final_amount,
+      quote_expires_at: order.quote_expires_at,
       customer_notes: order.notes,
       customer: order.customer ? {
         company_name: order.customer.company_name,

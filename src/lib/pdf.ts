@@ -18,6 +18,7 @@ interface OrderPDFData {
   total_amount?: number
   quoted_amount?: number
   final_amount?: number
+  quote_expires_at?: string
   customer_notes?: string
   customer?: {
     company_name?: string
@@ -127,7 +128,24 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
   doc.setFontSize(9)
   doc.setTextColor(113, 113, 122)
   doc.text(`Type: ${order.type === 'trade_in' ? 'Trade-In' : 'CPO'}`, 14, y)
-  y += 12
+  y += 6
+
+  // --- Quote validity notice (quotes only, not invoices) ---
+  if (isQuote) {
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(182, 93, 47) // brand copper
+    doc.text(
+      order.quote_expires_at
+        ? `This quote is valid for 30 days (expires ${formatDate(order.quote_expires_at)}).`
+        : 'This quote is valid for 30 days.',
+      14, y
+    )
+    doc.setFont('helvetica', 'normal')
+    y += 6
+  }
+
+  y += 6
 
   // --- Customer Info ---
   if (order.customer) {
