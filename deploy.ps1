@@ -14,6 +14,16 @@ if (Test-Path $tokenFile) {
 
 Set-Location $PSScriptRoot
 
+# ── 0. Typecheck + regression gate — abort before touching git/Supabase if either fails ──
+Write-Host "Running typecheck..." -ForegroundColor Cyan
+npx tsc --noEmit
+if ($LASTEXITCODE -ne 0) { Write-Host "`nTypecheck failed. Deploy aborted — nothing was pushed." -ForegroundColor Red; exit 1 }
+
+Write-Host "Checking for new test regressions..." -ForegroundColor Cyan
+node scripts/check-test-regressions.mjs
+if ($LASTEXITCODE -ne 0) { Write-Host "`nNew test failures detected (see above). Deploy aborted — nothing was pushed." -ForegroundColor Red; exit 1 }
+Write-Host "Typecheck passed, no new test regressions." -ForegroundColor Green
+
 # ── 1. Check for any changes ─────────────────────────────────────────────────
 $status = git status --porcelain
 if (-not $status) {
