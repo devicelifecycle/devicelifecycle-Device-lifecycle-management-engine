@@ -1,0 +1,406 @@
+{
+  "generated_at": "2026-06-26T09:48:43.040Z",
+  "count": 100,
+  "tests": [
+    {
+      "file": "unit/api/customer.dashboard.route.test.ts",
+      "fullName": "GET /api/customer/dashboard creates a missing customer profile for the org before loading dashboard data"
+    },
+    {
+      "file": "unit/api/customers.route.test.ts",
+      "fullName": "POST /api/customers creates a fresh customer profile when the organization has none"
+    },
+    {
+      "file": "unit/api/customers.route.test.ts",
+      "fullName": "POST /api/customers reuses an existing active customer profile for the organization"
+    },
+    {
+      "file": "unit/api/devices.route.test.ts",
+      "fullName": "GET /api/devices returns 401 when not authenticated"
+    },
+    {
+      "file": "unit/api/devices.route.test.ts",
+      "fullName": "GET /api/devices returns devices for internal user"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "DELETE /api/pricing/brand-overrides deletes override by make"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "DELETE /api/pricing/brand-overrides returns 400 when make query param is missing"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "GET /api/pricing/brand-overrides returns 401 when unauthenticated"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "GET /api/pricing/brand-overrides returns 403 for customer role"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "GET /api/pricing/brand-overrides returns brand overrides list for admin"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "PATCH /api/pricing/settings — demand_adjustment_enabled accepts demand_adjustment_enabled as a boolean setting"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "PATCH /api/pricing/settings — demand_adjustment_enabled stores false correctly"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "POST /api/pricing/brand-overrides returns 400 when make is missing"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "POST /api/pricing/brand-overrides returns 400 when margin_percent is out of range"
+    },
+    {
+      "file": "unit/api/new-features.test.ts",
+      "fullName": "POST /api/pricing/brand-overrides upserts override for valid payload"
+    },
+    {
+      "file": "unit/api/orders.create.route.test.ts",
+      "fullName": "POST /api/orders blocks sales from creating CPO orders"
+    },
+    {
+      "file": "unit/api/orders.create.route.test.ts",
+      "fullName": "POST /api/orders blocks vendors from creating orders"
+    },
+    {
+      "file": "unit/api/orders.create.route.test.ts",
+      "fullName": "POST /api/orders creates an order and fans out admin and customer notifications"
+    },
+    {
+      "file": "unit/api/orders.detail.route.test.ts",
+      "fullName": "GET /api/orders/[id] lets vendors open unassigned CPO orders that are open for bidding, with pricing still redacted"
+    },
+    {
+      "file": "unit/api/orders.detail.route.test.ts",
+      "fullName": "GET /api/orders/[id] redacts customer, notes, and pricing data for vendor order detail responses"
+    },
+    {
+      "file": "unit/api/orders.exceptions.route.test.ts",
+      "fullName": "GET /api/orders/[id]/exceptions forbids customers from another organization"
+    },
+    {
+      "file": "unit/api/orders.exceptions.route.test.ts",
+      "fullName": "GET /api/orders/[id]/exceptions returns pending exceptions to a customer from the owning organization"
+    },
+    {
+      "file": "unit/api/orders.route.test.ts",
+      "fullName": "GET /api/orders includes vendor_id filter when provided"
+    },
+    {
+      "file": "unit/api/orders.route.test.ts",
+      "fullName": "GET /api/orders passes requester context and parsed filters into OrderService.getOrders"
+    },
+    {
+      "file": "unit/api/orders.route.test.ts",
+      "fullName": "GET /api/orders redacts customer and pricing data from vendor order list responses"
+    },
+    {
+      "file": "unit/api/orders.route.test.ts",
+      "fullName": "GET /api/orders returns 401 when user is not authenticated"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition allows a vendor to progress their own assigned order from sourced to shipped"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition allows a vendor to progress their own assigned order through the full fulfillment lifecycle"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition allows accepted trade-in orders to move directly to shipped_to_coe"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition allows sales to send a quote on a submitted order"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition blocks COE techs from sending quotes"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition blocks customers from acting on another organization order"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition blocks vendors from marking sourced orders as shipped before tracking is uploaded"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition blocks vendors from transitioning orders assigned to another vendor organization"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition lets a customer accept their own quote and triggers notifications"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition rejects sourcing transitions for non-CPO orders"
+    },
+    {
+      "file": "unit/api/orders.transition.route.test.ts",
+      "fullName": "POST /api/orders/[id]/transition returns 401 when unauthenticated"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping allows customers to upload CSV orders for their own organization"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping blocks sales from uploading CPO CSV orders"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping extracts brand from Product column for vendor inventory"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping normalizes free-text conditions to enums correctly"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping normalizes storage to canonical form (e.g. \"512 GB\" → \"512GB\")"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping parses CPO template with bulk quantity"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping parses Trade-In template with IMEI and faults"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping parses Vendor Inventory template with CPU/RAM/serial numbers"
+    },
+    {
+      "file": "unit/api/orders.upload-csv.route.test.ts",
+      "fullName": "CSV Upload — Auto-detect and Smart Mapping returns validation errors for missing required fields"
+    },
+    {
+      "file": "unit/api/pricing.calculate.route.test.ts",
+      "fullName": "POST /api/pricing/calculate blocks customer role from direct pricing access"
+    },
+    {
+      "file": "unit/api/pricing.calculate.route.test.ts",
+      "fullName": "POST /api/pricing/calculate calls PricingService.calculateAdaptivePrice for v2 and returns result"
+    },
+    {
+      "file": "unit/api/pricing.calculate.route.test.ts",
+      "fullName": "POST /api/pricing/calculate returns 400 for invalid v2 payload"
+    },
+    {
+      "file": "unit/api/pricing.calculate.route.test.ts",
+      "fullName": "POST /api/pricing/calculate returns 401 when not authenticated"
+    },
+    {
+      "file": "unit/api/pricing.catalog.route.test.ts",
+      "fullName": "GET /api/pricing/catalog aggregates all pages instead of stopping at the first 1000 rows"
+    },
+    {
+      "file": "unit/api/pricing.competitors.export.route.test.ts",
+      "fullName": "GET /api/pricing/competitors/export returns 401 for unauthenticated user"
+    },
+    {
+      "file": "unit/api/pricing.competitors.export.route.test.ts",
+      "fullName": "GET /api/pricing/competitors/export returns Excel export with expected content type"
+    },
+    {
+      "file": "unit/api/pricing.competitors.export.route.test.ts",
+      "fullName": "GET /api/pricing/competitors/export returns PDF export when format=pdf"
+    },
+    {
+      "file": "unit/api/pricing.model.route.test.ts",
+      "fullName": "GET /api/pricing/model returns 401 when not authenticated"
+    },
+    {
+      "file": "unit/api/pricing.model.route.test.ts",
+      "fullName": "GET /api/pricing/model returns list of models when authenticated"
+    },
+    {
+      "file": "unit/api/pricing.model.route.test.ts",
+      "fullName": "POST /api/pricing/model calculates price with simple_margin model"
+    },
+    {
+      "file": "unit/api/pricing.model.route.test.ts",
+      "fullName": "POST /api/pricing/model returns 400 for unknown model_id"
+    },
+    {
+      "file": "unit/api/pricing.scrape.route.test.ts",
+      "fullName": "POST /api/pricing/scrape can opt into inline training explicitly"
+    },
+    {
+      "file": "unit/api/pricing.scrape.route.test.ts",
+      "fullName": "POST /api/pricing/scrape passes provider filters through to the scraper pipeline"
+    },
+    {
+      "file": "unit/api/pricing.scrape.route.test.ts",
+      "fullName": "POST /api/pricing/scrape returns 401 for unauthenticated users"
+    },
+    {
+      "file": "unit/api/pricing.scrape.route.test.ts",
+      "fullName": "POST /api/pricing/scrape returns 403 for users without pricing permissions"
+    },
+    {
+      "file": "unit/api/pricing.scrape.route.test.ts",
+      "fullName": "POST /api/pricing/scrape returns structured JSON on success and skips inline training by default"
+    },
+    {
+      "file": "unit/api/scrapers.health.route.test.ts",
+      "fullName": "GET /api/health/scrapers returns 401 for unauthenticated user"
+    },
+    {
+      "file": "unit/api/scrapers.health.route.test.ts",
+      "fullName": "GET /api/health/scrapers returns aggregate rollout health for internal user"
+    },
+    {
+      "file": "unit/api/shipments.route.test.ts",
+      "fullName": "POST /api/shipments accepts manual tracking from a custom shipping platform"
+    },
+    {
+      "file": "unit/api/shipments.route.test.ts",
+      "fullName": "POST /api/shipments allows a vendor to upload tracking for their own sourced order"
+    },
+    {
+      "file": "unit/api/shipments.route.test.ts",
+      "fullName": "POST /api/shipments auto-transitions accepted trade-in orders when a customer submits an inbound shipment"
+    },
+    {
+      "file": "unit/api/shipments.route.test.ts",
+      "fullName": "POST /api/shipments blocks vendors from creating outbound shipments"
+    },
+    {
+      "file": "unit/api/shipments.route.test.ts",
+      "fullName": "POST /api/shipments creates shipment with tracking number and does not call label purchase"
+    },
+    {
+      "file": "unit/api/shipments.route.test.ts",
+      "fullName": "POST /api/shipments ignores stallion_purchase flag and creates shipment with provided tracking number"
+    },
+    {
+      "file": "unit/api/shipments.route.test.ts",
+      "fullName": "POST /api/shipments returns 400 when a custom carrier name is missing"
+    },
+    {
+      "file": "unit/api/shipments.route.test.ts",
+      "fullName": "POST /api/shipments returns 400 when manual shipment has no tracking number"
+    },
+    {
+      "file": "unit/api/triage.exception.route.test.ts",
+      "fullName": "POST /api/triage/[id]/exception allows customer from the owning organization to approve an exception"
+    },
+    {
+      "file": "unit/api/triage.exception.route.test.ts",
+      "fullName": "POST /api/triage/[id]/exception forbids customers from another organization"
+    },
+    {
+      "file": "unit/api/triage.exception.route.test.ts",
+      "fullName": "POST /api/triage/[id]/exception requires approved to be a boolean"
+    },
+    {
+      "file": "unit/api/triage.upload-template.route.test.ts",
+      "fullName": "POST /api/triage/upload-template keeps catalog recognition separate when no order is linked"
+    },
+    {
+      "file": "unit/api/triage.upload-template.route.test.ts",
+      "fullName": "POST /api/triage/upload-template matches uploaded rows against the linked order instead of force-matching catalog devices"
+    },
+    {
+      "file": "unit/api/twilio.health.route.test.ts",
+      "fullName": "GET /api/twilio/health returns 401 when not authenticated"
+    },
+    {
+      "file": "unit/api/twilio.health.route.test.ts",
+      "fullName": "GET /api/twilio/health returns 403 for non-admin users"
+    },
+    {
+      "file": "unit/api/twilio.health.route.test.ts",
+      "fullName": "GET /api/twilio/health returns Twilio readiness details for admins"
+    },
+    {
+      "file": "unit/api/twilio.test.route.test.ts",
+      "fullName": "POST /api/twilio/test returns 401 when not authenticated"
+    },
+    {
+      "file": "unit/api/twilio.test.route.test.ts",
+      "fullName": "POST /api/twilio/test returns 403 for non-admin users"
+    },
+    {
+      "file": "unit/api/twilio.test.route.test.ts",
+      "fullName": "POST /api/twilio/test returns 502 when Twilio rejects the send"
+    },
+    {
+      "file": "unit/api/twilio.test.route.test.ts",
+      "fullName": "POST /api/twilio/test returns 503 when Twilio is not configured"
+    },
+    {
+      "file": "unit/api/twilio.test.route.test.ts",
+      "fullName": "POST /api/twilio/test sends an SMS for admins when Twilio is configured"
+    },
+    {
+      "file": "unit/api/twilio.test.route.test.ts",
+      "fullName": "POST /api/twilio/test validates destination phone numbers"
+    },
+    {
+      "file": "unit/api/universal-scraper.health.route.test.ts",
+      "fullName": "GET /api/health/scrapers/universal returns 401 for unauthenticated user"
+    },
+    {
+      "file": "unit/api/universal-scraper.health.route.test.ts",
+      "fullName": "GET /api/health/scrapers/universal returns health payload for internal user"
+    },
+    {
+      "file": "unit/api/vendors.bid-status.route.test.ts",
+      "fullName": "PATCH /api/vendors/bids/[id] accepts a vendor bid, transitions the order to quoted, and notifies vendor and customer"
+    },
+    {
+      "file": "unit/api/vendors.bid-status.route.test.ts",
+      "fullName": "PATCH /api/vendors/bids/[id] rejects invalid status values before touching vendor logic"
+    },
+    {
+      "file": "unit/api/vendors.bids.route.test.ts",
+      "fullName": "POST /api/vendors/bids allows vendors to bid on open CPO orders"
+    },
+    {
+      "file": "unit/api/vendors.bids.route.test.ts",
+      "fullName": "POST /api/vendors/bids rejects bids once an order is already assigned to another vendor"
+    },
+    {
+      "file": "unit/api/vendors.bids.route.test.ts",
+      "fullName": "POST /api/vendors/bids rejects duplicate active bids from the same vendor"
+    },
+    {
+      "file": "unit/services/pricing.calculatePriceV2.test.ts",
+      "fullName": "PricingService trade-in pricing policy falls back to Bell/Telus + GoRecell formula when data-driven model returns no price"
+    },
+    {
+      "file": "unit/services/pricing.calculatePriceV2.test.ts",
+      "fullName": "PricingService trade-in pricing policy keeps a good-condition quote at or above GoRecell fair when the midpoint blend falls too low"
+    },
+    {
+      "file": "unit/services/pricing.calculatePriceV2.test.ts",
+      "fullName": "PricingService trade-in pricing policy normalizes storage input without changing the Bell/Telus + GoRecell result"
+    },
+    {
+      "file": "unit/services/pricing.calculatePriceV2.test.ts",
+      "fullName": "PricingService trade-in pricing policy uses the Bell/Telus midpoint blended with GoRecell and ignores Apple/UniverCell"
+    },
+    {
+      "file": "unit/services/pricing.calculatePriceV2.test.ts",
+      "fullName": "PricingService trade-in pricing policy uses the selected condition when blending fair-condition prices"
+    },
+    {
+      "file": "unit/services/triage.service.test.ts",
+      "fullName": "TriageService order lookups moves exception-approved orders to qc_complete when all devices are resolved"
+    }
+  ]
+}
