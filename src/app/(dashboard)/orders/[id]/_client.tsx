@@ -166,6 +166,7 @@ export default function OrderDetailClient() {
   const isCpoOrder = order?.type === 'cpo'
   const canSetPricing = isCpoOrder ? user?.role === 'admin' : canSetPricingByRole
   const canSendQuote = !isCustomer && !isVendor && ['admin', 'coe_manager', 'sales'].includes(user?.role ?? '')
+  const canSendTriageReport = !isCustomer && !isVendor && ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role ?? '')
   const { shipments: orderShipments, refetch: refetchShipments } = useOrderShipments(params.id as string)
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
   const [pricingDialogNotes, setPricingDialogNotes] = useState('')
@@ -178,6 +179,7 @@ export default function OrderDetailClient() {
   const [isSendingMismatchNotice, setIsSendingMismatchNotice] = useState(false)
   const [isSendingQuote, setIsSendingQuote] = useState(false)
   const [isSendingQuoteDirect, setIsSendingQuoteDirect] = useState(false)
+  const [isSendingTriageReport, setIsSendingTriageReport] = useState(false)
   const [isNotifyingPriceChange, setIsNotifyingPriceChange] = useState(false)
   const [isGeneratingPostTriageQuote, setIsGeneratingPostTriageQuote] = useState(false)
   const [suggestingItemId, setSuggestingItemId] = useState<string | null>(null)
@@ -1320,6 +1322,21 @@ export default function OrderDetailClient() {
       toast.error(e instanceof Error ? e.message : 'Failed to send quote email')
     } finally {
       setIsSendingQuoteDirect(false)
+    }
+  }
+
+  const handleSendTriageReport = async () => {
+    if (!order) return
+    setIsSendingTriageReport(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/send-triage-report`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to send triage report')
+      toast.success('Inspection report sent to customer')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to send triage report')
+    } finally {
+      setIsSendingTriageReport(false)
     }
   }
 
@@ -3322,6 +3339,24 @@ export default function OrderDetailClient() {
                     {isSendingQuoteDirect ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <Send className="h-4 w-4 shrink-0" />}
                     <span className="truncate">
                       {isSendingQuoteDirect ? 'Sending...' : 'Email Quote to Customer (PDF + Excel)'}
+                    </span>
+                  </span>
+                </Button>
+              )}
+
+              {/* Send Triage/Inspection Report — once any triage results exist for this order */}
+              {canSendTriageReport && triageHistory.length > 0 && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-between overflow-hidden"
+                  disabled={isSendingTriageReport}
+                  title="Email the inspection findings (claimed vs. final condition, price adjustments) to the customer"
+                  onClick={handleSendTriageReport}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    {isSendingTriageReport ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <Send className="h-4 w-4 shrink-0" />}
+                    <span className="truncate">
+                      {isSendingTriageReport ? 'Sending...' : 'Email Inspection Report to Customer'}
                     </span>
                   </span>
                 </Button>
