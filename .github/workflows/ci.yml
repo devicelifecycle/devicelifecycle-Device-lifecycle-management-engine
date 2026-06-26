@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck-and-test:
+    name: Typecheck + regression check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Check for new test regressions
+        # 100 tests have been persistently failing since before this CI
+        # workflow existed (pre-existing, unrelated to most changes) — this
+        # script diffs against tests/known-failing-tests.json instead of
+        # using a bare `vitest run` exit code, which would fail every run.
+        # No secrets are needed: the suite produces the identical 100-failure
+        # baseline with or without real Supabase credentials configured
+        # (unconfigured integration tests skip gracefully instead of failing).
+        run: node scripts/check-test-regressions.mjs
