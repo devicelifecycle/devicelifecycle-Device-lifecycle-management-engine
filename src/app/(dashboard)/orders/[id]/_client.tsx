@@ -1990,54 +1990,78 @@ export default function OrderDetailClient() {
             <div>
               <CardTitle className="text-base flex items-center gap-2">
                 <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-                Triage History ({triageHistory.length})
+                Triage Timeline ({triageHistory.length})
               </CardTitle>
-              <CardDescription className="mt-1">Every inspection submitted for this order's devices, including resolved exceptions.</CardDescription>
+              <CardDescription className="mt-1">From intake to updated quote — every inspection for this order's devices, oldest first, including resolved exceptions.</CardDescription>
             </div>
             <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${triageHistoryOpen ? 'rotate-180' : ''}`} />
           </button>
           {triageHistoryOpen && (
-            <CardContent className="space-y-3 pt-0">
-              {triageHistory.map(result => {
-                const imei = result.imei_record as unknown as { imei?: string; claimed_condition?: string; device?: { make?: string; model?: string } } | null
-                const deviceName = imei?.device ? `${imei.device.make || ''} ${imei.device.model || ''}`.trim() : ''
-                const label = deviceName || (imei?.imei ? `IMEI: ${imei.imei}` : 'Device')
-                const claimedLabel = imei?.claimed_condition ? (CONDITION_CONFIG[imei.claimed_condition as keyof typeof CONDITION_CONFIG]?.label || imei.claimed_condition) : '—'
-                const finalLabel = result.final_condition ? (CONDITION_CONFIG[result.final_condition as keyof typeof CONDITION_CONFIG]?.label || result.final_condition) : '—'
-                const triagedBy = (result as unknown as { triaged_by?: { full_name?: string } | null }).triaged_by
-                const statusBadge = !result.exception_required
-                  ? { label: 'Passed', className: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' }
-                  : result.exception_approved_at == null
-                    ? { label: 'Exception pending', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' }
-                    : result.exception_approved
-                      ? { label: 'Exception approved', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' }
-                      : { label: 'Exception rejected', className: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' }
-                return (
-                  <div key={result.id} className="rounded-lg border p-3 text-sm space-y-1.5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <p className="font-medium">{label}</p>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge.className}`}>{statusBadge.label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Reported: <span className="font-medium">{String(claimedLabel)}</span>
-                      {' → '}Found: <span className="font-medium">{String(finalLabel)}</span>
-                      {result.price_adjustment != null && result.price_adjustment !== 0 && (
-                        <span className="ml-1.5">({result.price_adjustment > 0 ? '+' : ''}{formatCurrency(result.price_adjustment)})</span>
-                      )}
-                      {result.battery_health != null && <span className="ml-1.5">· Battery {result.battery_health}%</span>}
-                    </p>
-                    {result.exception_reason && (
-                      <p className="text-xs text-muted-foreground">{result.exception_reason}</p>
-                    )}
-                    {result.notes && (
-                      <p className="text-xs text-muted-foreground italic">&quot;{result.notes}&quot;</p>
-                    )}
-                    <p className="text-[11px] text-muted-foreground/70">
-                      {triagedBy?.full_name ? `${triagedBy.full_name} · ` : ''}{result.triaged_at ? formatDateTime(result.triaged_at) : ''}
-                    </p>
-                  </div>
-                )
-              })}
+            <CardContent className="pt-0">
+              <div className="relative space-y-4 pl-5 border-l-2 border-dashed border-border ml-2">
+                {/* Start marker */}
+                <div className="relative">
+                  <span className="absolute -left-[27px] top-0.5 h-3 w-3 rounded-full bg-muted-foreground/40 ring-4 ring-background" />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Devices received{order.received_at ? ` · ${formatDateTime(order.received_at)}` : ''}
+                  </p>
+                </div>
+
+                {[...triageHistory]
+                  .sort((a, b) => new Date(a.triaged_at || 0).getTime() - new Date(b.triaged_at || 0).getTime())
+                  .map(result => {
+                    const imei = result.imei_record as unknown as { imei?: string; claimed_condition?: string; device?: { make?: string; model?: string } } | null
+                    const deviceName = imei?.device ? `${imei.device.make || ''} ${imei.device.model || ''}`.trim() : ''
+                    const label = deviceName || (imei?.imei ? `IMEI: ${imei.imei}` : 'Device')
+                    const claimedLabel = imei?.claimed_condition ? (CONDITION_CONFIG[imei.claimed_condition as keyof typeof CONDITION_CONFIG]?.label || imei.claimed_condition) : '—'
+                    const finalLabel = result.final_condition ? (CONDITION_CONFIG[result.final_condition as keyof typeof CONDITION_CONFIG]?.label || result.final_condition) : '—'
+                    const triagedBy = (result as unknown as { triaged_by?: { full_name?: string } | null }).triaged_by
+                    const statusBadge = !result.exception_required
+                      ? { label: 'Passed', className: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', dot: 'bg-green-500' }
+                      : result.exception_approved_at == null
+                        ? { label: 'Exception pending', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300', dot: 'bg-amber-500' }
+                        : result.exception_approved
+                          ? { label: 'Exception approved', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300', dot: 'bg-blue-500' }
+                          : { label: 'Exception rejected', className: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', dot: 'bg-red-500' }
+                    return (
+                      <div key={result.id} className="relative rounded-lg border p-3 text-sm space-y-1.5">
+                        <span className={`absolute -left-[31px] top-4 h-3 w-3 rounded-full ${statusBadge.dot} ring-4 ring-background`} />
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <p className="font-medium">{label}</p>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge.className}`}>{statusBadge.label}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Reported: <span className="font-medium">{String(claimedLabel)}</span>
+                          {' → '}Found: <span className="font-medium">{String(finalLabel)}</span>
+                          {result.price_adjustment != null && result.price_adjustment !== 0 && (
+                            <span className="ml-1.5">({result.price_adjustment > 0 ? '+' : ''}{formatCurrency(result.price_adjustment)})</span>
+                          )}
+                          {result.battery_health != null && <span className="ml-1.5">· Battery {result.battery_health}%</span>}
+                        </p>
+                        {result.exception_reason && (
+                          <p className="text-xs text-muted-foreground">{result.exception_reason}</p>
+                        )}
+                        {result.notes && (
+                          <p className="text-xs text-muted-foreground italic">&quot;{result.notes}&quot;</p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground/70">
+                          {triagedBy?.full_name ? `${triagedBy.full_name} · ` : ''}{result.triaged_at ? formatDateTime(result.triaged_at) : ''}
+                        </p>
+                      </div>
+                    )
+                  })}
+
+                {/* End marker — current quote state */}
+                <div className="relative">
+                  <span className="absolute -left-[27px] top-0.5 h-3 w-3 rounded-full bg-primary ring-4 ring-background" />
+                  <p className="text-xs font-medium">
+                    Quote updated: <span className="font-semibold">{formatCurrency(order.quoted_amount ?? order.total_amount ?? 0)}</span>
+                    <span className="ml-1.5 text-muted-foreground font-normal">
+                      ({(ORDER_STATUS_CONFIG[order.status]?.label) || order.status.replace(/_/g, ' ')}{order.quoted_at ? ` · ${formatDateTime(order.quoted_at)}` : ''})
+                    </span>
+                  </p>
+                </div>
+              </div>
             </CardContent>
           )}
         </Card>
