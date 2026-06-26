@@ -765,7 +765,7 @@ export default function NewCPOOrderPage() {
 
                 <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-4">
                   <p className="font-semibold text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
-                  <p className="text-xs text-muted-foreground mt-1">Use this template for Certified Pre-Owned bulk purchases. Columns: device_make, device_model, quantity, storage, notes (Make/Model also accepted). Download template to ensure correct format.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Use this template for Certified Pre-Owned bulk purchases. Columns: Make, Model, quantity, storage, notes. Download template to ensure correct format.</p>
                 </div>
                 <div className="rounded-lg border-2 border-dashed p-6 text-center">
                   <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />

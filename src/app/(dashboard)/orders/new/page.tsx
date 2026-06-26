@@ -1278,6 +1278,10 @@ export default function NewOrderPage() {
               <TabsContent value="csv" className="space-y-4">
                 <CsvUploadGuide defaultOpen={isCustomer} />
 
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Only have a few devices? <button type="button" onClick={() => setTab('manual')} className="font-medium text-primary underline-offset-2 hover:underline">Switch to Manual Entry</button> to add them one at a time instead of uploading a file.
+                </p>
+
                 {/* Clear template labels at top */}
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
                   <p className="font-semibold text-sm">

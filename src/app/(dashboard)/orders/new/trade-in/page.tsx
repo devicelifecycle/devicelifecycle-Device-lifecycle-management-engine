@@ -699,10 +699,14 @@ export default function NewTradeInPage() {
               <TabsContent value="csv" className="space-y-4">
                 <CsvUploadGuide defaultOpen={isCustomer} />
 
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Few devices? <button type="button" onClick={() => setTab('manual')} className="font-medium text-primary underline-offset-2 hover:underline">Use Manual Entry</button> instead.
+                </p>
+
                 {/* Clear Trade-In template label at top */}
                 <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 p-4">
                   <p className="font-semibold text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>
-                  <p className="text-xs text-muted-foreground mt-1">Use this template for device buybacks. Columns: device_make, device_model, quantity, condition, storage, notes (Make/Model also accepted). Download template to ensure correct format.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Use this template for device buybacks. Columns: Make, Model, quantity, condition, storage, notes. Download template to ensure correct format.</p>
                 </div>
 
                 <div className="rounded-lg border-2 border-dashed p-6 text-center">
