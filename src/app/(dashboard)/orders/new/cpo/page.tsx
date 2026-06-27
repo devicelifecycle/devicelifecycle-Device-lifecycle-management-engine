@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
+import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers } from '@/hooks/useCustomers'
@@ -19,7 +19,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Separator } from '@/components/ui/separator'
 import { CsvUploadGuide } from '@/components/orders/CsvUploadGuide'
@@ -108,7 +107,11 @@ export default function NewCPOOrderPage() {
   const [customerId, setCustomerId] = useState('')
   const [items, setItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
-  const [tab, setTab] = useState<'manual' | 'csv'>('manual')
+  // Three independent collapsible sections (not exclusive tabs) — see
+  // orders/new/page.tsx for the same pattern applied first.
+  const [manualEntryOpen, setManualEntryOpen] = useState(true)
+  const [downloadTemplatesOpen, setDownloadTemplatesOpen] = useState(false)
+  const [uploadSpreadsheetOpen, setUploadSpreadsheetOpen] = useState(false)
   const [csvData, setCsvData] = useState<CSVRow[]>([])
   const [csvErrors, setCsvErrors] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
@@ -476,7 +479,10 @@ export default function NewCPOOrderPage() {
     if (!customerId) { toast.error('Please select a customer'); return }
 
     let orderItems: { device_id: string; quantity: number; storage: string; condition: DeviceCondition; notes: string }[]
-    if (tab === 'csv' && csvData.length > 0) {
+    if (csvData.length > 0) {
+      if (items.length > 0) {
+        toast.warning('You have both manual items and an uploaded file — submitting the uploaded file only. Remove the file to submit manual items instead.')
+      }
       const rows = csvData.map(row => {
         const deviceId = row.device_id || matchDeviceFromCsv(devices, row.device_make, row.device_model)?.id || ''
         return {
@@ -563,16 +569,21 @@ export default function NewCPOOrderPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div><CardTitle>Devices</CardTitle><CardDescription>Add devices manually or upload a CPO CSV</CardDescription></div>
-            <Button type="button" variant="outline" size="sm" onClick={addItem} className={tab === 'manual' ? '' : 'hidden'}><Plus className="mr-2 h-3 w-3" />Add Item</Button>
+            <Button type="button" variant="outline" size="sm" onClick={addItem} className={manualEntryOpen ? '' : 'hidden'}><Plus className="mr-2 h-3 w-3" />Add Item</Button>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Tabs value={tab} onValueChange={v => setTab(v as 'manual' | 'csv')} className="w-full">
-              <TabsList className="mb-4">
-                <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-                <TabsTrigger value="csv">CSV Upload</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="manual" className="space-y-4">
+          <CardContent className="space-y-3">
+            {/* Section 1: Manual Entry */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setManualEntryOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">1. Manual Entry</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${manualEntryOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {manualEntryOpen && (
+                <div className="space-y-4 px-4 pb-4">
             {items.length === 0 ? (
               <p className="text-center py-6 text-muted-foreground">No items added. Click &quot;Add Item&quot; to start.</p>
             ) : (
@@ -758,26 +769,60 @@ export default function NewCPOOrderPage() {
                 )
               })
             )}
-              </TabsContent>
-
-              <TabsContent value="csv" className="space-y-4">
-                <CsvUploadGuide defaultOpen={isCustomer} />
-
-                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-4">
-                  <p className="font-semibold text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
-                  <p className="text-xs text-muted-foreground mt-1">Use this template for Certified Pre-Owned bulk purchases. Columns: Make, Model, quantity, storage, notes. Download template to ensure correct format.</p>
                 </div>
-                <div className="rounded-lg border-2 border-dashed p-6 text-center">
-                  <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground mb-3">Download the CPO template or upload your own CSV or Excel file</p>
-                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
-                  <div className="flex flex-wrap gap-2 justify-center">
+              )}
+            </div>
+
+            {/* Section 2: Download Templates */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setDownloadTemplatesOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">2. Download Templates</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${downloadTemplatesOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {downloadTemplatesOpen && (
+                <div className="space-y-3 px-4 pb-4">
+                  <p className="text-sm text-muted-foreground">
+                    Download one of our two templates and record your assets in this format.
+                  </p>
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-4">
+                    <p className="font-semibold text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
+                    <p className="text-xs text-muted-foreground mt-1">Columns: Make, Model, quantity, storage, notes.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="outline" onClick={handleDownloadCpoTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
                       <Download className="mr-2 h-4 w-4" />Download CPO Template
                     </Button>
                     <Button type="button" variant="outline" onClick={handleDownloadCpoExcelTemplate} className="border-blue-600 text-blue-700 hover:bg-blue-50">
                       <FileSpreadsheet className="mr-2 h-4 w-4" />Download Excel Template
                     </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Section 3: Upload Custom Spreadsheet */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setUploadSpreadsheetOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">3. Upload Custom Spreadsheet</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${uploadSpreadsheetOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {uploadSpreadsheetOpen && (
+                <div className="space-y-4 px-4 pb-4">
+                <CsvUploadGuide defaultOpen={isCustomer} />
+
+                <div className="rounded-lg border-2 border-dashed p-6 text-center">
+                  <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground mb-3">Upload your own CSV or Excel file using the CPO columns</p>
+                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
+                  <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
                       <Upload className="mr-2 h-4 w-4" />Upload CSV or Excel
                     </Button>
@@ -815,13 +860,14 @@ export default function NewCPOOrderPage() {
                     {csvData.length > 10 && <p className="text-xs text-muted-foreground mt-2">Showing 10 of {csvData.length} rows</p>}
                   </div>
                 )}
-              </TabsContent>
-            </Tabs>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Quote Summary — internal staff only, manual tab */}
-        {isInternal && tab === 'manual' && items.some((_, i) => {
+        {/* Quote Summary — internal staff only */}
+        {isInternal && items.some((_, i) => {
           const cp = itemPrices[i]?.conditionPrices
           return cp && Object.values(cp).some(e => (e?.price ?? 0) > 0)
         }) && (

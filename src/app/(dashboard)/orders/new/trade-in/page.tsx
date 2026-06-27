@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
+import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers } from '@/hooks/useCustomers'
@@ -19,7 +19,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CsvUploadGuide } from '@/components/orders/CsvUploadGuide'
@@ -109,7 +108,11 @@ export default function NewTradeInPage() {
   const [customerId, setCustomerId] = useState('')
   const [items, setItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
-  const [tab, setTab] = useState('manual')
+  // Three independent collapsible sections (not exclusive tabs) — see
+  // orders/new/page.tsx for the same pattern applied first.
+  const [manualEntryOpen, setManualEntryOpen] = useState(true)
+  const [downloadTemplatesOpen, setDownloadTemplatesOpen] = useState(false)
+  const [uploadSpreadsheetOpen, setUploadSpreadsheetOpen] = useState(false)
   const [csvData, setCsvData] = useState<CSVRow[]>([])
   const [csvErrors, setCsvErrors] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
@@ -392,7 +395,10 @@ export default function NewTradeInPage() {
 
     let orderItems: Record<string, unknown>[]
 
-    if (tab === 'csv' && csvData.length > 0) {
+    if (csvData.length > 0) {
+      if (items.length > 0) {
+        toast.warning('You have both manual items and an uploaded file — submitting the uploaded file only. Remove the file to submit manual items instead.')
+      }
       // Use pre-resolved device_id from parse-trade-template when available;
       // fall back to client-side catalog match for rows without one.
       const rows = csvData.map(row => {
@@ -518,14 +524,19 @@ export default function NewTradeInPage() {
             <CardTitle>Devices</CardTitle>
             <CardDescription>Add devices manually or upload a CSV</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="mb-4">
-                <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-                <TabsTrigger value="csv">CSV Upload</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="manual" className="space-y-4">
+          <CardContent className="space-y-3">
+            {/* Section 1: Manual Entry */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setManualEntryOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">1. Manual Entry</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${manualEntryOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {manualEntryOpen && (
+                <div className="space-y-4 px-4 pb-4">
                 <div className="flex justify-end">
                   <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="mr-2 h-3 w-3" />Add Item</Button>
                 </div>
@@ -694,34 +705,62 @@ export default function NewTradeInPage() {
                     )
                   })
                 )}
-              </TabsContent>
-
-              <TabsContent value="csv" className="space-y-4">
-                <CsvUploadGuide defaultOpen={isCustomer} />
-
-                <p className="text-xs text-muted-foreground -mt-2">
-                  Few devices? <button type="button" onClick={() => setTab('manual')} className="font-medium text-primary underline-offset-2 hover:underline">Use Manual Entry</button> instead.
-                </p>
-
-                {/* Clear Trade-In template label at top */}
-                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 p-4">
-                  <p className="font-semibold text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>
-                  <p className="text-xs text-muted-foreground mt-1">Use this template for device buybacks. Columns: Make, Model, quantity, condition, storage, notes. Download template to ensure correct format.</p>
                 </div>
+              )}
+            </div>
 
-                <div className="rounded-lg border-2 border-dashed p-6 text-center">
-                  <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Download the Trade-In template or upload your own CSV or Excel file
+            {/* Section 2: Download Templates */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setDownloadTemplatesOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">2. Download Templates</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${downloadTemplatesOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {downloadTemplatesOpen && (
+                <div className="space-y-3 px-4 pb-4">
+                  <p className="text-sm text-muted-foreground">
+                    Download one of our two templates and record your assets in this format.
                   </p>
-                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
-                  <div className="flex flex-wrap gap-2 justify-center">
+                  <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 p-4">
+                    <p className="font-semibold text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>
+                    <p className="text-xs text-muted-foreground mt-1">Columns: Make, Model, quantity, condition, storage, notes.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="outline" onClick={handleDownloadTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <Download className="mr-2 h-4 w-4" />Download CSV Template
                     </Button>
                     <Button type="button" variant="outline" onClick={handleDownloadExcelTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <FileSpreadsheet className="mr-2 h-4 w-4" />Download Trade-In Excel Template
                     </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Section 3: Upload Custom Spreadsheet */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setUploadSpreadsheetOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">3. Upload Custom Spreadsheet</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${uploadSpreadsheetOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {uploadSpreadsheetOpen && (
+                <div className="space-y-4 px-4 pb-4">
+                <CsvUploadGuide defaultOpen={isCustomer} />
+
+                <div className="rounded-lg border-2 border-dashed p-6 text-center">
+                  <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Upload your own CSV or Excel file using the trade-in columns
+                  </p>
+                  <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
+                  <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
                       <Upload className="mr-2 h-4 w-4" />Upload CSV or Excel
                     </Button>
@@ -764,13 +803,14 @@ export default function NewTradeInPage() {
                     {csvData.length > 10 && <p className="text-xs text-muted-foreground mt-2">Showing 10 of {csvData.length} rows</p>}
                   </div>
                 )}
-              </TabsContent>
-            </Tabs>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
         {/* Quote Summary (internal staff only) */}
-        {isInternal && tab === 'manual' && quoteTotalItems.length > 0 && (
+        {isInternal && quoteTotalItems.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Quote Summary</CardTitle>
