@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, Files } from 'lucide-react'
+import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, Files, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers, useMyCustomer } from '@/hooks/useCustomers'
@@ -19,7 +19,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CsvUploadGuide } from '@/components/orders/CsvUploadGuide'
@@ -233,7 +232,12 @@ export default function NewOrderPage() {
   const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [items, setItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
-  const [tab, setTab] = useState('manual')
+  // Three independent collapsible sections (not exclusive tabs) — a user can
+  // have manual items AND an uploaded file open at once. Manual Entry starts
+  // open since it's the simplest path; the other two start collapsed.
+  const [manualEntryOpen, setManualEntryOpen] = useState(true)
+  const [downloadTemplatesOpen, setDownloadTemplatesOpen] = useState(false)
+  const [uploadSpreadsheetOpen, setUploadSpreadsheetOpen] = useState(false)
 
   // Multi-CSV state
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([])
@@ -278,7 +282,6 @@ export default function NewOrderPage() {
       if (parsed.items) setItems(parsed.items)
       if (parsed.parsedFiles) setParsedFiles(parsed.parsedFiles)
       if (parsed.notes) setNotes(parsed.notes)
-      if (parsed.tab) setTab(parsed.tab)
       setHasDraft(false)
       toast.success('Draft restored')
     } catch { toast.error('Could not restore draft') }
@@ -288,11 +291,11 @@ export default function NewOrderPage() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (items.length > 0 || parsedFiles.length > 0 || notes.trim()) {
-        try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ items, parsedFiles, notes, tab })) } catch { /* ignore */ }
+        try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ items, parsedFiles, notes })) } catch { /* ignore */ }
       }
     }, 30000)
     return () => clearInterval(interval)
-  }, [items, parsedFiles, notes, tab])
+  }, [items, parsedFiles, notes])
 
   // Pricing state (internal roles only)
   const [itemPrices, setItemPrices] = useState<Record<number, ItemPrice>>({})
@@ -743,10 +746,17 @@ export default function NewOrderPage() {
       return
     }
 
-    // Combine items from manual entry and CSV
+    // Combine items from manual entry and CSV. Both sections are visible at
+    // once now (not exclusive tabs) — an uploaded file takes priority over
+    // manual items if both are present, matching the original tab-based
+    // precedence (CSV branch checked first), just driven by actual data
+    // instead of which section happened to be open.
     let orderItems: { device_id: string; quantity: number; storage: string; condition: DeviceCondition; notes: string; order_type: 'trade_in' | 'cpo'; serial_number?: string; color?: string; quoted_price?: number }[] = []
 
-    if (tab === 'csv' && allCsvRows.length > 0) {
+    if (allCsvRows.length > 0) {
+      if (items.length > 0) {
+        toast.warning('You have both manual items and an uploaded file — submitting the uploaded file only. Remove the file to submit manual items instead.')
+      }
       // Use the upload-csv server API for full fuzzy matching (Levenshtein + aliases)
       // Split rows by order type and create separate orders
       const tradeInCsvRows = allCsvRows.filter(r => r.order_type !== 'cpo')
@@ -826,10 +836,6 @@ export default function NewOrderPage() {
         toast.error(err instanceof Error ? err.message : 'Failed to upload CSV')
         return
       }
-    } else if (tab === 'csv') {
-      toast.error('No CSV rows to submit')
-      setIsSubmitting(false)
-      return
     } else {
       if (items.length === 0) { toast.error('Please add at least one item'); setIsSubmitting(false); return }
       const invalidItems = items.filter(i => !i.device_id)
@@ -1048,14 +1054,19 @@ export default function NewOrderPage() {
                 : 'Add trade-in devices manually or upload a trade-in CSV file'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="mb-4">
-                <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-                <TabsTrigger value="csv">CSV Upload</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="manual" className="space-y-4">
+          <CardContent className="space-y-3">
+            {/* Section 1: Manual Entry */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setManualEntryOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">1. Manual Entry</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${manualEntryOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {manualEntryOpen && (
+                <div className="space-y-4 px-4 pb-4">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">
                     {canCreateCpoOrder ? 'Add Trade-In and/or CPO items to your order:' : 'Add trade-in items to your order:'}
@@ -1273,51 +1284,43 @@ export default function NewOrderPage() {
                     )
                   })
                 )}
-              </TabsContent>
-
-              <TabsContent value="csv" className="space-y-4">
-                <CsvUploadGuide defaultOpen={isCustomer} />
-
-                <p className="text-xs text-muted-foreground -mt-2">
-                  Only have a few devices? <button type="button" onClick={() => setTab('manual')} className="font-medium text-primary underline-offset-2 hover:underline">Switch to Manual Entry</button> to add them one at a time instead of uploading a file.
-                </p>
-
-                {/* Clear template labels at top */}
-                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                  <p className="font-semibold text-sm">
-                    {canCreateCpoOrder ? 'Choose the correct template for your order type:' : 'Use the trade-in template for customer intake:'}
-                  </p>
-                  <div className={`grid gap-4 text-left ${canCreateCpoOrder ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
-                    <div className="rounded-md border border-green-200 bg-green-50 dark:bg-green-950/30 p-3">
-                      <p className="font-medium text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">For device buybacks. CSV and Excel templates are available.</p>
-                    </div>
-                    {canCreateCpoOrder && (
-                      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-3">
-                        <p className="font-medium text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">For Certified Pre-Owned purchases. CSV and Excel templates are available.</p>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {canCreateCpoOrder
-                      ? 'You can also upload your own CSV or Excel file if it uses the same columns.'
-                      : 'You can also upload your own CSV or Excel file if it uses the trade-in columns.'}
-                  </p>
                 </div>
+              )}
+            </div>
 
-                <div
-                  className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDraggingAdmin ? 'border-primary bg-primary/5' : 'border-muted'}`}
-                  onDragOver={e => { e.preventDefault(); setIsDraggingAdmin(true) }}
-                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingAdmin(false) }}
-                  onDrop={e => { e.preventDefault(); setIsDraggingAdmin(false); if (e.dataTransfer.files.length) handleFileDrop(e.dataTransfer.files) }}
-                >
-                  <Files className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {isDraggingAdmin ? 'Drop your file here' : canCreateCpoOrder ? 'Drag & drop a file here, or use the buttons below.' : 'Drag & drop a trade-in file here, or use the buttons below.'}
+            {/* Section 2: Download Templates */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setDownloadTemplatesOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">2. Download Templates</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${downloadTemplatesOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {downloadTemplatesOpen && (
+                <div className="space-y-3 px-4 pb-4">
+                  <p className="text-sm text-muted-foreground">
+                    Download one of our two templates and record your assets in this format. This ensures compliance with the required fields for best accuracy.
                   </p>
-                  <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods" multiple onChange={handleFileUpload} className="hidden" />
-                  <div className="flex flex-wrap gap-2 justify-center">
+                  <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                    <p className="font-semibold text-sm">
+                      {canCreateCpoOrder ? 'Choose the correct template for your order type:' : 'Use the trade-in template for customer intake:'}
+                    </p>
+                    <div className={`grid gap-4 text-left ${canCreateCpoOrder ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
+                      <div className="rounded-md border border-green-200 bg-green-50 dark:bg-green-950/30 p-3">
+                        <p className="font-medium text-green-800 dark:text-green-300 text-sm">Trade-In Template</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">For device buybacks. CSV and Excel templates are available.</p>
+                      </div>
+                      {canCreateCpoOrder && (
+                        <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-3">
+                          <p className="font-medium text-blue-800 dark:text-blue-300 text-sm">CPO Template</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">For Certified Pre-Owned purchases. CSV and Excel templates are available.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="outline" onClick={handleDownloadTradeInTemplate} className="border-green-600 text-green-700 hover:bg-green-50">
                       <Download className="mr-2 h-4 w-4" />Download CSV Template
                     </Button>
@@ -1334,6 +1337,37 @@ export default function NewOrderPage() {
                         <FileSpreadsheet className="mr-2 h-4 w-4" />Download CPO Excel Template
                       </Button>
                     )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Section 3: Upload Custom Spreadsheet */}
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setUploadSpreadsheetOpen(prev => !prev)}
+                className="flex w-full items-center justify-between gap-2 p-4 text-left"
+              >
+                <span className="font-semibold text-sm">3. Upload Custom Spreadsheet</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${uploadSpreadsheetOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {uploadSpreadsheetOpen && (
+                <div className="space-y-4 px-4 pb-4">
+                <CsvUploadGuide defaultOpen={isCustomer} />
+
+                <div
+                  className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDraggingAdmin ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                  onDragOver={e => { e.preventDefault(); setIsDraggingAdmin(true) }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingAdmin(false) }}
+                  onDrop={e => { e.preventDefault(); setIsDraggingAdmin(false); if (e.dataTransfer.files.length) handleFileDrop(e.dataTransfer.files) }}
+                >
+                  <Files className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {isDraggingAdmin ? 'Drop your file here' : canCreateCpoOrder ? 'Drag & drop a file here, or use the button below.' : 'Drag & drop a trade-in file here, or use the button below.'}
+                  </p>
+                  <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.ods" multiple onChange={handleFileUpload} className="hidden" />
+                  <div className="flex flex-wrap gap-2 justify-center">
                     <Button type="button" variant="outline" onClick={() => !isParsingFile && fileRef.current?.click()} disabled={isParsingFile}>
                       {isParsingFile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                       {isParsingFile ? 'Parsing…' : 'Upload Excel or CSV'}
@@ -1573,13 +1607,14 @@ export default function NewOrderPage() {
                   </div>
                   )
                 })()}
-              </TabsContent>
-            </Tabs>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
         {/* Quote Summary (internal staff only, manual entry) */}
-        {isInternal && tab === 'manual' && items.length > 0 && (tradeInTotal > 0 || cpoTotal > 0) && (
+        {isInternal && items.length > 0 && (tradeInTotal > 0 || cpoTotal > 0) && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Quote Summary</CardTitle>
