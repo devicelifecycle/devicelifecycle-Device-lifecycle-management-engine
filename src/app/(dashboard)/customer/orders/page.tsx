@@ -248,6 +248,7 @@ export default function CustomerOrdersPage() {
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Notes</TableHead>
                   <TableHead>Updated</TableHead>
                   <TableHead />
                 </TableRow>
@@ -282,6 +283,13 @@ export default function CustomerOrdersPage() {
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium whitespace-nowrap">
                         {formatCurrency(order.quoted_amount ?? order.total_amount ?? 0)}
+                      </TableCell>
+                      <TableCell className="max-w-[160px]">
+                        {order.notes ? (
+                          <span className="block truncate text-xs text-muted-foreground" title={order.notes}>{order.notes}</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground/50">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {formatRelativeTime(order.updated_at || order.created_at)}
