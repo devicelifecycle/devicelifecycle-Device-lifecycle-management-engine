@@ -275,6 +275,23 @@ export function PremiumStoryShowcase({ chapterId }: { chapterId: LandingChapterI
 
   return (
     <div className="premium-story-shell relative flex min-h-[31rem] flex-col justify-between gap-8 sm:min-h-[34rem]">
+      {/* Hidden, eager-loaded copies of every chapter's images, requested
+          through Next/Image's own optimization endpoint (not the raw
+          unsplash URL — a plain <link rel="preload"> on the original URL
+          wouldn't cache-match the transformed URL Image actually requests).
+          Each chapter's real <Image> below only mounts when scrolled to
+          (AnimatePresence remounts on chapterId change) — without this, that
+          first real mount is also the first time the browser fetches the
+          image, which is what caused the "images don't load while
+          scrolling" symptom. This warms the cache for all chapters upfront
+          so the real mount always hits cache. */}
+      <div className="sr-only" aria-hidden="true">
+        {(Object.keys(storyPanels) as LandingChapterId[]).map((id) =>
+          storyPanels[id].cards.map((card) => (
+            <Image key={`${id}-${card.src}`} src={card.src} alt="" width={card.width} height={card.height} priority />
+          ))
+        )}
+      </div>
       <AnimatePresence mode="wait">
         <motion.div
           key={chapterId}
