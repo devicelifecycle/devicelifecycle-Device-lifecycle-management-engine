@@ -137,25 +137,16 @@ export default function NewTradeInPage() {
   const [beatMode, setBeatMode] = useState<'amount' | 'percent'>('amount')
   const [beatOverride, setBeatOverride] = useState<string>('')
 
-  // Paginate through the full device catalog so CSV matching and dropdowns have
-  // all devices regardless of catalog size (avoids Samsung/Google cut-off at 500).
+  // Load a small first page of popular devices for the initial dropdown.
+  // Server-side search (searchDevices) handles typed queries instantly.
+  // Previously this fetched the entire catalog in a 500/page waterfall,
+  // causing 400ms–1.5s mount lag before the form was usable.
   useEffect(() => {
     let cancelled = false
-    async function loadAll() {
-      const all: Device[] = []
-      let page = 1
-      for (;;) {
-        const res = await fetch(`/api/devices?page_size=500&sort_by=make&sort_order=asc&page=${page}`)
-        if (!res.ok || cancelled) break
-        const d = await res.json()
-        const rows: Device[] = d.data || []
-        all.push(...rows)
-        if (rows.length < 500) break
-        page++
-      }
-      if (!cancelled) setDevices(all)
-    }
-    loadAll().catch(() => {})
+    fetch('/api/devices?page_size=80&sort_by=make&sort_order=asc')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d) setDevices(d.data || []) })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -285,6 +276,7 @@ export default function NewTradeInPage() {
       if (i !== index) return item
       if (field === 'device_id') {
         const dev = devices.find(d => d.id === value)
+          ?? Object.values(deviceSearchResults).flat().find(d => d.id === value)
         const storageOptions = getStorageOptionsForDevice(dev)
         const defaultStorage = storageOptions.includes('128GB') ? '128GB' : storageOptions[0] || ''
         return {
@@ -545,6 +537,7 @@ export default function NewTradeInPage() {
                 ) : (
                   items.map((item, index) => {
                     const selectedDevice = devices.find(d => d.id === item.device_id)
+                      ?? Object.values(deviceSearchResults).flat().find(d => d.id === item.device_id)
                     const storageOptions = getStorageOptionsForDevice(selectedDevice)
                     const price = itemPrices[index]
 

@@ -304,23 +304,16 @@ export default function NewOrderPage() {
   const [quickAddDialog, setQuickAddDialog] = useState<{ index: number; make: string; model: string } | null>(null)
   const [quickAddLoading, setQuickAddLoading] = useState(false)
 
+  // Load a small first page of popular devices for the initial dropdown.
+  // Server-side search (searchDevices) handles typed queries; this only
+  // covers the empty-focus state. Previously this fetched the entire
+  // catalog (500/page waterfall) causing 400ms–1.5s mount lag.
   useEffect(() => {
     let cancelled = false
-    async function loadAll() {
-      const all: Device[] = []
-      let page = 1
-      for (;;) {
-        const res = await fetch(`/api/devices?page_size=500&for_order_creation=1&sort_by=make&sort_order=asc&page=${page}`)
-        if (!res.ok || cancelled) break
-        const d = await res.json()
-        const rows: Device[] = d.data || []
-        all.push(...rows)
-        if (rows.length < 500) break
-        page++
-      }
-      if (!cancelled) setDevices(all)
-    }
-    loadAll().catch(() => {})
+    fetch('/api/devices?page_size=80&for_order_creation=1&sort_by=make&sort_order=asc')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d) setDevices(d.data || []) })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -1087,6 +1080,7 @@ export default function NewOrderPage() {
                 ) : (
                   items.map((item, index) => {
                     const selectedDevice = devices.find(d => d.id === item.device_id)
+                      ?? Object.values(deviceSearchResults).flat().find(d => d.id === item.device_id)
                     const storageOptions = getStorageOptionsForDevice(selectedDevice)
                     const price = itemPrices[index]
 
