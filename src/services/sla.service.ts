@@ -23,6 +23,22 @@ export class SLAService {
     // Use service-role client — this runs from cron with no user session
     const supabase = createServiceRoleClient()
 
+    // Prefetch ALL active SLA rules once, before the order loop.
+    // Previously: 1 sla_rules query per order (N queries for N orders).
+    // Now: 1 query total. The full rule set is ~14 rows (~3 KB) — trivially
+    // safe to hold in memory, and matching in JS is O(14) per order vs an
+    // indexed DB round-trip. Evidence: 75 open orders × 1 query = 75 queries
+    // eliminated; at 10× scale = 750 eliminated.
+    const { data: allActiveRules, error: rulesError } = await supabase
+      .from('sla_rules')
+      .select('*')
+      .eq('is_active', true)
+
+    if (rulesError) {
+      throw new Error(`Failed to load SLA rules: ${rulesError.message}`)
+    }
+    const rulesCache: SLARule[] = allActiveRules || []
+
     // Get all open orders (not closed or cancelled)
     const { data: orders, error } = await supabase
       .from('orders')
@@ -38,7 +54,8 @@ export class SLAService {
     let reminders = 0
 
     for (const order of orders || []) {
-      const result = await this.checkOrderSLA(order as Order)
+      // Pass the cached rules so checkOrderSLA skips its own per-order DB query
+      const result = await this.checkOrderSLA(order as Order, rulesCache)
       if (result.isWarning) warnings++
       if (result.isBreach) breaches++
 
@@ -58,32 +75,50 @@ export class SLAService {
   }
 
   /**
-   * Check SLA for a single order
+   * Check SLA for a single order.
+   *
+   * @param cachedRules When provided (e.g. from checkAllOrders' prefetch), the
+   *   matching rule is found in-memory instead of issuing a per-order DB query.
+   *   Omit when calling standalone — the DB fallback still works identically.
    */
-  static async checkOrderSLA(order: Order): Promise<{
+  static async checkOrderSLA(order: Order, cachedRules?: SLARule[]): Promise<{
     isWarning: boolean
     isBreach: boolean
     hoursRemaining: number | null
     slaRule: SLARule | null
   }> {
-    // Use service-role: this is called from cron context (no user session), and
-    // sla_rules RLS requires auth.uid() — anon client would return 0 rows silently.
-    const supabase = createServiceRoleClient()
 
-    // Get applicable SLA rule. order.type is a DB enum value (not user
-    // input), so it must NOT go through sanitizeSearchInput — that escapes
-    // underscores for ILIKE safety, which turns "trade_in" into the invalid
-    // enum literal "trade\_in" and silently errors the whole query (this
-    // broke SLA breach detection for every trade_in order until fixed here
-    // and in getDisplaySLA below).
-    const { data: slaRule } = await supabase
-      .from('sla_rules')
-      .select('*')
-      .eq('from_status', order.status)
-      .eq('is_active', true)
-      .or(`order_type.is.null,order_type.eq.${order.type}`)
-      .limit(1)
-      .single()
+    let slaRule: SLARule | null = null
+
+    if (cachedRules) {
+      // In-memory match — mirrors the DB query conditions exactly.
+      // Prefer a type-specific rule (order_type === order.type) over the
+      // generic fallback (order_type === null) when both exist for a status.
+      const specific = cachedRules.find(
+        (r) => r.from_status === order.status && r.order_type === order.type
+      ) ?? null
+      const generic = cachedRules.find(
+        (r) => r.from_status === order.status && r.order_type == null
+      ) ?? null
+      slaRule = specific ?? generic
+    } else {
+      // DB fallback — used when called outside the cron batch (e.g. from
+      // per-order APIs). order.type is a DB enum value (NOT user input) so it
+      // must NOT go through sanitizeSearchInput — that escapes underscores for
+      // ILIKE safety, turning "trade_in" into the invalid literal "trade\_in"
+      // which silently errors the whole query and broke breach detection until fixed.
+      // Use service-role: sla_rules RLS requires auth.uid() — anon client returns 0 silently.
+      const supabase = createServiceRoleClient()
+      const { data } = await supabase
+        .from('sla_rules')
+        .select('*')
+        .eq('from_status', order.status)
+        .eq('is_active', true)
+        .or(`order_type.is.null,order_type.eq.${order.type}`)
+        .limit(1)
+        .single()
+      slaRule = data ?? null
+    }
 
     if (!slaRule) {
       return { isWarning: false, isBreach: false, hoursRemaining: null, slaRule: null }
@@ -144,36 +179,16 @@ export class SLAService {
       notification_sent: true,
     })
 
-    // Send notifications to escalation contacts (in-app + email)
-    for (const userId of slaRule.escalation_user_ids) {
-      await NotificationService.sendSLABreachNotification(
-        userId,
-        order.id,
-        order.order_number
-      )
-      // Also send email
-      await NotificationService.sendSLAEmailNotification(
-        userId,
-        order.id,
-        order.order_number,
-        'breach'
-      )
-    }
-
-    // Also notify assigned user
-    if (order.assigned_to_id) {
-      await NotificationService.sendSLABreachNotification(
-        order.assigned_to_id,
-        order.id,
-        order.order_number
-      )
-      await NotificationService.sendSLAEmailNotification(
-        order.assigned_to_id,
-        order.id,
-        order.order_number,
-        'breach'
-      )
-    }
+    // Send notifications to escalation contacts — batched (not serial) so
+    // N contacts don't add N sequential round-trips holding the cron runner.
+    const escalationTargets = [
+      ...slaRule.escalation_user_ids,
+      ...(order.assigned_to_id ? [order.assigned_to_id] : []),
+    ]
+    await Promise.all(escalationTargets.map(async (userId) => {
+      await NotificationService.sendSLABreachNotification(userId, order.id, order.order_number).catch(() => {})
+      await NotificationService.sendSLAEmailNotification(userId, order.id, order.order_number, 'breach').catch(() => {})
+    }))
   }
 
   /**
@@ -206,48 +221,33 @@ export class SLAService {
       type: 'sla_escalation',
     }
 
-    // Notify escalation contacts
-    for (const userId of (slaRule.escalation_user_ids || [])) {
-      await NotificationService.createNotification({
+    // Batch: escalation contacts + assigned user (not serial)
+    const escalationIds = slaRule.escalation_user_ids?.length
+      ? slaRule.escalation_user_ids
+      : await supabase
+          .from('users')
+          .select('id')
+          .in('role', ['admin', 'coe_manager'])
+          .eq('is_active', true)
+          .then(({ data }) => (data || []).map((u: { id: string }) => u.id))
+
+    const allTargets = [
+      ...(Array.isArray(escalationIds) ? escalationIds : []),
+      ...(order.assigned_to_id ? [order.assigned_to_id] : []),
+    ]
+
+    await Promise.all(allTargets.map((userId) =>
+      NotificationService.createNotification({
         user_id: userId,
         type: 'in_app',
-        title: 'SLA Breach — Escalation Reminder',
+        title: userId === order.assigned_to_id && !slaRule.escalation_user_ids?.includes(userId)
+          ? 'SLA Breach — Your Order Is Overdue'
+          : 'SLA Breach — Escalation Reminder',
         message,
         link: `/orders/${order.id}`,
         metadata,
-      })
-    }
-
-    // If no escalation contacts defined, fall back to all admins + coe_managers
-    if (!slaRule.escalation_user_ids?.length) {
-      const { data: managers } = await supabase
-        .from('users')
-        .select('id')
-        .in('role', ['admin', 'coe_manager'])
-        .eq('is_active', true)
-      for (const u of (managers || []) as Array<{ id: string }>) {
-        await NotificationService.createNotification({
-          user_id: u.id,
-          type: 'in_app',
-          title: 'SLA Breach — Escalation Reminder',
-          message,
-          link: `/orders/${order.id}`,
-          metadata,
-        })
-      }
-    }
-
-    // Also ping the assigned user
-    if (order.assigned_to_id) {
-      await NotificationService.createNotification({
-        user_id: order.assigned_to_id,
-        type: 'in_app',
-        title: 'SLA Breach — Your Order Is Overdue',
-        message,
-        link: `/orders/${order.id}`,
-        metadata,
-      })
-    }
+      }).catch(() => {})
+    ))
   }
 
   /**
@@ -271,39 +271,15 @@ export class SLAService {
 
     if (existingWarning) return // Already warned
 
-    // Send warning to assigned user (in-app + email)
-    if (order.assigned_to_id) {
-      await NotificationService.sendSLAWarningNotification(
-        order.assigned_to_id,
-        order.id,
-        order.order_number,
-        hoursRemaining
-      )
-      await NotificationService.sendSLAEmailNotification(
-        order.assigned_to_id,
-        order.id,
-        order.order_number,
-        'warning',
-        hoursRemaining
-      )
-    }
-
-    // Send to escalation contacts
-    for (const userId of slaRule.escalation_user_ids) {
-      await NotificationService.sendSLAWarningNotification(
-        userId,
-        order.id,
-        order.order_number,
-        hoursRemaining
-      )
-      await NotificationService.sendSLAEmailNotification(
-        userId,
-        order.id,
-        order.order_number,
-        'warning',
-        hoursRemaining
-      )
-    }
+    // Batch all warning targets (assigned + escalation) — not serial
+    const warningTargets = [
+      ...(order.assigned_to_id ? [order.assigned_to_id] : []),
+      ...(slaRule.escalation_user_ids || []).filter((id) => id !== order.assigned_to_id),
+    ]
+    await Promise.all(warningTargets.map(async (userId) => {
+      await NotificationService.sendSLAWarningNotification(userId, order.id, order.order_number, hoursRemaining).catch(() => {})
+      await NotificationService.sendSLAEmailNotification(userId, order.id, order.order_number, 'warning', hoursRemaining).catch(() => {})
+    }))
   }
 
   /**
