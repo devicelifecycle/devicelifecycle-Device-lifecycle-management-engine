@@ -143,6 +143,9 @@ function StatusPill({ value, label }: { value: 'yes' | 'no' | 'unknown'; label: 
 
 export default function COETriagePage() {
   const [pendingItems, setPendingItems] = useState<IMEIRecord[]>([])
+  const [completedItems, setCompletedItems] = useState<IMEIRecord[]>([])
+  const [showCompleted, setShowCompleted] = useState(false)
+  const [isLoadingCompleted, setIsLoadingCompleted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search)
@@ -596,6 +599,17 @@ export default function COETriagePage() {
         setPendingItems(data.data || [])
       }
     } catch {} finally { if (!silent) setIsLoading(false) }
+  }, [])
+
+  const fetchCompleted = useCallback(async () => {
+    setIsLoadingCompleted(true)
+    try {
+      const res = await fetch('/api/triage?type=complete', { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        setCompletedItems(data.data || [])
+      }
+    } catch {} finally { setIsLoadingCompleted(false) }
   }, [])
 
   const removePendingItem = useCallback((itemId: string) => {
@@ -1055,10 +1069,34 @@ export default function COETriagePage() {
   const filtered = pendingItems.filter(item => {
     if (!debouncedSearch) return true
     const q = debouncedSearch.toLowerCase()
+    const orderData = item.order as unknown as Record<string, unknown> | undefined
+    const customer = orderData?.customer as Record<string, string> | undefined
+    const vendor = orderData?.vendor as Record<string, string> | undefined
     return (
       item.imei?.toLowerCase().includes(q) ||
       (item.device as unknown as Record<string, string>)?.make?.toLowerCase().includes(q) ||
-      (item.device as unknown as Record<string, string>)?.model?.toLowerCase().includes(q)
+      (item.device as unknown as Record<string, string>)?.model?.toLowerCase().includes(q) ||
+      (orderData?.order_number as string | undefined)?.toLowerCase().includes(q) ||
+      customer?.company_name?.toLowerCase().includes(q) ||
+      customer?.contact_name?.toLowerCase().includes(q) ||
+      vendor?.company_name?.toLowerCase().includes(q)
+    )
+  })
+
+  const filteredCompleted = completedItems.filter(item => {
+    if (!debouncedSearch) return true
+    const q = debouncedSearch.toLowerCase()
+    const orderData = item.order as unknown as Record<string, unknown> | undefined
+    const customer = orderData?.customer as Record<string, string> | undefined
+    const vendor = orderData?.vendor as Record<string, string> | undefined
+    return (
+      item.imei?.toLowerCase().includes(q) ||
+      (item.device as unknown as Record<string, string>)?.make?.toLowerCase().includes(q) ||
+      (item.device as unknown as Record<string, string>)?.model?.toLowerCase().includes(q) ||
+      (orderData?.order_number as string | undefined)?.toLowerCase().includes(q) ||
+      customer?.company_name?.toLowerCase().includes(q) ||
+      customer?.contact_name?.toLowerCase().includes(q) ||
+      vendor?.company_name?.toLowerCase().includes(q)
     )
   })
 
@@ -1958,13 +1996,27 @@ export default function COETriagePage() {
       {/* ── Pending Items Table ─────────────────────────────────────────── */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search by IMEI, device make, or model..." className="pl-10 bg-background" value={search} onChange={e => setSearch(e.target.value)} />
+        <Input placeholder="Search by IMEI, device, order number, customer or organisation name..." className="pl-10 bg-background" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Devices Awaiting Triage</CardTitle>
-          <CardDescription>{filtered.length} device{filtered.length !== 1 ? 's' : ''} to inspect</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Devices Awaiting Triage</CardTitle>
+            <CardDescription>{filtered.length} device{filtered.length !== 1 ? 's' : ''} to inspect</CardDescription>
+          </div>
+          <Button
+            size="sm"
+            variant={showCompleted ? 'secondary' : 'outline'}
+            onClick={() => {
+              const next = !showCompleted
+              setShowCompleted(next)
+              if (next && completedItems.length === 0) fetchCompleted()
+            }}
+          >
+            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+            {showCompleted ? 'Hide Completed' : 'Show Completed'}
+          </Button>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -2041,6 +2093,105 @@ export default function COETriagePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Completed Triage Section ──────────────────────────────────────── */}
+      {showCompleted && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              Completed Triage
+            </CardTitle>
+            <CardDescription>
+              {isLoadingCompleted ? 'Loading…' : `${filteredCompleted.length} device${filteredCompleted.length !== 1 ? 's' : ''} — most recent 100`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingCompleted ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />)}
+              </div>
+            ) : filteredCompleted.length === 0 ? (
+              <div className="flex flex-col items-center py-10 text-muted-foreground">
+                <CheckCircle2 className="h-8 w-8 mb-2 text-muted-foreground/40" />
+                <p className="text-sm">No completed triage items found</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table className="min-w-[720px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>IMEI</TableHead>
+                      <TableHead>Device</TableHead>
+                      <TableHead>Claimed</TableHead>
+                      <TableHead>Actual</TableHead>
+                      <TableHead>Order</TableHead>
+                      <TableHead>Customer / Org</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Completed</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCompleted.map(item => {
+                      const device = item.device as unknown as Record<string, string> | undefined
+                      const orderData = item.order as unknown as { id?: string; order_number?: string } | undefined
+                      const customer = (item.order as unknown as Record<string, Record<string, string> | undefined>)?.customer
+                      const statusColors: Record<string, string> = {
+                        complete: 'text-emerald-600 dark:text-emerald-400',
+                        needs_exception: 'text-amber-600 dark:text-amber-400',
+                        rejected: 'text-destructive',
+                      }
+                      const statusLabels: Record<string, string> = {
+                        complete: 'Complete',
+                        needs_exception: 'Exception Pending',
+                        rejected: 'Rejected',
+                      }
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-mono text-sm">{item.imei}</TableCell>
+                          <TableCell className="text-sm">
+                            {device ? `${device.make} ${device.model}` : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {item.claimed_condition && (
+                              <span className={CONDITION_CONFIG[item.claimed_condition]?.color}>
+                                {CONDITION_CONFIG[item.claimed_condition]?.label}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {item.actual_condition && (
+                              <span className={CONDITION_CONFIG[item.actual_condition]?.color}>
+                                {CONDITION_CONFIG[item.actual_condition]?.label}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {orderData?.id && orderData?.order_number ? (
+                              <a href={`/orders/${orderData.id}`} className="text-primary hover:underline">
+                                {orderData.order_number}
+                              </a>
+                            ) : '—'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {customer?.company_name || customer?.contact_name || '—'}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`text-xs font-medium ${statusColors[item.triage_status] ?? 'text-muted-foreground'}`}>
+                              {statusLabels[item.triage_status] ?? item.triage_status}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(item.updated_at ?? item.created_at)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
         </TabsContent>
 

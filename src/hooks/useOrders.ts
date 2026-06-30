@@ -10,6 +10,8 @@ interface OrderFilters {
   type?: OrderType
   customer_id?: string
   vendor_id?: string
+  customer_name?: string
+  vendor_name?: string
   assigned_to_id?: string
   search?: string
   page?: number

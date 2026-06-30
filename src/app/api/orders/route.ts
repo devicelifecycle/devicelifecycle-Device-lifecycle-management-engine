@@ -30,6 +30,8 @@ export async function GET(request: NextRequest) {
       vendor_id: searchParams.get('vendor_id') || undefined,
       assigned_to_id: searchParams.get('assigned_to_id') || undefined,
       search: searchParams.get('search') || undefined,
+      customer_name: searchParams.get('customer_name') || undefined,
+      vendor_name: searchParams.get('vendor_name') || undefined,
       date_from: searchParams.get('date_from') || undefined,
       date_to: searchParams.get('date_to') || undefined,
       is_sla_breached: searchParams.get('is_sla_breached') ? searchParams.get('is_sla_breached') === 'true' : undefined,

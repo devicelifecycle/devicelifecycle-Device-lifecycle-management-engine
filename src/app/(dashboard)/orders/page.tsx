@@ -34,9 +34,13 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('')
   const [typeFilter, setTypeFilter] = useState<OrderType | ''>('')
+  const [customerNameFilter, setCustomerNameFilter] = useState('')
+  const [vendorNameFilter, setVendorNameFilter] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatus, setBulkStatus] = useState<OrderStatus | ''>('')
   const debouncedSearch = useDebounce(search)
+  const debouncedCustomerName = useDebounce(customerNameFilter)
+  const debouncedVendorName = useDebounce(vendorNameFilter)
   const { hasRole } = useAuth()
 
   const isAdmin = hasRole(['admin'])
@@ -107,9 +111,11 @@ export default function OrdersPage() {
     ...(typeFilter && { type: typeFilter }),
     ...(customerIdFromUrl && { customer_id: customerIdFromUrl }),
     ...(vendorIdFromUrl && { vendor_id: vendorIdFromUrl }),
+    ...(debouncedCustomerName && { customer_name: debouncedCustomerName }),
+    ...(debouncedVendorName && { vendor_name: debouncedVendorName }),
   })
 
-  const hasFilters = statusFilter || typeFilter || customerIdFromUrl || vendorIdFromUrl
+  const hasFilters = statusFilter || typeFilter || customerIdFromUrl || vendorIdFromUrl || customerNameFilter || vendorNameFilter
   const allSelected = orders.length > 0 && orders.every((order) => selectedIds.has(order.id))
   const someSelected = selectedIds.size > 0
   const { deletableSelectedCount, requotableSelectedCount } = useMemo(() => ({
@@ -231,6 +237,8 @@ export default function OrdersPage() {
   function clearFilters() {
     setStatusFilter('')
     setTypeFilter('')
+    setCustomerNameFilter('')
+    setVendorNameFilter('')
     setPage(1)
     if (customerIdFromUrl || vendorIdFromUrl) router.replace('/orders')
   }
@@ -458,6 +466,29 @@ export default function OrdersPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {isInternal && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Filter by customer or organisation name..."
+                  className="pl-11"
+                  value={customerNameFilter}
+                  onChange={(e) => { setCustomerNameFilter(e.target.value); setPage(1) }}
+                />
+              </div>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Filter by vendor name..."
+                  className="pl-11"
+                  value={vendorNameFilter}
+                  onChange={(e) => { setVendorNameFilter(e.target.value); setPage(1) }}
+                />
+              </div>
+            </div>
+          )}
 
           <AnimatePresence>
             {someSelected && (

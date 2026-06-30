@@ -96,11 +96,13 @@ export class OrderService {
       date_from,
       date_to,
       search,
+      customer_name,
+      vendor_name,
       is_sla_breached,
       requester_id,
       requester_role,
       requester_organization_id,
-    } = filters
+    } = filters as typeof filters & { customer_name?: string; vendor_name?: string }
 
     let query = supabase
       .from('orders')
@@ -233,6 +235,38 @@ export class OrderService {
 
     if (is_sla_breached !== undefined) {
       query = query.eq('is_sla_breached', is_sla_breached)
+    }
+
+    if (customer_name) {
+      const safeCustomerName = sanitizeSearchInput(customer_name)
+      if (safeCustomerName) {
+        const { data: matchingCustomers } = await supabase
+          .from('customers')
+          .select('id')
+          .or(`company_name.ilike.%${safeCustomerName}%,contact_name.ilike.%${safeCustomerName}%`)
+          .limit(200)
+        const ids = (matchingCustomers || []).map((c: { id: string }) => c.id)
+        if (ids.length === 0) {
+          return { data: [], total: 0, page, page_size, total_pages: 0 }
+        }
+        query = query.in('customer_id', ids)
+      }
+    }
+
+    if (vendor_name) {
+      const safeVendorName = sanitizeSearchInput(vendor_name)
+      if (safeVendorName) {
+        const { data: matchingVendors } = await supabase
+          .from('vendors')
+          .select('id')
+          .ilike('company_name', `%${safeVendorName}%`)
+          .limit(200)
+        const ids = (matchingVendors || []).map((v: { id: string }) => v.id)
+        if (ids.length === 0) {
+          return { data: [], total: 0, page, page_size, total_pages: 0 }
+        }
+        query = query.in('vendor_id', ids)
+      }
     }
 
     // Apply sorting (allowlist to prevent injection)

@@ -357,12 +357,45 @@ export class TriageService {
           id,
           order_number,
           created_by_id,
-          created_by:users!orders_created_by_id_fkey(full_name, email)
+          created_by:users!orders_created_by_id_fkey(full_name, email),
+          customer:customers!orders_customer_id_fkey(company_name, contact_name),
+          vendor:vendors!orders_vendor_id_fkey(company_name)
         ),
         device:device_catalog(*)
       `)
       .eq('triage_status', 'pending')
       .order('created_at', { ascending: true })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return data as IMEIRecord[]
+  }
+
+  /**
+   * Get recently completed triage items (last 100, newest first)
+   */
+  static async getCompletedTriageItems(): Promise<IMEIRecord[]> {
+    const supabase = await createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('imei_records')
+      .select(`
+        *,
+        order:orders(
+          id,
+          order_number,
+          created_by_id,
+          created_by:users!orders_created_by_id_fkey(full_name, email),
+          customer:customers!orders_customer_id_fkey(company_name, contact_name),
+          vendor:vendors!orders_vendor_id_fkey(company_name)
+        ),
+        device:device_catalog(*)
+      `)
+      .in('triage_status', ['complete', 'needs_exception', 'rejected'])
+      .order('updated_at', { ascending: false })
+      .limit(100)
 
     if (error) {
       throw new Error(error.message)

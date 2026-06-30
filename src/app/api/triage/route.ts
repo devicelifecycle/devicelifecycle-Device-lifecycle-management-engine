@@ -45,6 +45,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: pending })
     }
 
+    if (type === 'complete') {
+      const completed = await TriageService.getCompletedTriageItems()
+      return NextResponse.json({ data: completed })
+    }
+
     const orderId = searchParams.get('order_id')
     if (orderId) {
       const results = await TriageService.getTriageResultsForOrder(orderId)

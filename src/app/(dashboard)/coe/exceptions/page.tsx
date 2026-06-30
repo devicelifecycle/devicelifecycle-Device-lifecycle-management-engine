@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
 import { AlertTriangle, CheckCircle2, XCircle, Search, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
@@ -141,9 +142,11 @@ export default function COEExceptionsPage() {
   const filtered = exceptions.filter(e => {
     if (!debouncedSearch) return true
     const q = debouncedSearch.toLowerCase()
+    const excOrder = (e as unknown as Record<string, unknown>).order as Record<string, string> | undefined
     return (
       e.exception_reason?.toLowerCase().includes(q) ||
-      (e.imei_record as unknown as Record<string, string>)?.imei?.toLowerCase().includes(q)
+      (e.imei_record as unknown as Record<string, string>)?.imei?.toLowerCase().includes(q) ||
+      excOrder?.order_number?.toLowerCase().includes(q)
     )
   })
 
@@ -184,6 +187,7 @@ export default function COEExceptionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Order</TableHead>
                   <TableHead>IMEI</TableHead>
                   <TableHead>Claimed</TableHead>
                   <TableHead>Actual</TableHead>
@@ -202,6 +206,7 @@ export default function COEExceptionsPage() {
               <TableBody>
                 {filtered.map(exc => {
                   const imei = exc.imei_record as unknown as Record<string, string> | undefined
+                  const excOrder = (exc as unknown as Record<string, unknown>).order as { id?: string; order_number?: string } | undefined
                   const suggestion = suggestions.get(exc.id)
                   const suggStyle = suggestion ? SUGGESTION_STYLES[suggestion.recommendation] : null
                   const openDialog = (act: 'approve' | 'reject') => {
@@ -211,6 +216,15 @@ export default function COEExceptionsPage() {
                   }
                   return (
                     <TableRow key={exc.id}>
+                      <TableCell className="whitespace-nowrap">
+                        {excOrder?.id && excOrder?.order_number ? (
+                          <Link href={`/orders/${excOrder.id}`} className="font-medium text-primary hover:underline text-sm">
+                            {excOrder.order_number}
+                          </Link>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-mono text-sm">{imei?.imei || '—'}</TableCell>
                       <TableCell>
                         {imei?.claimed_condition && (
