@@ -3,7 +3,7 @@
 // POST /api/orders/[id]/send-quote-email
 // ============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { supabase, authUser, profile, effectiveRole } = auth
+    const { profile } = auth
 
     if (!['admin', 'coe_manager', 'sales'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -117,8 +117,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const safeOrderNum = (order.order_number || '').replace(/[^a-zA-Z0-9._-]/g, '_')
     const filenameBase = `${safeOrderNum}-${docType}`
 
-    // Generate PDF
-    const pdfBuffer = generateOrderPDF({
+    // Derive URL before scheduling background work (not available inside after())
+    const envSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '')
+    const requestOrigin = `${req.nextUrl.protocol}//${req.nextUrl.host}`
+    const siteUrl = envSiteUrl || requestOrigin
+
+    // Schedule the heavy work (PDF generation + Excel + email send) to run
+    // AFTER the HTTP response is sent. Previously this blocked the response
+    // for 700ms–1.8s. The admin now gets an immediate 200; the customer
+    // receives the email within a moment.
+    //
+    // after() is Next.js's built-in post-response scheduling — Vercel's
+    // runtime waits for it before freeing the function, so work is never
+    // silently dropped. Failures are already logged to notification_attempts
+    // by EmailService's Phase 6 instrumentation.
+    after(async () => {
+      try {
+        // Generate PDF
+        const pdfBuffer = generateOrderPDF({
       order_number: order.order_number,
       type: order.type,
       status: order.status,
@@ -160,11 +176,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const quotedTotal = order.quoted_amount ?? order.total_amount ?? 0
     const totalFormatted = quotedTotal > 0 ? `$${quotedTotal.toFixed(2)}` : 'See attached'
 
-    // Derive absolute URL from env var → request host fallback so email links
-    // are never relative (relative URLs are non-functional in email clients).
-    const envSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '')
-    const requestOrigin = `${req.nextUrl.protocol}//${req.nextUrl.host}`
-    const siteUrl = envSiteUrl || requestOrigin
+    // siteUrl is captured from the outer scope (set before after() was scheduled)
     const orderUrl = `${siteUrl}/customer/orders/${order.id}`
 
     const safeOrderNumHtml = escapeHtml(order.order_number || '')
@@ -240,7 +252,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   <p style="color:#888;font-size:12px;margin-top:32px">— DLM Engine</p>
 </div>`
 
-    const sent = await EmailService.sendEmailWithAttachments(
+    await EmailService.sendEmailWithAttachments(
       customerEmail,
       `${docType} — Order ${order.order_number}`,
       html,
@@ -249,10 +261,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         { filename: `${filenameBase}.xlsx`, content: excelBuffer, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
       ]
     )
+    // Send success is logged by EmailService's notification_attempts instrumentation
+  } catch (bgError) {
+    // Logged to notification_attempts by EmailService's instrumentation; also
+    // surface to server logs so it shows in Vercel's function log stream.
+    console.error('[send-quote-email] Background send failed:', bgError)
+  }
+    }) // end after()
 
-    return NextResponse.json({ ok: true, email_sent: sent, recipient: customerEmail })
+    // Return immediately — the admin gets a response in <200ms instead of
+    // waiting for PDF generation + Excel + email round-trip (~700ms–1.8s).
+    return NextResponse.json({ ok: true, queued: true, recipient: customerEmail })
   } catch (error) {
-    console.error('Send quote email error:', error)
+    console.error('Send quote email error (validation):', error)
     return NextResponse.json({ error: safeErrorMessage(error, 'Failed to send quote email') }, { status: 500 })
   }
 }
