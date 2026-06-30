@@ -1067,7 +1067,7 @@ export default function NewOrderPage() {
               </button>
               {manualEntryOpen && (
                 <div className="space-y-4 px-4 pb-4">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <div className="flex flex-col items-center gap-3 p-4 rounded-lg bg-muted/50 text-center">
                   <p className="text-sm text-muted-foreground">
                     {canCreateCpoOrder ? 'Add Trade-In and/or CPO items to your order:' : 'Add trade-in items to your order:'}
                   </p>
@@ -1083,7 +1083,7 @@ export default function NewOrderPage() {
                   </div>
                 </div>
                 {items.length === 0 ? (
-                  <p className="text-center py-6 text-muted-foreground">No items added yet. Click buttons above to add items.</p>
+                  <p className="text-center py-6 font-semibold text-muted-foreground">No items added yet. Click the Trade-In Item button above to add devices.</p>
                 ) : (
                   items.map((item, index) => {
                     const selectedDevice = devices.find(d => d.id === item.device_id)

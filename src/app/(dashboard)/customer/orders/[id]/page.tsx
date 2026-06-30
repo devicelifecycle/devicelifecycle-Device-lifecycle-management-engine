@@ -237,8 +237,13 @@ export default function CustomerOrderDetailPage() {
   const steps = isCpo ? CPO_STEPS : TRADE_IN_STEPS
   const currentStepIdx = getStepIndex(steps, order.status)
 
+  // Only show confirmed prices once admin has actually sent the quote
+  // (status = quoted or later). At 'submitted' status the engine pre-calculates
+  // a unit_price but the admin hasn't approved it yet — showing it as a firm
+  // number misleads the customer into thinking the price is final.
+  const priceConfirmedByAdmin = !['draft', 'submitted'].includes(order.status)
   const hasAnyPrice = order.items?.some(item => (item.unit_price ?? item.guaranteed_buyback_price) != null) ?? false
-  const showPriceCol = isQuoted || hasAnyPrice
+  const showPriceCol = priceConfirmedByAdmin && (isQuoted || hasAnyPrice)
 
   function parseItemQty(item: { quantity?: number | null; notes?: string | null }): number {
     const match = item.notes?.match(/\[Original qty:\s*(\d+)\]/i)
@@ -701,10 +706,21 @@ export default function CustomerOrderDetailPage() {
           <p className="font-semibold mt-1">{order.total_quantity ?? '—'}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-5">
-          <p className="text-xs text-muted-foreground">{isQuoted ? 'Quoted Amount' : order.status === 'payment_sent' || isClosed ? 'Final Amount' : 'Amount'}</p>
-          <p className="font-semibold mt-1">
-            {(order.final_amount ?? 0) > 0 ? formatCurrency(order.final_amount!) : quotedAmount > 0 ? formatCurrency(quotedAmount) : '—'}
+          <p className="text-xs text-muted-foreground">
+            {isQuoted ? 'Quoted Amount' : order.status === 'payment_sent' || isClosed ? 'Final Amount' : priceConfirmedByAdmin ? 'Amount' : 'Est. Amount'}
           </p>
+          <p className="font-semibold mt-1">
+            {(order.final_amount ?? 0) > 0
+              ? formatCurrency(order.final_amount!)
+              : quotedAmount > 0
+                ? priceConfirmedByAdmin
+                  ? formatCurrency(quotedAmount)
+                  : `Est. ${formatCurrency(quotedAmount)}`
+                : '—'}
+          </p>
+          {!priceConfirmedByAdmin && quotedAmount > 0 && (
+            <p className="text-[11px] text-muted-foreground mt-0.5">Pending admin quote</p>
+          )}
         </CardContent></Card>
       </div>
 
