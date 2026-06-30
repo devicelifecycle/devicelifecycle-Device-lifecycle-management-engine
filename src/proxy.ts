@@ -127,14 +127,18 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
 
-    // Cookie absent — read role from DB
+    // Cookie absent — read role + full profile from DB in one query.
+    // Fetching the full profile here (instead of just 'role') costs nothing
+    // extra (same round-trip) and lets us stamp dlm_profile so the next
+    // request's layout.tsx fast-path skips its own DB call entirely,
+    // saving a full DB round-trip on every subsequent page load.
     const { data: dbUser } = await supabase
       .from('users')
-      .select('role')
+      .select('role, id, email, full_name, secondary_role, organization_id, is_active, is_org_admin, onboarding_completed_at, created_at, updated_at, notification_email, notification_preferences, last_login_at')
       .eq('id', authUser.id)
       .single()
 
-    if (!dbUser) {
+    if (!dbUser || dbUser.is_active === false) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
@@ -145,6 +149,19 @@ export async function proxy(request: NextRequest) {
     const cookieOpts = { path: '/', maxAge: 28800, sameSite: 'lax' as const }
     routed.cookies.set(ROLE_COOKIE, encodeURIComponent(dbUser.role), cookieOpts)
     routed.cookies.set(USER_ID_COOKIE, encodeURIComponent(authUser.id), cookieOpts)
+    // Stamp the full profile cookie so layout.tsx fast-path fires on next request
+    // (same fields as writeProfileCookie() in useAuth.ts, must stay in sync)
+    try {
+      const compact = {
+        id: dbUser.id, email: dbUser.email, full_name: dbUser.full_name,
+        role: dbUser.role, secondary_role: dbUser.secondary_role,
+        organization_id: dbUser.organization_id, is_active: dbUser.is_active,
+        is_org_admin: dbUser.is_org_admin, onboarding_completed_at: dbUser.onboarding_completed_at,
+        notification_email: dbUser.notification_email, notification_preferences: dbUser.notification_preferences,
+        last_login_at: dbUser.last_login_at, created_at: dbUser.created_at, updated_at: dbUser.updated_at,
+      }
+      routed.cookies.set('dlm_profile', encodeURIComponent(JSON.stringify(compact)), cookieOpts)
+    } catch { /* non-fatal — layout falls back to DB if cookie is absent */ }
     return routed
   } catch (error) {
     // AbortError happens when browser navigates away before proxy completes — ignore it

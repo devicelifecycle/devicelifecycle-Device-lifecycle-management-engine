@@ -45,9 +45,13 @@ export function useNotifications() {
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
     refetchInterval: 15000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
+    // refetchOnWindowFocus and refetchOnMount are additive with refetchInterval —
+    // every tab-switch triggers a fetch on top of the 15s background poll,
+    // generating 4-8x more /api/notifications calls than the interval alone.
+    // The interval already keeps the badge fresh; focus/mount refetch disabled.
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     staleTime: 15 * 1000,
   })
 

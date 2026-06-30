@@ -369,6 +369,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No data rows provided' }, { status: 400 })
     }
 
+    if (rows.length > 5000) {
+      return NextResponse.json(
+        { error: `Upload exceeds the 5,000 row limit (your file has ${rows.length} rows). Split it into smaller files and upload each separately.` },
+        { status: 400 }
+      )
+    }
+
     if (!customer_id) {
       return NextResponse.json({ error: 'customer_id is required' }, { status: 400 })
     }

@@ -587,8 +587,8 @@ export class TriageService {
         const disputeTitle = `Exception disputed — Order #${order.order_number}`
         const disputeMsg = `${deviceName ? deviceName + ' — ' : ''}Exception was disputed${notes ? `: "${notes}"` : ''}. Manual review required.`
 
-        for (const u of internalUsers || []) {
-          await NotificationService.createNotification({
+        await Promise.all((internalUsers || []).map((u) =>
+          NotificationService.createNotification({
             user_id: (u as { id: string }).id,
             type: 'in_app',
             title: disputeTitle,
@@ -601,7 +601,7 @@ export class TriageService {
               audience: 'internal',
             },
           }).catch(() => {})
-        }
+        ))
       }
     }
 

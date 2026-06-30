@@ -695,6 +695,12 @@ export async function POST(request: NextRequest) {
       if (inputRows.length === 0) {
         return NextResponse.json({ error: 'No rows provided' }, { status: 400 })
       }
+      if (inputRows.length > 5000) {
+        return NextResponse.json(
+          { error: `Upload exceeds the 5,000 row limit (${inputRows.length} rows received). Split into smaller files.` },
+          { status: 400 }
+        )
+      }
       const catalog = await getCatalog(supabase)
       const outputRows: TradeTemplateRow[] = inputRows.map(row => {
         const rowNotes: string[] = []
