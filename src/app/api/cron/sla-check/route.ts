@@ -7,6 +7,7 @@ import { SLAService } from '@/services/sla.service'
 import { readServerEnv } from '@/lib/server-env'
 import { timingSafeEqual } from 'crypto'
 import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
+import logger from '@/lib/logger'
 
 const CRON_NAME = 'sla-check'
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     // Verify cron secret - always required. Fail closed if env var not set.
     if (!cronSecret) {
-      console.error('CRON_SECRET environment variable is not set. Cron endpoint disabled.')
+      logger.error({ cron: CRON_NAME }, 'CRON_SECRET not set — cron endpoint disabled')
       return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
     }
 
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
-    console.error('Error running SLA check:', error)
+    logger.error({ err: error, cron: CRON_NAME }, 'SLA check cron failed')
     await logCronFailure(CRON_NAME, startedAt, error)
     return NextResponse.json(
       { error: 'Failed to run SLA check' },

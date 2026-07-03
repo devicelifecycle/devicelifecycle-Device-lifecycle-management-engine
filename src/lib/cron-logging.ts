@@ -8,6 +8,7 @@
 // response.
 
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import logger from '@/lib/logger'
 
 export async function logCronSuccess(
   cronName: string,
@@ -24,7 +25,7 @@ export async function logCronSuccess(
       stats: stats || {},
     })
   } catch (err) {
-    console.error(`[cron-logging] failed to record success for ${cronName}:`, err)
+    logger.error({ err, cronName }, 'cron-logging: failed to record success')
   }
 }
 
@@ -42,7 +43,8 @@ export async function logCronFailure(
       finished_at: new Date().toISOString(),
       error_message: error instanceof Error ? error.message : String(error),
     })
+    logger.warn({ cronName, err: error instanceof Error ? error.message : String(error) }, 'cron run failed')
   } catch (err) {
-    console.error(`[cron-logging] failed to record failure for ${cronName}:`, err)
+    logger.error({ err, cronName }, 'cron-logging: failed to record failure')
   }
 }

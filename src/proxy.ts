@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createMiddlewareSupabaseClient } from '@/lib/supabase/middleware'
+import { getProfileCache, setProfileCache } from '@/lib/cache/profile-cache'
 
 // Routes that don't require authentication
 const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/auth/callback', '/reset-password', '/value-lookup']
@@ -127,16 +128,21 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
 
-    // Cookie absent — read role + full profile from DB in one query.
-    // Fetching the full profile here (instead of just 'role') costs nothing
-    // extra (same round-trip) and lets us stamp dlm_profile so the next
-    // request's layout.tsx fast-path skips its own DB call entirely,
-    // saving a full DB round-trip on every subsequent page load.
-    const { data: dbUser } = await supabase
-      .from('users')
-      .select('role, id, email, full_name, secondary_role, organization_id, is_active, is_org_admin, onboarding_completed_at, created_at, updated_at, notification_email, notification_preferences, last_login_at')
-      .eq('id', authUser.id)
-      .single()
+    // Cookie absent — read role + full profile from DB (or in-process cache).
+    // The profile cache (8h TTL, keyed by userId) eliminates the SELECT on warm
+    // serverless invocations: only supabase.auth.getUser() runs (~50ms) instead
+    // of both calls (~150-200ms). Cold starts still pay the full cost once.
+    let dbUser = getProfileCache(authUser.id)
+
+    if (!dbUser) {
+      const { data: fetched } = await supabase
+        .from('users')
+        .select('role, id, email, full_name, secondary_role, organization_id, is_active, is_org_admin, onboarding_completed_at, created_at, updated_at, notification_email, notification_preferences, last_login_at')
+        .eq('id', authUser.id)
+        .single()
+      if (fetched) setProfileCache(authUser.id, fetched)
+      dbUser = fetched
+    }
 
     if (!dbUser || dbUser.is_active === false) {
       return NextResponse.redirect(new URL('/login', request.url))
