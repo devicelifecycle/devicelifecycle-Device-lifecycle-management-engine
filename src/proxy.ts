@@ -106,12 +106,26 @@ export async function proxy(request: NextRequest) {
   // in 8 hours. API routes independently validate the Supabase JWT, so this only
   // bypasses the middleware routing check, not data-layer authorization.
   if (cachedRole && cachedUserId) {
-    // Use dlm_active_role (set by switchRole()) if present, otherwise primary role.
-    // The cookie value is not validated here — API routes enforce data-level access.
-    const activeRoleCookie = request.cookies.get(ACTIVE_ROLE_COOKIE)?.value
+    const activeRoleCookieRaw = request.cookies.get(ACTIVE_ROLE_COOKIE)?.value
       ? decodeURIComponent(request.cookies.get(ACTIVE_ROLE_COOKIE)!.value)
       : null
-    const effectiveRole = activeRoleCookie || cachedRole
+
+    // Validate active role against both primary role (dlm_role) and secondary
+    // role from the profile cookie — prevents a customer from spoofing
+    // dlm_active_role=admin to reach protected UI on the fast path.
+    let secondaryRole: string | null = null
+    const profileCookieRaw = request.cookies.get('dlm_profile')?.value
+      ? decodeURIComponent(request.cookies.get('dlm_profile')!.value)
+      : null
+    if (profileCookieRaw) {
+      try {
+        const parsed = JSON.parse(profileCookieRaw) as { secondary_role?: string | null }
+        secondaryRole = parsed.secondary_role ?? null
+      } catch {}
+    }
+    const effectiveRole = (activeRoleCookieRaw && (activeRoleCookieRaw === cachedRole || activeRoleCookieRaw === secondaryRole))
+      ? activeRoleCookieRaw
+      : cachedRole
     return applyRoleRouting(pathname, effectiveRole, request)
   }
 

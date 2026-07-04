@@ -377,7 +377,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       // ── Fast path 1: localStorage cache matches the authenticated user ──
       // Most common case for returning users — navigate immediately with no DB call.
       const cachedUser = readTrustedCachedUser()
-      if (cachedUser && cachedUser.id === userId) {
+      if (cachedUser && cachedUser.id === userId && cachedUser.is_active !== false) {
         writeCachedUser(cachedUser)
         setRoutingCookies(cachedUser.role, cachedUser.id)
         writeProfileCookie(cachedUser)
@@ -505,6 +505,8 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
 
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (!authUser) throw new Error('Session lost after MFA verification')
+
+      void supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', authUser.id)
 
       const { data: profile } = await supabase
         .from('users')
