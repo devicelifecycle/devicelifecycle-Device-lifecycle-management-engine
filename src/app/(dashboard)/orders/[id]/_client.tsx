@@ -179,6 +179,7 @@ export default function OrderDetailClient() {
   const [isSendingMismatchNotice, setIsSendingMismatchNotice] = useState(false)
   const [isSendingQuote, setIsSendingQuote] = useState(false)
   const [isSendingQuoteDirect, setIsSendingQuoteDirect] = useState(false)
+  const [quoteValidityDays, setQuoteValidityDays] = useState(30)
   const [isSendingTriageReport, setIsSendingTriageReport] = useState(false)
   const [isNotifyingPriceChange, setIsNotifyingPriceChange] = useState(false)
   const [isGeneratingPostTriageQuote, setIsGeneratingPostTriageQuote] = useState(false)
@@ -1299,7 +1300,7 @@ export default function OrderDetailClient() {
         toast.error('Set pricing for all items before sending the quote')
         return
       }
-      await transition({ status: 'quoted' as OrderStatus, notes: 'Quote sent to customer' })
+      await transition({ status: 'quoted' as OrderStatus, notes: 'Quote sent to customer', validityDays: quoteValidityDays })
       toast.success('Quote sent to customer')
       refetch()
     } catch (e) {
@@ -1314,7 +1315,11 @@ export default function OrderDetailClient() {
     if (!order) return
     setIsSendingQuoteDirect(true)
     try {
-      const res = await fetch(`/api/orders/${order.id}/send-quote-email`, { method: 'POST' })
+      const res = await fetch(`/api/orders/${order.id}/send-quote-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ validity_days: quoteValidityDays }),
+      })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Failed to send quote')
       toast.success('Quote with PDF & Excel sent directly to customer')
@@ -1880,7 +1885,9 @@ export default function OrderDetailClient() {
               </div>
             )}
             <p className="text-xs text-green-600/80 dark:text-green-400/80 mt-2">
-              {isCpoOrder ? 'This quote is valid for 30 days.' : 'This quote combines automated market pricing with team-verified adjustments.'}
+              {isCpoOrder
+                ? `This quote is valid for ${order.quote_expires_at && order.quoted_at ? Math.round((new Date(order.quote_expires_at).getTime() - new Date(order.quoted_at).getTime()) / 86400000) : 30} days.`
+                : 'This quote combines automated market pricing with team-verified adjustments.'}
             </p>
           </CardContent>
         </Card>
@@ -3330,6 +3337,24 @@ export default function OrderDetailClient() {
                 </>
               )}
 
+              {/* Quote validity selector — shown whenever any quote-send action is available */}
+              {canSendQuote && ['draft', 'submitted', 'quoted'].includes(order.status) && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">Price guarantee:</span>
+                  <Select value={String(quoteValidityDays)} onValueChange={v => setQuoteValidityDays(Number(v))}>
+                    <SelectTrigger className="h-8 text-xs flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="15">15 days</SelectItem>
+                      <SelectItem value="30">30 days</SelectItem>
+                      <SelectItem value="60">60 days</SelectItem>
+                      <SelectItem value="90">90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Send Quote — available to internal staff when order has prices */}
               {canSendQuote && (order.status === 'draft' || order.status === 'submitted') && (
                 <Button
@@ -3611,8 +3636,8 @@ export default function OrderDetailClient() {
               </DialogDescription>
             </DialogHeader>
           </div>
-          {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {/* Scrollable body — wide visible scrollbar prevents accidental dialog close */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar-track]:bg-muted/20 [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
           {!isCpoOrder && (
             <div className="rounded-lg border bg-muted/30 p-3 flex items-center justify-between gap-4">
               <div>

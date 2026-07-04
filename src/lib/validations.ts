@@ -341,6 +341,7 @@ export const updateOrderSchema = z.object({
 export const orderTransitionSchema = z.object({
   to_status: z.enum(ORDER_STATUS_VALUES),
   notes: z.string().optional(),
+  validity_days: z.number().int().min(1).max(365).optional(),
 })
 
 const pricingMetadataSchema = z.object({

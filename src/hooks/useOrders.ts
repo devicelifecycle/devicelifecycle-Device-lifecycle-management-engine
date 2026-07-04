@@ -83,11 +83,11 @@ async function updateOrder(id: string, data: Partial<Order>): Promise<Order> {
   return response.json()
 }
 
-async function transitionOrder(id: string, newStatus: OrderStatus, notes?: string): Promise<Order> {
+async function transitionOrder(id: string, newStatus: OrderStatus, notes?: string, validityDays?: number): Promise<Order> {
   const response = await fetch(`/api/orders/${id}/transition`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to_status: newStatus, notes }),
+    body: JSON.stringify({ to_status: newStatus, notes, validity_days: validityDays }),
   })
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
@@ -312,8 +312,8 @@ export function useOrder(id: string | null) {
   })
 
   const transitionMutation = useMutation({
-    mutationFn: ({ status, notes }: { status: OrderStatus; notes?: string }) =>
-      transitionOrder(id!, status, notes),
+    mutationFn: ({ status, notes, validityDays }: { status: OrderStatus; notes?: string; validityDays?: number }) =>
+      transitionOrder(id!, status, notes, validityDays),
     onMutate: async ({ status }) => {
       await queryClient.cancelQueries({ queryKey: ['order', id] })
       const prevOrder = queryClient.getQueryData<Order>(['order', id])

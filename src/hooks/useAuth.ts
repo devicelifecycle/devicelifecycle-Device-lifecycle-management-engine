@@ -387,12 +387,14 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         const dest = getDefaultAppPathForRole(cachedUser.role)
         router.replace(dest)
         // Hard-nav fallback: force full-page reload ONLY if soft navigation stalled
-        // (URL hasn't changed after 2.5 s). Checking the pathname first prevents
-        // an unnecessary reload when router.replace already succeeded.
-        setTimeout(() => {
-          if (typeof window !== 'undefined' && !window.location.pathname.startsWith(dest.split('?')[0])) {
-            window.location.assign(dest)
-          }
+        // (URL hasn't changed after 2.5 s). Guard: skip if fetchUser() signed the user
+        // out (e.g. is_active became false) — firing hard-nav in that case would
+        // bounce the user into an immediate proxy redirect back to /login.
+        setTimeout(async () => {
+          if (typeof window === 'undefined') return
+          if (window.location.pathname.startsWith(dest.split('?')[0])) return
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) window.location.assign(dest)
         }, 2500)
         // Hydrate full profile in background — updates state without blocking nav
         fetchUser().catch(() => {})
@@ -431,10 +433,12 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         const dest = getDefaultAppPathForRole(profile.role)
         router.replace(dest)
         // Hard-nav fallback: force full-page reload ONLY if soft navigation stalled.
-        setTimeout(() => {
-          if (typeof window !== 'undefined' && !window.location.pathname.startsWith(dest.split('?')[0])) {
-            window.location.assign(dest)
-          }
+        // Skip if session was revoked between login and the timer firing.
+        setTimeout(async () => {
+          if (typeof window === 'undefined') return
+          if (window.location.pathname.startsWith(dest.split('?')[0])) return
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) window.location.assign(dest)
         }, 2500)
         return
       }

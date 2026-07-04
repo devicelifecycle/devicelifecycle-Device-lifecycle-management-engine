@@ -31,6 +31,7 @@ function LoginPageInner() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [accountDeactivated, setAccountDeactivated] = useState(false)
   const [mfaStep, setMfaStep] = useState(false)
   const [mfaFactorId, setMfaFactorId] = useState('')
   const [mfaCode, setMfaCode] = useState('')
@@ -40,6 +41,7 @@ function LoginPageInner() {
 
   useEffect(() => {
     if (searchParams.get('reason') === 'session_expired') setSessionExpired(true)
+    if (searchParams.get('reason') === 'deactivated') setAccountDeactivated(true)
   }, [searchParams])
 
   useEffect(() => {
@@ -83,8 +85,10 @@ function LoginPageInner() {
       }
       const msg = e instanceof Error ? e.message : 'Failed to sign in'
       setError(
-        msg.toLowerCase().includes('invalid login') || msg.toLowerCase().includes('invalid email')
+        msg.toLowerCase().includes('invalid login') || msg.toLowerCase().includes('invalid email') || msg.toLowerCase().includes('invalid credentials')
           ? 'Invalid Login ID or password.'
+          : msg.toLowerCase().includes('inactive') || msg.toLowerCase().includes('not found or inactive')
+          ? 'Your account is deactivated. Please contact your administrator.'
           : msg
       )
     }
@@ -263,6 +267,11 @@ function LoginPageInner() {
               {sessionExpired && (
                 <div className="surface-muted mb-5 rounded-2xl px-4 py-3 font-body text-sm text-muted-foreground">
                   Your session expired. Please sign in again.
+                </div>
+              )}
+              {accountDeactivated && (
+                <div className="mb-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-body text-sm text-amber-200">
+                  Your account has been deactivated. Please contact your administrator to regain access.
                 </div>
               )}
               {error && (

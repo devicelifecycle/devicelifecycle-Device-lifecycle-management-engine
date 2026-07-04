@@ -145,7 +145,9 @@ export async function proxy(request: NextRequest) {
     }
 
     if (!dbUser || dbUser.is_active === false) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      const loginUrl = new URL('/login', request.url)
+      if (dbUser?.is_active === false) loginUrl.searchParams.set('reason', 'deactivated')
+      return NextResponse.redirect(loginUrl)
     }
 
     // Stamp routing cookies server-side so the next navigation uses the fast path

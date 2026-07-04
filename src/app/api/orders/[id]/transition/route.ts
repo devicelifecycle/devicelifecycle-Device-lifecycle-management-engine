@@ -42,7 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       )
     }
 
-    const { to_status: newStatus, notes } = validationResult.data
+    const { to_status: newStatus, notes, validity_days } = validationResult.data
 
     // Get current order
     const currentOrder = await OrderService.getOrderById((await params).id)
@@ -204,7 +204,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       (await params).id,
       newStatus,
       authUser.id,
-      notes
+      notes,
+      validity_days
     )
 
     // Log audit

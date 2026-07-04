@@ -152,6 +152,12 @@ export async function PATCH(
 
     if (error) throw error
 
+    // Flush proxy-level profile cache so a reactivated user isn't blocked for up to 8h
+    if ('is_active' in updateData) {
+      const { invalidateProfileCache } = await import('@/lib/cache/profile-cache')
+      invalidateProfileCache(targetId)
+    }
+
     return NextResponse.json(updatedUser)
   } catch (error) {
     console.error('Error updating user:', error)

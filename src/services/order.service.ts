@@ -596,7 +596,8 @@ export class OrderService {
     id: string,
     toStatus: OrderStatus,
     userId: string,
-    notes?: string
+    notes?: string,
+    validityDays?: number
   ): Promise<Order> {
     // Use service role to bypass RLS — the API route has already validated permissions
     // (customers are allowed to accept/reject quotes but RLS only grants UPDATE to internal users)
@@ -633,8 +634,8 @@ export class OrderService {
       case 'quoted': {
         const now = new Date()
         updateData.quoted_at = now.toISOString()
-        // Trade-in quotes valid for 30 days
-        const expiryDays = 30
+        // Trade-in quotes valid for the requested duration (default 30 days)
+        const expiryDays = validityDays ?? 30
         updateData.quote_expires_at = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000).toISOString()
 
         // Always recalculate quoted_amount + total_amount from order_items to keep them in sync

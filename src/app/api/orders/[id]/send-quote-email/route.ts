@@ -30,10 +30,13 @@ function formatDate(s?: string | null): string {
   return new Date(s).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrderById>>): Promise<Buffer> {
+async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrderById>>, fallbackValidityDays = 30): Promise<Buffer> {
   const ExcelJS = await import('exceljs')
   const isQuote = ['draft', 'submitted', 'quoted'].includes(order!.status)
   const docType = isQuote ? 'Quote' : 'Invoice'
+  const quoteValidityDays = (order!.quote_expires_at && order!.quoted_at)
+    ? Math.round((new Date(order!.quote_expires_at).getTime() - new Date(order!.quoted_at).getTime()) / (1000 * 60 * 60 * 24))
+    : fallbackValidityDays
   const wb = new ExcelJS.default.Workbook()
 
   // Summary sheet
@@ -55,7 +58,7 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
     ['Total Quantity', order!.total_quantity ?? '—'],
     ['Quoted Amount', formatCurrency(order!.quoted_amount ?? order!.total_amount)],
     ['Final Amount', formatCurrency(order!.final_amount)],
-    ...(isQuote ? [['Quote Valid Until', order!.quote_expires_at ? formatDate(order!.quote_expires_at) : '30 days from quote date']] as (string | number | null | undefined)[][] : []),
+    ...(isQuote ? [['Quote Valid Until', order!.quote_expires_at ? formatDate(order!.quote_expires_at) : `${quoteValidityDays} days from quote date`]] as (string | number | null | undefined)[][] : []),
     ...(order!.notes ? [[], ['Notes', order!.notes]] as (string | number | null | undefined)[][] : []),
   ]
   summaryData.forEach(row => ws1.addRow(row))
@@ -101,6 +104,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!['admin', 'coe_manager', 'sales'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+
+    const body = await req.json().catch(() => ({}))
+    const bodyValidityDays: number = typeof body?.validity_days === 'number' ? Math.max(1, Math.min(365, body.validity_days)) : 30
 
     const orderId = (await params).id
     const order = await OrderService.getOrderById(orderId)
@@ -171,7 +177,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     // Generate Excel
-    const excelBuffer = await buildExcelBuffer(order)
+    const excelBuffer = await buildExcelBuffer(order, bodyValidityDays)
 
     const quotedTotal = order.quoted_amount ?? order.total_amount ?? 0
     const totalFormatted = quotedTotal > 0 ? `$${quotedTotal.toFixed(2)}` : 'See attached'
@@ -181,6 +187,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const safeOrderNumHtml = escapeHtml(order.order_number || '')
     const safeTotalFormatted = escapeHtml(totalFormatted)
+    const quoteValidityDays = (order.quote_expires_at && order.quoted_at)
+      ? Math.round((new Date(order.quote_expires_at).getTime() - new Date(order.quoted_at).getTime()) / (1000 * 60 * 60 * 24))
+      : bodyValidityDays
 
     const itemRows = (order.items || []).map(item => {
       const deviceLabel = item.device
@@ -232,7 +241,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   <h2 style="color:#111">Your ${docType} — Order ${safeOrderNumHtml}</h2>
   <p>Hi ${customerName},</p>
   <p>Please find your <strong>${docType.toLowerCase()}</strong> for order <strong>${safeOrderNumHtml}</strong> attached as a PDF and Excel file.</p>
-  ${isQuote ? `<p style="margin:8px 0;font-size:13px;color:#b65d2f;font-weight:600">This quote is valid for 30 days${order.quote_expires_at ? ` (expires ${formatDate(order.quote_expires_at)})` : ''}.</p>` : ''}
+  ${isQuote ? `<p style="margin:8px 0;font-size:13px;color:#b65d2f;font-weight:600">This quote is valid for ${quoteValidityDays} days${order.quote_expires_at ? ` (expires ${formatDate(order.quote_expires_at)})` : ''}.</p>` : ''}
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Order Number</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeOrderNumHtml}</td></tr>
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Total Amount</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeTotalFormatted}</td></tr>
