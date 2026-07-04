@@ -60,6 +60,8 @@ export async function requireAuth(): Promise<AuthContext | null> {
 
   if (!profile || !profile.is_active) return null
 
+  const VALID_ROLES = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor']
+
   const cookieStore = await cookies()
   const activeRoleRaw = cookieStore.get('dlm_active_role')?.value
   const activeRoleCookie = activeRoleRaw ? decodeURIComponent(activeRoleRaw) : null
@@ -68,6 +70,8 @@ export async function requireAuth(): Promise<AuthContext | null> {
     (activeRoleCookie === profile.role || activeRoleCookie === profile.secondary_role)
       ? activeRoleCookie
       : profile.role
+
+  if (!VALID_ROLES.includes(effectiveRole)) return null
 
   return { supabase, authUser: session.user, profile: profile as AuthProfile, effectiveRole }
 }

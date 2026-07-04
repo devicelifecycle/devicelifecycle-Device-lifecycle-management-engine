@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
     const client = isOrgAdmin ? createServiceRoleClient() : supabase
     let query = client.from('users').select('*').order('created_at', { ascending: false })
     if (isOrgAdmin) {
+      if (!profile.organization_id) {
+        return NextResponse.json({ error: 'Org admin account has no organization assigned' }, { status: 403 })
+      }
       query = query.eq('organization_id', profile.organization_id).eq('role', profile.role)
     }
     const { data: users, error } = await query
