@@ -136,9 +136,13 @@ export default function CustomerDetailPage() {
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><Building2 className="h-4 w-4" />Organization</CardTitle></CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">This customer is linked to organization</p>
-            <Link href="/admin/organizations" className="font-medium text-primary hover:underline">
-              {(customer as { organization?: { name: string } }).organization?.name}
-            </Link>
+            {user?.role === 'admin' ? (
+              <Link href="/admin/organizations" className="font-medium text-primary hover:underline">
+                {(customer as { organization?: { name: string } }).organization?.name}
+              </Link>
+            ) : (
+              <p className="font-medium">{(customer as { organization?: { name: string } }).organization?.name}</p>
+            )}
           </CardContent>
         </Card>
       )}

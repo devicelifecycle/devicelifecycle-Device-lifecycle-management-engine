@@ -186,9 +186,11 @@ export default function CustomersPage() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-muted-foreground">Scope active.</span>
             <span>Showing customers for one organization.</span>
-            <Link href="/admin/organizations" className="text-primary hover:text-primary/70">
-              View organizations
-            </Link>
+            {user?.role === 'admin' && (
+              <Link href="/admin/organizations" className="text-primary hover:text-primary/70">
+                View organizations
+              </Link>
+            )}
             <Link href="/customers" className="ml-auto text-primary hover:text-primary/70">
               Clear filter
             </Link>

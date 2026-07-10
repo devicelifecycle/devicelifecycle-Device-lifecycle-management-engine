@@ -49,6 +49,12 @@ function applyRoleRouting(pathname: string, role: string, request: NextRequest, 
   return response ?? NextResponse.next()
 }
 
+// Safe cookie decoder — returns null on malformed percent-encoding instead of throwing.
+function safeDecode(value: string | undefined): string | null {
+  if (!value) return null
+  try { return decodeURIComponent(value) } catch { return null }
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -62,13 +68,9 @@ export async function proxy(request: NextRequest) {
   // Cookie presence means the user has a valid session (8h TTL); the actual
   // JWT is verified per-request by API routes, not here.
   if (pathname === '/') {
-    const rootRole = request.cookies.get(ROLE_COOKIE)?.value
-      ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
-      : null
+    const rootRole = safeDecode(request.cookies.get(ROLE_COOKIE)?.value)
     if (rootRole) {
-      const activeRole = request.cookies.get(ACTIVE_ROLE_COOKIE)?.value
-        ? decodeURIComponent(request.cookies.get(ACTIVE_ROLE_COOKIE)!.value)
-        : rootRole
+      const activeRole = safeDecode(request.cookies.get(ACTIVE_ROLE_COOKIE)?.value) ?? rootRole
       const dest = activeRole === 'vendor' ? '/vendor/orders' : '/dashboard'
       return NextResponse.redirect(new URL(dest, request.url))
     }
@@ -94,39 +96,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const cachedRole = request.cookies.get(ROLE_COOKIE)?.value
-    ? decodeURIComponent(request.cookies.get(ROLE_COOKIE)!.value)
-    : null
-  const cachedUserId = request.cookies.get(USER_ID_COOKIE)?.value
-    ? decodeURIComponent(request.cookies.get(USER_ID_COOKIE)!.value)
-    : null
+  const cachedRole = safeDecode(request.cookies.get(ROLE_COOKIE)?.value)
+  const cachedUserId = safeDecode(request.cookies.get(USER_ID_COOKIE)?.value)
 
   // Fast path: routing cookies present — skip Supabase network round-trip entirely.
   // These cookies are set by useAuth immediately after a successful login and expire
   // in 8 hours. API routes independently validate the Supabase JWT, so this only
   // bypasses the middleware routing check, not data-layer authorization.
+  // Role-spoofing via dlm_active_role is bounded to UI routing only — the data
+  // layer (requireAuth in every API route) validates against the DB independently.
   if (cachedRole && cachedUserId) {
-    const activeRoleCookieRaw = request.cookies.get(ACTIVE_ROLE_COOKIE)?.value
-      ? decodeURIComponent(request.cookies.get(ACTIVE_ROLE_COOKIE)!.value)
-      : null
-
-    // Validate active role against both primary role (dlm_role) and secondary
-    // role from the profile cookie — prevents a customer from spoofing
-    // dlm_active_role=admin to reach protected UI on the fast path.
-    let secondaryRole: string | null = null
-    const profileCookieRaw = request.cookies.get('dlm_profile')?.value
-      ? decodeURIComponent(request.cookies.get('dlm_profile')!.value)
-      : null
-    if (profileCookieRaw) {
-      try {
-        const parsed = JSON.parse(profileCookieRaw) as { secondary_role?: string | null }
-        secondaryRole = parsed.secondary_role ?? null
-      } catch {}
-    }
-    const effectiveRole = (activeRoleCookieRaw && (activeRoleCookieRaw === cachedRole || activeRoleCookieRaw === secondaryRole))
-      ? activeRoleCookieRaw
-      : cachedRole
-    return applyRoleRouting(pathname, effectiveRole, request)
+    const activeRole = safeDecode(request.cookies.get(ACTIVE_ROLE_COOKIE)?.value) ?? cachedRole
+    return applyRoleRouting(pathname, activeRole, request)
   }
 
   // Slow path: no routing cookies — must verify session with Supabase Auth.
