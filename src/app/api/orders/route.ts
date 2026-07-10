@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const { supabase, authUser, profile, effectiveRole } = auth
 
     // Get user's role and organization
-    if (!profile.is_active) {
+    if (profile.is_active === false) {
       return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
     }
 

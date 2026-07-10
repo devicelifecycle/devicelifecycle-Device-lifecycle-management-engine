@@ -207,12 +207,16 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
     { label: 'Revenue', value: formatCurrency(recentRevenue), icon: DollarSign, tone: 'text-emerald-400' },
   ], [total, pendingOrders, slaAlerts, recentRevenue])
 
+  const isCoeRole = ['admin', 'coe_manager', 'coe_tech'].includes(user.role)
   const quickActions = useMemo(() => [
     { href: '/orders/new/trade-in', label: 'Create Trade-In', icon: Plus, description: 'Start a fresh device intake' },
-    { href: '/orders/new/cpo', label: 'Create CPO Quote', icon: Package, description: 'Build a resale purchase flow' },
-    { href: '/coe/triage', label: 'Open Triage', icon: ClipboardCheck, description: 'Review condition and exceptions' },
-    { href: '/coe/shipping', label: 'Check Shipping', icon: Truck, description: 'Finalize outbound operations' },
-  ], [])
+    ...(isCoeRole ? [
+      { href: '/orders/new/cpo', label: 'Create CPO Quote', icon: Package, description: 'Build a resale purchase flow' },
+      { href: '/coe/triage', label: 'Open Triage', icon: ClipboardCheck, description: 'Review condition and exceptions' },
+      { href: '/coe/shipping', label: 'Check Shipping', icon: Truck, description: 'Finalize outbound operations' },
+    ] : []),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [isCoeRole])
 
   return (
     <div className="relative space-y-8">
@@ -240,12 +244,14 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                   New Trade-In
                 </Button>
               </Link>
-              <Link href="/orders/new/cpo">
-                <Button size="lg" variant="outline">
-                  <Package className="mr-2 h-4 w-4" />
-                  New CPO
-                </Button>
-              </Link>
+              {isCoeRole && (
+                <Link href="/orders/new/cpo">
+                  <Button size="lg" variant="outline">
+                    <Package className="mr-2 h-4 w-4" />
+                    New CPO
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
 

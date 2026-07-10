@@ -215,7 +215,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         return
       }
 
-      if (!profile.is_active) {
+      if (profile.is_active === false) {
         await supabase.auth.signOut().catch(() => {})
         writeCachedUser(null)
         clearRoutingCookies()

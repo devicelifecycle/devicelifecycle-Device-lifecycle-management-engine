@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    if (!profile.is_active) {
+    if (profile.is_active === false) {
       return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 })
     }
 

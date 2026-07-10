@@ -58,7 +58,7 @@ export async function requireAuth(): Promise<AuthContext | null> {
     .eq('id', session.user.id)
     .single()
 
-  if (!profile || !profile.is_active) return null
+  if (!profile || profile.is_active === false) return null
 
   const VALID_ROLES = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor']
 
