@@ -238,7 +238,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       console.error('Error fetching user:', error)
       if (mountedRef.current) {
         const cachedUser = readTrustedCachedUser()
-        if (cachedUser) {
+        if (cachedUser && cachedUser.is_active !== false) {
           setState(prev => ({
             ...prev,
             user: cachedUser,
@@ -393,6 +393,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         setTimeout(async () => {
           if (typeof window === 'undefined') return
           if (window.location.pathname.startsWith(dest.split('?')[0])) return
+          if (window.location.pathname === '/login') return
           const { data: { session } } = await supabase.auth.getSession()
           if (session?.user) window.location.assign(dest)
         }, 2500)
@@ -437,6 +438,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         setTimeout(async () => {
           if (typeof window === 'undefined') return
           if (window.location.pathname.startsWith(dest.split('?')[0])) return
+          if (window.location.pathname === '/login') return
           const { data: { session } } = await supabase.auth.getSession()
           if (session?.user) window.location.assign(dest)
         }, 2500)

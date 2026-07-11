@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(effectiveRole)) {
       return NextResponse.json({ error: 'Forbidden — internal role required' }, { status: 403 })
     }
 
@@ -40,6 +40,20 @@ export async function POST(request: NextRequest) {
     }
     if (!to_status || typeof to_status !== 'string') {
       return NextResponse.json({ error: 'to_status is required' }, { status: 400 })
+    }
+
+    // Per-status role restrictions — must mirror src/app/api/orders/[id]/transition/route.ts
+    if (to_status === 'quoted' && !['admin', 'coe_manager', 'sales'].includes(effectiveRole)) {
+      return NextResponse.json({ error: 'Only admin, COE managers, or sales can send quotes' }, { status: 403 })
+    }
+    if (to_status === 'mismatch_review' && !['admin', 'coe_manager'].includes(effectiveRole)) {
+      return NextResponse.json({ error: 'Only admin or COE managers can flag a mismatch review' }, { status: 403 })
+    }
+    if (to_status === 'payment_processing' && !['admin', 'coe_manager', 'sales'].includes(effectiveRole)) {
+      return NextResponse.json({ error: 'Only admin, COE managers, or sales can initiate payment processing' }, { status: 403 })
+    }
+    if (to_status === 'payment_sent' && !['admin', 'coe_manager'].includes(effectiveRole)) {
+      return NextResponse.json({ error: 'Only admin or COE managers can mark payment as sent' }, { status: 403 })
     }
     if (order_ids.some((id: unknown) => typeof id !== 'string' || !isValidUUID(id))) {
       return NextResponse.json({ error: 'All order_ids must be valid UUIDs' }, { status: 400 })

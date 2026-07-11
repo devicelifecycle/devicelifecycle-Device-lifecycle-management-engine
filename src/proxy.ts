@@ -106,7 +106,21 @@ export async function proxy(request: NextRequest) {
   // Role-spoofing via dlm_active_role is bounded to UI routing only — the data
   // layer (requireAuth in every API route) validates against the DB independently.
   if (cachedRole && cachedUserId) {
-    const activeRole = safeDecode(request.cookies.get(ACTIVE_ROLE_COOKIE)?.value) ?? cachedRole
+    const rawActiveRole = safeDecode(request.cookies.get(ACTIVE_ROLE_COOKIE)?.value)
+    let activeRole = cachedRole
+    if (rawActiveRole && rawActiveRole !== cachedRole) {
+      // dlm_active_role claims a different role than primary — only trust it if
+      // it matches secondary_role stamped in the server-set dlm_profile cookie.
+      const rawProfile = safeDecode(request.cookies.get('dlm_profile')?.value)
+      if (rawProfile) {
+        try {
+          const parsedProfile = JSON.parse(rawProfile) as { secondary_role?: string }
+          if (rawActiveRole === parsedProfile.secondary_role) activeRole = rawActiveRole
+        } catch { /* malformed profile cookie — keep cachedRole */ }
+      }
+    } else if (rawActiveRole) {
+      activeRole = rawActiveRole
+    }
     return applyRoleRouting(pathname, activeRole, request)
   }
 

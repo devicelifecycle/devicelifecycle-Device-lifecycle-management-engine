@@ -35,7 +35,7 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
   const isQuote = ['draft', 'submitted', 'quoted'].includes(order!.status)
   const docType = isQuote ? 'Quote' : 'Invoice'
   const quoteValidityDays = (order!.quote_expires_at && order!.quoted_at)
-    ? Math.round((new Date(order!.quote_expires_at).getTime() - new Date(order!.quoted_at).getTime()) / (1000 * 60 * 60 * 24))
+    ? Math.max(1, Math.round((new Date(order!.quote_expires_at).getTime() - new Date(order!.quoted_at).getTime()) / (1000 * 60 * 60 * 24)))
     : fallbackValidityDays
   const wb = new ExcelJS.default.Workbook()
 
@@ -99,9 +99,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { profile } = auth
+    const { profile, effectiveRole } = auth
 
-    if (!['admin', 'coe_manager', 'sales'].includes(profile.role)) {
+    if (!['admin', 'coe_manager', 'sales'].includes(effectiveRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const safeOrderNumHtml = escapeHtml(order.order_number || '')
     const safeTotalFormatted = escapeHtml(totalFormatted)
     const quoteValidityDays = (order.quote_expires_at && order.quoted_at)
-      ? Math.round((new Date(order.quote_expires_at).getTime() - new Date(order.quoted_at).getTime()) / (1000 * 60 * 60 * 24))
+      ? Math.max(1, Math.round((new Date(order.quote_expires_at).getTime() - new Date(order.quoted_at).getTime()) / (1000 * 60 * 60 * 24)))
       : bodyValidityDays
 
     const itemRows = (order.items || []).map(item => {

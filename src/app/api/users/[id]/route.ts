@@ -94,6 +94,7 @@ export async function PATCH(
         .eq('id', targetId)
         .single()
       isOrgAdminManagingTeammate = !!targetUser
+        && !!profile.organization_id
         && targetUser.organization_id === profile.organization_id
         && targetUser.role === profile.role
     }
@@ -152,8 +153,10 @@ export async function PATCH(
 
     if (error) throw error
 
-    // Flush proxy-level profile cache so a reactivated user isn't blocked for up to 8h
-    if ('is_active' in updateData) {
+    // Flush proxy-level profile cache when any routing-sensitive field changes.
+    // Comment in profile-cache.ts claims all three are invalidated — ensure code matches.
+    const CACHE_INVALIDATING_FIELDS = ['is_active', 'role', 'secondary_role', 'organization_id']
+    if (CACHE_INVALIDATING_FIELDS.some(f => f in updateData)) {
       const { invalidateProfileCache } = await import('@/lib/cache/profile-cache')
       invalidateProfileCache(targetId)
     }

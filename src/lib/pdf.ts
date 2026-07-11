@@ -136,7 +136,7 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(182, 93, 47) // brand copper
     const validityDays = (order.quote_expires_at && order.quoted_at)
-      ? Math.round((new Date(order.quote_expires_at).getTime() - new Date(order.quoted_at).getTime()) / (1000 * 60 * 60 * 24))
+      ? Math.max(1, Math.round((new Date(order.quote_expires_at).getTime() - new Date(order.quoted_at).getTime()) / (1000 * 60 * 60 * 24)))
       : 30
     doc.text(
       order.quote_expires_at
