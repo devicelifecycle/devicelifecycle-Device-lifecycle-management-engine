@@ -64,10 +64,11 @@ export async function proxy(request: NextRequest) {
   const USER_ID_COOKIE = 'dlm_uid'
   const ACTIVE_ROLE_COOKIE = 'dlm_active_role'
 
-  // Authenticated users hitting '/' skip the landing page bundle entirely.
+  // Landing page + auth pages: redirect authenticated users to their dashboard.
   // Cookie presence means the user has a valid session (8h TTL); the actual
   // JWT is verified per-request by API routes, not here.
-  if (pathname === '/') {
+  const AUTH_AND_LANDING = ['/', '/login', '/register', '/forgot-password']
+  if (AUTH_AND_LANDING.includes(pathname)) {
     const rootRole = safeDecode(request.cookies.get(ROLE_COOKIE)?.value)
     if (rootRole) {
       const activeRole = safeDecode(request.cookies.get(ACTIVE_ROLE_COOKIE)?.value) ?? rootRole
@@ -77,8 +78,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow public routes (prefix match — '/' is handled above)
-  if (publicRoutes.some((route) => route !== '/' && pathname.startsWith(route))) {
+  // Allow remaining public routes (/auth/callback, /reset-password, /value-lookup)
+  if (publicRoutes.some((route) => !AUTH_AND_LANDING.includes(route) && pathname.startsWith(route))) {
     return NextResponse.next()
   }
 
