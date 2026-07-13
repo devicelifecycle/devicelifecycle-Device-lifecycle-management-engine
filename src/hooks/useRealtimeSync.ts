@@ -48,18 +48,33 @@ export function useRealtimeSync() {
   useEffect(() => {
     const channel = supabase.channel('dlm-realtime-sync')
 
+    // Coalesce bursts: bulk operations (CSV upload, bulk-transition) fire dozens
+    // of row-change events in quick succession. Without batching, each one would
+    // invalidate queries and trigger a refetch in every open tab — a refetch storm.
+    // We collect the changed tables and flush once on a trailing 250ms timer, so a
+    // burst produces a single invalidation pass. A single change is delayed 250ms,
+    // which is imperceptible; correctness is unchanged (data still refreshes).
+    const pendingTables = new Set<string>()
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+    const flush = () => {
+      flushTimer = null
+      for (const table of pendingTables) {
+        for (const key of TABLE_KEY_MAP[table] ?? []) {
+          queryClientRef.current.invalidateQueries({ queryKey: key })
+        }
+        notifyTable(table)
+      }
+      pendingTables.clear()
+    }
+
     for (const table of Object.keys(TABLE_KEY_MAP)) {
       channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table },
         () => {
-          // 1. Invalidate React Query cache
-          const keys = TABLE_KEY_MAP[table] ?? []
-          for (const key of keys) {
-            queryClientRef.current.invalidateQueries({ queryKey: key })
-          }
-          // 2. Fire DOM event for plain-fetch pages
-          notifyTable(table)
+          pendingTables.add(table)
+          if (!flushTimer) flushTimer = setTimeout(flush, 250)
         }
       )
     }
@@ -67,6 +82,7 @@ export function useRealtimeSync() {
     channel.subscribe()
 
     return () => {
+      if (flushTimer) clearTimeout(flushTimer)
       supabase.removeChannel(channel)
     }
   }, []) // Empty deps — subscribe once on mount, never re-subscribe
