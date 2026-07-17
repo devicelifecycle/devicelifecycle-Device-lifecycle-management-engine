@@ -1,0 +1,230 @@
+{
+  "winner": {
+    "symbol": "EURUSD",
+    "strategy": "vwap_bounce",
+    "params": {
+      "sl_atr": 1.5,
+      "tp_rr": 2.5,
+      "max_bars": 32
+    },
+    "tag": "vwap_bounce|sl1.5|rr2.5|mb32",
+    "backtest": {
+      "n": 64.0,
+      "win_rate": 0.375,
+      "expectancy_R": -0.09896958906860308,
+      "profit_factor": 0.8391104086503304,
+      "avg_R": -0.09896958906860308,
+      "max_dd_R": 14.361085330104428,
+      "total_R": -6.334053700390597,
+      "sharpe_R": -0.6264751659476478
+    }
+  },
+  "monte_carlo_bootstrap": {
+    "mc_sims": 1000000.0,
+    "mc_final_p05": -22.50838028342785,
+    "mc_final_p50": -6.498398710928827,
+    "mc_final_p95": 10.454756287765397,
+    "mc_dd_p50": 13.428192321815834,
+    "mc_dd_p95": 25.422298218976433,
+    "mc_dd_p99": 30.84035041261367,
+    "mc_pct_profit": 0.26188,
+    "mc_pct_dd20R": 0.173592,
+    "mc_mean_final": -6.317828466184382
+  },
+  "monte_carlo_reshuffle": {
+    "mc_sims": 200000.0,
+    "mc_final_p05": -6.3340537003906,
+    "mc_final_p50": -6.334053700390597,
+    "mc_final_p95": -6.3340537003905935,
+    "mc_dd_p50": 12.86872650187363,
+    "mc_dd_p95": 18.565622627019224,
+    "mc_dd_p99": 21.098298882511575,
+    "mc_pct_profit": 0.0,
+    "mc_pct_dd20R": 0.020925,
+    "mc_mean_final": -6.334053700390598
+  },
+  "top_table": [
+    {
+      "symbol": "EURUSD",
+      "strategy": "vwap_bounce",
+      "sl_atr": 1.5,
+      "tp_rr": 2.5,
+      "n": 64.0,
+      "win_rate": 0.375,
+      "expectancy_R": -0.09896958906860308,
+      "profit_factor": 0.8391104086503304,
+      "total_R": -6.334053700390597,
+      "max_dd_R": 14.361085330104428
+    },
+    {
+      "symbol": "EURUSD",
+      "strategy": "vwap_bounce",
+      "sl_atr": 1.0,
+      "tp_rr": 2.0,
+      "n": 64.0,
+      "win_rate": 0.34375,
+      "expectancy_R": -0.11473291992922077,
+      "profit_factor": 0.8380587590795862,
+      "total_R": -7.342906875470129,
+      "max_dd_R": 12.867276520591727
+    },
+    {
+      "symbol": "EURUSD",
+      "strategy": "vwap_bounce",
+      "sl_atr": 1.2,
+      "tp_rr": 1.5,
+      "n": 64.0,
+      "win_rate": 0.40625,
+      "expectancy_R": -0.1331358200883634,
+      "profit_factor": 0.7934703385882337,
+      "total_R": -8.520692485655257,
+      "max_dd_R": 14.377303659307302
+    },
+    {
+      "symbol": "USDJPY",
+      "strategy": "vwap_bounce",
+      "sl_atr": 1.2,
+      "tp_rr": 1.5,
+      "n": 84.0,
+      "win_rate": 0.40476190476190477,
+      "expectancy_R": -0.15734332189596256,
+      "profit_factor": 0.7626667234487163,
+      "total_R": -13.216839039260854,
+      "max_dd_R": 12.716175495804329
+    },
+    {
+      "symbol": "USDJPY",
+      "strategy": "vwap_bounce",
+      "sl_atr": 1.0,
+      "tp_rr": 2.0,
+      "n": 84.0,
+      "win_rate": 0.34523809523809523,
+      "expectancy_R": -0.1723725910106223,
+      "profit_factor": 0.7682423629298091,
+      "total_R": -14.479297644892274,
+      "max_dd_R": 13.892907395668047
+    },
+    {
+      "symbol": "GBPJPY",
+      "strategy": "asian_break",
+      "sl_atr": 1.2,
+      "tp_rr": 2.0,
+      "n": 674.0,
+      "win_rate": 0.3264094955489614,
+      "expectancy_R": -0.2016209425644288,
+      "profit_factor": 0.7393715354788634,
+      "total_R": -135.89251528842502,
+      "max_dd_R": 142.7546806192162
+    },
+    {
+      "symbol": "USDJPY",
+      "strategy": "asian_break",
+      "sl_atr": 1.0,
+      "tp_rr": 1.5,
+      "n": 264.0,
+      "win_rate": 0.3787878787878788,
+      "expectancy_R": -0.20506918201358454,
+      "profit_factor": 0.7110346672705018,
+      "total_R": -54.13826405158632,
+      "max_dd_R": 58.936323521006976
+    },
+    {
+      "symbol": "EURUSD",
+      "strategy": "mr_bb_rsi",
+      "sl_atr": 1.2,
+      "tp_rr": 1.2,
+      "n": 7.0,
+      "win_rate": 0.42857142857142855,
+      "expectancy_R": -0.2333927323217909,
+      "profit_factor": 0.6428841223152807,
+      "total_R": -1.6337491262525363,
+      "max_dd_R": 3.6562758970550604
+    },
+    {
+      "symbol": "USDJPY",
+      "strategy": "london_drive",
+      "sl_atr": 1.2,
+      "tp_rr": 2.2,
+      "n": 1075.0,
+      "win_rate": 0.2930232558139535,
+      "expectancy_R": -0.23799223192728874,
+      "profit_factor": 0.7004164306730699,
+      "total_R": -255.8416493218354,
+      "max_dd_R": 258.6915376895171
+    },
+    {
+      "symbol": "EURUSD",
+      "strategy": "asian_fade",
+      "sl_atr": 1.2,
+      "tp_rr": 1.0,
+      "n": 617.0,
+      "win_rate": 0.4359805510534846,
+      "expectancy_R": -0.2564076693067915,
+      "profit_factor": 0.5945360761518036,
+      "total_R": -158.20353196229036,
+      "max_dd_R": 160.68079308864165
+    },
+    {
+      "symbol": "USDJPY",
+      "strategy": "asian_break",
+      "sl_atr": 1.2,
+      "tp_rr": 2.0,
+      "n": 264.0,
+      "win_rate": 0.29545454545454547,
+      "expectancy_R": -0.273576910011295,
+      "profit_factor": 0.652901134248055,
+      "total_R": -72.22430424298189,
+      "max_dd_R": 73.16983893127016
+    },
+    {
+      "symbol": "USDJPY",
+      "strategy": "london_drive",
+      "sl_atr": 1.0,
+      "tp_rr": 1.8,
+      "n": 1075.0,
+      "win_rate": 0.3144186046511628,
+      "expectancy_R": -0.28718058383478057,
+      "profit_factor": 0.6380455271140432,
+      "total_R": -308.7191276223891,
+      "max_dd_R": 309.28429779986004
+    },
+    {
+      "symbol": "GBPJPY",
+      "strategy": "asian_break",
+      "sl_atr": 1.0,
+      "tp_rr": 1.5,
+      "n": 674.0,
+      "win_rate": 0.36053412462908013,
+      "expectancy_R": -0.3003041267907469,
+      "profit_factor": 0.6075512459366714,
+      "total_R": -202.4049814569634,
+      "max_dd_R": 205.90104386506115
+    },
+    {
+      "symbol": "GBPJPY",
+      "strategy": "london_drive",
+      "sl_atr": 1.2,
+      "tp_rr": 2.2,
+      "n": 1105.0,
+      "win_rate": 0.2823529411764706,
+      "expectancy_R": -0.3065569776021492,
+      "profit_factor": 0.634632574988361,
+      "total_R": -338.7454602503749,
+      "max_dd_R": 343.1755683006343
+    },
+    {
+      "symbol": "USDJPY",
+      "strategy": "vwap_bounce",
+      "sl_atr": 1.5,
+      "tp_rr": 2.5,
+      "n": 84.0,
+      "win_rate": 0.2976190476190476,
+      "expectancy_R": -0.3184507782334296,
+      "profit_factor": 0.5642513515988218,
+      "total_R": -26.749865371608085,
+      "max_dd_R": 28.298068754928934
+    }
+  ],
+  "verdict": "FAIL \u2014 do not trade live; edge not validated",
+  "disclaimer": "Historical simulation only. Not financial advice. Costs approximate retail spreads."
+}
