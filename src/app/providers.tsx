@@ -50,7 +50,7 @@ export function Providers({ children, initialUser }: { children: React.ReactNode
     <AuthProvider initialUser={initialUser}>
       <QueryClientProvider client={queryClient}>
         <ConditionalRealtimeProvider>
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
             {children}
           </ThemeProvider>
         </ConditionalRealtimeProvider>
