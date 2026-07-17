@@ -21,6 +21,7 @@ import {
   Truck,
   Workflow,
 } from "lucide-react";
+import { ByteBackMark } from "@/components/brand/ByteBackMark";
 import { Button } from "@/components/ui/button";
 import {
   PremiumDeviceHero,
@@ -251,7 +252,7 @@ export default function LandingPage() {
         >
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#17120f] text-[#f8f2ea] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.45)] sm:h-11 sm:w-11">
-              <Package className="h-4 w-4 sm:h-5 sm:w-5" />
+              <ByteBackMark className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div>
               <p className="editorial-title font-bold text-[1.4rem] leading-none text-[#17120f] sm:text-[1.7rem]">

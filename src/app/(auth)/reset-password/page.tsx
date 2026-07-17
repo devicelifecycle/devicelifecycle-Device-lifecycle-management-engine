@@ -8,7 +8,8 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
-import { Loader2, CheckCircle2, Eye, EyeOff, Package, KeyRound } from 'lucide-react'
+import { Loader2, CheckCircle2, Eye, EyeOff, KeyRound } from 'lucide-react'
+import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -198,7 +199,7 @@ export default function ResetPasswordPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <Link href="/" className="mb-8 flex items-center gap-3 text-foreground">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-          <Package className="h-6 w-6" />
+          <ByteBackMark className="h-6 w-6" />
         </div>
         <span className="text-xl font-bold tracking-tight">Byte-Back</span>
       </Link>

@@ -8,7 +8,8 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2, Mail, ArrowLeft, Package, KeyRound, ShieldCheck } from 'lucide-react'
+import { Loader2, Mail, ArrowLeft, KeyRound, ShieldCheck } from 'lucide-react'
+import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
@@ -154,7 +155,7 @@ function ForgotPasswordForm() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <Link href="/" className="mb-8 flex items-center gap-3 text-foreground">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-          <Package className="h-5 w-5" />
+          <ByteBackMark className="h-5 w-5" />
         </div>
         <span className="text-xl font-bold tracking-tight">Byte-Back</span>
       </Link>

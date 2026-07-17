@@ -23,6 +23,7 @@ import {
   UserCog,
   Users,
 } from 'lucide-react'
+import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useDashboardCounts } from '@/hooks/useDashboardCounts'
@@ -122,7 +123,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-[18px]">
         <div className="liquid-glass-strong flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white">
-          <Package className="h-4 w-4 text-primary" />
+          <ByteBackMark className="h-4 w-4 text-primary" />
         </div>
         <div>
           <p className="font-heading font-bold text-[15px] text-white leading-none tracking-tight">Byte-Back</p>

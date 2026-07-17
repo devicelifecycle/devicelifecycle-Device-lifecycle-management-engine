@@ -6,7 +6,8 @@
 'use client'
 
 import Link from 'next/link'
-import { ShieldCheck, ArrowLeft, Package } from 'lucide-react'
+import { ShieldCheck, ArrowLeft } from 'lucide-react'
+import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 
@@ -15,7 +16,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#120f0d] bg-mesh cinematic-grain px-4">
       <Link href="/" className="mb-8 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-          <Package className="h-5 w-5" />
+          <ByteBackMark className="h-5 w-5" />
         </div>
         <span className="text-xl font-bold tracking-tight">Byte-Back</span>
       </Link>

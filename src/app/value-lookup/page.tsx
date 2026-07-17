@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Loader2, Package, Search, Sparkles } from 'lucide-react'
+import { Loader2, Search, Sparkles } from 'lucide-react'
+import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -86,7 +87,7 @@ export default function PublicDeviceValuePage() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center px-4 py-16">
       <Link href="/" className="mb-8 flex items-center gap-2 text-foreground">
-        <Package className="h-6 w-6" />
+        <ByteBackMark className="h-6 w-6" />
         <span className="text-lg font-bold tracking-tight">Byte-Back</span>
       </Link>
 

@@ -11,8 +11,8 @@ import {
   EyeOff,
   KeyRound,
   Loader2,
-  Package,
 } from 'lucide-react'
+import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/input'
@@ -135,7 +135,7 @@ function LoginPageInner() {
 
           <div className="flex items-center gap-2">
             <div className="liquid-glass-strong flex h-7 w-7 items-center justify-center rounded-lg">
-              <Package className="h-3.5 w-3.5 text-primary" />
+              <ByteBackMark className="h-3.5 w-3.5 text-primary" />
             </div>
             <span className="font-body text-sm font-bold tracking-tight text-foreground">
               Byte-Back
@@ -227,7 +227,7 @@ function LoginPageInner() {
             {/* Mobile logo */}
             <div className="mb-8 flex items-center gap-3 lg:hidden">
               <div className="liquid-glass-strong flex h-10 w-10 items-center justify-center rounded-2xl">
-                <Package className="h-5 w-5 text-primary" />
+                <ByteBackMark className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="font-body text-base font-bold text-foreground">Byte-Back</p>

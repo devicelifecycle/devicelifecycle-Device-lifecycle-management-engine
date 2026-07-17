@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Package } from 'lucide-react'
+import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { useAuth } from '@/hooks/useAuth'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
@@ -41,7 +41,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="app-shell-bg grain-overlay flex min-h-screen items-center justify-center px-6 text-foreground">
         <div className="surface-panel relative flex w-full max-w-sm flex-col items-center gap-6 rounded-[2rem] px-10 py-14 text-center">
           <div className="liquid-glass-strong flex h-14 w-14 items-center justify-center rounded-2xl">
-            <Package className="h-6 w-6 text-primary" />
+            <ByteBackMark className="h-6 w-6 text-primary" />
           </div>
           <div className="space-y-2">
             <p className="font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
