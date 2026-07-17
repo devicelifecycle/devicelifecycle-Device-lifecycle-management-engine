@@ -101,7 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   </div>
   <p style="color:#888;font-size:12px;margin-top:4px;text-align:center">Or copy this link: ${orderUrl}</p>
   <p>If you have any questions about these results, please contact our team.</p>
-  <p style="color:#888;font-size:12px;margin-top:32px">— DLM Engine</p>
+  <p style="color:#888;font-size:12px;margin-top:32px">— Byte-Back</p>
 </div>`
 
     const sent = await EmailService.sendEmail(

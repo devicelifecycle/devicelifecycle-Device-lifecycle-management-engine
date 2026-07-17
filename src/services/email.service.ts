@@ -41,10 +41,11 @@ function logNotificationAttempt(input: {
 
 let resendClient: Resend | null = null
 let gmailTransporter: Transporter | null = null
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'DLM Engine'
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Byte-Back'
+const APP_TAGLINE = 'Device Lifecycle Management Platform'
 
 function getFromEmail(): string {
-  return process.env.RESEND_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || 'DLM Engine <onboarding@resend.dev>'
+  return process.env.RESEND_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || 'Byte-Back <onboarding@resend.dev>'
 }
 
 function getGmailTransporter(): Transporter | null {
@@ -311,7 +312,7 @@ export class EmailService {
           <!-- Header -->
           <tr>
             <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <!-- Body -->
@@ -345,7 +346,7 @@ export class EmailService {
           <!-- Footer -->
           <tr>
             <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
         </table>
@@ -390,7 +391,7 @@ export class EmailService {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -423,7 +424,7 @@ export class EmailService {
           </tr>
           <tr>
             <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
         </table>
@@ -461,7 +462,7 @@ export class EmailService {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -519,7 +520,7 @@ export class EmailService {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -575,7 +576,7 @@ export class EmailService {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -652,7 +653,7 @@ export class EmailService {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -689,7 +690,7 @@ export class EmailService {
           </tr>
           <tr>
             <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
         </table>
@@ -736,7 +737,7 @@ export class EmailService {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -782,7 +783,7 @@ export class EmailService {
           </tr>
           <tr>
             <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
         </table>
@@ -819,7 +820,7 @@ export class EmailService {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">${APP_NAME}</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -840,7 +841,7 @@ export class EmailService {
           </tr>
           <tr>
             <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
         </table>

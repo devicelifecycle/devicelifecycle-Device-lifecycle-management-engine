@@ -87,7 +87,7 @@ export default function PublicDeviceValuePage() {
     <div className="min-h-screen bg-background flex flex-col items-center px-4 py-16">
       <Link href="/" className="mb-8 flex items-center gap-2 text-foreground">
         <Package className="h-6 w-6" />
-        <span className="text-lg font-bold tracking-tight">DLM Engine</span>
+        <span className="text-lg font-bold tracking-tight">Byte-Back</span>
       </Link>
 
       <Card className="w-full max-w-lg shadow-xl">

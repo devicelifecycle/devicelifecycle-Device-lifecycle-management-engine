@@ -47,7 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <p className="font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Preparing Workspace
             </p>
-            <h1 className="editorial-title text-4xl text-foreground">Loading DLM Engine</h1>
+            <h1 className="editorial-title text-4xl text-foreground">Loading Byte-Back</h1>
             <p className="font-body text-sm font-light text-muted-foreground">
               Checking session, roles, and the operational canvas.
             </p>

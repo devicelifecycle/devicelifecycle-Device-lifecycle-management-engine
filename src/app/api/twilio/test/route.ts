@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Twilio is not configured' }, { status: 503 })
     }
 
-    const finalMessage = message || `DLM Engine Twilio test: delivery check sent at ${new Date().toISOString()}`
+    const finalMessage = message || `Byte-Back Twilio test: delivery check sent at ${new Date().toISOString()}`
     const sent = await EmailService.sendSMS(phoneNumber, finalMessage)
 
     if (!sent) {

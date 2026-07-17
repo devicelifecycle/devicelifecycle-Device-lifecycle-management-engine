@@ -20,7 +20,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import type { OrderStatus } from '@/types'
 
 const COE_ADDRESS = {
-  name: 'DLM COE Warehouse',
+  name: 'Byte-Back COE Warehouse',
   line1: '123 COE Drive',
   city: 'Toronto',
   province: 'ON',

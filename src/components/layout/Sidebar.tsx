@@ -125,8 +125,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <Package className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <p className="font-heading italic text-[15px] text-white leading-none tracking-tight">DLM Engine</p>
-          <p className="font-body text-[10px] text-white/35 mt-0.5 font-light tracking-wide">Device Lifecycle OS</p>
+          <p className="font-heading font-bold text-[15px] text-white leading-none tracking-tight">Byte-Back</p>
+          <p className="font-body text-[10px] text-white/35 mt-0.5 font-light tracking-wide">Device Lifecycle Management Platform</p>
         </div>
       </div>
 

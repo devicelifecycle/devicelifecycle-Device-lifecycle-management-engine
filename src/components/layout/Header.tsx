@@ -16,7 +16,7 @@ const HelpPanel = dynamic(
   { ssr: false, loading: () => null }
 )
 
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
 
 interface HeaderProps {
   /** Desktop: toggle the collapsible sidebar open/closed */

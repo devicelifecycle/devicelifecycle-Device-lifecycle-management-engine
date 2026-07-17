@@ -13,7 +13,7 @@ const spec = {
   info: {
     title: 'Device Lifecycle Management Engine API',
     version: '1.0.0',
-    description: 'Internal API for the DLM Engine — orders, triage, pricing, vendors, customers, and cron jobs.',
+    description: 'Internal API for Byte-Back — orders, triage, pricing, vendors, customers, and cron jobs.',
   },
   tags: [
     { name: 'Auth', description: 'Authentication and session management' },

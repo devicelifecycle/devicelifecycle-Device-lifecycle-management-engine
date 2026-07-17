@@ -90,27 +90,27 @@ export function getTourSteps(role: UserRole): TourStep[] {
 
 export const WELCOME_COPY: Record<UserRole, { headline: string; body: string }> = {
   admin: {
-    headline: 'Welcome to DLM Engine',
+    headline: 'Welcome to Byte-Back',
     body: 'You have full visibility — orders, pricing, users, and reporting across the whole platform. Let\'s take a 30-second tour of where everything lives.',
   },
   coe_manager: {
-    headline: 'Welcome to DLM Engine',
+    headline: 'Welcome to Byte-Back',
     body: 'You oversee the inspection and fulfillment team. Let\'s take a quick tour of your queue and tools.',
   },
   coe_tech: {
-    headline: 'Welcome to DLM Engine',
+    headline: 'Welcome to Byte-Back',
     body: 'You\'ll be inspecting and grading devices day to day. Let\'s take a quick tour of where things are.',
   },
   sales: {
-    headline: 'Welcome to DLM Engine',
+    headline: 'Welcome to Byte-Back',
     body: 'You create orders, set pricing, and manage customer relationships. Let\'s take a quick tour of your tools.',
   },
   customer: {
-    headline: 'Welcome to DLM Engine',
+    headline: 'Welcome to Byte-Back',
     body: 'Submit trade-ins, track quotes, and manage shipments — all from your own portal. Let\'s take a 30-second tour.',
   },
   vendor: {
-    headline: 'Welcome to DLM Engine',
+    headline: 'Welcome to Byte-Back',
     body: 'Bid on open orders and track fulfillment for the ones you win. Let\'s take a quick tour of your portal.',
   },
 }

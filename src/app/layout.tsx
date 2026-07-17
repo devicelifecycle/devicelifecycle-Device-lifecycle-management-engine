@@ -39,7 +39,7 @@ const sourceSerif = Source_Serif_4({
 })
 
 export const metadata: Metadata = {
-  title: 'DLM Engine — Device Lifecycle Management',
+  title: 'Byte-Back — Device Lifecycle Management Platform',
   description: 'Enterprise platform for ITAD device lifecycle management',
 }
 
@@ -49,7 +49,7 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   // Fetch user profile server-side so AuthProvider starts with isInitializing:false,
-  // eliminating the "Loading DLM Engine" spinner even on a fresh browser with no cache.
+  // eliminating the "Loading Byte-Back" spinner even on a fresh browser with no cache.
   // Fast path: if dlm_profile cookie is present and matches the session, skip the DB query.
   let initialUser: User | null | undefined = undefined
   try {

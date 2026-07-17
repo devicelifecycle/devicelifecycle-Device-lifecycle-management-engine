@@ -53,7 +53,7 @@ function readCachedUser(): User | null {
 
   try {
     // Use localStorage (persists across tab close/browser restart) so returning
-    // users don't see the full-screen "Loading DLM Engine" spinner every new tab.
+    // users don't see the full-screen "Loading Byte-Back" spinner every new tab.
     // The cache is only trusted when the dlm_role + dlm_uid cookies also match
     // (see readTrustedCachedUser), so stale profile data cannot be exploited.
     const raw = window.localStorage.getItem(AUTH_CACHE_KEY)
@@ -148,7 +148,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 function useProvideAuth(initialUser?: User | null): AuthContextValue {
   // Initialize synchronously from trusted cache (localStorage) or the server-provided
-  // profile so the dashboard layout never shows the "Loading DLM Engine" spinner.
+  // profile so the dashboard layout never shows the "Loading Byte-Back" spinner.
   // - localStorage hit → use it (existing fast path, no change)
   // - Server provided user → use it (eliminates spinner on fresh browser)
   // - Server said no session (null) → isInitializing:false, redirect immediately

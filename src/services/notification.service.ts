@@ -843,7 +843,7 @@ export class NotificationService {
 
       const hasFailures = (input.failed_scrapers?.length ?? 0) > 0
       const pricingUrl = `${getAppUrl()}/admin/pricing`
-      const appName = process.env.NEXT_PUBLIC_APP_NAME || 'DLM Engine'
+      const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Byte-Back'
 
       const emailHtml = `<!DOCTYPE html>
 <html>

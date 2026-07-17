@@ -137,8 +137,8 @@ function LoginPageInner() {
             <div className="liquid-glass-strong flex h-7 w-7 items-center justify-center rounded-lg">
               <Package className="h-3.5 w-3.5 text-primary" />
             </div>
-            <span className="font-body text-sm font-semibold tracking-tight text-foreground">
-              DLM Engine
+            <span className="font-body text-sm font-bold tracking-tight text-foreground">
+              Byte-Back
             </span>
           </div>
         </header>
@@ -230,8 +230,8 @@ function LoginPageInner() {
                 <Package className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="font-body text-base font-semibold text-foreground">DLM Engine</p>
-                <p className="font-body text-xs text-muted-foreground">Enterprise ITAD Platform</p>
+                <p className="font-body text-base font-bold text-foreground">Byte-Back</p>
+                <p className="font-body text-xs text-muted-foreground">Device Lifecycle Management Platform</p>
               </div>
             </div>
 

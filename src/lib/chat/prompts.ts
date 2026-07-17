@@ -4,7 +4,7 @@
 
 import type { UserRole } from '@/types'
 
-const BASE_PROMPT = `You are the DLM Engine AI Assistant — a helpful assistant embedded in the Device Lifecycle Management platform. You help users with orders, pricing, devices, shipments, and operations.
+const BASE_PROMPT = `You are the Byte-Back AI Assistant — a helpful assistant embedded in the Device Lifecycle Management Platform. You help users with orders, pricing, devices, shipments, and operations.
 
 Rules:
 - Be concise. Prefer short answers with key data points.
@@ -129,7 +129,7 @@ const PERSONA_LABELS: Record<ChatContext, string> = {
   sourcing: 'Vendor Sourcing Agent',
 }
 
-/** Null when no specialized persona applies — caller should show the generalist "DLM Assistant" label. */
+/** Null when no specialized persona applies — caller should show the generalist "Byte-Back Assistant" label. */
 export function getActivePersonaLabel(role: UserRole, context?: ChatContext): string | null {
   return contextAppliesForRole(role, context) ? PERSONA_LABELS[context] : null
 }

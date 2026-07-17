@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
-import { Sparkles, TrendingUp, ClipboardCheck, Gavel, X, Send, Loader2, Trash2 } from 'lucide-react'
+import { MessageCircle, TrendingUp, ClipboardCheck, Gavel, X, Send, Loader2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { ChatMessage } from './ChatMessage'
@@ -32,7 +32,7 @@ function loadStoredMessages(userId: string): ChatMessageType[] | null {
 const WELCOME_MSG: ChatMessageType = {
   id: 'welcome',
   role: 'assistant',
-  content: 'Hi! I\'m your DLM Engine assistant. Ask me about orders, pricing, devices, shipments, or anything else on the platform.',
+  content: 'Hi! I\'m your Byte-Back assistant. Ask me about orders, pricing, devices, shipments, or anything else on the platform.',
   timestamp: new Date().toISOString(),
 }
 
@@ -47,8 +47,8 @@ function getContextForPath(pathname: string): 'pricing' | 'triage' | 'sourcing' 
   return undefined
 }
 
-const DEFAULT_PERSONA = { label: 'DLM Assistant', subtitle: 'Powered by Llama 3.3', icon: Sparkles }
-const PERSONA_DETAILS: Record<string, { subtitle: string; icon: typeof Sparkles }> = {
+const DEFAULT_PERSONA = { label: 'Byte-Back Assistant', subtitle: 'Powered by Llama 3.3', icon: MessageCircle }
+const PERSONA_DETAILS: Record<string, { subtitle: string; icon: typeof MessageCircle }> = {
   'Pricing Agent': { subtitle: 'Watching market & competitor prices', icon: TrendingUp },
   'Triage Copilot': { subtitle: 'Helping with device inspection', icon: ClipboardCheck },
   'Vendor Sourcing Agent': { subtitle: 'Comparing bids & vendor history', icon: Gavel },

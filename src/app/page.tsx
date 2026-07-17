@@ -254,11 +254,11 @@ export default function LandingPage() {
               <Package className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div>
-              <p className="editorial-title text-[1.4rem] leading-none text-[#17120f] sm:text-[1.7rem]">
-                DLM Engine
+              <p className="editorial-title font-bold text-[1.4rem] leading-none text-[#17120f] sm:text-[1.7rem]">
+                Byte-Back
               </p>
               <p className="hidden text-[10px] uppercase tracking-[0.28em] text-[#7f766f] sm:block">
-                Device Lifecycle Management
+                Device Lifecycle Management Platform
               </p>
             </div>
           </div>

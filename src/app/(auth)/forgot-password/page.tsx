@@ -156,7 +156,7 @@ function ForgotPasswordForm() {
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
           <Package className="h-5 w-5" />
         </div>
-        <span className="text-xl font-bold tracking-tight">DLM Engine</span>
+        <span className="text-xl font-bold tracking-tight">Byte-Back</span>
       </Link>
 
       <Card className="w-full max-w-md shadow-xl animate-fade-in">

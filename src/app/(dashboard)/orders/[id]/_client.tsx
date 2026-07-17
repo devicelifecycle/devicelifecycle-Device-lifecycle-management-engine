@@ -2107,7 +2107,7 @@ export default function OrderDetailClient() {
               <p className="text-sm text-green-700 dark:text-green-300/90 mt-0.5">
                 {order.status === 'closed'
                   ? 'This order has been fully completed and closed. Thank you for fulfilling this order.'
-                  : 'The customer has confirmed delivery. DLM is processing the final payment and will close the order shortly.'}
+                  : 'The customer has confirmed delivery. Byte-Back is processing the final payment and will close the order shortly.'}
               </p>
             </div>
           </CardContent>

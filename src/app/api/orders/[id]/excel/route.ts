@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const ws1 = wb.addWorksheet('Summary')
     ws1.columns = [{ width: 20 }, { width: 40 }]
     ;[
-      ['DLM Engine — ' + docType],
+      ['Byte-Back — ' + docType],
       [],
       ['Order Number', order.order_number],
       ['Type', (order.type || '').replace(/_/g, ' ').toUpperCase()],

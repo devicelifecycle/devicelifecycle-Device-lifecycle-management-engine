@@ -43,7 +43,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const body = `<p>Hi ${customerName},</p>
 <p>The pricing for your order <b>${order.order_number}</b> has been updated. Please log in to review and accept or decline the new quote.</p>
 <p>If you have any questions, please don't hesitate to reach out to our team.</p>
-<p style="color:#6b7280;font-size:12px;margin-top:24px">This message was sent by your account team at DLM Engine.</p>`
+<p style="color:#6b7280;font-size:12px;margin-top:24px">This message was sent by your account team at Byte-Back.</p>`
 
     const sent = await EmailService.sendEmail(customerEmail, subject, body)
 

@@ -5,7 +5,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'DLM Engine'
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Byte-Back'
 
 interface OrderPDFData {
   order_number: string
