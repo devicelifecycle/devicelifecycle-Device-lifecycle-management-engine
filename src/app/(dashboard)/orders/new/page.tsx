@@ -862,7 +862,7 @@ export default function NewOrderPage() {
 
     submittedRef.current = true
     try {
-      const results: { id: string; type: string }[] = []
+      const results: { id: string; type: string; status?: string }[] = []
 
       // Create trade-in order if there are trade-in items
       if (tradeInItems.length > 0) {
@@ -872,7 +872,7 @@ export default function NewOrderPage() {
           items: tradeInItems.map(({ order_type, ...rest }) => rest),
           notes: notes ? `${notes} (Trade-In)` : undefined,
         } as Record<string, unknown>)
-        results.push({ id: result.id, type: 'Trade-In' })
+        results.push({ id: result.id, type: 'Trade-In', status: result.status })
       }
 
       // Create CPO order if there are CPO items
@@ -883,16 +883,31 @@ export default function NewOrderPage() {
           items: cpoItems.map(({ order_type, ...rest }) => rest),
           notes: notes ? `${notes} (CPO)` : undefined,
         } as Record<string, unknown>)
-        results.push({ id: result.id, type: 'CPO' })
+        results.push({ id: result.id, type: 'CPO', status: result.status })
       }
 
-      if (results.length === 1) {
-        localStorage.removeItem(DRAFT_KEY)
-        toast.success(isCustomer ? `${results[0].type} request submitted! Our team will send you a quote shortly.` : `${results[0].type} order created successfully`)
+      // A customer order is only truly submitted once its status left 'draft'.
+      // The API auto-submits customer orders but treats a failed transition as
+      // non-fatal, leaving the order in 'draft' — so confirm actual status here
+      // instead of always claiming the request was submitted.
+      const notSubmitted = results.filter(r => r.status === 'draft')
+
+      localStorage.removeItem(DRAFT_KEY)
+      if (isCustomer && notSubmitted.length > 0) {
+        toast.warning(
+          `Your ${notSubmitted.map(r => r.type).join(' & ')} request was created but could NOT be submitted automatically. Please open it and press Submit, or contact support — no confirmation email has been sent yet.`,
+          { duration: 8000 }
+        )
+        router.replace(results.length === 1 ? `/customer/orders/${results[0].id}` : '/customer/orders')
+      } else if (results.length === 1) {
+        toast.success(isCustomer
+          ? `${results[0].type} request created and submitted — you'll receive an email confirmation shortly. Our team will send your quote soon.`
+          : `${results[0].type} order created successfully`)
         router.replace(isCustomer ? `/customer/orders/${results[0].id}` : `/orders/${results[0].id}`)
       } else if (results.length === 2) {
-        localStorage.removeItem(DRAFT_KEY)
-        toast.success(isCustomer ? `${results.length} requests submitted! Our team will send you quotes shortly.` : `Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
+        toast.success(isCustomer
+          ? `Both requests created and submitted — you'll receive an email confirmation shortly. Our team will send your quotes soon.`
+          : `Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
         router.replace(isCustomer ? '/customer/orders' : '/orders')
       }
     } catch (err) {

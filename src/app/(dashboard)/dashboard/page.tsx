@@ -504,6 +504,7 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
   const quickActions = useMemo(() => [
     { href: '/orders/new', label: 'New Order', icon: Plus, description: 'Create a request.' },
     { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, description: 'See latest updates.' },
+    { href: '/value-lookup', label: 'Residual Value Quote', icon: DollarSign, description: 'Estimate a device’s trade-in value.' },
   ], [])
 
   return (
@@ -520,20 +521,6 @@ function CustomerDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
               <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
                 Welcome back, {user.full_name || 'Customer'}.
               </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/orders/new">
-                <Button size="lg">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Order
-                </Button>
-              </Link>
-              <Link href="/customer/orders">
-                <Button size="lg" variant="outline">
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  View My Orders
-                </Button>
-              </Link>
             </div>
           </div>
 
