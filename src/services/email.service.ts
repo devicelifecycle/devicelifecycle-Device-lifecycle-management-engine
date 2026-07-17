@@ -304,15 +304,15 @@ export class EmailService {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <!-- Header -->
           <tr>
-            <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
+            <td style="background:#a2481f;background:linear-gradient(135deg,#c56a34,#a2481f);padding:26px 32px;border-bottom:3px solid #e0a76b;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#f4ddc8;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <!-- Body -->
@@ -322,7 +322,7 @@ export class EmailService {
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">${message}</p>
 
               <!-- Status Badge -->
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#faf4ec;border-radius:8px;width:100%;border:1px solid #eaddcb;">
                 <tr>
                   <td style="padding:20px 24px;">
                     <p style="margin:0 0 4px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order #${orderNumber}</p>
@@ -334,7 +334,7 @@ export class EmailService {
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
-                  <td style="background:#18181b;border-radius:6px;">
+                  <td style="background:#a2481f;border-radius:8px;">
                     <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">View Order Details</a>
                   </td>
                 </tr>
@@ -345,7 +345,7 @@ export class EmailService {
           </tr>
           <!-- Footer -->
           <tr>
-            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
               <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
@@ -384,14 +384,14 @@ export class EmailService {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
+            <td style="background:#a2481f;background:linear-gradient(135deg,#c56a34,#a2481f);padding:26px 32px;border-bottom:3px solid #e0a76b;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#f4ddc8;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -399,7 +399,7 @@ export class EmailService {
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your account has been created on ${APP_NAME}. Use the credentials below to sign in:</p>
 
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#faf4ec;border-radius:8px;width:100%;border:1px solid #eaddcb;">
                 <tr>
                   <td style="padding:20px 24px;">
                     <p style="margin:0 0 8px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Login Credentials</p>
@@ -412,7 +412,7 @@ export class EmailService {
 
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
-                  <td style="background:#18181b;border-radius:6px;">
+                  <td style="background:#a2481f;border-radius:8px;">
                     <a href="${loginUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Log In Now</a>
                   </td>
                 </tr>
@@ -423,7 +423,7 @@ export class EmailService {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
               <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
@@ -455,14 +455,14 @@ export class EmailService {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
+            <td style="background:#a2481f;background:linear-gradient(135deg,#c56a34,#a2481f);padding:26px 32px;border-bottom:3px solid #e0a76b;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#f4ddc8;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -472,7 +472,7 @@ export class EmailService {
 
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
-                  <td style="background:#18181b;border-radius:6px;">
+                  <td style="background:#a2481f;border-radius:8px;">
                     <a href="${resetLink}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Reset Password</a>
                   </td>
                 </tr>
@@ -482,7 +482,7 @@ export class EmailService {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
               <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}.</p>
             </td>
           </tr>
@@ -513,14 +513,14 @@ export class EmailService {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
+            <td style="background:#a2481f;background:linear-gradient(135deg,#c56a34,#a2481f);padding:26px 32px;border-bottom:3px solid #e0a76b;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#f4ddc8;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -537,7 +537,7 @@ export class EmailService {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
               <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}.</p>
             </td>
           </tr>
@@ -569,14 +569,14 @@ export class EmailService {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
+            <td style="background:#a2481f;background:linear-gradient(135deg,#c56a34,#a2481f);padding:26px 32px;border-bottom:3px solid #e0a76b;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#f4ddc8;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -586,7 +586,7 @@ export class EmailService {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
               <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}.</p>
             </td>
           </tr>
@@ -634,7 +634,7 @@ export class EmailService {
     const nextStepsRows = nextSteps.map(s => `
       <tr>
         <td style="width:28px;padding:8px 8px 8px 0;vertical-align:top;">
-          <span style="display:inline-block;width:22px;height:22px;background:#18181b;border-radius:50%;text-align:center;line-height:22px;color:#fff;font-size:11px;font-weight:700;">${s.num}</span>
+          <span style="display:inline-block;width:22px;height:22px;background:#a2481f;border-radius:50%;text-align:center;line-height:22px;color:#fff;font-size:11px;font-weight:700;">${s.num}</span>
         </td>
         <td style="padding:8px 0;color:#3f3f46;font-size:14px;line-height:1.5;">${s.text}</td>
       </tr>`).join('')
@@ -646,14 +646,14 @@ export class EmailService {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
+            <td style="background:#a2481f;background:linear-gradient(135deg,#c56a34,#a2481f);padding:26px 32px;border-bottom:3px solid #e0a76b;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#f4ddc8;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -661,7 +661,7 @@ export class EmailService {
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your <strong>${typeLabel}</strong> order has been received. Here's what happens next.</p>
 
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;background:#f4f4f5;border-radius:8px;width:100%;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;background:#faf4ec;border-radius:8px;width:100%;border:1px solid #eaddcb;">
                 <tr>
                   <td style="padding:20px 24px;">
                     <p style="margin:0 0 8px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order Summary</p>
@@ -679,7 +679,7 @@ export class EmailService {
 
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
-                  <td style="background:#18181b;border-radius:6px;">
+                  <td style="background:#a2481f;border-radius:8px;">
                     <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">View Your Order</a>
                   </td>
                 </tr>
@@ -689,7 +689,7 @@ export class EmailService {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
               <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
@@ -730,14 +730,14 @@ export class EmailService {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
+            <td style="background:#a2481f;background:linear-gradient(135deg,#c56a34,#a2481f);padding:26px 32px;border-bottom:3px solid #e0a76b;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#f4ddc8;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -748,7 +748,7 @@ export class EmailService {
                 Please review and accept or reject the quote before it expires.
               </p>
 
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f4f5;border-radius:8px;width:100%;border-collapse:collapse;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#faf4ec;border-radius:8px;width:100%;border:1px solid #eaddcb;border-collapse:collapse;">
                 <tr>
                   <td style="padding:16px 24px;border-bottom:1px solid #e4e4e7;">
                     <p style="margin:0 0 4px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order</p>
@@ -772,7 +772,7 @@ export class EmailService {
 
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
-                  <td style="background:#18181b;border-radius:6px;">
+                  <td style="background:#a2481f;border-radius:8px;">
                     <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Review &amp; Respond to Quote</a>
                   </td>
                 </tr>
@@ -782,7 +782,7 @@ export class EmailService {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
               <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
@@ -813,14 +813,14 @@ export class EmailService {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background:#18181b;padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${APP_NAME}</h1><p style="margin:4px 0 0;color:#a1a1aa;font-size:12px;">${APP_TAGLINE}</p>
+            <td style="background:#a2481f;background:linear-gradient(135deg,#c56a34,#a2481f);padding:26px 32px;border-bottom:3px solid #e0a76b;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#f4ddc8;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
             </td>
           </tr>
           <tr>
@@ -831,7 +831,7 @@ export class EmailService {
               </p>
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
                 <tr>
-                  <td style="background:#18181b;border-radius:6px;">
+                  <td style="background:#a2481f;border-radius:8px;">
                     <a href="${newOrderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Start a New Trade-In</a>
                   </td>
                 </tr>
@@ -840,7 +840,7 @@ export class EmailService {
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
               <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
             </td>
           </tr>
