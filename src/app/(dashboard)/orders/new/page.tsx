@@ -220,8 +220,10 @@ export default function NewOrderPage() {
   const { customer: myCustomer, isLoading: myCustomerLoading, error: myCustomerError } = useMyCustomer()
   const isCustomer = user?.role === 'customer'
   const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
-  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech'].includes(user?.role || '')
-  const cpoCreationBlockedMessage = 'CPO orders must be created by admin or COE. Customers can submit trade-in requests from the Requests page.'
+  // Customers can now self-create CPO (Certified Pre-Owned purchase) orders too —
+  // internal staff and customers both get the CPO order type option.
+  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech', 'customer'].includes(user?.role || '')
+  const cpoCreationBlockedMessage = 'Only admin, COE, or the customer portal can create CPO orders.'
 
   const [devices, setDevices] = useState<Device[]>([])
   const [customerId, setCustomerId] = useState('')
