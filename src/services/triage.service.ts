@@ -296,6 +296,7 @@ export class TriageService {
   ): number {
     const multipliers: Record<DeviceCondition, number> = {
       'new': 1.0,
+      'certified': 0.9,
       'excellent': 0.9,
       'good': 0.8,
       'fair': 0.65,

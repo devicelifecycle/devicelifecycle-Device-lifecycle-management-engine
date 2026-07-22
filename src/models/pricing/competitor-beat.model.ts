@@ -13,6 +13,7 @@ const round2 = (n: number) => Math.round(Math.max(n, 0) * 100) / 100
 
 const CONDITION_MULT: Record<DeviceCondition, number> = {
   new: 1.0,
+  certified: 0.95,
   excellent: 0.95,
   good: 0.85,
   fair: 0.70,
@@ -50,7 +51,7 @@ export class CompetitorBeatPricingModel implements IPricingModel {
 
     // Map condition to competitor condition string
     const competitorCondition =
-      input.condition === 'new' || input.condition === 'excellent' ? 'excellent'
+      input.condition === 'new' || input.condition === 'excellent' || input.condition === 'certified' ? 'excellent'
       : input.condition === 'fair' ? 'fair'
       : input.condition === 'poor' ? 'broken'
       : 'good'

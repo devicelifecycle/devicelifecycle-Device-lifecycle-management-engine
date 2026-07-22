@@ -130,7 +130,7 @@ function normalizeHeader(raw: string): string {
 function normalizeCondition(raw: string): string {
   if (!raw) return 'good'
   const lower = raw.toLowerCase().trim()
-  if (['new', 'excellent', 'good', 'fair', 'poor'].includes(lower)) return lower
+  if (['new', 'excellent', 'good', 'fair', 'poor', 'certified'].includes(lower)) return lower
   if (CONDITION_TYPO_MAP[lower]) return CONDITION_TYPO_MAP[lower]
   // Fuzzy match
   for (const [typo, canonical] of Object.entries(CONDITION_TYPO_MAP)) {
@@ -191,8 +191,8 @@ interface ItemPrice {
   goRecell_fair_floor_price?: number
 }
 
-// CPO orders are always 'good' condition
-const CPO_CONDITION: DeviceCondition = 'good'
+// CPO orders are certified pre-owned (their own grade, not a trade-in condition)
+const CPO_CONDITION: DeviceCondition = 'certified'
 
 function getStorageOptionsForDevice(device?: Device): string[] {
   if (!device) return STORAGE_OPTIONS
@@ -1224,7 +1224,7 @@ export default function NewOrderPage() {
                                 <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>
                                   <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
-                                    {Object.entries(CONDITION_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                                    {Object.entries(CONDITION_CONFIG).filter(([k]) => k !== 'certified').map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
                               )}
@@ -1543,7 +1543,7 @@ export default function NewOrderPage() {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {Object.entries(CONDITION_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                                    {Object.entries(CONDITION_CONFIG).filter(([k]) => k !== 'certified').map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
                               </TableCell>

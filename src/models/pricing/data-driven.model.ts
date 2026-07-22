@@ -30,6 +30,7 @@ const DEFAULT_DEDUCTIONS: Record<string, { type: 'percentage' | 'fixed'; value: 
 
 const DEFAULT_CONDITION_MULTIPLIERS: Record<string, number> = {
   new: 1.0,
+  certified: 0.95, // Certified Pre-Owned — priced like 'excellent'
   excellent: 0.95,
   good: 0.85,
   fair: 0.70,

@@ -13,6 +13,7 @@ const round2 = (n: number) => Math.round(Math.max(n, 0) * 100) / 100
 const DEFAULT_CONFIG: FixedMarginConfig = {
   condition_multipliers: {
     new: 1.0,
+    certified: 0.92,
     excellent: 0.92,
     good: 0.82,
     fair: 0.65,

@@ -48,6 +48,7 @@ const DEFAULT_MARGIN_SETTINGS = {
 // Condition multipliers
 const CONDITION_MULTIPLIERS: Record<DeviceCondition, number> = {
   new: 1.0,
+  certified: 0.95,
   excellent: 0.95,
   good: 0.85,
   fair: 0.70,

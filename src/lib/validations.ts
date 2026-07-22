@@ -16,7 +16,7 @@ export const ORDER_STATUS_VALUES = [
   'in_triage', 'qc_complete', 'mismatch_review', 'ready_to_ship', 'shipped',
   'delivered', 'payment_processing', 'payment_sent', 'closed', 'cancelled'
 ] as const
-export const DEVICE_CONDITION_VALUES = ['new', 'excellent', 'good', 'fair', 'poor'] as const
+export const DEVICE_CONDITION_VALUES = ['new', 'excellent', 'good', 'fair', 'poor', 'certified'] as const
 export const DEVICE_CATEGORY_VALUES = ['phone', 'tablet', 'laptop', 'watch', 'other'] as const
 export const USER_ROLE_VALUES = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor'] as const
 export const ORGANIZATION_TYPE_VALUES = ['internal', 'customer', 'vendor'] as const
@@ -29,7 +29,7 @@ export const AUDIT_ACTION_VALUES = ['create', 'update', 'delete', 'status_change
 // Condition normalisation delegates to the shared lib (src/lib/condition.ts)
 // so that CSV parsing and API validation always apply identical rules.
 
-export function normalizePricingConditionInput(input: unknown): 'new' | 'excellent' | 'good' | 'fair' | 'poor' {
+export function normalizePricingConditionInput(input: unknown): 'new' | 'excellent' | 'good' | 'fair' | 'poor' | 'certified' {
   return normalizePricingCondition(input)
 }
 

@@ -43,7 +43,7 @@ export type OrderStatus =
 
 export type DeviceCategory = 'phone' | 'tablet' | 'laptop' | 'watch' | 'other';
 
-export type DeviceCondition = 'new' | 'excellent' | 'good' | 'fair' | 'poor';
+export type DeviceCondition = 'new' | 'excellent' | 'good' | 'fair' | 'poor' | 'certified';
 
 export type ShipmentStatus =
   | 'label_created'

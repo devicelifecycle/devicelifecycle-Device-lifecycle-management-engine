@@ -635,7 +635,7 @@ export default function NewTradeInPage() {
                             <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                {Object.entries(CONDITION_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                                {Object.entries(CONDITION_CONFIG).filter(([k]) => k !== 'certified').map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                               </SelectContent>
                             </Select>
                             <Select value={item.storage} onValueChange={v => updateItem(index, 'storage', v)}>

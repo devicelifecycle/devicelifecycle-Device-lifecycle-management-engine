@@ -206,6 +206,12 @@ export const CONDITION_CONFIG: Record<DeviceCondition, {
     multiplier: 1.0,
     color: 'text-green-700',
   },
+  certified: {
+    label: 'Certified Pre-Owned',
+    description: 'Inspected & certified refurbished — like-new grade',
+    multiplier: 0.95,
+    color: 'text-emerald-700',
+  },
   excellent: {
     label: 'Excellent',
     description: 'Like new condition, minimal signs of use',

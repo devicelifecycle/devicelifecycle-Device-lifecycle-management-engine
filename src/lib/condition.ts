@@ -20,6 +20,7 @@ export type CanonicalCondition =
   | 'good'
   | 'fair'
   | 'poor'
+  | 'certified' // Certified Pre-Owned (CPO) — prices like 'excellent'; CPO-only grade
   | 'broken'    // maps to 'poor' for pricing; kept distinct for competitor comparison
   | 'recycle'   // not buyable — callers should skip/filter these rows
 
@@ -27,6 +28,10 @@ export type CanonicalCondition =
 const CONDITION_PHRASE_MAP: Record<string, CanonicalCondition> = {
   // New
   new: 'new', sealed: 'new', unopened: 'new',
+
+  // Certified Pre-Owned (CPO)
+  certified: 'certified', 'certified pre-owned': 'certified', 'certified preowned': 'certified',
+  cpo: 'certified', refurbished: 'certified', refurb: 'certified',
 
   // Excellent
   excellent: 'excellent', 'like new': 'excellent', likenew: 'excellent',
@@ -127,7 +132,7 @@ export function normalizeConditionRaw(input: unknown): CanonicalCondition | unde
  * - 'broken' and 'recycle' collapse to 'poor'
  * - Unknown input defaults to 'good'
  */
-export function normalizePricingCondition(input: unknown): 'new' | 'excellent' | 'good' | 'fair' | 'poor' {
+export function normalizePricingCondition(input: unknown): 'new' | 'excellent' | 'good' | 'fair' | 'poor' | 'certified' {
   const c = normalizeConditionRaw(input)
   if (!c) return 'good'
   if (c === 'broken' || c === 'recycle') return 'poor'
@@ -144,7 +149,7 @@ export function normalizePricingCondition(input: unknown): 'new' | 'excellent' |
 export function normalizeCompetitorCondition(input: unknown): 'excellent' | 'good' | 'fair' | 'poor' | 'broken' {
   const c = normalizeConditionRaw(input)
   if (!c) return 'good'
-  if (c === 'new') return 'excellent'
+  if (c === 'new' || c === 'certified') return 'excellent'
   if (c === 'recycle') return 'broken'
   return c
 }
