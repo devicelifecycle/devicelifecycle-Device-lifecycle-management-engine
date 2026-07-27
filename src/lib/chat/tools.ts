@@ -305,7 +305,7 @@ async function getDevicePrice(args: Record<string, unknown>, ctx: ToolContext): 
   const storage = String(args.storage || '128GB')
 
   // Map user-friendly conditions to DB conditions
-  const condMap: Record<string, string> = { new: 'excellent', excellent: 'excellent', good: 'good', fair: 'fair', poor: 'broken' }
+  const condMap: Record<string, string> = { new: 'excellent', certified: 'excellent', excellent: 'excellent', good: 'good', fair: 'fair', poor: 'broken' }
   const dbCondition = condMap[condition] || 'good'
 
   // Search device catalog

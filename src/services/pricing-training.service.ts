@@ -13,6 +13,7 @@ const CONDITION_ORDER: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 
 
 const CONDITION_MULTIPLIERS: Record<string, number> = {
   new: 1.0,
+  certified: 0.95, // Certified Pre-Owned — priced like 'excellent'
   excellent: 0.95,
   good: 0.85,
   fair: 0.70,
@@ -22,6 +23,7 @@ const CONDITION_MULTIPLIERS: Record<string, number> = {
 function normalizeTrainingCondition(condition: string | null | undefined): DeviceCondition {
   const normalized = (condition || 'good').toLowerCase().trim()
   if (normalized === 'new') return 'new'
+  if (normalized === 'certified' || normalized === 'cpo' || normalized === 'refurbished') return 'certified'
   if (normalized === 'excellent' || normalized === 'like_new') return 'excellent'
   if (normalized === 'good') return 'good'
   if (normalized === 'fair') return 'fair'

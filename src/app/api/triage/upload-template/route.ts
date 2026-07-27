@@ -43,6 +43,7 @@ const COLUMN_MAP: Record<string, string> = {
 
 const CONDITION_MAP: Record<string, string> = {
   new: 'new', sealed: 'new', unopened: 'new',
+  certified: 'certified', 'certified pre-owned': 'certified', cpo: 'certified', refurbished: 'certified',
   excellent: 'excellent', 'like new': 'excellent', likenew: 'excellent',
   a: 'excellent', 'a+': 'excellent', 'a-': 'excellent', 'grade a': 'excellent',
   good: 'good', b: 'good', 'b-': 'good', 'b+': 'good', 'grade b': 'good',

@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic'
 // Condition multipliers (mirrors PricingService — used for cross-condition interpolation)
 const CONDITION_MULTIPLIERS: Record<string, number> = {
   new: 1.0,
+  certified: 0.95, // Certified Pre-Owned — priced like 'excellent'
   excellent: 0.95,
   good: 0.85,
   fair: 0.70,

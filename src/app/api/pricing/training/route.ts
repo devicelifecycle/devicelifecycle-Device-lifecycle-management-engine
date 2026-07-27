@@ -9,6 +9,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { safeErrorMessage } from '@/lib/utils'
 
 const CONDITION_MULTIPLIERS: Record<string, number> = {
+  certified: 1.0, // Certified Pre-Owned — priced like 'excellent'
   excellent: 1.0,
   good: 0.9,
   fair: 0.75,
