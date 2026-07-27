@@ -222,7 +222,7 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
     <div className="relative space-y-8">
       <section className="surface-panel relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-8 lg:px-10">
         <div className="absolute inset-x-0 top-0 h-px copper-line opacity-80" />
-        <div className="grid gap-8 lg:grid-cols-[1.5fr_0.9fr]">
+        <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
           <div className="space-y-6">
             <div className="space-y-4">
               <span className="eyebrow-label">Command Center</span>
@@ -235,27 +235,10 @@ function InternalDashboard({ user }: { user: NonNullable<ReturnType<typeof useAu
                   SLA risk, and fulfillment movement in one place.
                 </p>
               </div>
-          </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link href="/orders/new/trade-in">
-                <Button size="lg">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Trade-In
-                </Button>
-              </Link>
-              {isCoeRole && (
-                <Link href="/orders/new/cpo">
-                  <Button size="lg" variant="outline">
-                    <Package className="mr-2 h-4 w-4" />
-                    New CPO
-                  </Button>
-                </Link>
-              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <div className="grid grid-cols-1 gap-3">
             {quickActions.map((action) => (
               <Link key={action.href} href={action.href}>
                 <div className="metric-tile h-full p-5 transition-transform duration-300 hover:-translate-y-1">
