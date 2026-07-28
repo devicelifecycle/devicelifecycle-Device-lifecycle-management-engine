@@ -8,6 +8,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
 import { generateOrderPDF, buildPriceAdjustmentNote } from '@/lib/pdf'
+import { computeOrderTaxLine } from '@/lib/tax'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +33,7 @@ function formatDate(s?: string | null): string {
 
 async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrderById>>, fallbackValidityDays = 30): Promise<Buffer> {
   const ExcelJS = await import('exceljs')
-  const isQuote = ['draft', 'submitted', 'quoted'].includes(order!.status)
+  const isQuote = !['payment_processing', 'payment_sent', 'closed'].includes(order!.status)
   const docType = isQuote ? 'Quote' : 'Invoice'
   const quoteValidityDays = (order!.quote_expires_at && order!.quoted_at)
     ? Math.max(1, Math.round((new Date(order!.quote_expires_at).getTime() - new Date(order!.quoted_at).getTime()) / (1000 * 60 * 60 * 24)))
@@ -58,6 +59,12 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
     ['Total Quantity', order!.total_quantity ?? '—'],
     ['Quoted Amount', formatCurrency(order!.quoted_amount ?? order!.total_amount)],
     ['Final Amount', formatCurrency(order!.final_amount)],
+    ...((() => {
+      const t = computeOrderTaxLine({ type: order!.type, subtotal: order!.final_amount || order!.quoted_amount || order!.total_amount, billingAddress: order!.customer?.billing_address })
+      return t
+        ? [['Subtotal', formatCurrency(t.subtotal)], [t.label, formatCurrency(t.taxAmount)], ['Total (incl. tax)', formatCurrency(t.total)]] as (string | number | null | undefined)[][]
+        : []
+    })()),
     ...(isQuote ? [['Quote Valid Until', order!.quote_expires_at ? formatDate(order!.quote_expires_at) : `${quoteValidityDays} days from quote date`]] as (string | number | null | undefined)[][] : []),
     ...(order!.notes ? [[], ['Notes', order!.notes]] as (string | number | null | undefined)[][] : []),
   ]
@@ -118,7 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'No customer email on file' }, { status: 400 })
     }
 
-    const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
+    const isQuote = !['payment_processing', 'payment_sent', 'closed'].includes(order.status)
     const docType = isQuote ? 'Quote' : 'Invoice'
     const safeOrderNum = (order.order_number || '').replace(/[^a-zA-Z0-9._-]/g, '_')
     const filenameBase = `${safeOrderNum}-${docType}`
@@ -179,14 +186,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Generate Excel
     const excelBuffer = await buildExcelBuffer(order, bodyValidityDays)
 
-    const quotedTotal = order.quoted_amount ?? order.total_amount ?? 0
-    const totalFormatted = quotedTotal > 0 ? `$${quotedTotal.toFixed(2)}` : 'See attached'
+    const subtotalAmount = order.final_amount || order.quoted_amount || order.total_amount || 0
+    const emailTaxLine = computeOrderTaxLine({ type: order.type, subtotal: subtotalAmount, billingAddress: order.customer?.billing_address })
+    const grandTotal = emailTaxLine ? emailTaxLine.total : subtotalAmount
+    const totalFormatted = grandTotal > 0 ? `$${grandTotal.toFixed(2)}` : 'See attached'
 
     // siteUrl is captured from the outer scope (set before after() was scheduled)
     const orderUrl = `${siteUrl}/customer/orders/${order.id}`
 
     const safeOrderNumHtml = escapeHtml(order.order_number || '')
     const safeTotalFormatted = escapeHtml(totalFormatted)
+    // CPO quotes show a Subtotal + Tax breakdown above the (tax-inclusive) total.
+    const taxRowsHtml = emailTaxLine
+      ? `<tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Subtotal</td><td style="padding:6px 12px;border:1px solid #e0e0e0">$${emailTaxLine.subtotal.toFixed(2)}</td></tr>
+    <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">${escapeHtml(emailTaxLine.label)}</td><td style="padding:6px 12px;border:1px solid #e0e0e0">$${emailTaxLine.taxAmount.toFixed(2)}</td></tr>`
+      : ''
     const quoteValidityDays = (order.quote_expires_at && order.quoted_at)
       ? Math.max(1, Math.round((new Date(order.quote_expires_at).getTime() - new Date(order.quoted_at).getTime()) / (1000 * 60 * 60 * 24)))
       : bodyValidityDays
@@ -244,6 +258,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   ${isQuote ? `<p style="margin:8px 0;font-size:13px;color:#b65d2f;font-weight:600">This quote is valid for ${quoteValidityDays} days${order.quote_expires_at ? ` (expires ${formatDate(order.quote_expires_at)})` : ''}.</p>` : ''}
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Order Number</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeOrderNumHtml}</td></tr>
+    ${taxRowsHtml}
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Total Amount</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeTotalFormatted}</td></tr>
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Date</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${formatDate(order.quoted_at || order.created_at)}</td></tr>
   </table>

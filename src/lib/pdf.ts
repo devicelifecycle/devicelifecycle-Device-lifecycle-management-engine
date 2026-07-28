@@ -4,6 +4,7 @@
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { computeOrderTaxLine } from './tax'
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Byte-Back'
 
@@ -100,7 +101,9 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
 
-  const isQuote = ['submitted', 'quoted'].includes(order.status)
+  // It's a QUOTE until money is actually due/moving. The old allowlist
+  // (['submitted','quoted']) mislabeled an accepted/sourcing CPO as an INVOICE.
+  const isQuote = !['payment_processing', 'payment_sent', 'closed'].includes(order.status)
   const docType = isQuote ? 'QUOTE' : 'INVOICE'
   doc.text(docType, pageWidth - 14, 22, { align: 'right' })
 
@@ -248,6 +251,25 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     doc.text(formatCurrency(order.quoted_amount), pageWidth - 14, y, { align: 'right' })
     y += 7
   }
+  // CPO invoices are taxable — resolve the rate from the customer's billing
+  // province/state and show a Tax line so the Total is tax-inclusive. Trade-in
+  // payouts and unresolvable jurisdictions get no tax line.
+  const taxLine = computeOrderTaxLine({ type: order.type, subtotal: displayAmount, billingAddress: order.customer?.billing_address })
+  const taxAmount = taxLine?.taxAmount ?? 0
+  if (taxLine) {
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(113, 113, 122)
+    doc.text('Subtotal:', totalsX, y)
+    doc.setTextColor(24, 24, 27)
+    doc.text(formatCurrency(taxLine.subtotal), pageWidth - 14, y, { align: 'right' })
+    y += 7
+    doc.setTextColor(113, 113, 122)
+    doc.text(`${taxLine.label}:`, totalsX, y)
+    doc.setTextColor(24, 24, 27)
+    doc.text(formatCurrency(taxAmount), pageWidth - 14, y, { align: 'right' })
+    y += 7
+  }
   if (displayAmount) {
     y += 2
     doc.setDrawColor(228, 228, 231)
@@ -257,7 +279,7 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(24, 24, 27)
     doc.text('Total:', totalsX, y)
-    doc.text(formatCurrency(displayAmount), pageWidth - 14, y, { align: 'right' })
+    doc.text(formatCurrency(displayAmount + taxAmount), pageWidth - 14, y, { align: 'right' })
     y += 10
   }
 

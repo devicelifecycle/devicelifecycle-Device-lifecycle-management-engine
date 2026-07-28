@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
+import { computeOrderTaxLine } from '@/lib/tax'
 export const dynamic = 'force-dynamic'
 
 function formatCurrency(n?: number | null): string {
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    const isQuote = ['draft', 'submitted', 'quoted'].includes(order.status)
+    const isQuote = !['payment_processing', 'payment_sent', 'closed'].includes(order.status)
     const docType = isQuote ? 'Quote' : 'Invoice'
     const ExcelJS = await import('exceljs')
     const wb = new ExcelJS.default.Workbook()
@@ -59,6 +60,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ['Total Quantity', order.total_quantity ?? '—'],
       ['Quoted Amount', formatCurrency(order.quoted_amount ?? order.total_amount)],
       ['Final Amount', formatCurrency(order.final_amount)],
+      ...((() => {
+        const t = computeOrderTaxLine({ type: order.type, subtotal: order.final_amount || order.quoted_amount || order.total_amount, billingAddress: order.customer?.billing_address })
+        return t
+          ? [['Subtotal', formatCurrency(t.subtotal)], [t.label, formatCurrency(t.taxAmount)], ['Total (incl. tax)', formatCurrency(t.total)]]
+          : []
+      })()),
     ].forEach(row => ws1.addRow(row))
 
     // ── Sheet 2: Line Items ──────────────────────────────────────────────────
