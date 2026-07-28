@@ -313,6 +313,7 @@ export const orderSchema = z.object({
   customer_notes: z.string().optional(),
   internal_notes: z.string().optional(),
   notes: z.string().optional(), // Alias for customer_notes (forms send 'notes')
+  currency: z.enum(['CAD', 'USD']).optional().default('CAD'),
 }).transform((data) => {
   const { notes, ...rest } = data
   return {

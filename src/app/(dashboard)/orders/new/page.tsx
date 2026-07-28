@@ -234,6 +234,8 @@ export default function NewOrderPage() {
   const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [items, setItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
+  // CPO orders can be quoted in CAD or USD; the FX rate is frozen at creation.
+  const [currency, setCurrency] = useState<'CAD' | 'USD'>('CAD')
   // Three independent collapsible sections (not exclusive tabs) — a user can
   // have manual items AND an uploaded file open at once. Manual Entry starts
   // open since it's the simplest path; the other two start collapsed.
@@ -884,6 +886,7 @@ export default function NewOrderPage() {
           customer_id: effectiveCustomerId,
           items: cpoItems.map(({ order_type, ...rest }) => rest),
           notes: notes ? `${notes} (CPO)` : undefined,
+          currency,
         } as Record<string, unknown>)
         results.push({ id: result.id, type: 'CPO', status: result.status })
       }
@@ -1789,6 +1792,33 @@ export default function NewOrderPage() {
               <p className="text-xs text-muted-foreground mt-3">
                 Competitor prices are for internal reference only. Edit <span className="font-medium">Our Quote</span> per item to override the engine price.
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Quote currency — CPO only */}
+        {items.some(i => i.order_type === 'cpo') && (
+          <Card>
+            <CardHeader><CardTitle>Quote Currency</CardTitle></CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-2">
+                {(['CAD', 'USD'] as const).map(c => (
+                  <Button
+                    key={c}
+                    type="button"
+                    variant={currency === c ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCurrency(c)}
+                  >
+                    {c}
+                  </Button>
+                ))}
+                <p className="ml-2 text-xs text-muted-foreground">
+                  {currency === 'USD'
+                    ? 'USD is converted at the Bank of Canada rate, frozen when the order is created.'
+                    : 'Amounts are quoted in Canadian dollars.'}
+                </p>
+              </div>
             </CardContent>
           </Card>
         )}

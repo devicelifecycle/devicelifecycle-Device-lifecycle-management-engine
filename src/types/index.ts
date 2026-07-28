@@ -337,7 +337,10 @@ export interface Order extends BaseEntity {
   total_amount: number;
   quoted_amount?: number;
   final_amount?: number;
-  
+  /** Display currency (amounts are stored in CAD); fx_rate is the frozen CAD->currency multiplier. */
+  currency?: string;
+  fx_rate?: number;
+
   submitted_at?: string;
   quoted_at?: string;
   quote_expires_at?: string;

@@ -21,11 +21,6 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function formatCurrency(n?: number | null): string {
-  if (n == null) return '—'
-  return `$${n.toFixed(2)}`
-}
-
 function formatDate(s?: string | null): string {
   if (!s) return '—'
   return new Date(s).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -35,6 +30,10 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
   const ExcelJS = await import('exceljs')
   const isQuote = !['payment_processing', 'payment_sent', 'closed'].includes(order!.status)
   const docType = isQuote ? 'Quote' : 'Invoice'
+  // Amounts are CAD; convert to the order's quote currency with its frozen rate.
+  const xlFx = order!.fx_rate ?? 1
+  const xlCur = (order!.currency ?? 'CAD').toUpperCase()
+  const money = (n?: number | null) => n == null ? '—' : `$${(Math.round(n * xlFx * 100) / 100).toFixed(2)} ${xlCur}`
   const quoteValidityDays = (order!.quote_expires_at && order!.quoted_at)
     ? Math.max(1, Math.round((new Date(order!.quote_expires_at).getTime() - new Date(order!.quoted_at).getTime()) / (1000 * 60 * 60 * 24)))
     : fallbackValidityDays
@@ -57,12 +56,13 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
     ['Phone', order!.customer?.contact_phone || '—'],
     [],
     ['Total Quantity', order!.total_quantity ?? '—'],
-    ['Quoted Amount', formatCurrency(order!.quoted_amount ?? order!.total_amount)],
-    ['Final Amount', formatCurrency(order!.final_amount)],
+    ['Quoted Amount', money(order!.quoted_amount ?? order!.total_amount)],
+    ['Final Amount', money(order!.final_amount)],
+    ...(xlCur !== 'CAD' ? [['Currency', `${xlCur} @ ${xlFx.toFixed(4)} (frozen)`]] as (string | number | null | undefined)[][] : []),
     ...((() => {
       const t = computeOrderTaxLine({ type: order!.type, subtotal: order!.final_amount || order!.quoted_amount || order!.total_amount, billingAddress: order!.customer?.billing_address })
       return t
-        ? [['Subtotal', formatCurrency(t.subtotal)], [t.label, formatCurrency(t.taxAmount)], ['Total (incl. tax)', formatCurrency(t.total)]] as (string | number | null | undefined)[][]
+        ? [['Subtotal', money(t.subtotal)], [t.label, money(t.taxAmount)], ['Total (incl. tax)', money(t.total)]] as (string | number | null | undefined)[][]
         : []
     })()),
     ...(isQuote ? [['Quote Valid Until', order!.quote_expires_at ? formatDate(order!.quote_expires_at) : `${quoteValidityDays} days from quote date`]] as (string | number | null | undefined)[][] : []),
@@ -85,14 +85,14 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
     const qty = item.quantity ?? 1
     const unit = item.unit_price ?? item.guaranteed_buyback_price ?? 0
     const total = unit * qty
-    const adjustmentNote = buildPriceAdjustmentNote(item)
+    const adjustmentNote = buildPriceAdjustmentNote(item, xlFx, xlCur)
     ws2.addRow([
       device,
       item.storage || '—',
       (item.claimed_condition || '—').replace(/_/g, ' '),
       qty,
-      unit > 0 ? unit : '—',
-      total > 0 ? total : '—',
+      unit > 0 ? Math.round(unit * xlFx * 100) / 100 : '—',
+      total > 0 ? Math.round(total * xlFx * 100) / 100 : '—',
       adjustmentNote ? (item.actual_condition || '—').replace(/_/g, ' ') : '—',
       adjustmentNote || '—',
     ])
@@ -158,6 +158,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       total_amount: order.total_amount,
       quoted_amount: order.quoted_amount,
       final_amount: order.final_amount,
+      currency: order.currency,
+      fx_rate: order.fx_rate,
       quote_expires_at: order.quote_expires_at,
       customer_notes: order.notes,
       customer: order.customer ? {
@@ -186,10 +188,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Generate Excel
     const excelBuffer = await buildExcelBuffer(order, bodyValidityDays)
 
+    // Amounts are CAD; convert to the order's quote currency with its frozen rate.
+    const emailFx = order.fx_rate ?? 1
+    const emailCur = (order.currency ?? 'CAD').toUpperCase()
+    const money = (n: number) => `$${(Math.round(n * emailFx * 100) / 100).toFixed(2)} ${emailCur}`
     const subtotalAmount = order.final_amount || order.quoted_amount || order.total_amount || 0
     const emailTaxLine = computeOrderTaxLine({ type: order.type, subtotal: subtotalAmount, billingAddress: order.customer?.billing_address })
     const grandTotal = emailTaxLine ? emailTaxLine.total : subtotalAmount
-    const totalFormatted = grandTotal > 0 ? `$${grandTotal.toFixed(2)}` : 'See attached'
+    const totalFormatted = grandTotal > 0 ? money(grandTotal) : 'See attached'
 
     // siteUrl is captured from the outer scope (set before after() was scheduled)
     const orderUrl = `${siteUrl}/customer/orders/${order.id}`
@@ -198,8 +204,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const safeTotalFormatted = escapeHtml(totalFormatted)
     // CPO quotes show a Subtotal + Tax breakdown above the (tax-inclusive) total.
     const taxRowsHtml = emailTaxLine
-      ? `<tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Subtotal</td><td style="padding:6px 12px;border:1px solid #e0e0e0">$${emailTaxLine.subtotal.toFixed(2)}</td></tr>
-    <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">${escapeHtml(emailTaxLine.label)}</td><td style="padding:6px 12px;border:1px solid #e0e0e0">$${emailTaxLine.taxAmount.toFixed(2)}</td></tr>`
+      ? `<tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Subtotal</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${money(emailTaxLine.subtotal)}</td></tr>
+    <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">${escapeHtml(emailTaxLine.label)}</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${money(emailTaxLine.taxAmount)}</td></tr>`
       : ''
     const quoteValidityDays = (order.quote_expires_at && order.quoted_at)
       ? Math.max(1, Math.round((new Date(order.quote_expires_at).getTime() - new Date(order.quoted_at).getTime()) / (1000 * 60 * 60 * 24)))

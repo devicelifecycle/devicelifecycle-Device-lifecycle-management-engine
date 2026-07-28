@@ -9,11 +9,6 @@ import { OrderService } from '@/services/order.service'
 import { computeOrderTaxLine } from '@/lib/tax'
 export const dynamic = 'force-dynamic'
 
-function formatCurrency(n?: number | null): string {
-  if (n == null) return '—'
-  return `$${n.toFixed(2)}`
-}
-
 function formatDate(s?: string | null): string {
   if (!s) return '—'
   return new Date(s).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -37,6 +32,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const isQuote = !['payment_processing', 'payment_sent', 'closed'].includes(order.status)
     const docType = isQuote ? 'Quote' : 'Invoice'
+    // Amounts are CAD; convert to the order's quote currency with its frozen rate.
+    const xlFx = order.fx_rate ?? 1
+    const xlCur = (order.currency ?? 'CAD').toUpperCase()
+    const money = (n?: number | null) => n == null ? '—' : `$${(Math.round(n * xlFx * 100) / 100).toFixed(2)} ${xlCur}`
     const ExcelJS = await import('exceljs')
     const wb = new ExcelJS.default.Workbook()
 
@@ -58,12 +57,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ['Phone', order.customer?.contact_phone || '—'],
       [],
       ['Total Quantity', order.total_quantity ?? '—'],
-      ['Quoted Amount', formatCurrency(order.quoted_amount ?? order.total_amount)],
-      ['Final Amount', formatCurrency(order.final_amount)],
+      ['Quoted Amount', money(order.quoted_amount ?? order.total_amount)],
+      ['Final Amount', money(order.final_amount)],
+      ...(xlCur !== 'CAD' ? [['Currency', `${xlCur} @ ${xlFx.toFixed(4)} (frozen)`]] : []),
       ...((() => {
         const t = computeOrderTaxLine({ type: order.type, subtotal: order.final_amount || order.quoted_amount || order.total_amount, billingAddress: order.customer?.billing_address })
         return t
-          ? [['Subtotal', formatCurrency(t.subtotal)], [t.label, formatCurrency(t.taxAmount)], ['Total (incl. tax)', formatCurrency(t.total)]]
+          ? [['Subtotal', money(t.subtotal)], [t.label, money(t.taxAmount)], ['Total (incl. tax)', money(t.total)]]
           : []
       })()),
     ].forEach(row => ws1.addRow(row))
@@ -84,8 +84,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         item.storage || '—',
         (item.claimed_condition || '—').replace(/_/g, ' '),
         qty,
-        unit > 0 ? unit : '—',
-        total > 0 ? total : '—',
+        unit > 0 ? Math.round(unit * xlFx * 100) / 100 : '—',
+        total > 0 ? Math.round(total * xlFx * 100) / 100 : '—',
       ])
     }
 

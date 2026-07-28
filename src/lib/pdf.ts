@@ -19,6 +19,8 @@ interface OrderPDFData {
   total_amount?: number
   quoted_amount?: number
   final_amount?: number
+  currency?: string
+  fx_rate?: number
   quote_expires_at?: string
   customer_notes?: string
   customer?: {
@@ -44,8 +46,15 @@ interface OrderPDFData {
   }[]
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+/**
+ * Amounts are stored in CAD. When an order is quoted in another currency it
+ * carries a frozen CAD->currency multiplier (fxRate); we convert here and append
+ * the currency code so "$" is never ambiguous between CAD and USD.
+ */
+function formatCurrency(amount: number, fxRate = 1, currency = 'CAD'): string {
+  const converted = amount * (fxRate || 1)
+  const num = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(converted)
+  return `$${num} ${(currency || 'CAD').toUpperCase()}`
 }
 
 function formatDate(dateStr: string): string {
@@ -73,7 +82,7 @@ export function buildPriceAdjustmentNote(item: {
   quoted_price?: number
   final_price?: number
   unit_price?: number
-}): string | null {
+}, fxRate = 1, currency = 'CAD'): string | null {
   if (!item.actual_condition || !item.claimed_condition || item.actual_condition === item.claimed_condition) {
     return null
   }
@@ -81,7 +90,7 @@ export function buildPriceAdjustmentNote(item: {
   const after = item.final_price ?? item.unit_price
   let note = `Condition reassessed during inspection: claimed ${capitalize(item.claimed_condition)}, found ${capitalize(item.actual_condition)}.`
   if (before != null && after != null && before !== after) {
-    note += ` Price adjusted from ${formatCurrency(before)} to ${formatCurrency(after)}.`
+    note += ` Price adjusted from ${formatCurrency(before, fxRate, currency)} to ${formatCurrency(after, fxRate, currency)}.`
   }
   return note
 }
@@ -90,6 +99,11 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   let y = 20
+
+  // Display currency: amounts are stored in CAD; convert via the order's frozen rate.
+  const fx = order.fx_rate ?? 1
+  const cur = order.currency ?? 'CAD'
+  const money = (amount: number) => formatCurrency(amount, fx, cur)
 
   // --- Header ---
   doc.setFillColor(24, 24, 27) // zinc-900
@@ -190,8 +204,8 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     const condition = item.claimed_condition
       ? item.claimed_condition.charAt(0).toUpperCase() + item.claimed_condition.slice(1)
       : '—'
-    const unitPrice = item.unit_price ? formatCurrency(item.unit_price) : '—'
-    const lineTotal = item.unit_price ? formatCurrency(item.unit_price * item.quantity) : '—'
+    const unitPrice = item.unit_price ? money(item.unit_price) : '—'
+    const lineTotal = item.unit_price ? money(item.unit_price * item.quantity) : '—'
     return [device, condition, String(item.quantity), unitPrice, lineTotal]
   })
 
@@ -241,14 +255,14 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     doc.setTextColor(113, 113, 122)
     doc.text('Subtotal:', totalsX, y)
     doc.setTextColor(24, 24, 27)
-    doc.text(formatCurrency(order.total_amount), pageWidth - 14, y, { align: 'right' })
+    doc.text(money(order.total_amount), pageWidth - 14, y, { align: 'right' })
     y += 7
   }
   if (order.quoted_amount && order.quoted_amount !== order.total_amount) {
     doc.setTextColor(113, 113, 122)
     doc.text('Quoted Amount:', totalsX, y)
     doc.setTextColor(24, 24, 27)
-    doc.text(formatCurrency(order.quoted_amount), pageWidth - 14, y, { align: 'right' })
+    doc.text(money(order.quoted_amount), pageWidth - 14, y, { align: 'right' })
     y += 7
   }
   // CPO invoices are taxable — resolve the rate from the customer's billing
@@ -262,12 +276,12 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     doc.setTextColor(113, 113, 122)
     doc.text('Subtotal:', totalsX, y)
     doc.setTextColor(24, 24, 27)
-    doc.text(formatCurrency(taxLine.subtotal), pageWidth - 14, y, { align: 'right' })
+    doc.text(money(taxLine.subtotal), pageWidth - 14, y, { align: 'right' })
     y += 7
     doc.setTextColor(113, 113, 122)
     doc.text(`${taxLine.label}:`, totalsX, y)
     doc.setTextColor(24, 24, 27)
-    doc.text(formatCurrency(taxAmount), pageWidth - 14, y, { align: 'right' })
+    doc.text(money(taxAmount), pageWidth - 14, y, { align: 'right' })
     y += 7
   }
   if (displayAmount) {
@@ -279,7 +293,7 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(24, 24, 27)
     doc.text('Total:', totalsX, y)
-    doc.text(formatCurrency(displayAmount + taxAmount), pageWidth - 14, y, { align: 'right' })
+    doc.text(money(displayAmount + taxAmount), pageWidth - 14, y, { align: 'right' })
     y += 10
   }
 
@@ -288,7 +302,7 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
   //     rather than interleaved into it, same approach as Buyback
   //     Guarantee below: autoTable's column alignment shouldn't have to
   //     accommodate a variable-height explanation row. ---
-  const adjustedItems = (order.items || []).filter((item) => buildPriceAdjustmentNote(item) != null)
+  const adjustedItems = (order.items || []).filter((item) => buildPriceAdjustmentNote(item, fx, cur) != null)
   if (adjustedItems.length > 0) {
     y += 4
     doc.setFontSize(10)
@@ -303,7 +317,7 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
       const deviceName = item.device
         ? `${item.device.make || ''} ${item.device.model || ''}${item.storage ? ` (${item.storage})` : ''}`
         : 'Unknown'
-      const note = buildPriceAdjustmentNote(item)
+      const note = buildPriceAdjustmentNote(item, fx, cur)
       const line = `• ${deviceName}: ${note}`
       const lines = doc.splitTextToSize(line, pageWidth - 28)
       doc.text(lines, 14, y)
@@ -336,7 +350,7 @@ export function generateOrderPDF(order: OrderPDFData): Buffer {
       const validUntil = item.buyback_valid_until
         ? formatDate(item.buyback_valid_until)
         : '24 months from quote'
-      const line = `• ${deviceName}: We guarantee to buy back at ${formatCurrency(item.guaranteed_buyback_price!)} per unit if returned in ${condition} condition (valid until ${validUntil}).`
+      const line = `• ${deviceName}: We guarantee to buy back at ${money(item.guaranteed_buyback_price!)} per unit if returned in ${condition} condition (valid until ${validUntil}).`
       const lines = doc.splitTextToSize(line, pageWidth - 28)
       doc.text(lines, 14, y)
       y += 6 * lines.length

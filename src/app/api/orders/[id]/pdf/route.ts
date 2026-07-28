@@ -66,6 +66,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       total_amount: order.total_amount,
       quoted_amount: order.quoted_amount,
       final_amount: order.final_amount,
+      currency: order.currency,
+      fx_rate: order.fx_rate,
       quote_expires_at: order.quote_expires_at,
       customer_notes: order.notes,
       customer: order.customer ? {

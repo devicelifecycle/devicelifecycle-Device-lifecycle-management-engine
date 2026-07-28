@@ -396,6 +396,21 @@ export class OrderService {
       throw new Error('CPO orders must have direction "outbound"')
     }
 
+    // Freeze the display currency + FX rate at creation. Amounts are stored in
+    // CAD; a non-CAD order records the CAD->currency multiplier from the Bank of
+    // Canada so its quoted total never drifts. Refuse rather than guess if the
+    // rate is unavailable.
+    const currency = String((input as { currency?: string }).currency || 'CAD').toUpperCase()
+    let fxRate = 1
+    if (currency !== 'CAD') {
+      const { getCadToRate } = await import('@/lib/fx')
+      const rate = await getCadToRate(currency)
+      if (rate == null) {
+        throw new Error(`Exchange rate for ${currency} is unavailable right now — please try again shortly or quote in CAD.`)
+      }
+      fxRate = rate
+    }
+
     let order: Order | null = null
     let orderNumber = ''
     let lastConflictedOrderNumber: string | null = null
@@ -432,6 +447,8 @@ export class OrderService {
           created_by_id: userId,
           notes: input.customer_notes,
           internal_notes: input.internal_notes,
+          currency,
+          fx_rate: fxRate,
         })
         .select()
         .single()
