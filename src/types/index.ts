@@ -85,6 +85,8 @@ export interface User extends BaseEntity {
   role: UserRole;
   secondary_role?: UserRole | null;
   organization_id?: string;
+  /** VAR/tenant the user belongs to (multi-tenant isolation). */
+  tenant_id?: string | null;
   phone?: string;
   avatar_url?: string;
   notification_email?: string | null;

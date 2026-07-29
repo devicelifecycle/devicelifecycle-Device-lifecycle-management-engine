@@ -24,6 +24,8 @@ export interface AuthProfile {
   role: string
   secondary_role: string | null
   organization_id: string | null
+  /** The VAR/tenant this user belongs to (multi-tenant isolation). */
+  tenant_id: string | null
   is_active: boolean
   is_org_admin: boolean
 }
@@ -34,6 +36,8 @@ export interface AuthContext {
   profile: AuthProfile
   /** The role currently in use — primary or secondary, validated against DB */
   effectiveRole: string
+  /** The VAR/tenant this request belongs to — scope all tenant data by this. */
+  tenantId: string | null
 }
 
 /**
@@ -54,7 +58,7 @@ export async function requireAuth(): Promise<AuthContext | null> {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, role, secondary_role, organization_id, is_active, is_org_admin')
+    .select('id, role, secondary_role, organization_id, tenant_id, is_active, is_org_admin')
     .eq('id', session.user.id)
     .single()
 
@@ -73,7 +77,7 @@ export async function requireAuth(): Promise<AuthContext | null> {
 
   if (!VALID_ROLES.includes(effectiveRole)) return null
 
-  return { supabase, authUser: session.user, profile: profile as AuthProfile, effectiveRole }
+  return { supabase, authUser: session.user, profile: profile as AuthProfile, effectiveRole, tenantId: (profile as AuthProfile).tenant_id ?? null }
 }
 
 export function unauthorized(message = 'Unauthorized') {
