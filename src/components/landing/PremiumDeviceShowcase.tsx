@@ -175,7 +175,7 @@ export function PremiumDeviceHero() {
             <p className="text-[11px] uppercase tracking-[0.28em] text-[#8a7665]">
               Device Runway
             </p>
-            <p className="mt-2 max-w-md text-xl font-semibold tracking-tight text-[#17120f] sm:mt-3 sm:text-2xl lg:text-[2rem]">
+            <p className="mt-2 max-w-md text-xl font-semibold tracking-tight text-[#0f1e3d] sm:mt-3 sm:text-2xl lg:text-[2rem]">
               Real hardware, every step of the device lifecycle.
             </p>
           </div>
@@ -201,7 +201,7 @@ export function PremiumDeviceHero() {
             </div>
             <div className="premium-device-meta mt-3 rounded-[1.5rem] px-4 py-3">
               <p className="text-[10px] uppercase tracking-[0.26em] text-[#8a7665]">{heroDevices[1].label}</p>
-              <p className="mt-1 text-lg font-semibold tracking-tight text-[#17120f]">{heroDevices[1].title}</p>
+              <p className="mt-1 text-lg font-semibold tracking-tight text-[#0f1e3d]">{heroDevices[1].title}</p>
               <p className="mt-1 text-sm leading-5 text-[#5a534d]">{heroDevices[1].detail}</p>
             </div>
           </div>
@@ -241,7 +241,7 @@ export function PremiumDeviceHero() {
                 </p>
                 <div className="mt-2 flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-xl font-semibold tracking-tight text-[#17120f]">
+                    <p className="text-xl font-semibold tracking-tight text-[#0f1e3d]">
                       {device.title}
                     </p>
                     <p className="mt-2 text-sm leading-6 text-[#5a534d]">

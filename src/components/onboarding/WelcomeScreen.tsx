@@ -27,13 +27,13 @@ export function WelcomeScreen({
         transition={{ type: 'spring', stiffness: 260, damping: 26 }}
         className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/[0.08] bg-[#0a0a12] p-8 text-center shadow-[0_32px_80px_-20px_rgba(0,0,0,0.8)]"
       >
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d17843]/70 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#3b82f6]/70 to-transparent" />
 
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#9a4a1f] to-[#d17843] shadow-[0_8px_28px_-6px_rgba(209,120,67,0.55)]">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1e40af] to-[#3b82f6] shadow-[0_8px_28px_-6px_rgba(209,120,67,0.55)]">
           <Package className="h-6 w-6 text-white" />
         </div>
 
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d17843]">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#3b82f6]">
           {firstName ? `Welcome, ${firstName}` : 'Welcome'}
         </p>
         <h1 className="mb-3 font-heading italic text-2xl text-white">{copy.headline}</h1>
@@ -43,7 +43,7 @@ export function WelcomeScreen({
           <button
             onClick={onStart}
             type="button"
-            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#9a4a1f] to-[#d17843] py-3 text-sm font-semibold text-white shadow-[0_8px_24px_-6px_rgba(209,120,67,0.5)] hover:shadow-lg transition-all"
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1e40af] to-[#3b82f6] py-3 text-sm font-semibold text-white shadow-[0_8px_24px_-6px_rgba(209,120,67,0.5)] hover:shadow-lg transition-all"
           >
             <Sparkles className="h-4 w-4" />
             Start Guided Tour

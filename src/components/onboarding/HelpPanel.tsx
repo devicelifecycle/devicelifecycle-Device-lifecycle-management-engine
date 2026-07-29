@@ -64,7 +64,7 @@ export function HelpPanel({ onClose }: { onClose: () => void }) {
       >
         <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
           <div className="flex items-center gap-2">
-            <HelpCircle className="h-4 w-4 text-[#d17843]" />
+            <HelpCircle className="h-4 w-4 text-[#3b82f6]" />
             <h2 className="text-sm font-semibold text-white">Help</h2>
           </div>
           <button onClick={onClose} title="Close" type="button" className="rounded-lg p-1.5 text-white/50 hover:bg-white/10 hover:text-white transition-colors">
@@ -76,7 +76,7 @@ export function HelpPanel({ onClose }: { onClose: () => void }) {
           <button
             onClick={replayTour}
             type="button"
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#9a4a1f] to-[#d17843] py-3 text-sm font-semibold text-white shadow-[0_8px_24px_-6px_rgba(209,120,67,0.5)] hover:shadow-lg transition-all"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1e40af] to-[#3b82f6] py-3 text-sm font-semibold text-white shadow-[0_8px_24px_-6px_rgba(209,120,67,0.5)] hover:shadow-lg transition-all"
           >
             <Sparkles className="h-4 w-4" />
             Replay Guided Tour

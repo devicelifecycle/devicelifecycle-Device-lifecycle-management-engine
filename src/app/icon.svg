@@ -1,16 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <defs>
-    <linearGradient id="byteback-badge" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#dd8544" />
-      <stop offset="100%" stop-color="#a2481f" />
-    </linearGradient>
-  </defs>
-  <rect width="128" height="128" rx="30" fill="url(#byteback-badge)" />
-  <!-- Byte-Back mark: a buyback return-loop arrow encircling a "byte" (device) square -->
-  <g transform="translate(17.6 17.6) scale(3.87)" fill="none" stroke="#fdf6ee"
-     stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-    <path d="M3 3v5h5" />
-    <rect x="9.7" y="9.7" width="4.6" height="4.6" rx="1.2" fill="#fdf6ee" stroke="none" />
+  <!-- Byte-Back mark: two-tone "BB" with a pixel/byte dissolve, blue-on-blue brand -->
+  <rect width="128" height="128" rx="28" fill="#0f1e3d" />
+  <g fill="#60a5fa">
+    <rect x="20" y="44" width="7" height="7" rx="1.5" />
+    <rect x="20" y="58" width="7" height="7" rx="1.5" />
+    <rect x="30" y="51" width="7" height="7" rx="1.5" />
+    <rect x="11" y="51" width="7" height="7" rx="1.5" />
   </g>
+  <text x="75" y="67" text-anchor="middle" dominant-baseline="central"
+        font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="66" letter-spacing="-5">
+    <tspan fill="#ffffff">B</tspan><tspan fill="#3b82f6">B</tspan>
+  </text>
 </svg>

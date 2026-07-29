@@ -82,7 +82,7 @@ export function Spotlight({ targetSelector, onTargetMissing }: { targetSelector:
           doesn't get its own hit-testing), so this needs its own layer. */}
       <div className="fixed inset-0 z-[69]" />
       <motion.div
-        className="fixed z-[70] rounded-2xl pointer-events-none ring-2 ring-[#d17843]"
+        className="fixed z-[70] rounded-2xl pointer-events-none ring-2 ring-[#3b82f6]"
         initial={false}
         animate={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}

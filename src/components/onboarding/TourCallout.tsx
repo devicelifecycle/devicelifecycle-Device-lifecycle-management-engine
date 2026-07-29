@@ -98,7 +98,7 @@ export function TourCallout({
             {Array.from({ length: totalSteps }).map((_, i) => (
               <span
                 key={i}
-                className={`h-1.5 rounded-full transition-all ${i === stepIndex ? 'w-4 bg-[#d17843]' : 'w-1.5 bg-white/15'}`}
+                className={`h-1.5 rounded-full transition-all ${i === stepIndex ? 'w-4 bg-[#3b82f6]' : 'w-1.5 bg-white/15'}`}
               />
             ))}
           </div>
@@ -116,7 +116,7 @@ export function TourCallout({
             <button
               onClick={onNext}
               type="button"
-              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#9a4a1f] to-[#d17843] px-3 py-1.5 text-xs font-semibold text-white hover:shadow-md transition-all"
+              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#1e40af] to-[#3b82f6] px-3 py-1.5 text-xs font-semibold text-white hover:shadow-md transition-all"
             >
               {stepIndex === totalSteps - 1 ? 'Done' : 'Next'}
               {stepIndex < totalSteps - 1 && <ArrowRight className="h-3 w-3" />}

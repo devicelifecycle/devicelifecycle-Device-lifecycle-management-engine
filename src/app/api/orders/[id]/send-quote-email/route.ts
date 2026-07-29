@@ -261,7 +261,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   <h2 style="color:#111">Your ${docType} — Order ${safeOrderNumHtml}</h2>
   <p>Hi ${customerName},</p>
   <p>Please find your <strong>${docType.toLowerCase()}</strong> for order <strong>${safeOrderNumHtml}</strong> attached as a PDF and Excel file.</p>
-  ${isQuote ? `<p style="margin:8px 0;font-size:13px;color:#b65d2f;font-weight:600">This quote is valid for ${quoteValidityDays} days${order.quote_expires_at ? ` (expires ${formatDate(order.quote_expires_at)})` : ''}.</p>` : ''}
+  ${isQuote ? `<p style="margin:8px 0;font-size:13px;color:#2563eb;font-weight:600">This quote is valid for ${quoteValidityDays} days${order.quote_expires_at ? ` (expires ${formatDate(order.quote_expires_at)})` : ''}.</p>` : ''}
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Order Number</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeOrderNumHtml}</td></tr>
     ${taxRowsHtml}
@@ -275,7 +275,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     <p style="margin:0;font-size:13px;color:#333;white-space:pre-wrap">${escapeHtml(order.notes)}</p>
   </div>` : ''}
   <div style="margin:24px 0;text-align:center">
-    <a href="${orderUrl}" style="display:inline-block;padding:14px 32px;background:#b65d2f;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">View &amp; Accept Quote in Portal</a>
+    <a href="${orderUrl}" style="display:inline-block;padding:14px 32px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">View &amp; Accept Quote in Portal</a>
   </div>
   <p style="color:#888;font-size:12px;margin-top:4px;text-align:center">Or copy this link: ${orderUrl}</p>
   <p>If you have any questions, please contact our team.</p>

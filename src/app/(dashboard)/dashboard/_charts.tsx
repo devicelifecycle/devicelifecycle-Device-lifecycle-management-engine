@@ -30,7 +30,7 @@ export function MonthlyOrdersChart({ chartData, gridStroke, tickStyle, tooltipSt
         <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
         <YAxis tick={tickStyle} axisLine={false} tickLine={false} allowDecimals={false} />
         <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [v, 'Orders']} />
-        <Bar dataKey="orders" fill="#d17843" radius={[8, 8, 0, 0]} />
+        <Bar dataKey="orders" fill="#3b82f6" radius={[8, 8, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -75,8 +75,8 @@ export function OrderMomentumChart({ trendData, isDark }: {
       <AreaChart data={trendData}>
         <defs>
           <linearGradient id="momentumFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#d17843" stopOpacity={0.55} />
-            <stop offset="100%" stopColor="#d17843" stopOpacity={0.02} />
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.55} />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
           </linearGradient>
         </defs>
         <CartesianGrid stroke={isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'} vertical={false} />
@@ -85,12 +85,12 @@ export function OrderMomentumChart({ trendData, isDark }: {
         <Tooltip
           contentStyle={{
             background: isDark ? 'rgba(18,14,12,0.95)' : '#fff',
-            border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e7e5e4',
+            border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
             borderRadius: '18px',
             color: isDark ? '#f5f5f4' : '#1c1917',
           }}
         />
-        <Area type="monotone" dataKey="orders" stroke="#d17843" strokeWidth={2.5} fill="url(#momentumFill)" />
+        <Area type="monotone" dataKey="orders" stroke="#3b82f6" strokeWidth={2.5} fill="url(#momentumFill)" />
       </AreaChart>
     </ResponsiveContainer>
   )
@@ -109,7 +109,7 @@ export function PipelineWeightChart({ pipelineData, isDark }: {
         <Tooltip
           contentStyle={{
             background: isDark ? 'rgba(18,14,12,0.95)' : '#fff',
-            border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e7e5e4',
+            border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
             borderRadius: '18px',
             color: isDark ? '#f5f5f4' : '#1c1917',
           }}

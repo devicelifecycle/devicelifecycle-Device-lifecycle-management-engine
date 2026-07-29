@@ -51,9 +51,9 @@ const storyChapters = [
     stageFootnote:
       "The experience feels lighter because teams stop rebuilding context downstream.",
     icon: Sparkles,
-    accent: "from-[#f4d8b0]/55 via-[#fcf4e8] to-white",
-    glow: "bg-[#edc486]/35",
-    wash: "from-[#e8bd84]/18 via-transparent to-transparent",
+    accent: "from-[#dbeafe]/55 via-[#eff6ff] to-white",
+    glow: "bg-[#93c5fd]/35",
+    wash: "from-[#93c5fd]/18 via-transparent to-transparent",
   },
   {
     id: "pricing",
@@ -234,7 +234,7 @@ export default function LandingPage() {
   return (
     <div className="landing-shell relative text-[#16120f]">
       <motion.div
-        className="fixed inset-x-0 top-0 z-[80] h-px origin-left bg-gradient-to-r from-[#e8bb77] via-[#d46f39] to-[#8dbde9]"
+        className="fixed inset-x-0 top-0 z-[80] h-px origin-left bg-gradient-to-r from-[#93c5fd] via-[#d46f39] to-[#8dbde9]"
         style={{ scaleX: progressScaleX }}
       />
 
@@ -251,11 +251,11 @@ export default function LandingPage() {
           className="welcome-header sticky top-4 z-50 flex items-center justify-between rounded-full px-4 py-3 sm:px-6"
         >
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#17120f] text-[#f8f2ea] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.45)] sm:h-11 sm:w-11">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0f1e3d] text-[#f8f2ea] shadow-[0_20px_40px_-24px_rgba(0,0,0,0.45)] sm:h-11 sm:w-11">
               <ByteBackMark className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div>
-              <p className="editorial-title font-bold text-[1.4rem] leading-none text-[#17120f] sm:text-[1.7rem]">
+              <p className="editorial-title font-bold text-[1.4rem] leading-none text-[#0f1e3d] sm:text-[1.7rem]">
                 Byte-Back
               </p>
               <p className="hidden text-[10px] uppercase tracking-[0.28em] text-[#7f766f] sm:block">
@@ -267,19 +267,19 @@ export default function LandingPage() {
           <div className="hidden items-center gap-6 lg:flex">
             <Link
               href="#experience"
-              className="text-sm text-[#6d655f] transition-colors hover:text-[#17120f]"
+              className="text-sm text-[#6d655f] transition-colors hover:text-[#0f1e3d]"
             >
               Story
             </Link>
             <Link
               href="#principles"
-              className="text-sm text-[#6d655f] transition-colors hover:text-[#17120f]"
+              className="text-sm text-[#6d655f] transition-colors hover:text-[#0f1e3d]"
             >
               Principles
             </Link>
             <Link
               href="#launch"
-              className="text-sm text-[#6d655f] transition-colors hover:text-[#17120f]"
+              className="text-sm text-[#6d655f] transition-colors hover:text-[#0f1e3d]"
             >
               Launch
             </Link>
@@ -290,7 +290,7 @@ export default function LandingPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="border-black/10 bg-white/60 text-[#17120f] hover:bg-white sm:h-10 sm:px-4 sm:text-sm"
+                className="border-black/10 bg-white/60 text-[#0f1e3d] hover:bg-white sm:h-10 sm:px-4 sm:text-sm"
               >
                 Sign In
               </Button>
@@ -323,7 +323,7 @@ export default function LandingPage() {
                     initial={{ opacity: 0, y: 22 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.08 }}
-                    className="editorial-title max-w-5xl text-[clamp(2.8rem,7.7vw,7.6rem)] leading-[1.06] text-[#17120f]"
+                    className="editorial-title max-w-5xl text-[clamp(2.8rem,7.7vw,7.6rem)] leading-[1.06] text-[#0f1e3d]"
                   >
                     Devices move through the business
                     <span className="block brand-gradient">
@@ -359,7 +359,7 @@ export default function LandingPage() {
                     <Button
                       size="lg"
                       variant="outline"
-                      className="border-black/10 bg-white/70 text-[#17120f] hover:bg-white"
+                      className="border-black/10 bg-white/70 text-[#0f1e3d] hover:bg-white"
                     >
                       Explore the story
                     </Button>
@@ -429,7 +429,7 @@ export default function LandingPage() {
               <span className="eyebrow-label text-[#8a6c45]">
                 Platform Story
               </span>
-              <h2 className="editorial-title mt-6 text-4xl text-[#17120f] sm:text-5xl lg:text-6xl">
+              <h2 className="editorial-title mt-6 text-4xl text-[#0f1e3d] sm:text-5xl lg:text-6xl">
                 Three surfaces. One continuous device journey.
               </h2>
               <p className="mt-5 text-base leading-8 text-[#625a54] sm:text-lg">
@@ -450,8 +450,8 @@ export default function LandingPage() {
                     onClick={() => scrollToChapter(chapter.id)}
                     className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.24em] transition-all duration-300 ${
                       isActive
-                        ? "border-[#d07a48]/35 bg-[#f7e9da] text-[#17120f] shadow-[0_18px_50px_-30px_rgba(190,106,49,0.42)]"
-                        : "border-black/8 bg-white/65 text-[#6a625d] hover:border-black/16 hover:text-[#17120f]"
+                        ? "border-[#d07a48]/35 bg-[#f7e9da] text-[#0f1e3d] shadow-[0_18px_50px_-30px_rgba(190,106,49,0.42)]"
+                        : "border-black/8 bg-white/65 text-[#6a625d] hover:border-black/16 hover:text-[#0f1e3d]"
                     }`}
                   >
                     {chapter.eyebrow}
@@ -490,7 +490,7 @@ export default function LandingPage() {
                     />
                     <div className="relative h-full">
                       <div className="mb-6 flex items-center justify-between gap-4">
-                        <span className="eyebrow-label text-[#ebc88d]">
+                        <span className="eyebrow-label text-[#93c5fd]">
                           Chapter {activeChapter.step}
                         </span>
                         <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-white/70">
@@ -544,12 +544,12 @@ export default function LandingPage() {
                           </div>
 
                           <div className="mt-8 flex flex-col gap-5 sm:mt-10 sm:gap-6">
-                            <div className="flex h-14 w-14 items-center justify-center rounded-[1.7rem] border border-black/8 bg-white/75 text-[#17120f] shadow-[0_20px_40px_-28px_rgba(0,0,0,0.22)] sm:h-16 sm:w-16">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-[1.7rem] border border-black/8 bg-white/75 text-[#0f1e3d] shadow-[0_20px_40px_-28px_rgba(0,0,0,0.22)] sm:h-16 sm:w-16">
                               <chapter.icon className="h-5 w-5 sm:h-6 sm:w-6" />
                             </div>
 
                             <div className="max-w-2xl">
-                              <h3 className="editorial-title text-3xl text-[#17120f] sm:text-4xl lg:text-5xl">
+                              <h3 className="editorial-title text-3xl text-[#0f1e3d] sm:text-4xl lg:text-5xl">
                                 {chapter.title}
                               </h3>
                               <p className="mt-4 text-base leading-8 text-[#5f5751]">
@@ -600,7 +600,7 @@ export default function LandingPage() {
               <p className="text-xs uppercase tracking-[0.28em] text-[#8c7050]">
                 Built For Clarity
               </p>
-              <p className="editorial-title mt-5 text-3xl text-[#17120f] sm:text-5xl lg:text-6xl">
+              <p className="editorial-title mt-5 text-3xl text-[#0f1e3d] sm:text-5xl lg:text-6xl">
                 Designed to stay calm while the work gets complicated.
               </p>
               <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-[#645c56] sm:text-lg">
@@ -616,7 +616,7 @@ export default function LandingPage() {
               <span className="eyebrow-label text-[#8a6c45]">
                 Design Principles
               </span>
-              <h2 className="editorial-title mt-6 text-4xl text-[#17120f] sm:text-5xl lg:text-6xl">
+              <h2 className="editorial-title mt-6 text-4xl text-[#0f1e3d] sm:text-5xl lg:text-6xl">
                 Clean on first glance. Deep when you keep going.
               </h2>
               <p className="mt-5 text-base leading-8 text-[#625a54] sm:text-lg">
@@ -636,10 +636,10 @@ export default function LandingPage() {
                   transition={{ duration: 0.65, delay: index * 0.06 }}
                   className="principle-card rounded-[2.1rem] p-6"
                 >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-[#17120f] text-[#f7efe5]">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-[#0f1e3d] text-[#f7efe5]">
                     <principle.icon className="h-5 w-5" />
                   </div>
-                  <p className="mt-6 text-xl font-semibold text-[#17120f] sm:text-2xl">
+                  <p className="mt-6 text-xl font-semibold text-[#0f1e3d] sm:text-2xl">
                     {principle.title}
                   </p>
                   <p className="mt-3 text-sm leading-7 text-[#605953]">
@@ -661,7 +661,7 @@ export default function LandingPage() {
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
 
               <motion.div
-                className="absolute right-10 top-8 h-40 w-40 rounded-full bg-[#d17843]/16 blur-3xl"
+                className="absolute right-10 top-8 h-40 w-40 rounded-full bg-[#3b82f6]/16 blur-3xl"
                 animate={
                   shouldReduceMotion
                     ? undefined

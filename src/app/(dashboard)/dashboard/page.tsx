@@ -60,7 +60,7 @@ function MonthlyPerformanceSection({ isDark, analytics, isLoading }: { isDark: b
 
   const tooltipStyle = {
     background: isDark ? 'rgba(18,14,12,0.95)' : '#fff',
-    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e7e5e4',
+    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
     borderRadius: '14px',
     color: isDark ? '#f5f5f4' : '#1c1917',
   }
@@ -148,7 +148,7 @@ function MonthlyPerformanceSection({ isDark, analytics, isLoading }: { isDark: b
   )
 }
 
-const PIPELINE_COLORS = ['#f1d7af', '#d17843', '#6ec6b8', '#8da8d8', '#d95f5f', '#f0c36d']
+const PIPELINE_COLORS = ['#1e3a8a', '#3b82f6', '#6ec6b8', '#8da8d8', '#d95f5f', '#f0c36d']
 
 function useTrend(orders: Array<{ created_at?: string | null }>) {
   return useMemo(() => {

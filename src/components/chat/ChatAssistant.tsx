@@ -206,7 +206,7 @@ export function ChatAssistant() {
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between rounded-t-2xl bg-gradient-to-r from-[#9a4a1f] to-[#d17843] px-4 py-3">
+        <div className="flex items-center justify-between rounded-t-2xl bg-gradient-to-r from-[#1e40af] to-[#3b82f6] px-4 py-3">
           <div className="flex items-center gap-2.5 text-white">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/20">
               <persona.icon className="h-4 w-4" />
@@ -248,7 +248,7 @@ export function ChatAssistant() {
           ))}
           {isLoading && (
             <div className="flex items-center gap-2 text-muted-foreground">
-              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#9a4a1f] to-[#d17843]">
+              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#1e40af] to-[#3b82f6]">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
               </div>
               <div className="rounded-2xl rounded-tl-sm bg-muted/80 px-3.5 py-2.5">
@@ -272,7 +272,7 @@ export function ChatAssistant() {
               onKeyDown={handleKeyDown}
               placeholder="Ask about orders, pricing, devices..."
               rows={1}
-              className="flex-1 resize-none rounded-xl border bg-muted/30 px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-[#d17843] focus:ring-1 focus:ring-[#d17843]/30 transition-colors"
+              className="flex-1 resize-none rounded-xl border bg-muted/30 px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]/30 transition-colors"
               disabled={isLoading}
             />
             <button
@@ -283,7 +283,7 @@ export function ChatAssistant() {
               className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-xl transition-all',
                 input.trim() && !isLoading
-                  ? 'bg-gradient-to-r from-[#9a4a1f] to-[#d17843] text-white hover:shadow-md'
+                  ? 'bg-gradient-to-r from-[#1e40af] to-[#3b82f6] text-white hover:shadow-md'
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
               )}
             >
@@ -308,7 +308,7 @@ export function ChatAssistant() {
           'fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-2xl ring-1 ring-inset transition-all duration-300 hover:scale-105 hover:-translate-y-0.5',
           isOpen
             ? 'bg-white/[0.06] text-muted-foreground ring-white/10 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]'
-            : 'bg-gradient-to-br from-[#9a4a1f] to-[#d17843] text-white ring-white/20 shadow-[0_8px_28px_-6px_rgba(209,120,67,0.55),inset_0_1px_0_rgba(255,255,255,0.25)]'
+            : 'bg-gradient-to-br from-[#1e40af] to-[#3b82f6] text-white ring-white/20 shadow-[0_8px_28px_-6px_rgba(209,120,67,0.55),inset_0_1px_0_rgba(255,255,255,0.25)]'
         )}
       >
         {isOpen ? (

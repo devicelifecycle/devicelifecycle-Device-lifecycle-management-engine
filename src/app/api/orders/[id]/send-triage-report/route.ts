@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         <tr>
           <td style="padding:6px 10px;border:1px solid #e0e0e0">${escapeHtml(deviceLabel)}</td>
           <td style="padding:6px 10px;border:1px solid #e0e0e0">${escapeHtml(claimed)}</td>
-          <td style="padding:6px 10px;border:1px solid #e0e0e0${changed ? ';color:#b65d2f;font-weight:600' : ''}">${escapeHtml(final)}</td>
+          <td style="padding:6px 10px;border:1px solid #e0e0e0${changed ? ';color:#2563eb;font-weight:600' : ''}">${escapeHtml(final)}</td>
           <td style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right${adjustment && adjustment < 0 ? ';color:#c0392b' : adjustment && adjustment > 0 ? ';color:#1e7e34' : ''}">${adjustment ? `${adjustment > 0 ? '+' : adjustment < 0 ? '-' : ''}${formatCurrency(Math.abs(adjustment))}` : '—'}</td>
         </tr>
         ${r.notes ? `<tr><td colspan="4" style="padding:4px 10px 10px;border:1px solid #e0e0e0;border-top:none;font-size:12px;color:#666;font-style:italic">${escapeHtml(r.notes)}</td></tr>` : ''}`
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   </table>
   ${anyAdjustment ? `<p style="margin:8px 0;font-size:13px;color:#555">Highlighted rows reflect a condition or price change found during inspection. Your order total has been updated accordingly — log in to review.</p>` : `<p style="margin:8px 0;font-size:13px;color:#1e7e34">Good news — every device matched what was originally reported. No price changes.</p>`}
   <div style="margin:24px 0;text-align:center">
-    <a href="${orderUrl}" style="display:inline-block;padding:14px 32px;background:#b65d2f;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">View Order Details</a>
+    <a href="${orderUrl}" style="display:inline-block;padding:14px 32px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">View Order Details</a>
   </div>
   <p style="color:#888;font-size:12px;margin-top:4px;text-align:center">Or copy this link: ${orderUrl}</p>
   <p>If you have any questions about these results, please contact our team.</p>
