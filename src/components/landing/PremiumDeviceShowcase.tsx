@@ -166,20 +166,20 @@ export function PremiumDeviceHero() {
   return (
     <div ref={stageRef} className="premium-runway-shell grain-overlay relative overflow-hidden rounded-[2.8rem] p-5 sm:p-7">
       <motion.div className="premium-runway-spotlight absolute inset-x-[10%] top-10 h-44 rounded-full blur-3xl" style={{ scale: spotlightScale, opacity: spotlightOpacity }} />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.52),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.78)_0%,rgba(245,239,232,0.96)_38%,rgba(232,224,214,0.92)_100%)]" />
-      <div className="absolute inset-x-8 bottom-10 h-24 rounded-full bg-[radial-gradient(circle,rgba(23,18,15,0.18)_0%,rgba(23,18,15,0.02)_68%,transparent_76%)] blur-2xl" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.52),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.78)_0%,rgba(239,246,255,0.96)_38%,rgba(219,234,254,0.92)_100%)]" />
+      <div className="absolute inset-x-8 bottom-10 h-24 rounded-full bg-[radial-gradient(circle,rgba(15,30,61,0.18)_0%,rgba(15,30,61,0.02)_68%,transparent_76%)] blur-2xl" />
 
       <div className="relative flex min-h-[28rem] flex-col justify-between gap-6 sm:min-h-[34rem] sm:gap-8 lg:min-h-[38rem]">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[#8a7665]">
+            <p className="text-[11px] uppercase tracking-[0.28em] text-[#64748b]">
               Device Runway
             </p>
             <p className="mt-2 max-w-md text-xl font-semibold tracking-tight text-[#0f1e3d] sm:mt-3 sm:text-2xl lg:text-[2rem]">
               Real hardware, every step of the device lifecycle.
             </p>
           </div>
-          <div className="hidden shrink-0 rounded-full border border-black/8 bg-white/70 px-3 py-1 text-xs text-[#514a44] sm:block">
+          <div className="hidden shrink-0 rounded-full border border-black/8 bg-white/70 px-3 py-1 text-xs text-[#475569] sm:block">
             Scroll-reactive
           </div>
         </div>
@@ -200,9 +200,9 @@ export function PremiumDeviceHero() {
               <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/35 via-black/5 to-transparent" />
             </div>
             <div className="premium-device-meta mt-3 rounded-[1.5rem] px-4 py-3">
-              <p className="text-[10px] uppercase tracking-[0.26em] text-[#8a7665]">{heroDevices[1].label}</p>
+              <p className="text-[10px] uppercase tracking-[0.26em] text-[#64748b]">{heroDevices[1].label}</p>
               <p className="mt-1 text-lg font-semibold tracking-tight text-[#0f1e3d]">{heroDevices[1].title}</p>
-              <p className="mt-1 text-sm leading-5 text-[#5a534d]">{heroDevices[1].detail}</p>
+              <p className="mt-1 text-sm leading-5 text-[#475569]">{heroDevices[1].detail}</p>
             </div>
           </div>
         </div>
@@ -236,7 +236,7 @@ export function PremiumDeviceHero() {
               </div>
 
               <div className="premium-device-meta mt-4 rounded-[1.7rem] px-4 py-4">
-                <p className="text-[10px] uppercase tracking-[0.26em] text-[#8a7665]">
+                <p className="text-[10px] uppercase tracking-[0.26em] text-[#64748b]">
                   {device.label}
                 </p>
                 <div className="mt-2 flex items-end justify-between gap-4">
@@ -244,11 +244,11 @@ export function PremiumDeviceHero() {
                     <p className="text-xl font-semibold tracking-tight text-[#0f1e3d]">
                       {device.title}
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-[#5a534d]">
+                    <p className="mt-2 text-sm leading-6 text-[#475569]">
                       {device.detail}
                     </p>
                   </div>
-                  <div className="hidden text-[10px] uppercase tracking-[0.22em] text-[#8f8277] sm:block">
+                  <div className="hidden text-[10px] uppercase tracking-[0.22em] text-[#94a3b8] sm:block">
                     0{index + 1}
                   </div>
                 </div>
@@ -259,7 +259,7 @@ export function PremiumDeviceHero() {
 
         <div className="grid gap-3 sm:grid-cols-3">
           {heroDevices.map((device) => (
-            <div key={device.title} className="rounded-full border border-black/8 bg-white/65 px-4 py-3 text-center text-[11px] uppercase tracking-[0.24em] text-[#5e5650]">
+            <div key={device.title} className="rounded-full border border-black/8 bg-white/65 px-4 py-3 text-center text-[11px] uppercase tracking-[0.24em] text-[#64748b]">
               {device.title}
             </div>
           ))}
