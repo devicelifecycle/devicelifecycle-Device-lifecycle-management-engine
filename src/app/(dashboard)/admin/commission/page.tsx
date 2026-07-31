@@ -23,6 +23,7 @@ type MarginType = MarginSpec['type']
 const DEFAULT: CommissionConfig = {
   platformCommissionPct: 0.05,
   productMarginPct: 0,
+  holdbackPct: 0,
   corpMargin: { type: 'fixed', value: 0 },
   repMargin: { type: 'fixed', value: 0 },
 }
@@ -102,6 +103,11 @@ export default function CommissionSettingsPage() {
                 value={config.productMarginPct}
                 onChange={(v) => setConfig((c) => ({ ...c, productMarginPct: v }))}
               />
+              <PercentField
+                label="Holdback"
+                value={config.holdbackPct}
+                onChange={(v) => setConfig((c) => ({ ...c, holdbackPct: v }))}
+              />
             </CardContent>
           </Card>
 
@@ -143,7 +149,7 @@ export default function CommissionSettingsPage() {
                 sub="Customer sells a device"
                 rows={[
                   ['Market value', formatCurrency(preview.tradeIn.marketValue)],
-                  [`BB take (${marginLabel({ type: 'percent', value: config.platformCommissionPct + config.productMarginPct })})`, `− ${formatCurrency(preview.tradeIn.bbTake)}`],
+                  [`BB take (${marginLabel({ type: 'percent', value: config.platformCommissionPct + config.productMarginPct + config.holdbackPct })})`, `− ${formatCurrency(preview.tradeIn.bbTake)}`],
                   ['VAR price (BB pays VAR)', formatCurrency(preview.tradeIn.varPrice)],
                   [`Corp ${marginLabel(config.corpMargin)} + Rep ${marginLabel(config.repMargin)}`, `− ${formatCurrency(preview.tradeIn.varMargin)}`],
                 ]}

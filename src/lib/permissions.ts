@@ -15,7 +15,7 @@ export const PERMISSION_KEYS = [
   'vendor.manage', 'vendor.view',
   'order.create', 'order.update', 'order.transition', 'order.view',
   'pricing.manage', 'pricing.view',
-  'commission.manage', 'commission.view',
+  'commission.manage', 'commission.view', 'commission.var_margins',
   'billing.manage', 'billing.view',
   'reports.view', 'audit.view',
   'impersonate.tenant', 'feature.manage', 'licensing.manage',
@@ -36,6 +36,26 @@ const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   sales: ['order.create', 'order.view', 'customer.create', 'customer.view', 'pricing.view', 'reports.view'],
   customer: ['order.create', 'order.view', 'reports.view'],
   vendor: ['order.view', 'reports.view'],
+
+  // Delegated VAR roles (Appendix A) — scoped to their own tenant/customers,
+  // and never able to exceed BB privileges (no platform/tenant/commission.manage).
+  var_entity_admin: [
+    'tenant.view', 'user.create', 'user.update', 'user.view',
+    'customer.create', 'customer.update', 'customer.delete', 'customer.view',
+    'order.create', 'order.update', 'order.view',
+    'pricing.view', 'commission.view', 'commission.var_margins',
+    'billing.view', 'reports.view', 'audit.view',
+  ],
+  var_regional_manager: [
+    'tenant.view', 'user.create', 'user.view',
+    'customer.create', 'customer.update', 'customer.view',
+    'order.create', 'order.update', 'order.view',
+    'commission.view', 'commission.var_margins', 'reports.view',
+  ],
+  var_sales_rep: [
+    'customer.create', 'customer.view',
+    'order.create', 'order.view', 'reports.view',
+  ],
 }
 
 /** Does this role grant the given permission? */

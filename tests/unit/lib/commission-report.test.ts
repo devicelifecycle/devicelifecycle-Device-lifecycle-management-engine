@@ -6,6 +6,7 @@ import type { CommissionConfig } from '@/lib/commission'
 const config: CommissionConfig = {
   platformCommissionPct: 0.05,
   productMarginPct: 0,
+  holdbackPct: 0,
   corpMargin: { type: 'fixed', value: 5 },
   repMargin: { type: 'fixed', value: 3 },
 }

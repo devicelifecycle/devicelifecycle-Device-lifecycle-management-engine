@@ -15,6 +15,8 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { DEFAULT_BRANDING, type TenantBranding } from '@/lib/branding'
+import { DEFAULT_FEATURES, FEATURE_KEYS, type FeatureFlags, type FeatureKey } from '@/lib/features'
+import { DEFAULT_LICENSE, LIMIT_KEYS, UNLIMITED, type LicenseLimits, type LimitKey } from '@/lib/licensing'
 
 interface TenantDetail {
   id: string
@@ -25,6 +27,19 @@ interface TenantDetail {
   custom_domain: string | null
   plan: string | null
   branding: TenantBranding
+  features: FeatureFlags
+  license: LicenseLimits
+}
+
+const FEATURE_LABELS: Record<FeatureKey, string> = {
+  trade_in: 'Trade-in', cpo: 'CPO', rve: 'Residual value (RVE)',
+  billing: 'Billing', reporting: 'Reporting', notifications: 'Notifications',
+  api_access: 'API access', sso: 'SSO', vendor_auction: 'Vendor auction',
+  knowledge_base: 'Knowledge base', chat: 'Chat', impersonation: 'Impersonation',
+}
+const LIMIT_LABELS: Record<LimitKey, string> = {
+  customers: 'Customers', users: 'Users', storageMb: 'Storage (MB)',
+  apiCallsPerMonth: 'API calls / mo', transactionsPerMonth: 'Transactions / mo',
 }
 
 export default function TenantDetailPage() {
@@ -32,6 +47,8 @@ export default function TenantDetailPage() {
   const router = useRouter()
   const [tenant, setTenant] = useState<TenantDetail | null>(null)
   const [branding, setBranding] = useState<TenantBranding>(DEFAULT_BRANDING)
+  const [features, setFeatures] = useState<FeatureFlags>(DEFAULT_FEATURES)
+  const [license, setLicense] = useState<LicenseLimits>(DEFAULT_LICENSE)
   const [customDomain, setCustomDomain] = useState('')
   const [isActive, setIsActive] = useState(true)
   const [loading, setLoading] = useState(true)
@@ -44,6 +61,8 @@ export default function TenantDetailPage() {
       const { data } = await res.json()
       setTenant(data)
       setBranding(data.branding)
+      setFeatures(data.features)
+      setLicense(data.license)
       setCustomDomain(data.custom_domain ?? '')
       setIsActive(data.is_active)
     } catch {
@@ -70,6 +89,8 @@ export default function TenantDetailPage() {
           branding: isPlatform ? undefined : branding,
           is_active: isPlatform ? undefined : isActive,
           custom_domain: customDomain.trim() || null,
+          features,
+          license,
         }),
       })
       const j = await res.json().catch(() => ({}))
@@ -192,6 +213,49 @@ export default function TenantDetailPage() {
                 </button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Features</CardTitle>
+            <CardDescription>Enable or disable modules for this tenant.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2.5">
+            {FEATURE_KEYS.map((k) => (
+              <div key={k} className="flex items-center justify-between">
+                <span className="text-sm">{FEATURE_LABELS[k]}</span>
+                <Switch checked={features[k]} onCheckedChange={(v) => setFeatures((f) => ({ ...f, [k]: v }))} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Licensing / quotas</CardTitle>
+            <CardDescription>Blank = unlimited.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {LIMIT_KEYS.map((k) => (
+              <div key={k} className="flex items-center justify-between gap-4">
+                <span className="text-sm">{LIMIT_LABELS[k]}</span>
+                <Input
+                  type="number"
+                  min={0}
+                  className="w-36"
+                  placeholder="Unlimited"
+                  value={license[k] === UNLIMITED ? '' : license[k]}
+                  onChange={(e) => setLicense((l) => ({ ...l, [k]: e.target.value === '' ? UNLIMITED : Math.max(0, Math.floor(Number(e.target.value) || 0)) }))}
+                />
+              </div>
+            ))}
+            <Button onClick={save} disabled={saving} className="mt-2 w-full sm:w-auto">
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save features & limits
+            </Button>
           </CardContent>
         </Card>
       </div>

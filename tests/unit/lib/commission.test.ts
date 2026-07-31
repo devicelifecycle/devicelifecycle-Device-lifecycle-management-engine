@@ -9,6 +9,7 @@ import {
 const noBB: CommissionConfig = {
   platformCommissionPct: 0,
   productMarginPct: 0,
+  holdbackPct: 0,
   corpMargin: { type: 'fixed', value: 0 },
   repMargin: { type: 'fixed', value: 0 },
 }
@@ -43,7 +44,7 @@ describe('commission engine — BB blended take', () => {
     const r = computeDealPricing({
       orderType: 'cpo',
       marketValue: 1000,
-      config: { platformCommissionPct: 0.02, productMarginPct: 0, corpMargin: { type: 'fixed', value: 50 }, repMargin: { type: 'fixed', value: 30 } },
+      config: { platformCommissionPct: 0.02, productMarginPct: 0, holdbackPct: 0, corpMargin: { type: 'fixed', value: 50 }, repMargin: { type: 'fixed', value: 30 } },
     })
     expect(r.bbPlatformCommission).toBe(20)
     expect(r.varPrice).toBe(1020)
@@ -54,7 +55,7 @@ describe('commission engine — BB blended take', () => {
     const r = computeDealPricing({
       orderType: 'trade_in',
       marketValue: 200,
-      config: { platformCommissionPct: 0.05, productMarginPct: 0.05, corpMargin: { type: 'fixed', value: 0 }, repMargin: { type: 'fixed', value: 0 } },
+      config: { platformCommissionPct: 0.05, productMarginPct: 0.05, holdbackPct: 0, corpMargin: { type: 'fixed', value: 0 }, repMargin: { type: 'fixed', value: 0 } },
     })
     expect(r.bbTake).toBe(20) // 10% of 200
     expect(r.varPrice).toBe(180)
@@ -65,7 +66,7 @@ describe('commission engine — BB blended take', () => {
     const r = computeDealPricing({
       orderType: 'cpo',
       marketValue: 1000,
-      config: { platformCommissionPct: 0, productMarginPct: 0, corpMargin: { type: 'percent', value: 0.05 }, repMargin: { type: 'percent', value: 0.03 } },
+      config: { platformCommissionPct: 0, productMarginPct: 0, holdbackPct: 0, corpMargin: { type: 'percent', value: 0.05 }, repMargin: { type: 'percent', value: 0.03 } },
     })
     expect(r.corpMargin).toBe(50) // 5% of 1000
     expect(r.repMargin).toBe(30) // 3% of 1000
@@ -85,6 +86,8 @@ describe('commission engine — BB blended take', () => {
 describe('commissionConfigFromSettings', () => {
   it('falls back to defaults for empty/partial settings', () => {
     expect(commissionConfigFromSettings(null)).toEqual(DEFAULT_COMMISSION_CONFIG)
+    // holdback defaults to 0 so existing pricing is unchanged
+    expect(DEFAULT_COMMISSION_CONFIG.holdbackPct).toBe(0)
     expect(commissionConfigFromSettings({}).platformCommissionPct).toBe(DEFAULT_COMMISSION_CONFIG.platformCommissionPct)
   })
 
@@ -93,6 +96,7 @@ describe('commissionConfigFromSettings', () => {
       commission: {
         platformCommissionPct: 0.08,
         productMarginPct: 0.02,
+        holdbackPct: 0,
         corpMargin: { type: 'percent', value: 0.05 },
         repMargin: { type: 'fixed', value: 25 },
       },
@@ -101,5 +105,21 @@ describe('commissionConfigFromSettings', () => {
     expect(cfg.productMarginPct).toBe(0.02)
     expect(cfg.corpMargin).toEqual({ type: 'percent', value: 0.05 })
     expect(cfg.repMargin).toEqual({ type: 'fixed', value: 25 })
+  })
+
+  it('holdback is a separately-reported blended component', () => {
+    const config = { ...DEFAULT_COMMISSION_CONFIG, platformCommissionPct: 0.05, holdbackPct: 0.02 }
+    const r = computeDealPricing({ orderType: 'trade_in', marketValue: 1000, config })
+    expect(r.bbPlatformCommission).toBe(50) // 5%
+    expect(r.bbHoldback).toBe(20)           // 2%
+    expect(r.bbTake).toBe(70)               // 50 + 20
+    expect(r.varPrice).toBe(930)            // 1000 - 70 (holdback lowers trade-in price)
+  })
+
+  it('zero holdback (default) leaves take unchanged', () => {
+    const r = computeDealPricing({ orderType: 'cpo', marketValue: 1000, config: { ...DEFAULT_COMMISSION_CONFIG, platformCommissionPct: 0.02 } })
+    expect(r.bbHoldback).toBe(0)
+    expect(r.bbTake).toBe(20)
+    expect(r.varPrice).toBe(1020)
   })
 })

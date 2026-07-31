@@ -35,6 +35,9 @@ export interface CommissionConfig {
   platformCommissionPct: number
   /** BB product margin, as a fraction of the market value (0.05 = 5%). */
   productMarginPct: number
+  /** BB holdback withheld from the blended price, as a fraction of market value
+   *  (0.02 = 2%). Reported separately in commission/holdback reporting. */
+  holdbackPct: number
   /** VAR entity margin. */
   corpMargin: MarginSpec
   /** Individual rep margin. */
@@ -49,7 +52,9 @@ export interface CommissionResult {
   bbPlatformCommission: number
   /** BB product margin ($) — reporting only, blended into varPrice. */
   bbProductMargin: number
-  /** BB's total blended take ($). */
+  /** BB holdback ($) — reporting only, blended into varPrice, released per policy. */
+  bbHoldback: number
+  /** BB's total blended take ($) = commission + product margin + holdback. */
   bbTake: number
   /** The blended BB↔VAR price (what BB pays the VAR for trade-in, or what the
    *  VAR pays BB for CPO). This is all the VAR sees of BB's side. */
@@ -67,6 +72,7 @@ export interface CommissionResult {
 export const DEFAULT_COMMISSION_CONFIG: CommissionConfig = {
   platformCommissionPct: 0.05,
   productMarginPct: 0,
+  holdbackPct: 0,
   corpMargin: { type: 'fixed', value: 0 },
   repMargin: { type: 'fixed', value: 0 },
 }
@@ -95,7 +101,8 @@ export function computeDealPricing(input: {
 
   const bbPlatformCommission = round2(Math.max(0, marketValue) * (config.platformCommissionPct || 0))
   const bbProductMargin = round2(Math.max(0, marketValue) * (config.productMarginPct || 0))
-  const bbTake = round2(bbPlatformCommission + bbProductMargin)
+  const bbHoldback = round2(Math.max(0, marketValue) * (config.holdbackPct || 0))
+  const bbTake = round2(bbPlatformCommission + bbProductMargin + bbHoldback)
 
   const varPrice = isCpo
     ? round2(marketValue + bbTake) // VAR pays BB (BB adds its blended take)
@@ -114,6 +121,7 @@ export function computeDealPricing(input: {
     marketValue: round2(marketValue),
     bbPlatformCommission,
     bbProductMargin,
+    bbHoldback,
     bbTake,
     varPrice,
     corpMargin,
@@ -140,6 +148,7 @@ export function commissionConfigFromSettings(settings: unknown): CommissionConfi
   return {
     platformCommissionPct: typeof c.platformCommissionPct === 'number' ? c.platformCommissionPct : DEFAULT_COMMISSION_CONFIG.platformCommissionPct,
     productMarginPct: typeof c.productMarginPct === 'number' ? c.productMarginPct : DEFAULT_COMMISSION_CONFIG.productMarginPct,
+    holdbackPct: typeof c.holdbackPct === 'number' ? c.holdbackPct : DEFAULT_COMMISSION_CONFIG.holdbackPct,
     corpMargin: margin(c.corpMargin, DEFAULT_COMMISSION_CONFIG.corpMargin),
     repMargin: margin(c.repMargin, DEFAULT_COMMISSION_CONFIG.repMargin),
   }

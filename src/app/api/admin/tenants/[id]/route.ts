@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveBranding } from '@/lib/branding'
+import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
+import { resolveLicense, LIMIT_KEYS } from '@/lib/licensing'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +30,8 @@ const patchSchema = z.object({
   is_active: z.boolean().optional(),
   custom_domain: z.string().max(255).nullable().optional(),
   plan: z.string().max(50).nullable().optional(),
+  features: z.record(z.boolean()).optional(),          // per-VAR module overrides
+  license: z.record(z.number().int().min(-1)).optional(), // usage caps (-1 = unlimited)
 })
 
 async function guard() {
@@ -50,7 +54,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Failed to load tenant' }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ data: { ...data, branding: resolveBranding(data.branding) } })
+  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown }
+  return NextResponse.json({
+    data: {
+      ...data,
+      branding: resolveBranding(data.branding),
+      features: resolveFeatures(undefined, settings.features),
+      license: resolveLicense(settings.license),
+    },
+  })
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -65,7 +77,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const supabase = createServiceRoleClient()
   const { data: existing, error: fetchErr } = await supabase
-    .from('tenants').select('id, type, branding').eq('id', id).maybeSingle()
+    .from('tenants').select('id, type, branding, settings').eq('id', id).maybeSingle()
   if (fetchErr) return NextResponse.json({ error: 'Failed to load tenant' }, { status: 500 })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -83,6 +95,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.is_active !== undefined) update.is_active = parsed.data.is_active
   if (parsed.data.custom_domain !== undefined) update.custom_domain = parsed.data.custom_domain || null
   if (parsed.data.plan !== undefined) update.plan = parsed.data.plan || null
+
+  // Merge feature/license overrides into settings JSONB (store only known keys).
+  if (parsed.data.features || parsed.data.license) {
+    const settings = { ...(existing.settings as Record<string, unknown> ?? {}) }
+    if (parsed.data.features) {
+      const cur = { ...(settings.features as Record<string, boolean> ?? {}) }
+      for (const k of FEATURE_KEYS) if (k in parsed.data.features) cur[k] = parsed.data.features[k]
+      settings.features = cur
+    }
+    if (parsed.data.license) {
+      const cur = { ...(settings.license as Record<string, number> ?? {}) }
+      for (const k of LIMIT_KEYS) if (k in parsed.data.license) cur[k] = parsed.data.license[k]
+      settings.license = cur
+    }
+    update.settings = settings
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
