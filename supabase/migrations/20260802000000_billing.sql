@@ -51,6 +51,9 @@ LANGUAGE sql AS $$
   RETURNING next_val;
 $$;
 
+-- Counter is internal; deny all non-service access (service role bypasses RLS).
+ALTER TABLE invoice_counters ENABLE ROW LEVEL SECURITY;
+
 -- ── RLS: admins/service full access; a tenant reads its own invoices ─────────
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_line_items ENABLE ROW LEVEL SECURITY;

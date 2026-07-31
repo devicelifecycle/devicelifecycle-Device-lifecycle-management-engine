@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) {
+    // Unique-violation backstop for the check-then-insert race on slug.
+    if (error.code === '23505') {
+      return NextResponse.json({ error: `Slug "${slug}" is already taken` }, { status: 409 })
+    }
     console.error('Failed to create tenant:', error)
     return NextResponse.json({ error: 'Failed to create VAR' }, { status: 500 })
   }
