@@ -16,6 +16,7 @@ import {
   Gavel,
   LayoutDashboard,
   LogOut,
+  Network,
   Package,
   Shield,
   ShoppingCart,
@@ -87,6 +88,7 @@ const navSections: NavSection[] = [
     items: [
       { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'coe_manager'] },
       { title: 'Organizations', href: '/admin/organizations', icon: Building2, roles: ['admin'] },
+      { title: 'VARs', href: '/admin/tenants', icon: Network, roles: ['admin'] },
       { title: 'Pricing', href: '/admin/pricing', icon: DollarSign, roles: ['admin'] },
       { title: 'Commission', href: '/admin/commission', icon: Percent, roles: ['admin'] },
       { title: 'SLA Rules', href: '/admin/sla-rules', icon: FileText, roles: ['admin'] },
