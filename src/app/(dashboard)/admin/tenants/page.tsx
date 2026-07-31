@@ -2,12 +2,12 @@
 
 // ============================================================================
 // ADMIN — VARs (TENANTS)
-// Platform-admin surface to view and create Value-Added Reseller tenants. All
-// existing data stays on the Byte-Back platform tenant; creating a VAR is
-// purely additive (a new row) and does not touch current single-tenant flows.
 // ============================================================================
+// View and create VAR tenants. Existing data stays on the Byte-Back platform
+// tenant; a new VAR is just a new row.
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { Building2, Loader2, Plus, ShieldCheck } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -132,8 +132,10 @@ export default function TenantsPage() {
                 </thead>
                 <tbody>
                   {tenants.map((t) => (
-                    <tr key={t.id} className="border-b last:border-0">
-                      <td className="py-3 pr-4 font-medium">{t.name}</td>
+                    <tr key={t.id} className="border-b last:border-0 hover:bg-muted/40">
+                      <td className="py-3 pr-4 font-medium">
+                        <Link href={`/admin/tenants/${t.id}`} className="hover:underline">{t.name}</Link>
+                      </td>
                       <td className="py-3 pr-4 font-mono text-xs text-muted-foreground">{t.slug}</td>
                       <td className="py-3 pr-4">
                         {t.type === 'platform' ? (
