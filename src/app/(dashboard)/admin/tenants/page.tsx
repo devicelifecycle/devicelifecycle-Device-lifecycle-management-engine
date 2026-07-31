@@ -36,7 +36,7 @@ export default function TenantsPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/tenants')
+      const res = await fetch('/api/admin/tenants?limit=200')
       if (!res.ok) throw new Error()
       const j = await res.json()
       setTenants(j.data ?? [])

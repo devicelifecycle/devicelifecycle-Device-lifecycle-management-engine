@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { computeInvoiceTotals, formatInvoiceNumber } from '@/lib/billing'
+import { parsePaging } from '@/lib/paging'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -24,17 +25,19 @@ async function adminOnly() {
   return { auth }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const g = await adminOnly()
   if (g.error) return g.error
 
+  const { page, limit, from, to } = parsePaging(request)
   const supabase = createServiceRoleClient()
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from('invoices')
-    .select('id, tenant_id, invoice_number, period_start, period_end, status, total, currency, created_at, tenants(name, slug)')
+    .select('id, tenant_id, invoice_number, period_start, period_end, status, total, currency, created_at, tenants(name, slug)', { count: 'exact' })
     .order('created_at', { ascending: false })
+    .range(from, to)
   if (error) return NextResponse.json({ error: 'Failed to load invoices' }, { status: 500 })
-  return NextResponse.json({ data })
+  return NextResponse.json({ data, total: count ?? 0, page, limit })
 }
 
 export async function POST(request: NextRequest) {
@@ -52,12 +55,13 @@ export async function POST(request: NextRequest) {
   const totals = computeInvoiceTotals([], parsed.data.subscription_fee ?? 0)
 
   const year = Number(parsed.data.period_start.slice(0, 4))
-  const { count } = await supabase
-    .from('invoices')
-    .select('id', { count: 'exact', head: true })
-    .gte('period_start', `${year}-01-01`)
-    .lte('period_start', `${year}-12-31`)
-  const invoiceNumber = formatInvoiceNumber(year, (count ?? 0) + 1)
+  // Atomic, concurrency-safe sequence (see next_invoice_seq in the migration).
+  const { data: seq, error: seqErr } = await supabase.rpc('next_invoice_seq', { p_year: year })
+  if (seqErr || typeof seq !== 'number') {
+    console.error('Failed to allocate invoice number:', seqErr)
+    return NextResponse.json({ error: 'Failed to allocate invoice number' }, { status: 500 })
+  }
+  const invoiceNumber = formatInvoiceNumber(year, seq)
 
   const { data, error } = await supabase
     .from('invoices')

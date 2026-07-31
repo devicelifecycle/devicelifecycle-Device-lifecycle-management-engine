@@ -36,6 +36,21 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
 );
 CREATE INDEX IF NOT EXISTS idx_invoice_line_items_invoice ON invoice_line_items(invoice_id);
 
+-- ── Atomic per-year invoice numbering (concurrency-safe) ────────────────────
+-- count()+1 races under load; this upsert row-locks the counter so concurrent
+-- invoice creation can never collide on a number.
+CREATE TABLE IF NOT EXISTS invoice_counters (
+  year INT PRIMARY KEY,
+  next_val INT NOT NULL DEFAULT 0
+);
+
+CREATE OR REPLACE FUNCTION next_invoice_seq(p_year INT) RETURNS INT
+LANGUAGE sql AS $$
+  INSERT INTO invoice_counters (year, next_val) VALUES (p_year, 1)
+  ON CONFLICT (year) DO UPDATE SET next_val = invoice_counters.next_val + 1
+  RETURNING next_val;
+$$;
+
 -- ── RLS: admins/service full access; a tenant reads its own invoices ─────────
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_line_items ENABLE ROW LEVEL SECURITY;

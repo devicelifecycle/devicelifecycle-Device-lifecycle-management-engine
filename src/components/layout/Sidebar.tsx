@@ -95,6 +95,7 @@ const navSections: NavSection[] = [
       { title: 'Pricing', href: '/admin/pricing', icon: DollarSign, roles: ['admin'] },
       { title: 'Commission', href: '/admin/commission', icon: Percent, roles: ['admin'] },
       { title: 'Billing', href: '/admin/billing', icon: Receipt, roles: ['admin'] },
+      { title: 'Commission Report', href: '/admin/reports/commission', icon: BarChart3, roles: ['admin'] },
       { title: 'SLA Rules', href: '/admin/sla-rules', icon: FileText, roles: ['admin'] },
       { title: 'Users', href: '/admin/users', icon: Shield, roles: ['admin'], tourId: 'nav-users' },
       { title: 'Audit Log', href: '/admin/audit-log', icon: FileText, roles: ['admin'] },

@@ -48,7 +48,7 @@ export default function BillingPage() {
     try {
       const [invRes, tenRes] = await Promise.all([
         fetch('/api/admin/billing'),
-        fetch('/api/admin/tenants'),
+        fetch('/api/admin/tenants?type=var&limit=200'),
       ])
       if (invRes.ok) setInvoices((await invRes.json()).data ?? [])
       if (tenRes.ok) {
