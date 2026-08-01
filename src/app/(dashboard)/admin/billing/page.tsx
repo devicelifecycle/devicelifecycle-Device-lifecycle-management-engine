@@ -13,6 +13,13 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
+import { canTransitionInvoice, type InvoiceStatus } from '@/lib/billing'
+
+const NEXT_ACTIONS: Array<{ to: InvoiceStatus; label: string }> = [
+  { to: 'sent', label: 'Mark sent' },
+  { to: 'paid', label: 'Mark paid' },
+  { to: 'void', label: 'Void' },
+]
 
 interface Invoice {
   id: string
@@ -91,6 +98,22 @@ export default function BillingPage() {
     }
   }
 
+  const transition = async (id: string, to: InvoiceStatus) => {
+    try {
+      const res = await fetch(`/api/admin/billing/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: to }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to update invoice')
+      toast.success(`Invoice marked ${to}`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update invoice')
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
       <div>
@@ -162,7 +185,8 @@ export default function BillingPage() {
                     <th className="pb-2 pr-4 font-medium">VAR</th>
                     <th className="pb-2 pr-4 font-medium">Period</th>
                     <th className="pb-2 pr-4 font-medium">Status</th>
-                    <th className="pb-2 font-medium text-right">Total</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Total</th>
+                    <th className="pb-2 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -176,7 +200,16 @@ export default function BillingPage() {
                           {inv.status}
                         </span>
                       </td>
-                      <td className="py-3 text-right font-medium tabular-nums">{formatCurrency(inv.total, inv.currency)}</td>
+                      <td className="py-3 pr-4 text-right font-medium tabular-nums">{formatCurrency(inv.total, inv.currency)}</td>
+                      <td className="py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          {NEXT_ACTIONS.filter((a) => canTransitionInvoice(inv.status as InvoiceStatus, a.to)).map((a) => (
+                            <Button key={a.to} size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => transition(inv.id, a.to)}>
+                              {a.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
