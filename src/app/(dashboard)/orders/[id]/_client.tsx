@@ -1192,7 +1192,22 @@ export default function OrderDetailClient() {
         await transition({ status: 'submitted' as OrderStatus, notes: 'Auto-submitted for quoting' })
         await refetch()
       }
-      await transition({ status: 'quoted' as OrderStatus, notes: 'Quote sent to customer' })
+      if (order?.status === 'quoted') {
+        // Already quoted: re-issue the quote (refreshed prices + PDF/Excel email)
+        // instead of a quoted→quoted status transition, which is not permitted by
+        // VALID_ORDER_TRANSITIONS and would fail after the price PATCH.
+        const res = await fetch(`/api/orders/${params.id}/send-quote-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ validity_days: quoteValidityDays }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          throw new Error(d.error || 'Failed to re-send quote')
+        }
+      } else {
+        await transition({ status: 'quoted' as OrderStatus, notes: 'Quote sent to customer' })
+      }
       toast.success('Prices saved and quote sent to customer')
       setPricingDialogOpen(false)
       refetch()
@@ -1413,7 +1428,22 @@ export default function OrderDetailClient() {
         await transition({ status: 'submitted' as OrderStatus, notes: 'Auto-submitted for quoting' })
         await refetch()
       }
-      await transition({ status: 'quoted' as OrderStatus, notes: 'Quote sent to customer' })
+      if (order?.status === 'quoted') {
+        // Already quoted: re-issue the quote (refreshed prices + PDF/Excel email)
+        // instead of a quoted→quoted status transition, which is not permitted by
+        // VALID_ORDER_TRANSITIONS and would fail after the price PATCH.
+        const res = await fetch(`/api/orders/${params.id}/send-quote-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ validity_days: quoteValidityDays }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          throw new Error(d.error || 'Failed to re-send quote')
+        }
+      } else {
+        await transition({ status: 'quoted' as OrderStatus, notes: 'Quote sent to customer' })
+      }
       toast.success('Prices saved and quote sent to customer')
       setIsInlineEditing(false)
       refetch()

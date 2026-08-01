@@ -475,17 +475,21 @@ export class OrderService {
 
     // Create order items
     if (input.items && input.items.length > 0) {
-      const items = input.items.map(item => ({
-        order_id: order.id,
-        device_id: item.device_id || item.device_catalog_id,
-        quantity: item.quantity,
-        storage: item.storage,
-        colour: item.color,
-        claimed_condition: item.condition,
-        cpo_grade: input.type === 'cpo' ? (item.cpo_grade ?? 'certified') : null,
-        unit_price: 0,
-        notes: item.notes,
-      }))
+      const items = input.items.map(item => {
+        const base = {
+          order_id: order.id,
+          device_id: item.device_id || item.device_catalog_id,
+          quantity: item.quantity,
+          storage: item.storage,
+          colour: item.color,
+          claimed_condition: item.condition,
+          unit_price: 0,
+          notes: item.notes,
+        }
+        // Only CPO rows reference cpo_grade, so trade-in creation never depends on
+        // the cpo_grade column existing (keeps trade-ins working if the migration lags).
+        return input.type === 'cpo' ? { ...base, cpo_grade: item.cpo_grade ?? 'certified' } : base
+      })
 
       const { error: itemsError } = await supabase
         .from('order_items')

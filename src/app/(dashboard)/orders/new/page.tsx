@@ -285,7 +285,9 @@ export default function NewOrderPage() {
       const saved = localStorage.getItem(DRAFT_KEY)
       if (!saved) return
       const parsed = JSON.parse(saved)
-      if (parsed.items) setItems(parsed.items)
+      // Backfill cpo_grade for drafts saved before the CPO-grade field existed,
+      // so the grade <Select> stays controlled.
+      if (parsed.items) setItems((parsed.items as LineItem[]).map(it => ({ ...it, cpo_grade: it.cpo_grade ?? 'certified' })))
       if (parsed.parsedFiles) setParsedFiles(parsed.parsedFiles)
       if (parsed.notes) setNotes(parsed.notes)
       setHasDraft(false)
