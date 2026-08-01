@@ -58,6 +58,34 @@ export function residualRetention(months: number, table: DepreciationPoint[] = D
   return clamp(last.retention, 0, 1)
 }
 
+export interface ResidualScheduleRow {
+  year: number
+  months: number
+  retention: number
+  value: number
+}
+
+/**
+ * Year-by-year residual value from a base value, using the depreciation table —
+ * the same shape the trade-in quote uses, just priced off depreciation. Year 0
+ * is the base value; each subsequent year applies the table's retention.
+ */
+export function residualSchedule(
+  baseValue: number,
+  years: number,
+  table: DepreciationPoint[] = DEFAULT_DEPRECIATION,
+): ResidualScheduleRow[] {
+  const base = Math.max(0, baseValue)
+  const yrs = clamp(Math.floor(years), 0, 10)
+  const rows: ResidualScheduleRow[] = []
+  for (let y = 0; y <= yrs; y++) {
+    const months = y * 12
+    const retention = residualRetention(months, table)
+    rows.push({ year: y, months, retention: round2(retention), value: round2(base * retention) })
+  }
+  return rows
+}
+
 /** Project a residual value from a base value + horizon in months. */
 export function estimateResidualValue(
   baseValue: number,

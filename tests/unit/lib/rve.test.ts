@@ -3,6 +3,7 @@ import {
   residualRetention,
   estimateResidualValue,
   computeRve,
+  residualSchedule,
   DEFAULT_DEPRECIATION,
   type DepreciationPoint,
 } from '@/lib/rve'
@@ -46,6 +47,22 @@ describe('RVE depreciation', () => {
     for (let i = 1; i < DEFAULT_DEPRECIATION.length; i++) {
       expect(DEFAULT_DEPRECIATION[i].retention).toBeLessThanOrEqual(DEFAULT_DEPRECIATION[i - 1].retention)
     }
+  })
+})
+
+describe('residualSchedule', () => {
+  it('starts at the base value in year 0 and depreciates yearly', () => {
+    const rows = residualSchedule(1000, 3)
+    expect(rows).toHaveLength(4) // years 0..3
+    expect(rows[0]).toMatchObject({ year: 0, value: 1000 })
+    expect(rows[1].value).toBe(680) // 12mo → 0.68
+    expect(rows[2].value).toBe(460) // 24mo → 0.46
+    expect(rows[3].value).toBe(300) // 36mo → 0.30
+  })
+
+  it('clamps years to [0,10] and handles a zero base', () => {
+    expect(residualSchedule(0, 3).every((r) => r.value === 0)).toBe(true)
+    expect(residualSchedule(1000, 99)).toHaveLength(11) // capped at 10 years
   })
 })
 
