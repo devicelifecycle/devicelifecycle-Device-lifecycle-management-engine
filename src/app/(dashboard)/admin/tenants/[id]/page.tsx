@@ -17,6 +17,8 @@ import { Switch } from '@/components/ui/switch'
 import { DEFAULT_BRANDING, type TenantBranding } from '@/lib/branding'
 import { DEFAULT_FEATURES, FEATURE_KEYS, type FeatureFlags, type FeatureKey } from '@/lib/features'
 import { DEFAULT_LICENSE, LIMIT_KEYS, UNLIMITED, type LicenseLimits, type LimitKey } from '@/lib/licensing'
+import { DEFAULT_WHITELABEL, type WhiteLabelContent } from '@/lib/templates'
+import { Textarea } from '@/components/ui/textarea'
 
 interface TenantDetail {
   id: string
@@ -29,6 +31,7 @@ interface TenantDetail {
   branding: TenantBranding
   features: FeatureFlags
   license: LicenseLimits
+  whitelabel: WhiteLabelContent
 }
 
 const FEATURE_LABELS: Record<FeatureKey, string> = {
@@ -49,6 +52,7 @@ export default function TenantDetailPage() {
   const [branding, setBranding] = useState<TenantBranding>(DEFAULT_BRANDING)
   const [features, setFeatures] = useState<FeatureFlags>(DEFAULT_FEATURES)
   const [license, setLicense] = useState<LicenseLimits>(DEFAULT_LICENSE)
+  const [whitelabel, setWhitelabel] = useState<WhiteLabelContent>(DEFAULT_WHITELABEL)
   const [customDomain, setCustomDomain] = useState('')
   const [isActive, setIsActive] = useState(true)
   const [loading, setLoading] = useState(true)
@@ -63,6 +67,7 @@ export default function TenantDetailPage() {
       setBranding(data.branding)
       setFeatures(data.features)
       setLicense(data.license)
+      if (data.whitelabel) setWhitelabel(data.whitelabel)
       setCustomDomain(data.custom_domain ?? '')
       setIsActive(data.is_active)
     } catch {
@@ -91,6 +96,7 @@ export default function TenantDetailPage() {
           custom_domain: customDomain.trim() || null,
           features,
           license,
+          whitelabel,
         }),
       })
       const j = await res.json().catch(() => ({}))
@@ -259,6 +265,36 @@ export default function TenantDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">White-label content</CardTitle>
+          <CardDescription>Email/notification copy + links. Tokens: <span className="font-mono">{'{{company}}'}</span>, <span className="font-mono">{'{{customer}}'}</span>.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Quote email subject">
+              <Input value={whitelabel.quoteSubject} onChange={(e) => setWhitelabel((w) => ({ ...w, quoteSubject: e.target.value }))} maxLength={200} />
+            </Field>
+            <Field label="Notification signature">
+              <Input value={whitelabel.notificationSignature} onChange={(e) => setWhitelabel((w) => ({ ...w, notificationSignature: e.target.value }))} maxLength={200} />
+            </Field>
+            <Field label="Knowledge base URL">
+              <Input value={whitelabel.knowledgeBaseUrl ?? ''} onChange={(e) => setWhitelabel((w) => ({ ...w, knowledgeBaseUrl: e.target.value || null }))} placeholder="https://kb.acme.com" />
+            </Field>
+            <Field label="Privacy policy URL">
+              <Input value={whitelabel.privacyPolicyUrl ?? ''} onChange={(e) => setWhitelabel((w) => ({ ...w, privacyPolicyUrl: e.target.value || null }))} placeholder="https://acme.com/privacy" />
+            </Field>
+          </div>
+          <Field label="Quote email intro">
+            <Textarea value={whitelabel.quoteIntro} onChange={(e) => setWhitelabel((w) => ({ ...w, quoteIntro: e.target.value }))} rows={3} maxLength={1000} />
+          </Field>
+          <Button onClick={save} disabled={saving} className="w-full sm:w-auto">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save white-label content
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

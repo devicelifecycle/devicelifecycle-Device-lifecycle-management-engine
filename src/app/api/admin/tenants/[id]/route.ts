@@ -8,6 +8,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveBranding } from '@/lib/branding'
 import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
 import { resolveLicense, LIMIT_KEYS } from '@/lib/licensing'
+import { resolveWhiteLabel } from '@/lib/templates'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,13 @@ const patchSchema = z.object({
   plan: z.string().max(50).nullable().optional(),
   features: z.record(z.boolean()).optional(),          // per-VAR module overrides
   license: z.record(z.number().int().min(-1)).optional(), // usage caps (-1 = unlimited)
+  whitelabel: z.object({
+    quoteSubject: z.string().max(200).optional(),
+    quoteIntro: z.string().max(1000).optional(),
+    notificationSignature: z.string().max(200).optional(),
+    knowledgeBaseUrl: z.string().max(500).nullable().optional(),
+    privacyPolicyUrl: z.string().max(500).nullable().optional(),
+  }).optional(),
 })
 
 async function guard() {
@@ -54,13 +62,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Failed to load tenant' }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown }
+  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown }
   return NextResponse.json({
     data: {
       ...data,
       branding: resolveBranding(data.branding),
       features: resolveFeatures(undefined, settings.features),
       license: resolveLicense(settings.license),
+      whitelabel: resolveWhiteLabel(settings.whitelabel),
     },
   })
 }
@@ -96,8 +105,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.custom_domain !== undefined) update.custom_domain = parsed.data.custom_domain || null
   if (parsed.data.plan !== undefined) update.plan = parsed.data.plan || null
 
-  // Merge feature/license overrides into settings JSONB (store only known keys).
-  if (parsed.data.features || parsed.data.license) {
+  // Merge feature/license/white-label overrides into settings JSONB (known keys only).
+  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel) {
     const settings = { ...(existing.settings as Record<string, unknown> ?? {}) }
     if (parsed.data.features) {
       const cur = { ...(settings.features as Record<string, boolean> ?? {}) }
@@ -108,6 +117,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const cur = { ...(settings.license as Record<string, number> ?? {}) }
       for (const k of LIMIT_KEYS) if (k in parsed.data.license) cur[k] = parsed.data.license[k]
       settings.license = cur
+    }
+    if (parsed.data.whitelabel) {
+      // Normalize through the resolver so only valid, sanitized values are stored.
+      settings.whitelabel = resolveWhiteLabel({ ...(settings.whitelabel as object ?? {}), ...parsed.data.whitelabel })
     }
     update.settings = settings
   }
