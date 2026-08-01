@@ -17,6 +17,7 @@ import {
   Gavel,
   Layers,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   Network,
   Package,
@@ -58,6 +59,7 @@ const navSections: NavSection[] = [
       { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { title: 'Notifications', href: '/notifications', icon: Bell, roles: ['admin', 'coe_manager', 'coe_tech', 'sales', 'vendor'] },
       { title: 'Notifications', href: '/customer/notifications', icon: Bell, roles: ['customer'] },
+      { title: 'Support', href: '/tickets', icon: LifeBuoy },
     ],
   },
   {
