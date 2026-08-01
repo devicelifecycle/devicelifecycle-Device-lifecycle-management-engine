@@ -17,7 +17,12 @@ interface Overview {
   isPlatform: boolean
   tenant: { id: string; name: string; slug: string; type: string; is_active: boolean; custom_domain: string | null }
   branding: TenantBranding
-  commission: CommissionConfig
+  // BB blended-take fields are redacted (null) for non-admin VAR operators.
+  commission: Omit<CommissionConfig, 'platformCommissionPct' | 'productMarginPct' | 'holdbackPct'> & {
+    platformCommissionPct: number | null
+    productMarginPct: number | null
+    holdbackPct: number | null
+  }
   invoices: Array<{ id: string; invoice_number: string | null; period_start: string; period_end: string; status: string; total: number; currency: string }>
 }
 
@@ -97,8 +102,12 @@ export default function VarConsolePage() {
             <CardDescription>How each deal is blended.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <Row label="BB platform commission" value={pct(commission.platformCommissionPct)} />
-            <Row label="BB product margin" value={pct(commission.productMarginPct)} />
+            {commission.platformCommissionPct !== null && (
+              <Row label="BB platform commission" value={pct(commission.platformCommissionPct)} />
+            )}
+            {commission.productMarginPct !== null && (
+              <Row label="BB product margin" value={pct(commission.productMarginPct)} />
+            )}
             <Row label="Your corp margin" value={margin(commission.corpMargin)} />
             <Row label="Your rep margin" value={margin(commission.repMargin)} />
           </CardContent>
