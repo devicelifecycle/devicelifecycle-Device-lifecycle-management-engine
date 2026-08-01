@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useMemo } from 'react'
 import {
+  Activity,
   AlertTriangle,
   BarChart3,
   Bell,
@@ -98,6 +99,7 @@ const navSections: NavSection[] = [
       { title: 'Plans', href: '/admin/plans', icon: Layers, roles: ['admin'] },
       { title: 'Billing', href: '/admin/billing', icon: Receipt, roles: ['admin'] },
       { title: 'Commission Report', href: '/admin/reports/commission', icon: BarChart3, roles: ['admin'] },
+      { title: 'Platform Analytics', href: '/admin/reports/platform', icon: Activity, roles: ['admin'] },
       { title: 'SLA Rules', href: '/admin/sla-rules', icon: FileText, roles: ['admin'] },
       { title: 'Users', href: '/admin/users', icon: Shield, roles: ['admin'], tourId: 'nav-users' },
       { title: 'Audit Log', href: '/admin/audit-log', icon: FileText, roles: ['admin'] },
