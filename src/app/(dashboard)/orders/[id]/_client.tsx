@@ -37,6 +37,7 @@ import { useOrderShipments } from '@/hooks/useShipments'
 import { DiscrepancyDetail } from '@/components/orders/DiscrepancyDetail'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
+import { computeOrderTaxLine } from '@/lib/tax'
 import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import type { OrderStatus, OrderItem, PricingMetadata, AuditLog, VendorBid, Vendor, TriageResult } from '@/types'
 import type { Order } from '@/types'
@@ -2165,6 +2166,42 @@ export default function OrderDetailClient() {
                     <p className="font-medium">{formatCurrency(order.quoted_amount ?? 0)}</p>
                   </div>
                 )}
+                {/* CPO tax breakdown (Canada) — shown on-screen so the quote/invoice
+                    that goes out is never missing tax. Warns when the customer's
+                    province can't be resolved (the usual cause of “no tax”). */}
+                {canViewCommercials && isCpoOrder && (() => {
+                  const subtotal = order.quoted_amount ?? order.total_amount ?? 0
+                  if (subtotal <= 0) return null
+                  const addr = (order.customer?.billing_address ?? order.customer?.shipping_address) as Record<string, unknown> | null
+                  const taxLine = computeOrderTaxLine({ type: order.type, subtotal, billingAddress: addr })
+                  const province = addr && typeof addr === 'object' ? String((addr.state ?? addr.province) ?? '').trim() : ''
+                  return (
+                    <div className="sm:col-span-2 space-y-1 rounded-lg border bg-muted/30 p-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span>{formatCurrency(subtotal)}</span>
+                      </div>
+                      {taxLine ? (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{taxLine.label}</span>
+                            <span>{formatCurrency(taxLine.taxAmount)}</span>
+                          </div>
+                          <div className="flex justify-between border-t pt-1 text-sm font-semibold">
+                            <span>Total (incl. tax)</span>
+                            <span>{formatCurrency(taxLine.total)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-xs text-amber-600">
+                          No tax applied — {province && province.toLowerCase() !== 'unknown'
+                            ? `tax is not configured for “${province}”.`
+                            : 'add the customer’s province/state to their address so tax is calculated.'}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
                 {canViewCommercials && (order.final_amount ?? 0) > 0 && (
                   <div>
                     <p className="text-sm text-muted-foreground">Final Amount</p>
@@ -2202,7 +2239,7 @@ export default function OrderDetailClient() {
             <CardHeader className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
               <div className="flex items-center gap-3">
                 <CardTitle>Line Items</CardTitle>
-                {canSetPricing && canSendQuote && !isCpoOrder && (order.status === 'draft' || order.status === 'submitted') && order.items && order.items.length > 0 && (
+                {canSetPricing && canSendQuote && !isCpoOrder && (order.status === 'draft' || order.status === 'submitted' || order.status === 'quoted') && order.items && order.items.length > 0 && (
                   <>
                     {!isInlineEditing ? (
                       <Button variant="outline" size="sm" onClick={handleEditAndSendQuote}>
