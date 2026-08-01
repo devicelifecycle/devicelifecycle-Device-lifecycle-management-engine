@@ -292,6 +292,8 @@ export const orderItemSchema = z.object({
   storage: z.string().min(1, 'Storage is required'),
   color: z.string().optional(),
   condition: z.preprocess(normalizePricingConditionInput, z.enum(DEVICE_CONDITION_VALUES)),
+  // CPO certification grade (CPO items only; ignored for trade-in).
+  cpo_grade: z.enum(['certified', 'certified_premium', 'certified_standard']).optional().nullable(),
   notes: z.string().optional(),
 })
 

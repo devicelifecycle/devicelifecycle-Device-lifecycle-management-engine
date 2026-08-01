@@ -482,6 +482,7 @@ export class OrderService {
         storage: item.storage,
         colour: item.color,
         claimed_condition: item.condition,
+        cpo_grade: input.type === 'cpo' ? (item.cpo_grade ?? 'certified') : null,
         unit_price: 0,
         notes: item.notes,
       }))

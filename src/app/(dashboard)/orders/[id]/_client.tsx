@@ -39,8 +39,9 @@ import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
 import { computeOrderTaxLine } from '@/lib/tax'
 import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
-import type { OrderStatus, OrderItem, PricingMetadata, AuditLog, VendorBid, Vendor, TriageResult } from '@/types'
+import type { OrderStatus, OrderItem, PricingMetadata, AuditLog, VendorBid, Vendor, TriageResult, CpoGrade } from '@/types'
 import type { Order } from '@/types'
+import { CPO_GRADE_LABELS } from '@/types'
 
 const COE_ADDRESS = {
   name: 'COE Warehouse',
@@ -2337,7 +2338,11 @@ export default function OrderDetailClient() {
                             </TableCell>
                             <TableCell>{item.quantity}</TableCell>
                             <TableCell>
-                              {item.claimed_condition && (
+                              {isCpoOrder ? (
+                                <span className="text-blue-700 dark:text-blue-300">
+                                  {CPO_GRADE_LABELS[(item.cpo_grade ?? 'certified') as CpoGrade]}
+                                </span>
+                              ) : item.claimed_condition && (
                                 <div className="flex items-center gap-2">
                                   <span className={CONDITION_CONFIG[item.claimed_condition]?.color}>
                                     {CONDITION_CONFIG[item.claimed_condition]?.label}

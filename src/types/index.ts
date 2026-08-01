@@ -45,6 +45,15 @@ export type DeviceCategory = 'phone' | 'tablet' | 'laptop' | 'watch' | 'other';
 
 export type DeviceCondition = 'new' | 'excellent' | 'good' | 'fair' | 'poor' | 'certified';
 
+// CPO certification grade (separate from the trade-in condition scale).
+export type CpoGrade = 'certified' | 'certified_premium' | 'certified_standard';
+export const CPO_GRADES: CpoGrade[] = ['certified', 'certified_premium', 'certified_standard'];
+export const CPO_GRADE_LABELS: Record<CpoGrade, string> = {
+  certified: 'Certified',
+  certified_premium: 'Certified – Premium',
+  certified_standard: 'Certified – Standard',
+};
+
 export type ShipmentStatus =
   | 'label_created'
   | 'picked_up'
@@ -407,6 +416,7 @@ export interface OrderItem extends BaseEntity {
   storage?: string;
   claimed_condition?: DeviceCondition;
   actual_condition?: DeviceCondition;
+  cpo_grade?: CpoGrade | null;
   unit_price?: number;
   quoted_price?: number;
   final_price?: number;
@@ -919,6 +929,7 @@ export interface CreateOrderInput {
     color?: string;
     condition?: DeviceCondition;
     claimed_condition?: DeviceCondition;
+    cpo_grade?: CpoGrade | null;
     unit_price?: number;
     notes?: string;
   }>;

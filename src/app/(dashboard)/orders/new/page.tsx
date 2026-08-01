@@ -30,7 +30,8 @@ import {
   buildCsvContent,
   buildXlsxTemplateBlob,
 } from '@/lib/csv-templates'
-import type { Device, DeviceCondition } from '@/types'
+import type { Device, DeviceCondition, CpoGrade } from '@/types'
+import { CPO_GRADES, CPO_GRADE_LABELS } from '@/types'
 
 // Column alias map — auto-corrects misspelled or alternative column names.
 // Supports any CSV/Excel template without requiring a predefined format.
@@ -164,6 +165,7 @@ interface LineItem {
   device_label: string
   quantity: number
   condition: DeviceCondition
+  cpo_grade: CpoGrade // CPO certification grade (CPO items only)
   storage: string
   notes: string
   order_type: 'trade_in' | 'cpo'
@@ -487,6 +489,7 @@ export default function NewOrderPage() {
       device_label: '',
       quantity: 1,
       condition: orderType === 'cpo' ? CPO_CONDITION : 'good',
+      cpo_grade: 'certified',
       storage: '',
       notes: '',
       order_type: orderType,
@@ -748,7 +751,7 @@ export default function NewOrderPage() {
     // manual items if both are present, matching the original tab-based
     // precedence (CSV branch checked first), just driven by actual data
     // instead of which section happened to be open.
-    let orderItems: { device_id: string; quantity: number; storage: string; condition: DeviceCondition; notes: string; order_type: 'trade_in' | 'cpo'; serial_number?: string; color?: string; quoted_price?: number }[] = []
+    let orderItems: { device_id: string; quantity: number; storage: string; condition: DeviceCondition; cpo_grade?: CpoGrade; notes: string; order_type: 'trade_in' | 'cpo'; serial_number?: string; color?: string; quoted_price?: number }[] = []
 
     if (allCsvRows.length > 0) {
       if (items.length > 0) {
@@ -846,6 +849,7 @@ export default function NewOrderPage() {
         quantity: i.quantity,
         storage: i.storage || '128GB',
         condition: i.condition,
+        ...(i.order_type === 'cpo' ? { cpo_grade: i.cpo_grade } : {}),
         notes: i.notes,
         order_type: i.order_type,
         serial_number: i.serial_number || '',
@@ -1223,11 +1227,18 @@ export default function NewOrderPage() {
                                 })()}
                               </div>
                               <Input type="number" min={1} value={item.quantity} onChange={e => updateItem(index, 'quantity', parseInt(e.target.value) || 1)} placeholder="Qty" />
-                              {item.order_type !== 'cpo' && (
+                              {item.order_type !== 'cpo' ? (
                                 <Select value={item.condition} onValueChange={v => updateItem(index, 'condition', v)}>
                                   <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     {Object.entries(CONDITION_CONFIG).filter(([k]) => k !== 'certified').map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Select value={item.cpo_grade} onValueChange={v => updateItem(index, 'cpo_grade', v)}>
+                                  <SelectTrigger className="border-blue-300 bg-blue-50 text-blue-800"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {CPO_GRADES.map(g => <SelectItem key={g} value={g}>{CPO_GRADE_LABELS[g]}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
                               )}
