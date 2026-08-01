@@ -5,12 +5,17 @@
 // ============================================================================
 
 import { useEffect, useState } from 'react'
+import { ComingSoon } from '@/components/ComingSoon'
 import { Activity, Building2, Loader2, Receipt, Users } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
 import type { PlatformSummary } from '@/lib/platform-metrics'
 
 export default function PlatformReportPage() {
+  return <ComingSoon title="Platform Analytics" />
+}
+
+function PlatformReportPageImpl() {
   const [data, setData] = useState<PlatformSummary | null>(null)
   const [loading, setLoading] = useState(true)
 

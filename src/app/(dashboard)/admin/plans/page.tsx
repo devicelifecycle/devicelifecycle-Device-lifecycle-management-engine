@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
+import { ComingSoon } from '@/components/ComingSoon'
 import { toast } from 'sonner'
 import { Layers, Loader2, Plus } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -29,6 +30,10 @@ interface Plan {
 const cap = (n: number) => (n === UNLIMITED ? '∞' : String(n))
 
 export default function PlansPage() {
+  return <ComingSoon title="Plans" />
+}
+
+function PlansPageImpl() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
