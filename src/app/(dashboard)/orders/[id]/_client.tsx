@@ -1403,6 +1403,10 @@ export default function OrderDetailClient() {
     })
     setInlineEditPrices(prices)
     setIsInlineEditing(true)
+    // Open the add-item form and the notes field alongside the price editor so a
+    // line can be added and the memo edited without leaving the edit flow.
+    setPricingAddOpen(true)
+    setLabelDraft(order.internal_notes || '')
   }
 
   const handleSaveAndSendQuote = async () => {
@@ -2307,6 +2311,24 @@ export default function OrderDetailClient() {
               })()}
             </CardHeader>
             <CardContent>
+              {isInlineEditing && (
+                <div className="mb-4 space-y-2 rounded-lg border bg-muted/30 p-3">
+                  <label className="text-xs font-medium text-muted-foreground">Order notes / memo</label>
+                  <Textarea
+                    value={labelDraft}
+                    onChange={e => setLabelDraft(e.target.value)}
+                    rows={2}
+                    placeholder="Internal note for this order…"
+                    maxLength={2000}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={handleSaveLabel} disabled={labelSaving}>
+                      {labelSaving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}Save note
+                    </Button>
+                    <p className="text-xs text-muted-foreground">Add a line with “Add Device” below; the note saves separately.</p>
+                  </div>
+                </div>
+              )}
               {order.items && order.items.length > 0 ? (
                 <div className="overflow-x-auto">
                 <Table>
@@ -2350,6 +2372,7 @@ export default function OrderDetailClient() {
                                 )}
                                 {item.device ? `${item.device.make} ${item.device.model}` : 'Unknown Device'}
                                 {item.device?.variant && <span className="text-muted-foreground ml-1">({item.device.variant})</span>}
+                                {getStorageForItem(item) && <span className="text-muted-foreground ml-1">· {getStorageForItem(item)}</span>}
                                 {item.colour && <span className="text-muted-foreground ml-1">· {item.colour}</span>}
                               </div>
                               {(item.imei || item.serial_number) && (
