@@ -104,6 +104,7 @@ const navSections: NavSection[] = [
       { title: 'Platform Analytics', href: '/admin/reports/platform', icon: Activity, roles: ['admin'] },
       { title: 'SLA Rules', href: '/admin/sla-rules', icon: FileText, roles: ['admin'] },
       { title: 'Users', href: '/admin/users', icon: Shield, roles: ['admin'], tourId: 'nav-users' },
+      { title: 'Roles & Access', href: '/admin/roles', icon: Shield, roles: ['admin'] },
       { title: 'Audit Log', href: '/admin/audit-log', icon: FileText, roles: ['admin'] },
     ],
   },
