@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     const { data: quotedOrders, error: ordersErr } = await supabase
       .from('orders')
       .select(`
-        id, order_number, type, status, quoted_at, created_at, customer_id,
+        id, order_number, type, status, quoted_at, created_at, customer_id, internal_notes,
         items:order_items(id, device_id, storage, claimed_condition, unit_price, quantity,
           device:device_catalog(id, make, model))
       `)
@@ -78,11 +78,14 @@ export async function GET(request: NextRequest) {
         : null
 
       if (expiresAt && now > expiresAt) {
-        // Auto-expire: move to rejected with note
+        // Auto-expire: move to rejected. APPEND the expiry note — never overwrite
+        // the existing memo (that was wiping the order's internal_notes at 30 days).
         const expiryNote = `Auto-expired: quote was valid for 30 days (quoted ${order.quoted_at}, expired ${expiresAt.toISOString()})`
+        const existingNotes = (order as { internal_notes?: string | null }).internal_notes?.trim()
+        const mergedNotes = existingNotes ? `${existingNotes}\n${expiryNote}` : expiryNote
         await supabase.from('orders').update({
           status: 'rejected',
-          internal_notes: expiryNote,
+          internal_notes: mergedNotes,
           updated_at: now.toISOString(),
         }).eq('id', order.id)
 
