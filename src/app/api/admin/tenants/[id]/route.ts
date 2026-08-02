@@ -9,6 +9,7 @@ import { resolveBranding } from '@/lib/branding'
 import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
 import { resolveLicense, LIMIT_KEYS } from '@/lib/licensing'
 import { resolveWhiteLabel } from '@/lib/templates'
+import { resolveSecurityConfig } from '@/lib/security-config'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +41,11 @@ const patchSchema = z.object({
     knowledgeBaseUrl: z.string().max(500).nullable().optional(),
     privacyPolicyUrl: z.string().max(500).nullable().optional(),
   }).optional(),
+  security: z.object({
+    passwordMinLength: z.number().int().min(8).max(128).optional(),
+    mfaRequired: z.boolean().optional(),
+    ipAllowlist: z.array(z.string().max(64)).max(200).optional(),
+  }).optional(),
 })
 
 async function guard() {
@@ -62,11 +68,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Failed to load tenant' }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown }
+  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown; security?: unknown }
   return NextResponse.json({
     data: {
       ...data,
       branding: resolveBranding(data.branding),
+      security: resolveSecurityConfig(settings.security),
       features: resolveFeatures(undefined, settings.features),
       license: resolveLicense(settings.license),
       whitelabel: resolveWhiteLabel(settings.whitelabel),
@@ -105,8 +112,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.custom_domain !== undefined) update.custom_domain = parsed.data.custom_domain || null
   if (parsed.data.plan !== undefined) update.plan = parsed.data.plan || null
 
-  // Merge feature/license/white-label overrides into settings JSONB (known keys only).
-  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel) {
+  // Merge feature/license/white-label/security overrides into settings JSONB (known keys only).
+  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel || parsed.data.security) {
     const settings = { ...(existing.settings as Record<string, unknown> ?? {}) }
     if (parsed.data.features) {
       const cur = { ...(settings.features as Record<string, boolean> ?? {}) }
@@ -121,6 +128,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (parsed.data.whitelabel) {
       // Normalize through the resolver so only valid, sanitized values are stored.
       settings.whitelabel = resolveWhiteLabel({ ...(settings.whitelabel as object ?? {}), ...parsed.data.whitelabel })
+    }
+    if (parsed.data.security) {
+      settings.security = resolveSecurityConfig({ ...(settings.security as object ?? {}), ...parsed.data.security })
     }
     update.settings = settings
   }
