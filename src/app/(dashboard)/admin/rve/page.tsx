@@ -8,6 +8,7 @@
 // instead of the live market. Admin-side; additive; no order records created.
 
 import { useMemo, useState } from 'react'
+import { ComingSoon } from '@/components/ComingSoon'
 import { Plus, TrendingDown, Trash2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,10 @@ interface Line { id: number; label: string; base: string }
 let nextId = 1
 
 export default function RvePage() {
+  return <ComingSoon title="Residual Value" />
+}
+
+function RvePageImpl() {
   const [years, setYears] = useState('3')
   const [lines, setLines] = useState<Line[]>([{ id: nextId++, label: '', base: '' }])
 

@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
+import { ComingSoon } from '@/components/ComingSoon'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { LifeBuoy, Loader2, Plus } from 'lucide-react'
@@ -36,6 +37,10 @@ const PRIORITY_STYLES: Record<string, string> = {
 }
 
 export default function TicketsPage() {
+  return <ComingSoon title="Support" />
+}
+
+function TicketsPageImpl() {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [subject, setSubject] = useState('')

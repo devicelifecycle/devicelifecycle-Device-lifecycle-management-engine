@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
+import { ComingSoon } from '@/components/ComingSoon'
 import { toast } from 'sonner'
 import { Loader2, ShieldCheck, UserPlus } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -24,6 +25,10 @@ interface Role {
 }
 
 export default function RolesPage() {
+  return <ComingSoon title="Roles & Access" />
+}
+
+function RolesPageImpl() {
   const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')

@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
+import { ComingSoon } from '@/components/ComingSoon'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Loader2, Send } from 'lucide-react'
@@ -18,6 +19,10 @@ interface Ticket { id: string; subject: string; status: TicketStatus; priority: 
 interface Message { id: string; author_id: string | null; body: string; created_at: string }
 
 export default function TicketDetailPage() {
+  return <ComingSoon title="Support" />
+}
+
+function TicketDetailPageImpl() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [ticket, setTicket] = useState<Ticket | null>(null)

@@ -6,6 +6,7 @@
 // Edit a VAR's branding, custom domain, and active status, with a live preview.
 
 import { useCallback, useEffect, useState } from 'react'
+import { ComingSoon } from '@/components/ComingSoon'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Loader2, Save } from 'lucide-react'
@@ -46,6 +47,10 @@ const LIMIT_LABELS: Record<LimitKey, string> = {
 }
 
 export default function TenantDetailPage() {
+  return <ComingSoon title="VAR Settings" />
+}
+
+function TenantDetailPageImpl() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [tenant, setTenant] = useState<TenantDetail | null>(null)
