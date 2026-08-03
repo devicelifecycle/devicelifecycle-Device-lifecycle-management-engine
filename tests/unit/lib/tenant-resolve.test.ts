@@ -23,26 +23,29 @@ describe('parseHost', () => {
   })
 })
 
-// Minimal fake matching the client shape resolveTenantIdByHost expects.
-function fakeClient(row: { id: string; slug: string; is_active: boolean } | null) {
-  return {
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: row }) }) }) }),
-  }
-}
+// Lookup stub matching the TenantLookup callback shape.
+const lookupOf = (row: { id: string; is_active: boolean } | null) => async () => row
 
 describe('resolveTenantIdByHost', () => {
   it('platform host → platform tenant (no lookup needed)', async () => {
-    expect(await resolveTenantIdByHost(fakeClient(null), 'byte-back.ca', BASE)).toBe(PLATFORM_TENANT_ID)
+    expect(await resolveTenantIdByHost(lookupOf(null), 'byte-back.ca', BASE)).toBe(PLATFORM_TENANT_ID)
   })
 
   it('active matching tenant → its id', async () => {
-    const row = { id: 'tenant-1', slug: 'acme', is_active: true }
-    expect(await resolveTenantIdByHost(fakeClient(row), 'acme.byte-back.ca', BASE)).toBe('tenant-1')
+    expect(await resolveTenantIdByHost(lookupOf({ id: 'tenant-1', is_active: true }), 'acme.byte-back.ca', BASE)).toBe('tenant-1')
   })
 
   it('no match or inactive tenant → platform fallback', async () => {
-    expect(await resolveTenantIdByHost(fakeClient(null), 'nope.byte-back.ca', BASE)).toBe(PLATFORM_TENANT_ID)
-    const inactive = { id: 'tenant-2', slug: 'acme', is_active: false }
-    expect(await resolveTenantIdByHost(fakeClient(inactive), 'acme.byte-back.ca', BASE)).toBe(PLATFORM_TENANT_ID)
+    expect(await resolveTenantIdByHost(lookupOf(null), 'nope.byte-back.ca', BASE)).toBe(PLATFORM_TENANT_ID)
+    expect(await resolveTenantIdByHost(lookupOf({ id: 'tenant-2', is_active: false }), 'acme.byte-back.ca', BASE)).toBe(PLATFORM_TENANT_ID)
+  })
+
+  it('passes the right column to the lookup', async () => {
+    let seen = ''
+    const lookup = async (col: 'custom_domain' | 'slug') => { seen = col; return null }
+    await resolveTenantIdByHost(lookup, 'portal.acme.com', BASE)
+    expect(seen).toBe('custom_domain')
+    await resolveTenantIdByHost(lookup, 'acme.byte-back.ca', BASE)
+    expect(seen).toBe('slug')
   })
 })

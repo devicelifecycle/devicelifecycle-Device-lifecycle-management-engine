@@ -37,31 +37,29 @@ export function parseHost(host: string | null | undefined, baseDomain: string): 
   return { customDomain: h, subdomain: null, isPlatformHost: false }
 }
 
-interface TenantRow { id: string; slug: string; is_active: boolean }
-interface MinimalClient {
-  from: (t: string) => {
-    select: (c: string) => {
-      eq: (col: string, val: string) => { maybeSingle: () => Promise<{ data: TenantRow | null }> }
-    }
-  }
-}
+/** Looks up a tenant by an exact column match; returns null if none. */
+export type TenantLookup = (
+  column: 'custom_domain' | 'slug',
+  value: string,
+) => Promise<{ id: string; is_active: boolean } | null>
 
 /**
  * Resolve the tenant id for a host. Falls back to the platform tenant whenever
- * the host is the platform host or no matching active tenant is found.
+ * the host is the platform host or no matching active tenant is found. Takes a
+ * lookup callback so it stays decoupled from the DB client.
  */
 export async function resolveTenantIdByHost(
-  supabase: MinimalClient,
+  lookup: TenantLookup,
   host: string | null | undefined,
   baseDomain: string,
 ): Promise<string> {
   const parts = parseHost(host, baseDomain)
   if (parts.isPlatformHost) return PLATFORM_TENANT_ID
 
-  const { col, val } = parts.customDomain
-    ? { col: 'custom_domain', val: parts.customDomain }
-    : { col: 'slug', val: parts.subdomain as string }
+  const [col, val]: ['custom_domain' | 'slug', string] = parts.customDomain
+    ? ['custom_domain', parts.customDomain]
+    : ['slug', parts.subdomain as string]
 
-  const { data } = await supabase.from('tenants').select('id, slug, is_active').eq(col, val).maybeSingle()
-  return data && data.is_active ? data.id : PLATFORM_TENANT_ID
+  const row = await lookup(col, val)
+  return row && row.is_active ? row.id : PLATFORM_TENANT_ID
 }
