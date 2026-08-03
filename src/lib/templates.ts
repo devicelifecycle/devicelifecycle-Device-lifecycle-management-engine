@@ -52,3 +52,23 @@ export function renderTemplate(template: string, values: Record<string, string |
     return v === undefined || v === null ? '' : String(v)
   })
 }
+
+/** True when the email/notification copy is still the platform default (i.e. the
+ *  VAR hasn't customized it). Callers keep the existing hardcoded email in that
+ *  case, so wiring this in is a no-op until a VAR sets its own copy. */
+export function isDefaultWhiteLabel(w: WhiteLabelContent): boolean {
+  return w.quoteSubject === DEFAULT_WHITELABEL.quoteSubject
+    && w.quoteIntro === DEFAULT_WHITELABEL.quoteIntro
+    && w.notificationSignature === DEFAULT_WHITELABEL.notificationSignature
+}
+
+/** Render a VAR's quote email subject + intro from its white-label copy. */
+export function renderWhiteLabelEmail(
+  w: WhiteLabelContent,
+  vars: { company?: string; customer?: string },
+): { subject: string; intro: string } {
+  return {
+    subject: renderTemplate(w.quoteSubject, vars),
+    intro: renderTemplate(w.quoteIntro, vars),
+  }
+}

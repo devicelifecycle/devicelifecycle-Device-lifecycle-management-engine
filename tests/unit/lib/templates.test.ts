@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveWhiteLabel, renderTemplate, DEFAULT_WHITELABEL } from '@/lib/templates'
+import { resolveWhiteLabel, renderTemplate, DEFAULT_WHITELABEL, isDefaultWhiteLabel, renderWhiteLabelEmail } from '@/lib/templates'
 
 describe('white-label content resolver', () => {
   it('empty resolves to defaults', () => {
@@ -34,5 +34,20 @@ describe('renderTemplate', () => {
   it('does not recursively expand injected placeholders', () => {
     // A value containing {{company}} must NOT be re-substituted.
     expect(renderTemplate('{{x}}', { x: '{{company}}', company: 'SECRET' })).toBe('{{company}}')
+  })
+})
+
+describe('email white-label', () => {
+  it('default copy is detected as default (keep the existing email)', () => {
+    expect(isDefaultWhiteLabel(resolveWhiteLabel({}))).toBe(true)
+    expect(isDefaultWhiteLabel(resolveWhiteLabel({ quoteSubject: 'Quote from Acme' }))).toBe(false)
+  })
+
+  it('renders a VAR subject + intro from its copy', () => {
+    const w = resolveWhiteLabel({ quoteSubject: 'Your quote from {{company}}', quoteIntro: 'Hi {{customer}}, ready.' })
+    expect(renderWhiteLabelEmail(w, { company: 'Acme', customer: 'Sam' })).toEqual({
+      subject: 'Your quote from Acme',
+      intro: 'Hi Sam, ready.',
+    })
   })
 })
