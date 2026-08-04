@@ -1561,7 +1561,7 @@ export default function AdminPricingClient() {
       )}
 
       <Tabs defaultValue="trade-in" value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="flex h-auto w-full flex-wrap items-center justify-start gap-1 bg-white/[0.035]">
+        <TabsList className="flex h-auto w-full flex-wrap items-center justify-start gap-1 bg-muted/40">
           <TabsTrigger value="trade-in"><TrendingUp className="mr-1.5 h-3.5 w-3.5" />Trade-In Pricing</TabsTrigger>
           <TabsTrigger value="cpo"><ShoppingBag className="mr-1.5 h-3.5 w-3.5" />CPO Pricing</TabsTrigger>
           <TabsTrigger value="international"><Globe className="mr-1.5 h-3.5 w-3.5" />International</TabsTrigger>
@@ -1574,17 +1574,17 @@ export default function AdminPricingClient() {
         {/* ============================================================ */}
         <TabsContent value="trade-in" className="space-y-4 mt-4">
           {/* How Trade-In Pricing Works */}
-          <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+          <Card className="surface-panel border-border bg-transparent text-foreground">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Activity className="h-4 w-4 text-primary" />
                 How Trade-In Pricing Works
               </CardTitle>
-              <CardDescription className="text-stone-400">Our pricing engine uses competitor market data to automatically generate optimal trade-in prices.</CardDescription>
+              <CardDescription className="text-muted-foreground">Our pricing engine uses competitor market data to automatically generate optimal trade-in prices.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
-                <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 space-y-2">
+                <div className="rounded-[1.25rem] border border-border bg-muted/40 p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500 text-white text-xs font-bold">1</div>
                     <h4 className="text-sm font-semibold">Scrape Competitors</h4>
@@ -1593,7 +1593,7 @@ export default function AdminPricingClient() {
                     Daily scrape of trade-in offers from <strong>Telus</strong>, <strong>Bell</strong>, and <strong>GoRecell</strong>. Apple and UniverCell stay visible as reference data.
                   </p>
                 </div>
-                <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 space-y-2">
+                <div className="rounded-[1.25rem] border border-border bg-muted/40 p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500 text-white text-xs font-bold">2</div>
                     <h4 className="text-sm font-semibold">Calculate Average</h4>
@@ -1602,7 +1602,7 @@ export default function AdminPricingClient() {
                     For each device + storage + condition, we compute the <strong>Bell/Telus average</strong> first, then compare it with <strong>GoRecell</strong>.
                   </p>
                 </div>
-                <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 space-y-2">
+                <div className="rounded-[1.25rem] border border-border bg-muted/40 p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500 text-white text-xs font-bold">3</div>
                     <h4 className="text-sm font-semibold">Final Quote</h4>
@@ -1612,7 +1612,7 @@ export default function AdminPricingClient() {
                   </p>
                 </div>
               </div>
-              <div className="mt-4 rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4">
+              <div className="mt-4 rounded-[1.25rem] border border-border bg-muted/40 p-4">
                 <div className="flex flex-wrap gap-x-8 gap-y-3 text-xs">
                   <div>
                     <span className="text-muted-foreground">Trade-In Formula:</span>{' '}
@@ -1784,7 +1784,7 @@ export default function AdminPricingClient() {
             </Card>
           )}
 
-          <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+          <Card className="surface-panel border-border bg-transparent text-foreground">
             <CardHeader>
               <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base">
@@ -1920,7 +1920,7 @@ export default function AdminPricingClient() {
           </Card>
 
           {/* Bulk Pricing Adjustment Tool */}
-          <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+          <Card className="surface-panel border-border bg-transparent text-foreground">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <DollarSign className="h-4 w-4" />
@@ -1985,7 +1985,7 @@ export default function AdminPricingClient() {
           </Card>
 
           {/* Trade-In Calculator */}
-          <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+          <Card className="surface-panel border-border bg-transparent text-foreground">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Calculator className="h-4 w-4" />
@@ -2161,7 +2161,7 @@ export default function AdminPricingClient() {
                               </span>
                             </div>
                             {calculatorCompetitorSnapshot.goRecellFloorApplied && calculatorCompetitorSnapshot.goRecellFairPrice != null && (
-                              <div className="rounded-md border border-amber-300/50 bg-white/70 dark:border-amber-800/50 dark:bg-black/10 px-2.5 py-2 text-[11px] text-amber-900 dark:text-amber-200">
+                              <div className="rounded-md border border-amber-300/50 bg-muted/40 dark:border-amber-800/50 dark:bg-black/10 px-2.5 py-2 text-[11px] text-amber-900 dark:text-amber-200">
                                 Good-condition floor applied to stay at or above GoRecell fair: {formatCurrency(calculatorCompetitorSnapshot.goRecellFairPrice)}
                               </div>
                             )}
@@ -2170,7 +2170,7 @@ export default function AdminPricingClient() {
                                 const canonicalName = normalizeCompetitorName(row.name)
                                 const isPricingDriver = ['Bell', 'Telus', 'GoRecell'].includes(canonicalName)
                                 return (
-                                  <div key={row.name} className={`rounded border px-2 py-1.5 text-center relative ${isPricingDriver ? 'border-amber-300/60 bg-white/80 dark:border-amber-700/60 dark:bg-black/15' : 'border-white/10 bg-white/40 dark:bg-white/5'}`}>
+                                  <div key={row.name} className={`rounded border px-2 py-1.5 text-center relative ${isPricingDriver ? 'border-amber-300/60 bg-muted/40 dark:border-amber-700/60 dark:bg-black/15' : 'border-border bg-muted/40 dark:bg-white/5'}`}>
                                     {isPricingDriver && (
                                       <span className="absolute -top-1.5 right-1 text-[8px] bg-amber-500 text-white rounded px-1 leading-tight">used</span>
                                     )}
@@ -2187,7 +2187,7 @@ export default function AdminPricingClient() {
                         )}
                         <div className="space-y-1">
                           {calculatorCompetitorSnapshot.rows.map((row) => (
-                            <div key={row.name} className="flex items-center justify-between rounded-md border border-white/10 bg-white/60 px-3 py-2 dark:bg-white/5">
+                            <div key={row.name} className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 dark:bg-white/5">
                               <span className="font-medium text-slate-900 dark:text-slate-100">
                                 {row.name}
                                 {row.source_condition && row.source_condition !== calculatorCompetitorSnapshot.condition ? ` (${row.source_condition})` : ''}
@@ -2361,17 +2361,17 @@ export default function AdminPricingClient() {
         {/* ============================================================ */}
         <TabsContent value="cpo" className="space-y-4 mt-4">
           {/* How CPO Pricing Works */}
-          <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+          <Card className="surface-panel border-border bg-transparent text-foreground">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <ShoppingBag className="h-4 w-4 text-primary" />
                 How CPO Pricing Works
               </CardTitle>
-              <CardDescription className="text-stone-400">Certified Pre-Owned pricing: all CPO devices are &quot;certified&quot; condition. No condition selector needed.</CardDescription>
+              <CardDescription className="text-muted-foreground">Certified Pre-Owned pricing: all CPO devices are &quot;certified&quot; condition. No condition selector needed.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
-                <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 space-y-2">
+                <div className="rounded-[1.25rem] border border-border bg-muted/40 p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500 text-white text-xs font-bold">1</div>
                     <h4 className="text-sm font-semibold">Competitor Sell Prices</h4>
@@ -2380,7 +2380,7 @@ export default function AdminPricingClient() {
                     We track what competitors <strong>sell</strong> certified devices for across all storage options.
                   </p>
                 </div>
-                <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 space-y-2">
+                <div className="rounded-[1.25rem] border border-border bg-muted/40 p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500 text-white text-xs font-bold">2</div>
                     <h4 className="text-sm font-semibold">Add Markup</h4>
@@ -2389,7 +2389,7 @@ export default function AdminPricingClient() {
                     <strong>Our CPO Price = Avg Sell x (1 + {parseFloat(settingsForm.cpo_markup_percent || '18') >= 1 ? settingsForm.cpo_markup_percent : '18'}%)</strong>
                   </p>
                 </div>
-                <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 space-y-2">
+                <div className="rounded-[1.25rem] border border-border bg-muted/40 p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500 text-white text-xs font-bold">3</div>
                     <h4 className="text-sm font-semibold">Depreciation</h4>
@@ -2400,7 +2400,7 @@ export default function AdminPricingClient() {
                 </div>
               </div>
               {/* Quick-edit CPO markup */}
-              <div className="mt-4 rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4 flex flex-wrap items-end gap-4">
+              <div className="mt-4 rounded-[1.25rem] border border-border bg-muted/40 p-4 flex flex-wrap items-end gap-4">
                 <div className="flex items-center gap-2">
                   <Label htmlFor="quick-cpo-pct" className="text-xs whitespace-nowrap">CPO markup (%):</Label>
                   <Input
@@ -2431,7 +2431,7 @@ export default function AdminPricingClient() {
           </Card>
 
           {/* CPO Competitor Sell Price Matrix */}
-          <Card className="surface-panel border-white/8 bg-transparent text-stone-100">
+          <Card className="surface-panel border-border bg-transparent text-foreground">
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div>
