@@ -10,6 +10,7 @@ import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
 import { resolveLicense, LIMIT_KEYS } from '@/lib/licensing'
 import { resolveWhiteLabel } from '@/lib/templates'
 import { resolveSecurityConfig } from '@/lib/security-config'
+import { resolveIntegrations } from '@/lib/integrations-config'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,16 @@ const patchSchema = z.object({
     mfaRequired: z.boolean().optional(),
     ipAllowlist: z.array(z.string().max(64)).max(200).optional(),
   }).optional(),
+  integrations: z.object({
+    smsProvider: z.string().max(20).optional(),
+    smsFrom: z.string().max(40).nullable().optional(),
+    smtpHost: z.string().max(255).nullable().optional(),
+    smtpPort: z.number().int().nullable().optional(),
+    smtpUser: z.string().max(255).nullable().optional(),
+    paymentProvider: z.string().max(20).optional(),
+    ssoProvider: z.string().max(20).optional(),
+    ssoEntityId: z.string().max(300).nullable().optional(),
+  }).optional(),
 })
 
 async function guard() {
@@ -68,12 +79,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Failed to load tenant' }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown; security?: unknown }
+  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown; security?: unknown; integrations?: unknown }
   return NextResponse.json({
     data: {
       ...data,
       branding: resolveBranding(data.branding),
       security: resolveSecurityConfig(settings.security),
+      integrations: resolveIntegrations(settings.integrations),
       features: resolveFeatures(undefined, settings.features),
       license: resolveLicense(settings.license),
       whitelabel: resolveWhiteLabel(settings.whitelabel),
@@ -112,8 +124,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.custom_domain !== undefined) update.custom_domain = parsed.data.custom_domain || null
   if (parsed.data.plan !== undefined) update.plan = parsed.data.plan || null
 
-  // Merge feature/license/white-label/security overrides into settings JSONB (known keys only).
-  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel || parsed.data.security) {
+  // Merge feature/license/white-label/security/integrations overrides into settings JSONB (known keys only).
+  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel || parsed.data.security || parsed.data.integrations) {
     const settings = { ...(existing.settings as Record<string, unknown> ?? {}) }
     if (parsed.data.features) {
       const cur = { ...(settings.features as Record<string, boolean> ?? {}) }
@@ -131,6 +143,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     if (parsed.data.security) {
       settings.security = resolveSecurityConfig({ ...(settings.security as object ?? {}), ...parsed.data.security })
+    }
+    if (parsed.data.integrations) {
+      settings.integrations = resolveIntegrations({ ...(settings.integrations as object ?? {}), ...parsed.data.integrations })
     }
     update.settings = settings
   }
