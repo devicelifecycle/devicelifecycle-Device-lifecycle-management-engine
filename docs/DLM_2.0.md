@@ -36,7 +36,7 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 - ◐ **Apply + verify tenant-scoped RLS** — migration authored + safe-by-construction; apply/verify/rollback runbook at [[DLM_2.0_RLS_Runbook]]; **awaiting go-ahead to run `db push` on prod**
 - ◐ VAR provisioning: **data-scoping done** (creator's tenant stamped on users/customers/orders via `nonPlatformTenantId`); invite console + `var_*` role system is a Month 2 dependency
 - ☑ Enforce **feature flags** on module routes + **quota** on create paths (customers/users/transactions); API-call metering + storage deferred (runtime metering / no file-size source)
-- ☐ Custom-domain onboarding (GoDaddy DNS + Resend domain verification)
+- ◐ Custom-domain onboarding — resolver + runtime branding already support subdomains + custom domains; operational checklist at [[DLM_2.0_Custom_Domain_Onboarding]] (DNS + Vercel + Resend). Per-VAR lighting-up is operational, done at launch.
 
 *3.5-mo: keep RLS + proxy wiring; fast-track domain onboarding to Month 4.*
 
