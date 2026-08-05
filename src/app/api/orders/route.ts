@@ -12,6 +12,8 @@ import { NotificationService } from '@/services/notification.service'
 import { sanitizeOrdersForVendor } from '@/lib/order-visibility'
 import { orderSchema, orderFiltersSchema } from '@/lib/validations'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { tenantLimits } from '@/lib/tenant-limits'
+import { featureBlockMessage, quotaBlockMessage } from '@/lib/quota'
 export const dynamic = 'force-dynamic'
 
 
@@ -133,6 +135,29 @@ export async function POST(request: NextRequest) {
       orgId = profile.organization_id ?? customer.organization_id ?? ''
     } else {
       orgId = profile.organization_id ?? customer.organization_id ?? ''
+    }
+
+    // Per-tenant module + monthly-transaction gating. No-op for the platform
+    // tenant (core modules on, transactions unlimited by default). Fails open on
+    // any lookup error so it can never wrongly block a legitimate order.
+    if (auth.tenantId) {
+      try {
+        const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
+        const { license, features } = tenantLimits(tenant?.settings)
+        const isCpo = orderData.type === 'cpo'
+        const fBlock = featureBlockMessage(features, isCpo ? 'cpo' : 'trade_in', isCpo ? 'CPO' : 'Trade-In')
+        if (fBlock) return NextResponse.json({ error: fBlock }, { status: 403 })
+        if (license.transactionsPerMonth >= 0) {
+          const monthStart = new Date()
+          monthStart.setUTCDate(1)
+          monthStart.setUTCHours(0, 0, 0, 0)
+          const { count } = await supabase
+            .from('orders').select('id', { count: 'exact', head: true })
+            .eq('tenant_id', auth.tenantId).gte('created_at', monthStart.toISOString())
+          const qBlock = quotaBlockMessage(license.transactionsPerMonth, count ?? 0, 1, 'Transactions this month')
+          if (qBlock) return NextResponse.json({ error: qBlock }, { status: 403 })
+        }
+      } catch { /* fail open — never block an order on a quota lookup error */ }
     }
 
     let order = await OrderService.createOrder(

@@ -9,7 +9,7 @@ import { customerSchema } from '@/lib/validations'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
 import { safeErrorMessage } from '@/lib/utils'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
-import { resolveLicense } from '@/lib/licensing'
+import { tenantLimits } from '@/lib/tenant-limits'
 import { quotaBlockMessage } from '@/lib/quota'
 export const dynamic = 'force-dynamic'
 
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
     if (!existingCustomerId && auth.tenantId) {
       try {
         const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
-        const license = resolveLicense((tenant?.settings as { license?: unknown } | null)?.license)
+        const { license } = tenantLimits(tenant?.settings)
         if (license.customers >= 0) {
           const { count } = await supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', auth.tenantId)
           const blocked = quotaBlockMessage(license.customers, count ?? 0, 1, 'Customers')

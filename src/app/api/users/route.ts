@@ -7,6 +7,8 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createUserSchema } from '@/lib/validations'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
+import { tenantLimits } from '@/lib/tenant-limits'
+import { quotaBlockMessage } from '@/lib/quota'
 export const dynamic = 'force-dynamic'
 
 const ORG_ADMIN_ROLES = ['customer', 'vendor']
@@ -84,6 +86,20 @@ export async function POST(request: NextRequest) {
     }
 
     const { full_name, email, role, password, organization_id, notification_email, phone } = validationResult.data
+
+    // Per-tenant user quota. No-op for the platform tenant (unlimited by
+    // default); fails open so a lookup error never blocks provisioning.
+    if (auth.tenantId) {
+      try {
+        const { data: tenant } = await auth.supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
+        const { license } = tenantLimits(tenant?.settings)
+        if (license.users >= 0) {
+          const { count } = await auth.supabase.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', auth.tenantId)
+          const blocked = quotaBlockMessage(license.users, count ?? 0, 1, 'Users')
+          if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
+        }
+      } catch { /* fail open — never block provisioning on a quota lookup error */ }
+    }
 
     const provisioned = await UserProvisioningService.provisionUser({
       fullName: full_name,
