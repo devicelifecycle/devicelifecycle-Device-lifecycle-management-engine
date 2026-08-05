@@ -12,6 +12,7 @@ import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { quotaBlockMessage } from '@/lib/quota'
 import { nonPlatformTenantId } from '@/lib/tenant-resolve'
+import { customerScopeFilter } from '@/lib/delegation'
 export const dynamic = 'force-dynamic'
 
 
@@ -28,11 +29,15 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)
+    // Delegated VAR roles get narrowed to their region / assigned customers.
+    // Inert (null) for internal + platform roles, so their listing is unchanged.
+    const scope = customerScopeFilter({ role: profile.role, userId: profile.id, region: profile.region })
     const filters = {
       search: searchParams.get('search') || undefined,
       is_active: searchParams.get('is_active') === 'true' ? true :
                  searchParams.get('is_active') === 'false' ? false : undefined,
       organization_id: (isInternal ? searchParams.get('organization_id') || undefined : profile.organization_id) as string | undefined,
+      scope,
       page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
       page_size: Math.min(Math.max(parseInt(searchParams.get('page_size') || searchParams.get('limit') || '20'), 1), 500),
     }

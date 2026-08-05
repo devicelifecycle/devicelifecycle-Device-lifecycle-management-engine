@@ -16,7 +16,13 @@ export class CustomerService {
    * Get customers with pagination
    */
   static async getCustomers(
-    params: PaginationParams & { search?: string; organization_id?: string; is_active?: boolean }
+    params: PaginationParams & {
+      search?: string
+      organization_id?: string
+      is_active?: boolean
+      /** Extra delegated-role filter (region / assigned rep). Inert when absent. */
+      scope?: { column: string; value: string } | null
+    }
   ): Promise<PaginatedResponse<Customer>> {
     const supabase = await createServerSupabaseClient()
 
@@ -28,6 +34,7 @@ export class CustomerService {
       search,
       organization_id,
       is_active = true,
+      scope,
     } = params
 
     let query = supabase
@@ -37,6 +44,12 @@ export class CustomerService {
 
     if (organization_id) {
       query = query.eq('organization_id', organization_id)
+    }
+
+    // Delegated VAR scoping (Regional Manager → region, Sales Rep → own).
+    // Applied on top of tenant RLS; null for non-delegated roles.
+    if (scope) {
+      query = query.eq(scope.column, scope.value)
     }
 
     if (search) {

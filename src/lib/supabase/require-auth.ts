@@ -26,6 +26,8 @@ export interface AuthProfile {
   organization_id: string | null
   /** The VAR/tenant this user belongs to (multi-tenant isolation). */
   tenant_id: string | null
+  /** Region a delegated VAR user is scoped to (Regional Manager). */
+  region: string | null
   is_active: boolean
   is_org_admin: boolean
 }
@@ -58,7 +60,7 @@ export async function requireAuth(): Promise<AuthContext | null> {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('id, role, secondary_role, organization_id, tenant_id, is_active, is_org_admin')
+    .select('id, role, secondary_role, organization_id, tenant_id, region, is_active, is_org_admin')
     .eq('id', session.user.id)
     .single()
 
