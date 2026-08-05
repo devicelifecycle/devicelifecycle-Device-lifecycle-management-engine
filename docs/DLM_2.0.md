@@ -31,11 +31,11 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 ## Month 1 — Make tenancy real (runtime isolation)
 *Turn the built foundations into a live multi-tenant system.*
 
-- ☐ Wire `resolveTenantIdByHost` into the proxy/middleware → per-request tenant context
-- ☐ Runtime **per-tenant branding/theme** injection (custom domain + `<slug>.base` subdomain)
-- ☐ **Apply + verify tenant-scoped RLS** across all 20 tables (migration exists) on staging, with a rollback runbook
-- ☐ VAR provisioning end-to-end: create VAR → invite users → data scoped to tenant
-- ☐ Enforce **feature flags** on module routes + **quota** on the remaining create paths (users/storage/API/transactions)
+- ☑ Per-request tenant context via `getServerTenant()` (server-side, React-cached; platform host = no-DB fast path)
+- ☑ Runtime **per-tenant branding/theme** injection in the root layout (`tenantBrandingStyle`, `:root:root` both themes; no-op for platform)
+- ◐ **Apply + verify tenant-scoped RLS** — migration authored + safe-by-construction; apply/verify/rollback runbook at [[DLM_2.0_RLS_Runbook]]; **awaiting go-ahead to run `db push` on prod**
+- ◐ VAR provisioning: **data-scoping done** (creator's tenant stamped on users/customers/orders via `nonPlatformTenantId`); invite console + `var_*` role system is a Month 2 dependency
+- ☑ Enforce **feature flags** on module routes + **quota** on create paths (customers/users/transactions); API-call metering + storage deferred (runtime metering / no file-size source)
 - ☐ Custom-domain onboarding (GoDaddy DNS + Resend domain verification)
 
 *3.5-mo: keep RLS + proxy wiring; fast-track domain onboarding to Month 4.*
