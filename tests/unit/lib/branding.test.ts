@@ -4,6 +4,7 @@ import {
   resolveBranding,
   brandingCssVars,
   isDefaultBranding,
+  tenantBrandingStyle,
 } from '@/lib/branding'
 
 describe('white-label branding resolver', () => {
@@ -55,5 +56,27 @@ describe('white-label branding resolver', () => {
     expect(isDefaultBranding(DEFAULT_BRANDING)).toBe(true)
     expect(isDefaultBranding(resolveBranding({ primary: '10 90% 50%' }))).toBe(false)
     expect(isDefaultBranding(resolveBranding({ name: 'Acme' }))).toBe(false)
+  })
+
+  describe('tenantBrandingStyle', () => {
+    it('returns null for the platform default (inject nothing)', () => {
+      expect(tenantBrandingStyle(DEFAULT_BRANDING)).toBeNull()
+      expect(tenantBrandingStyle(resolveBranding({}))).toBeNull()
+    })
+
+    it('emits a doubled-:root rule with the branded tokens for a VAR', () => {
+      const css = tenantBrandingStyle(resolveBranding({ primary: '270 60% 45%', name: 'Acme' }))
+      expect(css).toContain(':root:root{')
+      expect(css).toContain('--primary:270 60% 45%')
+      expect(css).toContain('--sidebar-bg:')
+      expect(css).toContain('--primary-foreground:')
+    })
+
+    it('emits only HSL-safe characters (no injection surface)', () => {
+      // Malicious color is rejected by resolveBranding, so the style stays clean.
+      const css = tenantBrandingStyle(resolveBranding({ name: 'Acme', primary: '} body{display:none' }))
+      expect(css).not.toContain('display:none')
+      expect(css).toMatch(/^:root:root\{[\d\s%;:\-a-z]+\}$/)
+    })
   })
 })

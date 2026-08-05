@@ -11,6 +11,8 @@ import { Providers } from './providers'
 import { Toaster } from '@/components/ui/toaster'
 import { cookies } from 'next/headers'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getServerTenant } from '@/lib/tenant-context'
+import { tenantBrandingStyle } from '@/lib/branding'
 import type { User } from '@/types'
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
@@ -83,6 +85,11 @@ export default async function RootLayout({
     // Proceed without server data — client auth handles the fallback
   }
 
+  // Per-request tenant → white-label brand tokens. Platform host resolves with
+  // no DB call and yields null here, so the base theme renders unchanged.
+  const tenant = await getServerTenant()
+  const brandStyle = tenantBrandingStyle(tenant.branding)
+
   return (
     <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${syne.variable} ${instrumentSerif.variable} ${barlow.variable} ${poppins.variable} ${sourceSerif.variable}`}>
       <head>
@@ -98,6 +105,8 @@ export default async function RootLayout({
             </>
           )
         })()}
+        {/* White-label brand tokens for a VAR host. Absent for the platform host. */}
+        {brandStyle && <style dangerouslySetInnerHTML={{ __html: brandStyle }} />}
         <script
           dangerouslySetInnerHTML={{
             __html: `

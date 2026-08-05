@@ -81,6 +81,24 @@ export function brandingCssVars(b: TenantBranding): Record<string, string> {
   }
 }
 
+/**
+ * Build the CSS to inject for a tenant's branding, or null when it is the
+ * platform default (inject nothing → identical to the base stylesheet).
+ *
+ * Uses a doubled `:root:root` selector (specificity 0,2,0) so the tenant's
+ * brand tokens win over both the base `:root` and the `.dark` overrides in
+ * globals.css regardless of stylesheet order or active theme. Values are HSL
+ * triplets already validated by resolveBranding (digits/spaces/% only), so the
+ * string is safe to place verbatim in a <style> tag.
+ */
+export function tenantBrandingStyle(b: TenantBranding): string | null {
+  if (isDefaultBranding(b)) return null
+  const body = Object.entries(brandingCssVars(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(';')
+  return `:root:root{${body}}`
+}
+
 /** True when branding is effectively the platform default (nothing customized). */
 export function isDefaultBranding(b: TenantBranding): boolean {
   return (
