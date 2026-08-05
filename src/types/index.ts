@@ -6,13 +6,33 @@
 // STRING LITERAL TYPES
 // ============================================================================
 
-export type UserRole = 
+export type UserRole =
   | 'admin'
   | 'coe_manager'
   | 'coe_tech'
   | 'sales'
   | 'customer'
   | 'vendor';
+
+/**
+ * Delegated VAR roles (Appendix A). A separate tier from the 6 core operational
+ * roles: a VAR's own admin, its regional managers, and its sales reps. Kept out
+ * of UserRole so the platform's role-content maps (onboarding, chat, config)
+ * stay scoped to the core roles; use AppRole where any role string is valid.
+ */
+export type DelegatedRole =
+  | 'var_entity_admin'
+  | 'var_regional_manager'
+  | 'var_sales_rep';
+
+/** Any role the system recognizes — core operational or delegated VAR. */
+export type AppRole = UserRole | DelegatedRole;
+
+export const DELEGATED_ROLES: DelegatedRole[] = [
+  'var_entity_admin',
+  'var_regional_manager',
+  'var_sales_rep',
+];
 
 export type OrganizationType = 'internal' | 'customer' | 'vendor';
 

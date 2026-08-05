@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { delegationLevel, customerScopeFilter } from '@/lib/delegation'
+import { DELEGATED_ROLES } from '@/types'
 
 describe('delegation level', () => {
   it('maps VAR roles to their scope', () => {
@@ -11,6 +12,13 @@ describe('delegation level', () => {
     expect(delegationLevel('admin')).toBe('none')
     expect(delegationLevel('sales')).toBe('none')
     expect(delegationLevel(null)).toBe('none')
+  })
+  it('every DELEGATED_ROLES entry has a real (non-none) scope', () => {
+    // Guards against adding a delegated role but forgetting to scope it.
+    for (const r of DELEGATED_ROLES) {
+      expect(delegationLevel(r)).not.toBe('none')
+    }
+    expect(DELEGATED_ROLES).toHaveLength(3)
   })
 })
 

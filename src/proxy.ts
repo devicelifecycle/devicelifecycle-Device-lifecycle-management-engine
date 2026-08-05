@@ -13,6 +13,8 @@ const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/auth/cal
 // Routes that require specific roles (more specific routes first)
 const roleRoutes: [string, string[]][] = [
   ['/admin', ['admin']],
+  // VAR console: the platform admin plus the VAR's own delegated roles.
+  ['/var', ['admin', 'var_entity_admin', 'var_regional_manager', 'var_sales_rep']],
   ['/coe', ['admin', 'coe_manager', 'coe_tech']],
   ['/customers/new', ['admin', 'coe_manager']],
   ['/vendors/new', ['admin', 'coe_manager']],

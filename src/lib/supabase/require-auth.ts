@@ -64,7 +64,13 @@ export async function requireAuth(): Promise<AuthContext | null> {
 
   if (!profile || profile.is_active === false) return null
 
-  const VALID_ROLES = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor']
+  // Core operational roles + delegated VAR roles (Appendix A). VAR roles are
+  // accepted here so a provisioned VAR user can authenticate; their data access
+  // is narrowed by tenant RLS + delegated scoping, not by this list.
+  const VALID_ROLES = [
+    'admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor',
+    'var_entity_admin', 'var_regional_manager', 'var_sales_rep',
+  ]
 
   const cookieStore = await cookies()
   const activeRoleRaw = cookieStore.get('dlm_active_role')?.value
