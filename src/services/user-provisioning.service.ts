@@ -18,6 +18,8 @@ interface ProvisionUserParams {
   notificationEmail?: string
   phone?: string
   oneUserPerRolePerOrganization?: boolean
+  /** Tenant the new user belongs to. Omit to inherit the DB default (platform). */
+  tenantId?: string
 }
 
 interface ProvisionUserResult {
@@ -196,6 +198,9 @@ export class UserProvisioningService {
         is_active: true,
         notification_email: isLoginId ? emailToSend : null,
         phone: params.phone || null,
+        // Only stamp tenant_id when explicitly provided (VAR invite); otherwise
+        // omit the key so the column keeps its DB default (platform tenant).
+        ...(params.tenantId ? { tenant_id: params.tenantId } : {}),
       })
       .select()
       .single()

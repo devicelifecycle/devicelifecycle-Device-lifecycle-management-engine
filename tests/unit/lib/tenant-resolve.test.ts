@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseHost, resolveTenantIdByHost, PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
+import { parseHost, resolveTenantIdByHost, nonPlatformTenantId, PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
 
 const BASE = 'byte-back.ca'
 
@@ -47,5 +47,17 @@ describe('resolveTenantIdByHost', () => {
     expect(seen).toBe('custom_domain')
     await resolveTenantIdByHost(lookup, 'acme.byte-back.ca', BASE)
     expect(seen).toBe('slug')
+  })
+})
+
+describe('nonPlatformTenantId', () => {
+  it('platform tenant / null / undefined → undefined (omit tenant_id, keep DB default)', () => {
+    expect(nonPlatformTenantId(PLATFORM_TENANT_ID)).toBeUndefined()
+    expect(nonPlatformTenantId(null)).toBeUndefined()
+    expect(nonPlatformTenantId(undefined)).toBeUndefined()
+  })
+
+  it('a real VAR tenant → its id (stamp it on the row)', () => {
+    expect(nonPlatformTenantId('11111111-1111-4111-8111-111111111111')).toBe('11111111-1111-4111-8111-111111111111')
   })
 })

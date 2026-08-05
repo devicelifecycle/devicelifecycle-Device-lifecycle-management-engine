@@ -90,7 +90,7 @@ export class CustomerService {
   /**
    * Create a new customer. orgId links to organizations table (type 'customer').
    */
-  static async createCustomer(input: CreateCustomerInput, orgId?: string): Promise<Customer> {
+  static async createCustomer(input: CreateCustomerInput, orgId?: string, tenantId?: string): Promise<Customer> {
     const supabase = await createServerSupabaseClient()
 
     const { data, error } = await supabase
@@ -99,6 +99,9 @@ export class CustomerService {
         ...input,
         organization_id: orgId ?? null,
         is_active: true,
+        // Scope to the creating tenant when known; otherwise inherit the DB
+        // default (platform tenant), so existing single-tenant creates are unchanged.
+        ...(tenantId ? { tenant_id: tenantId } : {}),
       })
       .select()
       .single()

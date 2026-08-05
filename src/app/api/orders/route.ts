@@ -14,6 +14,7 @@ import { orderSchema, orderFiltersSchema } from '@/lib/validations'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { featureBlockMessage, quotaBlockMessage } from '@/lib/quota'
+import { nonPlatformTenantId } from '@/lib/tenant-resolve'
 export const dynamic = 'force-dynamic'
 
 
@@ -163,7 +164,8 @@ export async function POST(request: NextRequest) {
     let order = await OrderService.createOrder(
       orderData as Parameters<typeof OrderService.createOrder>[0],
       authUser.id,
-      orgId
+      orgId,
+      nonPlatformTenantId(auth.tenantId)
     )
 
     // Customers have already reviewed their order — auto-submit so it enters the pricing queue

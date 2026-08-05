@@ -37,6 +37,17 @@ export function parseHost(host: string | null | undefined, baseDomain: string): 
   return { customDomain: h, subdomain: null, isPlatformHost: false }
 }
 
+/**
+ * The tenant id to stamp on a newly created row, or undefined for the platform
+ * tenant (and unknown tenants). Returning undefined means the caller omits the
+ * tenant_id column entirely, so the row keeps its DB default — current single-
+ * tenant creates are byte-identical and never depend on the column existing yet.
+ * Only a real VAR tenant produces an id to stamp.
+ */
+export function nonPlatformTenantId(tenantId: string | null | undefined): string | undefined {
+  return tenantId && tenantId !== PLATFORM_TENANT_ID ? tenantId : undefined
+}
+
 /** Looks up a tenant by an exact column match; returns null if none. */
 export type TenantLookup = (
   column: 'custom_domain' | 'slug',

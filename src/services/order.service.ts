@@ -379,7 +379,7 @@ export class OrderService {
   /**
    * Create a new order
    */
-  static async createOrder(input: CreateOrderInput, userId: string, orgId: string): Promise<Order> {
+  static async createOrder(input: CreateOrderInput, userId: string, orgId: string, tenantId?: string): Promise<Order> {
     // Use service role to bypass RLS - API has already validated permissions
     const supabase = createServiceRoleClient()
 
@@ -449,6 +449,9 @@ export class OrderService {
           internal_notes: input.internal_notes,
           currency,
           fx_rate: fxRate,
+          // Scope to the creating tenant when known; otherwise inherit the DB
+          // default (platform tenant), leaving single-tenant creates unchanged.
+          ...(tenantId ? { tenant_id: tenantId } : {}),
         })
         .select()
         .single()

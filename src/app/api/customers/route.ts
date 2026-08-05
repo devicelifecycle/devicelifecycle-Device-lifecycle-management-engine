@@ -11,6 +11,7 @@ import { safeErrorMessage } from '@/lib/utils'
 import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { quotaBlockMessage } from '@/lib/quota'
+import { nonPlatformTenantId } from '@/lib/tenant-resolve'
 export const dynamic = 'force-dynamic'
 
 
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
 
     const customer = existingCustomerId
       ? await CustomerService.updateCustomer(existingCustomerId, customerInput)
-      : await CustomerService.createCustomer(customerInput, orgId)
+      : await CustomerService.createCustomer(customerInput, orgId, nonPlatformTenantId(auth.tenantId))
 
     // Portal login provisioning is best-effort: if this email already has a
     // login elsewhere (Supabase Auth requires globally unique emails), the
@@ -165,6 +166,7 @@ export async function POST(request: NextRequest) {
         role: 'customer',
         organizationId: orgId,
         oneUserPerRolePerOrganization: true,
+        tenantId: nonPlatformTenantId(auth.tenantId),
       })
     } catch (provisionError) {
       provisioned = {

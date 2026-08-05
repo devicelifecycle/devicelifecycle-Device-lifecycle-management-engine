@@ -9,6 +9,7 @@ import { createUserSchema } from '@/lib/validations'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { quotaBlockMessage } from '@/lib/quota'
+import { nonPlatformTenantId } from '@/lib/tenant-resolve'
 export const dynamic = 'force-dynamic'
 
 const ORG_ADMIN_ROLES = ['customer', 'vendor']
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
       organizationId: organization_id,
       notificationEmail: notification_email,
       phone,
+      tenantId: nonPlatformTenantId(auth.tenantId),
     })
 
     return NextResponse.json(provisioned.user, { status: 201 })
