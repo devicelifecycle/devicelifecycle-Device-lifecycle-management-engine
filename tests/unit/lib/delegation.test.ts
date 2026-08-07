@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { delegationLevel, customerScopeFilter } from '@/lib/delegation'
+import { delegationLevel, customerScopeFilter, canManageCustomer } from '@/lib/delegation'
 import { DELEGATED_ROLES } from '@/types'
 
 describe('delegation level', () => {
@@ -38,5 +38,23 @@ describe('customer scope filter', () => {
   })
   it('sales rep filters to their own assigned customers', () => {
     expect(customerScopeFilter({ role: 'var_sales_rep', ...base })).toEqual({ column: 'assigned_rep_id', value: 'u1' })
+  })
+})
+
+describe('canManageCustomer', () => {
+  it('platform admin can manage any customer', () => {
+    expect(canManageCustomer('admin', 'admin', null, 'ON')).toBe(true)
+  })
+  it('VAR entity admin can manage any customer in the tenant', () => {
+    expect(canManageCustomer('var_entity_admin', 'var_entity_admin', null, 'BC')).toBe(true)
+  })
+  it('regional manager can manage only their own region', () => {
+    expect(canManageCustomer('var_regional_manager', 'var_regional_manager', 'ON', 'ON')).toBe(true)
+    expect(canManageCustomer('var_regional_manager', 'var_regional_manager', 'ON', 'BC')).toBe(false)
+    expect(canManageCustomer('var_regional_manager', 'var_regional_manager', null, 'ON')).toBe(false)
+  })
+  it('sales rep and end customer cannot manage', () => {
+    expect(canManageCustomer('var_sales_rep', 'var_sales_rep', 'ON', 'ON')).toBe(false)
+    expect(canManageCustomer('customer', 'customer', null, null)).toBe(false)
   })
 })

@@ -162,6 +162,55 @@ export class CustomerService {
    * login's email so the same address can be re-registered immediately —
    * otherwise the org's customer user row keeps the email reserved forever.
    */
+  /**
+   * Bulk-create customer records (VAR import). Inserts in chunks (one round-trip
+   * per chunk, not per row) via the authenticated client, so tenant RLS both
+   * scopes and validates every row. Stamp tenantId for a VAR so the row's
+   * tenant matches auth_tenant_id() and passes the RLS WITH CHECK.
+   */
+  static async bulkCreateCustomers(
+    rows: Array<Record<string, unknown>>,
+    opts: { tenantId?: string } = {},
+  ): Promise<Customer[]> {
+    const supabase = await createServerSupabaseClient()
+    const payload = rows.map((r) => ({
+      ...r,
+      is_active: true,
+      ...(opts.tenantId ? { tenant_id: opts.tenantId } : {}),
+    }))
+
+    const created: Customer[] = []
+    const CHUNK = 500
+    for (let i = 0; i < payload.length; i += CHUNK) {
+      const { data, error } = await supabase
+        .from('customers').insert(payload.slice(i, i + CHUNK)).select()
+      if (error) throw new Error(error.message)
+      if (data) created.push(...(data as Customer[]))
+    }
+    return created
+  }
+
+  /**
+   * Apply a VAR-admin management change (suspend/reactivate, assign a rep, move
+   * region) with a whitelisted field set. Uses the caller's authenticated client
+   * so tenant RLS scopes the write — a VAR can never touch another tenant's row.
+   */
+  static async setManagedFields(
+    id: string,
+    fields: { is_active?: boolean; assigned_rep_id?: string | null; region?: string | null },
+  ): Promise<Customer> {
+    const supabase = await createServerSupabaseClient()
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (fields.is_active !== undefined) patch.is_active = fields.is_active
+    if (fields.assigned_rep_id !== undefined) patch.assigned_rep_id = fields.assigned_rep_id
+    if (fields.region !== undefined) patch.region = fields.region
+
+    const { data, error } = await supabase
+      .from('customers').update(patch).eq('id', id).select().single()
+    if (error) throw new Error(error.message)
+    return data as Customer
+  }
+
   static async deactivateCustomer(id: string): Promise<void> {
     const supabase = await createServerSupabaseClient()
 

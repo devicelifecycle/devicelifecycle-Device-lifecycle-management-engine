@@ -42,3 +42,25 @@ export function customerScopeFilter(ctx: DelegationContext): ScopeFilter | null 
   if (level === 'own') return { column: 'assigned_rep_id', value: ctx.userId }
   return null // 'tenant' or 'none'
 }
+
+/**
+ * Can this actor run a VAR management action (suspend / assign / move) on a
+ * customer that lives in `customerRegion`?
+ *   • platform admin        → yes, always
+ *   • VAR Entity Admin       → yes for the whole tenant (RLS still bounds it)
+ *   • VAR Regional Manager   → only customers in their own region
+ *   • Sales Rep / anyone else → no (read/own-scope only)
+ * Pure so it can be unit-tested and reused across management routes.
+ */
+export function canManageCustomer(
+  role: string,
+  effectiveRole: string,
+  actorRegion: string | null,
+  customerRegion: string | null,
+): boolean {
+  if (role === 'admin') return true
+  const level = delegationLevel(effectiveRole)
+  if (level === 'tenant') return true
+  if (level === 'region') return actorRegion != null && actorRegion === customerRegion
+  return false
+}

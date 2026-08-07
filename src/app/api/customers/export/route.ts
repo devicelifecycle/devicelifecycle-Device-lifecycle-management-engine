@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { CustomerService } from '@/services/customer.service'
+import { customerScopeFilter } from '@/lib/delegation'
 import type { Customer } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -37,22 +38,23 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { supabase, authUser, profile, effectiveRole } = auth
+    const { profile, effectiveRole } = auth
 
-    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+    // End customers / vendors can't export the customer book; everyone else can,
+    // narrowed by tenant RLS + delegated scope (region / own) below.
+    if (['customer', 'vendor'].includes(effectiveRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || undefined
-    const isInternal = true
-    const organization_id = isInternal ? undefined : profile.organization_id ?? undefined
+    const scope = customerScopeFilter({ role: profile.role, userId: profile.id, region: profile.region })
 
     const result = await CustomerService.getCustomers({
       page: 1,
       page_size: 10000,
       search,
-      organization_id,
+      scope,
     })
 
     const csv = toCSV(result.data)

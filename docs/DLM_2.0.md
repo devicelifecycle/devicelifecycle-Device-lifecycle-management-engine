@@ -45,11 +45,16 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 ## Month 2 — Consoles (VAR Admin, delegated, End Customer)
 *Un-pause and complete the three-tier consoles from the outline.*
 
-- ☐ **VAR Admin console:** tenant-scoped customer management (create/suspend/delete/assign/move/archive/search/bulk import-export/automated reminders)
+- ◐ **VAR Admin console (backend):** delegated roles are now first-class (auth + routing); customer-management APIs shipped — `manage` (suspend/reactivate/assign/move), delegation-scoped export, chunked bulk import; search already existed. Console UI still paused.
 - ☐ VAR **user & rep** management (create customer users, add/disable reps, reset passwords, assign permissions)
-- ☐ **Delegated N-level roles** enforcement (Appendix A: Entity → Regional Manager → Sales Rep scoping + roll-up reporting)
+- ☑ **Delegated N-level roles** enforcement (Appendix A: Entity → Regional Manager → Sales Rep scoping) wired into customer listings/export/management; roll-up reporting still to do
 - ☐ **End Customer console:** company profile, locations, departments, contacts, business hours
 - ☐ Customer **device/asset register** (register/assign/retire/move/audit) + own reports/exports
+
+> **Plan paused after M2.2 at user request (2026-08-07).** Remaining Month 2:
+> VAR user/rep management (M2.3), End Customer console (M2.4), asset register
+> (M2.5), roll-up reporting. Foundation (roles, RLS, delegation, tenant scoping)
+> is in place to resume from.
 
 *3.5-mo: ship VAR Admin + delegated roles; End Customer console trimmed to profile + reports.*
 
