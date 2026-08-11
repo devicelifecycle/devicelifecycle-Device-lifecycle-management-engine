@@ -356,16 +356,20 @@ export default function NewOrderPage() {
 
       if (latestLookupRequestRef.current[index] !== requestId) return
 
-      // Parse last manual price — newest entry for same storage wins
+      // Parse last manual price — newest entry for the same PRICE KIND wins.
+      // CPO items ('certified') only pick up prior CPO manual prices; trade items
+      // only pick up prior trade prices — so a CPO line never inherits a trade
+      // price and vice versa. Same-storage is preferred, then any storage.
       let lastManualPrice: number | null = null
       let lastManualAt: string | null = null
       if (manualRes.ok) {
         const manualData = await manualRes.json()
         const entries: Array<{ storage: string; condition: string; last_manual_price: number; last_set_at: string }> = manualData.data || []
-        const sameStorage = entries
-          .filter(e => e.storage === storage && (e.last_manual_price || 0) > 0)
-          .sort((a, b) => (b.last_set_at || '').localeCompare(a.last_set_at || ''))
-        const best = sameStorage[0] ?? entries.filter(e => (e.last_manual_price || 0) > 0).sort((a, b) => (b.last_set_at || '').localeCompare(a.last_set_at || ''))[0]
+        const isCpo = condition === CPO_CONDITION
+        const matchesKind = (c: string) => (isCpo ? c === CPO_CONDITION : c !== CPO_CONDITION)
+        const byNewest = (a: { last_set_at: string }, b: { last_set_at: string }) => (b.last_set_at || '').localeCompare(a.last_set_at || '')
+        const priced = entries.filter(e => (e.last_manual_price || 0) > 0 && matchesKind(e.condition))
+        const best = priced.filter(e => e.storage === storage).sort(byNewest)[0] ?? priced.sort(byNewest)[0]
         if (best) {
           lastManualPrice = best.last_manual_price
           lastManualAt = best.last_set_at
