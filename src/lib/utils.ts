@@ -33,6 +33,30 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount)
 }
 
+/**
+ * Format an order amount in its DISPLAY currency. Order amounts are stored in
+ * CAD; for a USD order we convert with the frozen fx_rate (CAD→USD multiplier)
+ * and label it "US$…", while CAD is labeled "CA$…". This makes the currency
+ * explicit on quotes so a customer can't confuse USD and CAD figures. Falls back
+ * to CAD (no conversion) when currency/fx_rate are missing or invalid.
+ */
+export function formatOrderMoney(
+  amount: number,
+  currency?: string | null,
+  fxRate?: number | null,
+): string {
+  const cur = (currency || 'CAD').toUpperCase()
+  if (cur !== 'CAD' && typeof fxRate === 'number' && fxRate > 0) {
+    return formatCurrency(amount * fxRate, cur)
+  }
+  return formatCurrency(amount, 'CAD')
+}
+
+/** Short currency label for an order ("CAD" / "USD"), for chips/badges. */
+export function orderCurrencyLabel(currency?: string | null): string {
+  return (currency || 'CAD').toUpperCase() === 'USD' ? 'USD' : 'CAD'
+}
+
 /** Default timezone for date/time display (Toronto / Eastern) */
 const DISPLAY_TIMEZONE = 'America/Toronto'
 

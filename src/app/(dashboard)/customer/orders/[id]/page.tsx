@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { useOrder } from '@/hooks/useOrders'
-import { formatCurrency, formatRelativeTime, formatDateTime } from '@/lib/utils'
+import { formatOrderMoney, orderCurrencyLabel, formatRelativeTime, formatDateTime } from '@/lib/utils'
 import { CUSTOMER_STATUS_CONFIG } from '@/lib/constants'
 import { toast } from 'sonner'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
@@ -234,6 +234,10 @@ export default function CustomerOrderDetailPage() {
   ) ?? false
 
   const quotedAmount = order.quoted_amount ?? order.total_amount ?? 0
+  // Amounts are stored in CAD; render them in the order's display currency so a
+  // USD quote never shows a CAD figure with a bare "$" (Ryan: avoid confusion).
+  const money = (n: number) => formatOrderMoney(n, order.currency, order.fx_rate)
+  const currencyLabel = orderCurrencyLabel(order.currency)
   const steps = isCpo ? CPO_STEPS : TRADE_IN_STEPS
   const currentStepIdx = getStepIndex(steps, order.status)
 
@@ -359,7 +363,8 @@ export default function CustomerOrderDetailPage() {
                   {isCpo ? 'Your CPO quote is ready' : 'Your quote is ready'}
                 </p>
                 <p className="text-sm text-purple-700 dark:text-purple-300 mt-0.5">
-                  Total: <strong>{formatCurrency(quotedAmount)}</strong>
+                  Total: <strong>{money(quotedAmount)}</strong>
+                  <span className="ml-1.5 inline-flex items-center rounded-full border border-purple-300 dark:border-purple-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide align-middle">{currencyLabel}</span>
                   {isCpo ? ' — CPO devices will be shipped to you after acceptance.' : ' — Accept to proceed with shipping your devices to us.'}
                 </p>
               </div>
@@ -561,7 +566,7 @@ export default function CustomerOrderDetailPage() {
                         {' → '}
                         Inspected: <strong className="capitalize text-amber-700 dark:text-amber-400">{item.actual_condition}</strong>
                         {item.unit_price != null && (
-                          <span className="ml-2 font-medium text-slate-700 dark:text-slate-300">· Revised price: {formatCurrency(item.unit_price)}</span>
+                          <span className="ml-2 font-medium text-slate-700 dark:text-slate-300">· Revised price: {money(item.unit_price)}</span>
                         )}
                       </p>
                     </div>
@@ -613,7 +618,7 @@ export default function CustomerOrderDetailPage() {
               <p className="font-semibold text-teal-800 dark:text-teal-200">Payment is being processed</p>
               <p className="text-sm text-teal-700 dark:text-teal-300 mt-0.5">
                 All devices have been verified and your payment of{' '}
-                <strong>{formatCurrency(order.final_amount ?? quotedAmount)}</strong> is being prepared.
+                <strong>{money(order.final_amount ?? quotedAmount)}</strong> is being prepared.
                 You will receive a notification once it has been sent — typically within 1–2 business days.
               </p>
             </div>
@@ -630,7 +635,7 @@ export default function CustomerOrderDetailPage() {
               <p className="font-semibold text-emerald-800 dark:text-emerald-200">Payment has been sent!</p>
               <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">
                 Your payment of{' '}
-                <strong>{formatCurrency(order.final_amount ?? quotedAmount)}</strong>{' '}
+                <strong>{money(order.final_amount ?? quotedAmount)}</strong>{' '}
                 has been processed
                 {order.payment_method ? ` via ${order.payment_method}` : ''}.
                 Please allow 1–2 business days for it to reflect in your account.
@@ -685,7 +690,7 @@ export default function CustomerOrderDetailPage() {
               <p className="text-sm text-green-700 dark:text-green-300 mt-0.5">
                 {isCpo
                   ? 'Your CPO devices have been delivered. Thank you for your order!'
-                  : `Your trade-in is complete. Thank you! Final amount: ${formatCurrency(order.final_amount ?? quotedAmount)}.`}
+                  : `Your trade-in is complete. Thank you! Final amount: ${money(order.final_amount ?? quotedAmount)}.`}
               </p>
             </div>
           </CardContent>
@@ -711,11 +716,11 @@ export default function CustomerOrderDetailPage() {
           </p>
           <p className="font-semibold mt-1">
             {(order.final_amount ?? 0) > 0
-              ? formatCurrency(order.final_amount!)
+              ? money(order.final_amount!)
               : quotedAmount > 0
                 ? priceConfirmedByAdmin
-                  ? formatCurrency(quotedAmount)
-                  : `Est. ${formatCurrency(quotedAmount)}`
+                  ? money(quotedAmount)
+                  : `Est. ${money(quotedAmount)}`
                 : '—'}
           </p>
           {!priceConfirmedByAdmin && quotedAmount > 0 && (
@@ -773,7 +778,7 @@ export default function CustomerOrderDetailPage() {
                         <TableCell className="text-right tabular-nums">{displayQty}</TableCell>
                         {showPriceCol && (
                           <TableCell className="text-right tabular-nums font-medium">
-                            {unitPrice != null ? formatCurrency(unitPrice) : '—'}
+                            {unitPrice != null ? money(unitPrice) : '—'}
                           </TableCell>
                         )}
                       </TableRow>
