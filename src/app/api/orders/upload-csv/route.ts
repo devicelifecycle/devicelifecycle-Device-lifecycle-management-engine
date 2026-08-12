@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import type { AuthContext } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { OrderService } from '@/services/order.service'
+import { EmailService } from '@/services/email.service'
 import { sanitizeCsvCell } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 import { matchDeviceFromCsv, isPlausibleBrand, extractColor, stripColor, computeDeviceIdentityKey } from '@/lib/device-match'
@@ -827,6 +829,54 @@ export async function POST(request: NextRequest) {
             error: `Failed to save line items: ${itemsError.message || 'database error'}`,
           }, { status: 500 })
         }
+      }
+    }
+
+    // Customers have already reviewed their upload — auto-submit so the order
+    // enters the pricing queue and a confirmation is sent, matching the manual
+    // /api/orders path. Without this the order stayed in 'draft' with no email,
+    // even though the UI said it was created. Internal-staff uploads stay draft.
+    if (effectiveRole === 'customer') {
+      try {
+        const submitted = await OrderService.transitionOrder(
+          (order as { id: string }).id,
+          'submitted',
+          authUser.id,
+          'Auto-submitted by customer (CSV upload)',
+        )
+        order = submitted as unknown as Record<string, unknown>
+      } catch (err) {
+        console.error('Failed to auto-submit customer CSV order:', err)
+        // Non-fatal — the order stays in draft and the client tells the customer to submit it.
+      }
+
+      // Only confirm to the customer once the order actually reached 'submitted'.
+      if ((order as { status?: string }).status === 'submitted') {
+        const submittedOrder = order as { id: string; order_number: string }
+        ;(async () => {
+          const { data: cust } = await supabase
+            .from('customers')
+            .select('contact_email, contact_name, contact_phone')
+            .eq('id', customer_id)
+            .single()
+          const orderTypeLabel = effectiveOrderType === 'cpo' ? 'CPO' : 'Trade-In'
+          if (cust?.contact_email) {
+            await EmailService.sendOrderConfirmationEmail({
+              to: cust.contact_email,
+              recipientName: cust.contact_name || 'Customer',
+              orderNumber: submittedOrder.order_number,
+              orderId: submittedOrder.id,
+              orderType: effectiveOrderType,
+              itemCount: totalQuantity,
+            })
+          }
+          if (cust?.contact_phone && EmailService.isTwilioConfigured()) {
+            await EmailService.sendSMS(
+              cust.contact_phone,
+              `[Byte-Back] Order #${submittedOrder.order_number} confirmed. Your ${orderTypeLabel} order was received and is now being reviewed.`.slice(0, 160),
+            )
+          }
+        })().catch(err => console.error('CSV order confirmation email error:', err))
       }
     }
 
