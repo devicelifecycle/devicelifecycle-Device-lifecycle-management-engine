@@ -275,7 +275,7 @@ async function notifyCustomer(
 <p>After expiry, you'll need to request a new quote and market prices may have changed.</p>
 <p><a href="${orderUrl}" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review &amp; Accept Quote</a></p>
 <p style="color:#6b7280;font-size:12px;margin-top:24px">If you have questions, reply to this email or contact our team.</p>`
-    smsText = `[DLM] Your quote for order #${order.order_number} expires in ${d} days. Log in to accept before it expires.`
+    smsText = `[Byte-Back] Your quote for order #${order.order_number} expires in ${d} days. Log in to accept before it expires.`
 
     // In-app + email + SMS, then return (skip the common notification block below)
     const { data: custUsers } = await supabase
@@ -315,7 +315,7 @@ async function notifyCustomer(
     message = `Your trade-in quote for order #${order.order_number} has expired after 30 days. Please contact us to get a new quote.`
     emailSubject = `Quote Expired — Order #${order.order_number}`
     emailBody = `<h2>Quote Expired</h2><p>Your trade-in quote for order <b>#${order.order_number}</b> has expired after the 30-day approval window.</p><p>Market prices may have changed since the original quote. Please log in to request a new quote, or contact our team for assistance.</p>`
-    smsText = `[DLM] Your quote for order #${order.order_number} has expired (30 days). Please request a new quote.`
+    smsText = `[Byte-Back] Your quote for order #${order.order_number} has expired (30 days). Please request a new quote.`
   } else {
     title = `Price Update — Order #${order.order_number}`
     message = `Market prices have ${direction} by ~${diffPercent}% since your quote for order #${order.order_number}. Log in to review the updated pricing.`
@@ -333,7 +333,7 @@ async function notifyCustomer(
     }
 
     emailBody = `<h2>Price Update for Your Trade-In Quote</h2><p>Market prices have <b>${direction}</b> by approximately <b>${diffPercent}%</b> since we sent your quote for order <b>#${order.order_number}</b>.</p>${itemsHtml}<p>Your original quote is still valid. Log in to review and accept or request a requote at the new market price.</p><p style="color:#6b7280;font-size:12px">This is an automated notification from Byte-Back price monitoring.</p>`
-    smsText = `[DLM] Prices ${direction} ~${diffPercent}% for order #${order.order_number}. Log in to review.`
+    smsText = `[Byte-Back] Prices ${direction} ~${diffPercent}% for order #${order.order_number}. Log in to review.`
   }
 
   // 1. In-app notification to all customer users (price_change: skipped — admin must trigger email manually)

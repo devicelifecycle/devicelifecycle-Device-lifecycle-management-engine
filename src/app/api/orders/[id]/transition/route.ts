@@ -280,7 +280,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             vendor.contact_phone && EmailService.isTwilioConfigured()
               ? EmailService.sendSMS(
                   vendor.contact_phone,
-                  `[DLM] New CPO Order #${currentOrder.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
+                  `[Byte-Back] New CPO Order #${currentOrder.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
                 ).catch(() => {})
               : null,
           ]).filter(Boolean),

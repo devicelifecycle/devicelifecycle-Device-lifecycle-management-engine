@@ -111,7 +111,7 @@ export async function PATCH(
         if (vendor.contact_phone && EmailService.isTwilioConfigured()) {
           EmailService.sendSMS(
             vendor.contact_phone,
-            `[DLM] ${vendorTitle}. ${vendorMessage}`.slice(0, 160)
+            `[Byte-Back] ${vendorTitle}. ${vendorMessage}`.slice(0, 160)
           ).catch((err) => console.error('Failed to SMS vendor:', err))
         }
       }
@@ -167,7 +167,7 @@ export async function PATCH(
           if (customer.contact_phone && EmailService.isTwilioConfigured()) {
             EmailService.sendSMS(
               customer.contact_phone,
-              `[DLM] ${rejTitle}. ${rejMsg}`.slice(0, 160)
+              `[Byte-Back] ${rejTitle}. ${rejMsg}`.slice(0, 160)
             ).catch((err) => console.error('Failed to SMS customer (rejection):', err))
           }
         }
@@ -239,7 +239,7 @@ export async function PATCH(
             if (customer.contact_phone && EmailService.isTwilioConfigured()) {
               EmailService.sendSMS(
                 customer.contact_phone,
-                `[DLM] ${custTitle}. ${custMessage}`.slice(0, 160)
+                `[Byte-Back] ${custTitle}. ${custMessage}`.slice(0, 160)
               ).catch((err) => console.error('Failed to SMS customer:', err))
             }
           }

@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
       if (vendor?.contact_phone && EmailService.isTwilioConfigured()) {
         EmailService.sendSMS(
           vendor.contact_phone,
-          `[DLM] Bid Expired — Order #${label}. Your bid (${bidSummary}) has expired. Submit a new bid if the order is still open.`.slice(0, 160)
+          `[Byte-Back] Bid Expired — Order #${label}. Your bid (${bidSummary}) has expired. Submit a new bid if the order is still open.`.slice(0, 160)
         ).catch(() => {})
       }
 

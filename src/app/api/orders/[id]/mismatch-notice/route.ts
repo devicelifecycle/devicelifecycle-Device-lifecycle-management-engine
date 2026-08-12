@@ -93,7 +93,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const customerSmsSent = customerRecord?.contact_phone && EmailService.isTwilioConfigured()
       ? await EmailService.sendSMS(
           customerRecord.contact_phone,
-          `[DLM] Order ${order.order_number}: ${mismatchedItems.length} device(s) need quote mismatch review. Please check your updated order details.`.slice(0, 160)
+          `[Byte-Back] Order ${order.order_number}: ${mismatchedItems.length} device(s) need quote mismatch review. Please check your updated order details.`.slice(0, 160)
         )
       : false
 
