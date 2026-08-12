@@ -11,7 +11,7 @@ import { VendorService } from '@/services/vendor.service'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { submitVendorBidSchema } from '@/lib/validations'
-import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit'
 export const dynamic = 'force-dynamic'
 
 
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(`vendor-bid:${getClientIp(request)}`, { limit: 20, windowSeconds: 60 })
+    const rl = await checkRateLimitAsync(`vendor-bid:${getClientIp(request)}`, { limit: 20, windowSeconds: 60 })
     if (!rl.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
     const authCtx = await requireAuth()

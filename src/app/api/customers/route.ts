@@ -8,7 +8,7 @@ import { CustomerService } from '@/services/customer.service'
 import { customerSchema } from '@/lib/validations'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
 import { safeErrorMessage } from '@/lib/utils'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { quotaBlockMessage } from '@/lib/quota'
 import { nonPlatformTenantId } from '@/lib/tenant-resolve'
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(`customer-create:${getClientIp(request)}`, RATE_LIMITS.api)
+    const rl = await checkRateLimitAsync(`customer-create:${getClientIp(request)}`, RATE_LIMITS.api)
     if (!rl.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
     const auth = await requireAuth()

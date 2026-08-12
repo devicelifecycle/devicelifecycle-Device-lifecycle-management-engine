@@ -8,7 +8,7 @@ import Groq from 'groq-sdk'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { getSystemPrompt, getActivePersonaLabel, type ChatContext } from '@/lib/chat/prompts'
 import { getToolsForRole, executeTool } from '@/lib/chat/tools'
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/rate-limit'
 import type { UserRole } from '@/types'
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limit
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-    const rl = checkRateLimit(`chat:${ip}`, RATE_LIMITS.api)
+    const rl = await checkRateLimitAsync(`chat:${ip}`, RATE_LIMITS.api)
     if (!rl.allowed) {
       return new Response(
         JSON.stringify({ error: 'Rate limit exceeded. Try again shortly.' }),

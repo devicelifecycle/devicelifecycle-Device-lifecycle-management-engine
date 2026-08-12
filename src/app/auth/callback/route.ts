@@ -6,11 +6,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
   // Rate limit auth callbacks: 10 per 15 min per IP
-  const rl = checkRateLimit(`auth-callback:${getClientIp(request)}`, RATE_LIMITS.auth)
+  const rl = await checkRateLimitAsync(`auth-callback:${getClientIp(request)}`, RATE_LIMITS.auth)
   if (!rl.allowed) {
     return NextResponse.redirect(new URL('/login?error=rate_limited', request.url))
   }

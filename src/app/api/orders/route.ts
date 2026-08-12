@@ -11,7 +11,7 @@ import { EmailService } from '@/services/email.service'
 import { NotificationService } from '@/services/notification.service'
 import { sanitizeOrdersForVendor } from '@/lib/order-visibility'
 import { orderSchema, orderFiltersSchema } from '@/lib/validations'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { featureBlockMessage, quotaBlockMessage } from '@/lib/quota'
 import { nonPlatformTenantId } from '@/lib/tenant-resolve'
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(`orders-create:${getClientIp(request)}`, RATE_LIMITS.api)
+    const rl = await checkRateLimitAsync(`orders-create:${getClientIp(request)}`, RATE_LIMITS.api)
     if (!rl.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
     const auth = await requireAuth()

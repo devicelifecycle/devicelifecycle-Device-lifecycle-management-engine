@@ -7,7 +7,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { AuditService } from '@/services/audit.service'
 import { NotificationService } from '@/services/notification.service'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { isValidUUID } from '@/lib/utils'
 import type { OrderStatus } from '@/types'
 export const dynamic = 'force-dynamic'
@@ -17,7 +17,7 @@ const MAX_BATCH_SIZE = 50
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(`bulk-transition:${getClientIp(request)}`, RATE_LIMITS.api)
+    const rl = await checkRateLimitAsync(`bulk-transition:${getClientIp(request)}`, RATE_LIMITS.api)
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }

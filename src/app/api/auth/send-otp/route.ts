@@ -8,13 +8,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { EmailService } from '@/services/email.service'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(`send-otp:${getClientIp(request)}`, { ...RATE_LIMITS.api, limit: 5 })
+    const rl = await checkRateLimitAsync(`send-otp:${getClientIp(request)}`, { ...RATE_LIMITS.api, limit: 5 })
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 })
     }

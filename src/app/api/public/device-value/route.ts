@@ -8,14 +8,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { isValidUUID } from '@/lib/utils'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const rl = checkRateLimit(`public-device-value:${getClientIp(request)}`, RATE_LIMITS.public)
+  const rl = await checkRateLimitAsync(`public-device-value:${getClientIp(request)}`, RATE_LIMITS.public)
   if (!rl.allowed) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }

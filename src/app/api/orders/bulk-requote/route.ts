@@ -12,7 +12,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import { AuditService } from '@/services/audit.service'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { bulkRequoteOrdersSchema } from '@/lib/validations'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -27,7 +27,7 @@ function mapDeviceConditionToPricingCondition(condition?: string): 'new' | 'exce
 
 export async function POST(request: NextRequest) {
   try {
-    const rl = checkRateLimit(`bulk-requote:${getClientIp(request)}`, RATE_LIMITS.api)
+    const rl = await checkRateLimitAsync(`bulk-requote:${getClientIp(request)}`, RATE_LIMITS.api)
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }

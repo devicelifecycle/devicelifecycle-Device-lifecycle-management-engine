@@ -9,7 +9,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
 import { PricingModelRegistry } from '@/models/pricing'
 import { normalizeCompetitorConditionInput, priceCalculationSchema, priceCalculationV2Schema } from '@/lib/validations'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 export const dynamic = 'force-dynamic'
 
 
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate-limit: 60 calculate requests per minute per IP (CPU-intensive endpoint)
     const ip = getClientIp(request)
-    const rl = checkRateLimit(`pricing-calculate:${ip}`, { limit: 60, windowSeconds: 60 })
+    const rl = await checkRateLimitAsync(`pricing-calculate:${ip}`, { limit: 60, windowSeconds: 60 })
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many requests' }, {
         status: 429,

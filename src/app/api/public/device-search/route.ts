@@ -5,13 +5,13 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { sanitizeSearchInput } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const rl = checkRateLimit(`public-device-search:${getClientIp(request)}`, RATE_LIMITS.public)
+  const rl = await checkRateLimitAsync(`public-device-search:${getClientIp(request)}`, RATE_LIMITS.public)
   if (!rl.allowed) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
