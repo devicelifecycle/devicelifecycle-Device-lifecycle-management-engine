@@ -416,7 +416,7 @@ export class NotificationService {
       )
     }
 
-    const smsText = this.buildSmsText(`[DLM] Order #${order.order_number}:`, messageText)
+    const smsText = this.buildSmsText(`[Byte-Back] Order #${order.order_number}:`, messageText)
 
     const seenPhones = new Set<string>()
     const uniqueSmsTargets = smsTargets.filter(target => {
@@ -580,7 +580,7 @@ export class NotificationService {
 
       await this.sendSmsIfConfigured(
         (user as { phone?: string | null }).phone,
-        this.buildSmsText(`[DLM] ${subject}`, message)
+        this.buildSmsText(`[Byte-Back] ${subject}`, message)
       )
     } catch (err) {
       console.error('[NotificationService] SLA email failed:', err)
@@ -712,7 +712,7 @@ export class NotificationService {
 
       await this.sendSmsIfConfigured(
         customer.contact_phone,
-        this.buildSmsText(`[DLM] ${title}`, message)
+        this.buildSmsText(`[Byte-Back] ${title}`, message)
       )
     } catch (err) {
       console.error('Failed to send exception notification:', err)
@@ -793,7 +793,7 @@ export class NotificationService {
 
       await this.sendSmsIfConfigured(
         customer.contact_phone,
-        this.buildSmsText(`[DLM] ${title}`, message)
+        this.buildSmsText(`[Byte-Back] ${title}`, message)
       )
     } catch (err) {
       console.error('Failed to send exception resolved notification:', err)

@@ -169,7 +169,7 @@ function LoginPageInner() {
 
               {/* Eyebrow label */}
               <div className="eyebrow-label w-fit">
-                Enterprise ITAD Platform
+                Byte-Back
               </div>
 
               {/* Main headline */}

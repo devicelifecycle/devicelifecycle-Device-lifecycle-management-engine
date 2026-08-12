@@ -582,7 +582,7 @@ export class EmailService {
           <tr>
             <td style="padding:32px;">
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
-              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your administrator immediately.</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your Byte-Back administrator at support@byte-back.ca immediately.</p>
             </td>
           </tr>
           <tr>

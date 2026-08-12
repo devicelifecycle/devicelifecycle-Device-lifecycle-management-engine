@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
       if (customer?.contact_phone && EmailService.isTwilioConfigured()) {
         await EmailService.sendSMS(
           customer.contact_phone,
-          `[DLM] Order #${order.order_number} confirmed. Your ${orderTypeLabel} order was received and is now being reviewed.`.slice(0, 160)
+          `[Byte-Back] Order #${order.order_number} confirmed. Your ${orderTypeLabel} order was received and is now being reviewed.`.slice(0, 160)
         )
       }
     })().catch(err => console.error('Order confirmation email error:', err))
@@ -296,7 +296,7 @@ export async function POST(request: NextRequest) {
             vendor.contact_phone && EmailService.isTwilioConfigured()
               ? EmailService.sendSMS(
                   vendor.contact_phone,
-                  `[DLM] New CPO Order #${order.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
+                  `[Byte-Back] New CPO Order #${order.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
                 ).catch(() => {})
               : null,
           ]).filter(Boolean),

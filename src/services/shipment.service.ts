@@ -736,7 +736,7 @@ export class ShipmentService {
           if (customerRecord.contact_phone && EmailService.isTwilioConfigured()) {
             await EmailService.sendSMS(
               customerRecord.contact_phone,
-              `[DLM] ${title}: expected ${expectedQuantity}, received ${receivedQuantity}. Review ${orderUrl}`.slice(0, 160)
+              `[Byte-Back] ${title}: expected ${expectedQuantity}, received ${receivedQuantity}. Review ${orderUrl}`.slice(0, 160)
             ).catch(() => {})
           }
         }
