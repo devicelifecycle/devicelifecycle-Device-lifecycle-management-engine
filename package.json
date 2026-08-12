@@ -27,6 +27,7 @@
     "db:reset": "./scripts/db-reset-clean.sh",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "load-test": "node scripts/load-test.mjs",
     "agent:1": "npx tsx scripts/agents/agent1-full-catalog.ts",
     "agent:2": "npx tsx scripts/agents/agent2-condition-matrix.ts",
     "agent:3": "npx tsx scripts/agents/agent3-input-normalization.ts",
