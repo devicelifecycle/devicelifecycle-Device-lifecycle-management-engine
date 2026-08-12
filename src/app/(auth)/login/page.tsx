@@ -111,8 +111,6 @@ function LoginPageInner() {
   }
 
   return (
-    // Force dark-mode design system for the login page
-    <div className="dark">
       <div className="app-shell-bg grain-overlay relative flex min-h-screen flex-col overflow-hidden text-foreground">
 
         {/* Loading overlay */}
@@ -405,7 +403,6 @@ function LoginPageInner() {
         </div>
 
       </div>
-    </div>
   )
 }
 
@@ -413,10 +410,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="dark">
-          <div className="app-shell-bg grain-overlay relative flex min-h-screen items-center justify-center text-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
+        <div className="app-shell-bg grain-overlay relative flex min-h-screen items-center justify-center text-foreground">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       }
     >
