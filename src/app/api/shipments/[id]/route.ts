@@ -102,22 +102,22 @@ export async function PATCH(
     }
 
     if (data.status) {
-      // Carrier and tracking number are required when setting or changing the shipment status
-      const metadata = data.metadata as Record<string, unknown> | undefined
-      const carrier = metadata?.carrier as string | undefined
-      const trackingNumber = metadata?.tracking_number as string | undefined
-      if (!carrier || !trackingNumber) {
+      // A shipment must already have a carrier and tracking number before its
+      // status can be advanced. These are set at creation time and live on the
+      // shipment record — the client does not (and should not) re-send them on a
+      // status update, so validate against the loaded shipment, not the request body.
+      if (!shipment.carrier || !shipment.tracking_number) {
         return NextResponse.json(
-          { error: 'carrier and tracking_number are required when updating shipment status' },
+          { error: 'Shipment is missing a carrier or tracking number' },
           { status: 400 }
         )
       }
-      const shipment = await ShipmentService.updateShipmentStatus(
+      const updated = await ShipmentService.updateShipmentStatus(
         (await params).id,
         data.status,
         data.metadata
       )
-      return NextResponse.json(shipment)
+      return NextResponse.json(updated)
     }
 
     return NextResponse.json({ error: 'Invalid update' }, { status: 400 })
