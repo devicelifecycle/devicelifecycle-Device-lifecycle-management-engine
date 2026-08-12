@@ -1,4 +1,4 @@
-# deploy.ps1 — push all changes to GitHub + Supabase in one shot
+﻿# deploy.ps1 — push all changes to GitHub + Supabase in one shot
 # Usage:  .\deploy.ps1
 #         .\deploy.ps1 "your commit message"
 
