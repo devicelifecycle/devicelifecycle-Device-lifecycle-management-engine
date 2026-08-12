@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, Files, ChevronDown } from 'lucide-react'
+import { Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, Files, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers, useMyCustomer } from '@/hooks/useCustomers'
@@ -776,7 +776,7 @@ export default function NewOrderPage() {
 
       try {
         submittedRef.current = true
-        const results: { id: string; type: string }[] = []
+        const results: { id: string; type: string; status?: string }[] = []
 
         for (const [orderType, csvRows] of [['trade_in', tradeInCsvRows], ['cpo', cpoCsvRows]] as const) {
           if (csvRows.length === 0) continue
@@ -823,16 +823,30 @@ export default function NewOrderPage() {
             return
           }
 
-          results.push({ id: data.order?.id, type: orderType === 'cpo' ? 'CPO' : 'Trade-In' })
+          results.push({ id: data.order?.id, type: orderType === 'cpo' ? 'CPO' : 'Trade-In', status: data.order?.status })
         }
 
-        if (results.length === 1) {
-          localStorage.removeItem(DRAFT_KEY)
-          toast.success(`${results[0].type} order created — ${allCsvRows.length} items`)
+        localStorage.removeItem(DRAFT_KEY)
+        // A customer order is only truly submitted once its status leaves 'draft'.
+        // The upload API auto-submits customer orders but treats a failed
+        // transition as non-fatal (e.g. rows missing a Model), leaving it in
+        // 'draft' — so confirm the real status instead of always claiming success.
+        const notSubmitted = results.filter(r => r.status === 'draft')
+        if (isCustomer && notSubmitted.length > 0) {
+          toast.warning(
+            `Your ${notSubmitted.map(r => r.type).join(' & ')} order was created but could NOT be submitted automatically — some rows may be missing a required field (e.g. Model). Please open it, fix the flagged rows and press Submit. No confirmation email has been sent yet.`,
+            { duration: 9000 }
+          )
+          router.replace(results.length === 1 && results[0].id ? (isCustomer ? `/customer/orders/${results[0].id}` : `/orders/${results[0].id}`) : (isCustomer ? '/customer/orders' : '/orders'))
+        } else if (results.length === 1) {
+          toast.success(isCustomer
+            ? `${results[0].type} order created and submitted — ${allCsvRows.length} items. You'll receive an email confirmation shortly.`
+            : `${results[0].type} order created — ${allCsvRows.length} items`)
           router.replace(isCustomer ? `/customer/orders/${results[0].id}` : `/orders/${results[0].id}`)
         } else if (results.length > 1) {
-          localStorage.removeItem(DRAFT_KEY)
-          toast.success(`Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
+          toast.success(isCustomer
+            ? `Created ${results.length} orders and submitted them — you'll receive an email confirmation shortly.`
+            : `Created ${results.length} orders: ${results.map(r => r.type).join(' & ')}`)
           router.replace(isCustomer ? '/customer/orders' : '/orders')
         }
         return
@@ -940,10 +954,7 @@ export default function NewOrderPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href={isCustomer ? '/customer/requests' : '/orders'}>
-          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-        </Link>
+      <div>
         <div>
           <h1 className="text-2xl font-bold">New Order</h1>
           <p className="text-muted-foreground">
@@ -1085,7 +1096,7 @@ export default function NewOrderPage() {
                 onClick={() => setManualEntryOpen(prev => !prev)}
                 className="flex w-full items-center justify-between gap-2 p-4 text-left"
               >
-                <span className="font-semibold text-sm">1. Manual Entry</span>
+                <span className="font-semibold text-sm">1. Manual Entry Option</span>
                 <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${manualEntryOpen ? 'rotate-180' : ''}`} />
               </button>
               {manualEntryOpen && (
@@ -1105,6 +1116,11 @@ export default function NewOrderPage() {
                     )}
                   </div>
                 </div>
+                {items.length > 0 && (
+                  <p className="text-center text-xs text-muted-foreground">
+                    <span className="font-semibold text-destructive">*</span> Device, Quantity, Condition and Storage are required. IMEI/Serial, Color and Notes are optional.
+                  </p>
+                )}
                 {items.length === 0 ? (
                   <p className="text-center py-6 font-semibold text-muted-foreground">No items added yet. Click the Trade-In Item button above to add devices.</p>
                 ) : (
@@ -1293,13 +1309,13 @@ export default function NewOrderPage() {
                                 <Input 
                                   value={item.serial_number || ''} 
                                   onChange={e => updateItem(index, 'serial_number', e.target.value)} 
-                                  placeholder="IMEI / Serial Number"
+                                  placeholder="IMEI / Serial Number (optional)"
                                   className="font-mono text-sm"
                                 />
                                 <Input 
                                   value={item.color || ''} 
                                   onChange={e => updateItem(index, 'color', e.target.value)} 
-                                  placeholder="Color (e.g., Midnight, Silver)"
+                                  placeholder="Color (optional, e.g. Midnight)"
                                 />
                                 <Input 
                                   value={item.notes || ''} 
@@ -1342,7 +1358,7 @@ export default function NewOrderPage() {
                 onClick={() => setDownloadTemplatesOpen(prev => !prev)}
                 className="flex w-full items-center justify-between gap-2 p-4 text-left"
               >
-                <span className="font-semibold text-sm">2. Download Templates</span>
+                <span className="font-semibold text-sm">2A. Retrieve Standard Templates</span>
                 <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${downloadTemplatesOpen ? 'rotate-180' : ''}`} />
               </button>
               {downloadTemplatesOpen && (
@@ -1396,7 +1412,7 @@ export default function NewOrderPage() {
                 onClick={() => setUploadSpreadsheetOpen(prev => !prev)}
                 className="flex w-full items-center justify-between gap-2 p-4 text-left"
               >
-                <span className="font-semibold text-sm">3. Upload Custom Spreadsheet</span>
+                <span className="font-semibold text-sm">2B. Upload Template / Spreadsheet</span>
                 <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${uploadSpreadsheetOpen ? 'rotate-180' : ''}`} />
               </button>
               {uploadSpreadsheetOpen && (
@@ -1521,12 +1537,12 @@ export default function NewOrderPage() {
                           <TableRow>
                             <TableHead className="w-[90px]">Type</TableHead>
                             <TableHead className="w-[60px]">Match</TableHead>
-                            <TableHead>Make</TableHead>
-                            <TableHead>Model</TableHead>
+                            <TableHead className="min-w-[130px]">Make</TableHead>
+                            <TableHead className="min-w-[220px]">Model</TableHead>
                             <TableHead className="w-[70px]">Qty</TableHead>
                             <TableHead className="w-[110px]">Condition</TableHead>
                             <TableHead className="w-[100px]">Storage</TableHead>
-                            <TableHead>Notes</TableHead>
+                            <TableHead className="min-w-[120px]">Notes</TableHead>
                             <TableHead className="w-[40px]"></TableHead>
                           </TableRow>
                         </TableHeader>
