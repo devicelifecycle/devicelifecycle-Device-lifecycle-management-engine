@@ -1315,6 +1315,22 @@ export default function NewOrderPage() {
                     )
                   })
                 )}
+                {/* Prompt to add more devices without scrolling back to the top */}
+                {items.length > 0 && (
+                  <div className="flex flex-col items-center gap-2 border-t pt-4 text-center">
+                    <p className="text-sm text-muted-foreground">Need to add another device to this order?</p>
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => addItem('trade_in')} className="border-green-600 text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30">
+                        <Plus className="mr-2 h-3 w-3" />Add Trade-In Item
+                      </Button>
+                      {canCreateCpoOrder && (
+                        <Button type="button" size="sm" variant="outline" onClick={() => addItem('cpo')} className="border-blue-600 text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30">
+                          <Plus className="mr-2 h-3 w-3" />Add CPO Item
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
                 </div>
               )}
             </div>
