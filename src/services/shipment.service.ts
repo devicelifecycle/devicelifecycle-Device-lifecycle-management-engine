@@ -200,6 +200,58 @@ export class ShipmentService {
   }
 
   /**
+   * Email + SMS the order's customer about a shipment's current status
+   * (carrier + tracking). Reloads the shipment via service role so callers only
+   * pass an id. Fire-and-forget friendly — it swallows its own errors so it can
+   * never break the status update that triggered it.
+   */
+  static async notifyCustomerOfShipmentStatus(shipmentId: string): Promise<void> {
+    try {
+      const supabase = createServiceRoleClient()
+      const { data: shipment } = await supabase
+        .from('shipments')
+        .select('id, order_id, status, carrier, tracking_number, direction')
+        .eq('id', shipmentId)
+        .single()
+      if (!shipment?.order_id || !shipment.tracking_number) return
+
+      const { data: order } = await supabase
+        .from('orders')
+        .select('order_number, customer:customers(contact_email, contact_name, contact_phone)')
+        .eq('id', shipment.order_id)
+        .single()
+      if (!order) return
+
+      const customerRaw = order.customer as unknown
+      const customer = (Array.isArray(customerRaw) ? customerRaw[0] : customerRaw) as
+        | { contact_email?: string | null; contact_name?: string | null; contact_phone?: string | null }
+        | null
+      if (!customer?.contact_email) return
+
+      await EmailService.sendShipmentStatusEmail({
+        to: customer.contact_email,
+        recipientName: customer.contact_name || 'Customer',
+        orderNumber: order.order_number as string,
+        orderId: shipment.order_id as string,
+        trackingNumber: shipment.tracking_number as string,
+        carrier: (shipment.carrier as string) || 'Carrier',
+        status: shipment.status as string,
+        direction: shipment.direction as string | undefined,
+      }).catch(() => {})
+
+      if (customer.contact_phone && EmailService.isTwilioConfigured()) {
+        const label = String(shipment.status).replace(/_/g, ' ')
+        await EmailService.sendSMS(
+          customer.contact_phone,
+          `[Byte-Back] Order #${order.order_number}: shipment ${label}. ${shipment.carrier} tracking ${shipment.tracking_number}.`.slice(0, 160),
+        ).catch(() => {})
+      }
+    } catch (err) {
+      console.error('notifyCustomerOfShipmentStatus failed:', err)
+    }
+  }
+
+  /**
    * Attach purchased label data to shipment
    * Note: DB columns are named shippo_* for backward compatibility
    */

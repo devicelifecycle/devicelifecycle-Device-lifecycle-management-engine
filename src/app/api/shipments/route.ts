@@ -193,6 +193,10 @@ export async function POST(request: NextRequest) {
       created_by_id: authUser.id,
     })
 
+    // Email + SMS the customer that a shipment was created, with tracking —
+    // fire-and-forget. Subsequent status changes email them too (PATCH route).
+    void ShipmentService.notifyCustomerOfShipmentStatus(shipment.id)
+
     const responsePayload: Shipment = shipment
 
     await advanceTradeInToInboundTransit()

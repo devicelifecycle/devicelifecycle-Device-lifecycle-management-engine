@@ -117,6 +117,9 @@ export async function PATCH(
         data.status,
         data.metadata
       )
+      // Notify the customer (email + SMS) on every status change — fire-and-forget
+      // so a mail hiccup never fails the status update.
+      void ShipmentService.notifyCustomerOfShipmentStatus(shipment.id)
       return NextResponse.json(updated)
     }
 

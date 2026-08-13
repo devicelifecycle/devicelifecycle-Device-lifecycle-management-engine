@@ -704,6 +704,93 @@ export class EmailService {
   }
 
   /**
+   * Send a shipment status update to the customer, with carrier + tracking.
+   * Fired on shipment creation and on every subsequent status change.
+   */
+  static async sendShipmentStatusEmail(params: {
+    to: string
+    recipientName: string
+    orderNumber: string
+    orderId: string
+    trackingNumber: string
+    carrier: string
+    status: string
+    direction?: string
+  }): Promise<boolean> {
+    const { to, recipientName, orderNumber, orderId, trackingNumber, carrier, status, direction } = params
+    const orderUrl = getAppPath(`/orders/${orderId}`)
+
+    const STATUS_COPY: Record<string, { label: string; message: string }> = {
+      label_created: { label: 'Shipment Created', message: `A shipping label has been created${direction === 'outbound' ? ' for your order' : ''}. You can track it with the details below.` },
+      picked_up: { label: 'Picked Up', message: 'The carrier has picked up the shipment and it is now in their network.' },
+      in_transit: { label: 'In Transit', message: 'Your shipment is on its way.' },
+      out_for_delivery: { label: 'Out for Delivery', message: 'Your shipment is out for delivery today.' },
+      delivered: { label: 'Delivered', message: 'Your shipment has been delivered.' },
+      exception: { label: 'Delivery Exception', message: 'There is a delay with your shipment. Our team is looking into it.' },
+    }
+    const copy = STATUS_COPY[status] || { label: status.replace(/_/g, ' '), message: 'Your shipment status has been updated.' }
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">${copy.message}</p>
+
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;background:#faf4ec;border-radius:8px;width:100%;border:1px solid #eaddcb;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 8px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Shipment Update</p>
+                    <p style="margin:0 0 4px;color:#18181b;font-size:14px;"><strong>Order #:</strong> ${orderNumber}</p>
+                    <p style="margin:0 0 4px;color:#18181b;font-size:14px;"><strong>Status:</strong> ${copy.label}</p>
+                    <p style="margin:0 0 4px;color:#18181b;font-size:14px;"><strong>Carrier:</strong> ${carrier}</p>
+                    <p style="margin:0;color:#18181b;font-size:14px;"><strong>Tracking #:</strong> ${trackingNumber}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background:#1d4ed8;border-radius:8px;">
+                    <a href="${orderUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">View Your Order</a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive an email each time this shipment's status changes. If you have questions, reply to this email or log in to the portal.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+    return this.sendEmail(to, `Order #${orderNumber} — ${copy.label} — ${APP_NAME}`, html)
+  }
+
+  /**
    * Send SLA reminder email to customer who hasn't responded to a quote.
    */
   static async sendSLAReminderEmail(params: {
