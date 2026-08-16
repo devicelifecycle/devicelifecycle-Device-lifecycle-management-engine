@@ -48,6 +48,52 @@ function getFromEmail(): string {
   return process.env.RESEND_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || 'Byte-Back <onboarding@resend.dev>'
 }
 
+/**
+ * Shared branded wrapper for every transactional email — the outer table, blue
+ * gradient header, and footer. Callers pass only the unique body HTML (the
+ * contents of the padded content cell). `footer` picks the copyright line:
+ * 'full' includes the tagline + "All rights reserved" (customer-facing mail),
+ * 'short' is a terse copyright (security/account mail).
+ */
+function emailShell(body: string, footer: 'full' | 'short' = 'full'): string {
+  const year = new Date().getFullYear()
+  const footerText = footer === 'short'
+    ? `&copy; ${year} ${APP_NAME}.`
+    : `&copy; ${year} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.`
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">${body}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">${footerText}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
 function getGmailTransporter(): Transporter | null {
   const user = process.env.GMAIL_USER
   const pass = process.env.GMAIL_APP_PASSWORD
@@ -297,27 +343,7 @@ export class EmailService {
     const orderUrl = getAppPath(`/orders/${orderId}`)
     const statusLabel = toStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <!-- Header -->
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <!-- Body -->
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">${message}</p>
 
@@ -340,21 +366,7 @@ export class EmailService {
                 </tr>
               </table>
 
-              <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions, reply to this email or contact our support team.</p>
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions, reply to this email or contact our support team.</p>`)
 
     return this.sendEmail(to, subject, html)
   }
@@ -377,25 +389,7 @@ export class EmailService {
     const credentialLabel = loginId ? 'Username (Login ID)' : 'Username (Email)'
     const credentialValue = loginId ?? to
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your account has been created on ${APP_NAME}. Use the credentials below to sign in:</p>
 
@@ -420,19 +414,7 @@ export class EmailService {
 
               <p style="margin:0 0 8px;color:#ef4444;font-size:13px;font-weight:500;">Please change your password after your first login (Profile → Change password).</p>
               <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions, contact your administrator.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+`)
 
     return this.sendEmail(to, `Account confirmation — Your login details for ${APP_NAME}`, html)
   }
@@ -448,25 +430,7 @@ export class EmailService {
   }): Promise<boolean> {
     const { to, recipientName, resetLink } = params
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">You requested a password reset. Click the button below to set a new password:</p>
 
@@ -479,19 +443,7 @@ export class EmailService {
               </table>
 
               <p style="margin:0 0 8px;color:#71717a;font-size:13px;">This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+`, 'short')
 
     return this.sendEmail(to, `Reset your password — ${APP_NAME}`, html)
   }
@@ -506,25 +458,7 @@ export class EmailService {
   }): Promise<boolean> {
     const { to, recipientName, otp } = params
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password reset verification code is:</p>
 
@@ -534,19 +468,7 @@ export class EmailService {
 
               <p style="margin:0 0 8px;color:#71717a;font-size:13px;">This code expires in 1 hour. Do not share it with anyone.</p>
               <p style="margin:0;color:#71717a;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+`, 'short')
 
     return this.sendEmail(to, `Your password reset code — ${APP_NAME}`, html)
   }
@@ -562,40 +484,10 @@ export class EmailService {
     const { to, recipientName } = params
     if (!to || to.endsWith('@login.local')) return false
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your Byte-Back administrator at support@byte-back.ca immediately.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME}.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+`, 'short')
 
     return this.sendEmail(to, `Password updated — ${APP_NAME}`, html)
   }
@@ -639,25 +531,7 @@ export class EmailService {
         <td style="padding:8px 0;color:#3f3f46;font-size:14px;line-height:1.5;">${s.text}</td>
       </tr>`).join('')
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your <strong>${typeLabel}</strong> order has been received. Here's what happens next.</p>
 
@@ -686,19 +560,7 @@ export class EmailService {
               </table>
 
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive an email at each stage. If you have questions, reply to this email or log in to the portal and view your order.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+`)
 
     return this.sendEmail(to, `Order #${orderNumber} Confirmed — ${APP_NAME}`, html)
   }
@@ -730,25 +592,7 @@ export class EmailService {
     }
     const copy = STATUS_COPY[status] || { label: status.replace(/_/g, ' '), message: 'Your shipment status has been updated.' }
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">${copy.message}</p>
 
@@ -773,19 +617,7 @@ export class EmailService {
               </table>
 
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive an email each time this shipment's status changes. If you have questions, reply to this email or log in to the portal.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+`)
 
     return this.sendEmail(to, `Order #${orderNumber} — ${copy.label} — ${APP_NAME}`, html)
   }
@@ -810,25 +642,7 @@ export class EmailService {
       ? `$${quotedAmount.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : null
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">
                 ${urgencyText}Your quote for Order #${orderNumber} is still awaiting your response.
@@ -866,19 +680,7 @@ export class EmailService {
               </table>
 
               <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions about the quote, reply to this email or contact our team.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+`)
 
     return this.sendEmail(to, `${urgencyText}Quote Awaiting Response — Order #${orderNumber}`, html)
   }
@@ -893,25 +695,7 @@ export class EmailService {
     const newOrderUrl = getAppPath('/orders/new/trade-in')
     const cadenceLabel = frequency.replace('_', '-')
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f1e9df;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1e9df;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
+    const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">
                 Based on your ${cadenceLabel} reminder schedule${organizationName ? ` for ${organizationName}` : ''}, now's a good time to submit your next trade-in batch — whenever you're ready, just list the devices and we'll take it from there.
@@ -924,19 +708,7 @@ export class EmailService {
                 </tr>
               </table>
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You can change or turn off this reminder schedule any time from your Team page.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f7efe4;border-top:1px solid #e6d8c6;">
-              <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+`)
 
     return this.sendEmail(to, 'Time for your next trade-in batch', html)
   }
