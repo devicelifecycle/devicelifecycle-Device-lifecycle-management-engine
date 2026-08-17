@@ -7,18 +7,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
 import { isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 const BUCKET = 'uploads'
 const MAX_FILE_BYTES = 30 * 1024 * 1024  // 30 MB
 
+// Who may read/attach an order's raw device-list file. This route uses the
+// service-role client (RLS bypassed), so tenant + org isolation MUST be enforced
+// here or a caller could reach another tenant's/org's order by its id (IDOR).
+export function canAccessOrderFile(
+  order: { tenant_id?: string | null; customers?: unknown },
+  profile: { organization_id: string | null; role: string },
+  effectiveRole: string,
+  actorTenant: string | null,
+): boolean {
+  // Tenant isolation: a tenant-scoped actor can only touch orders in their tenant.
+  if (actorTenant && actorTenant !== PLATFORM_TENANT_ID) {
+    if ((order.tenant_id ?? PLATFORM_TENANT_ID) !== actorTenant) return false
+  }
+  // Intra-tenant org scoping for the owning customer and org-bound COE techs.
+  const needsOrgMatch = effectiveRole === 'customer' || (profile.role === 'coe_tech' && !!profile.organization_id)
+  if (needsOrgMatch) {
+    const orderOrg = (order.customers as { organization_id?: string } | null)?.organization_id
+    if (!orderOrg || orderOrg !== profile.organization_id) return false
+  }
+  return true
+}
+
 // ── POST: upload file and attach to order ────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { profile, effectiveRole } = auth
+    const { profile, effectiveRole, tenantId } = auth
 
     const allowedRoles = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer']
     if (!allowedRoles.includes(effectiveRole)) {
@@ -39,20 +62,17 @@ export async function POST(request: NextRequest) {
 
     const svc = createServiceRoleClient()
 
-    // Verify the order exists and the customer owns it
+    // Verify the order exists and the caller is allowed to attach to it
     const { data: order } = await svc
       .from('orders')
-      .select('id, customer_id, customers(organization_id)')
+      .select('id, tenant_id, customer_id, customers(organization_id)')
       .eq('id', orderId)
       .single()
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-    if (effectiveRole === 'customer') {
-      const orgId = (order.customers as unknown as { organization_id: string } | null)?.organization_id
-      if (!orgId || orgId !== profile.organization_id) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-      }
+    if (!canAccessOrderFile(order, profile, effectiveRole, tenantId)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
     // Sanitize filename — keep extension, strip path traversal
@@ -105,7 +125,13 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { profile, effectiveRole } = auth
+    const { profile, effectiveRole, tenantId } = auth
+
+    // Vendors must never pull a customer's raw device-list upload (IMEIs, serials,
+    // PII). Restrict to internal staff and the owning customer — same as POST.
+    if (!['admin', 'coe_manager', 'coe_tech', 'sales', 'customer'].includes(effectiveRole)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const orderId = request.nextUrl.searchParams.get('order_id')
     if (!orderId || !isValidUUID(orderId)) {
@@ -116,17 +142,14 @@ export async function GET(request: NextRequest) {
 
     const { data: order } = await svc
       .from('orders')
-      .select('id, metadata, customers(organization_id)')
+      .select('id, tenant_id, metadata, customers(organization_id)')
       .eq('id', orderId)
       .single()
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-    if (effectiveRole === 'customer') {
-      const orgId = (order.customers as unknown as { organization_id: string } | null)?.organization_id
-      if (!orgId || orgId !== profile.organization_id) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-      }
+    if (!canAccessOrderFile(order, profile, effectiveRole, tenantId)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
     const meta = order.metadata as Record<string, unknown> | null
