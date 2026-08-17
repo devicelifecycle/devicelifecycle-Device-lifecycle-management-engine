@@ -285,4 +285,97 @@ export class IMEIService {
 
     return data as IMEIRecord[]
   }
+
+  /**
+   * Bulk-register the devices a vendor supplied against a CPO order, stamping
+   * each one with the source vendor so a warranty claim can be routed back to
+   * them later. De-dupes on (imei, order_id) and returns how many landed.
+   */
+  static async bulkCreateFromVendor(input: {
+    orderId: string
+    vendorId: string
+    warrantyDays: number
+    rows: { imei: string; serial_number?: string; device_id?: string; condition?: DeviceCondition }[]
+  }): Promise<{ inserted: number; skipped: number }> {
+    const supabase = await createServerSupabaseClient()
+
+    const warrantyExpiry = new Date(Date.now() + input.warrantyDays * 86_400_000)
+      .toISOString().slice(0, 10)
+
+    // Skip IMEIs already recorded against this order — the table is unique on both.
+    const imeis = input.rows.map((r) => r.imei).filter(Boolean)
+    const { data: existing } = await supabase
+      .from('imei_records')
+      .select('imei')
+      .eq('order_id', input.orderId)
+      .in('imei', imeis)
+    const already = new Set((existing ?? []).map((e) => e.imei))
+
+    const toInsert = input.rows
+      .filter((r) => r.imei && !already.has(r.imei))
+      .map((r) => ({
+        imei: r.imei,
+        serial_number: r.serial_number || null,
+        order_id: input.orderId,
+        device_id: r.device_id || null,
+        source_vendor_id: input.vendorId,
+        claimed_condition: r.condition || null,
+        triage_status: 'pending',
+        warranty_expiry: warrantyExpiry,
+      }))
+
+    let inserted = 0
+    const CHUNK = 500
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const { error } = await supabase.from('imei_records').insert(toInsert.slice(i, i + CHUNK))
+      if (error) throw new Error(error.message)
+      inserted += Math.min(CHUNK, toInsert.length - i)
+    }
+
+    return { inserted, skipped: input.rows.length - inserted }
+  }
+
+  /**
+   * Fulfillment summary for a CPO order: how many devices were ordered, how many
+   * are actually in hand (one IMEI record = one device), and the balance still
+   * outstanding — broken down by the vendor who supplied them.
+   */
+  static async getOrderFulfillment(orderId: string): Promise<{
+    ordered: number
+    received: number
+    outstanding: number
+    byVendor: { vendorId: string | null; name: string; count: number }[]
+  }> {
+    const supabase = await createServerSupabaseClient()
+
+    const { data: order } = await supabase
+      .from('orders')
+      .select('total_quantity')
+      .eq('id', orderId)
+      .single()
+    const ordered = (order?.total_quantity as number | null) ?? 0
+
+    const { data: records } = await supabase
+      .from('imei_records')
+      .select('source_vendor_id, vendor:vendors(company_name)')
+      .eq('order_id', orderId)
+
+    const counts = new Map<string, { name: string; count: number }>()
+    for (const r of records ?? []) {
+      const id = (r.source_vendor_id as string | null) ?? 'unattributed'
+      const vraw = r.vendor as unknown
+      const vendor = (Array.isArray(vraw) ? vraw[0] : vraw) as { company_name?: string } | null
+      const name = vendor?.company_name || 'Unattributed'
+      const entry = counts.get(id) ?? { name, count: 0 }
+      entry.count++
+      counts.set(id, entry)
+    }
+
+    const received = records?.length ?? 0
+    const byVendor = [...counts.entries()]
+      .map(([vendorId, v]) => ({ vendorId: vendorId === 'unattributed' ? null : vendorId, name: v.name, count: v.count }))
+      .sort((a, b) => b.count - a.count)
+
+    return { ordered, received, outstanding: Math.max(0, ordered - received), byVendor }
+  }
 }

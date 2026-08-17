@@ -88,6 +88,7 @@ const navSections: NavSection[] = [
       { title: 'Triage', href: '/coe/triage', icon: ClipboardCheck, roles: ['admin', 'coe_manager', 'coe_tech'], tourId: 'nav-triage' },
       { title: 'Exceptions', href: '/coe/exceptions', icon: AlertTriangle, roles: ['admin', 'coe_manager'] },
       { title: 'Shipping', href: '/coe/shipping', icon: Truck, roles: ['admin', 'coe_manager', 'coe_tech'] },
+      { title: 'CPO IMEI Intake', href: '/coe/imei', icon: Package, roles: ['admin', 'coe_manager', 'coe_tech'] },
     ],
   },
   {
