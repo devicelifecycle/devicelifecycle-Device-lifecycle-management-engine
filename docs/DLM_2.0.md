@@ -87,8 +87,8 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 *Un-pause and complete the three-tier consoles from the outline.*
 
 - ◐ **VAR Admin console (backend):** delegated roles are now first-class (auth + routing); customer-management APIs shipped — `manage` (suspend/reactivate/assign/move), delegation-scoped export, chunked bulk import; search already existed. Console UI still paused.
-- ◐ VAR **user & rep** management (create customer users, add/disable reps, reset passwords, assign permissions) — **in progress 2026-08-17**; needs an additive `user_role` enum migration (`var_regional_manager`/`var_sales_rep` are not yet valid Postgres enum values — confirmed by reading the schema, insert would fail today without it)
-- ☑ **Delegated N-level roles** enforcement (Appendix A: Entity → Regional Manager → Sales Rep scoping) wired into customer listings/export/management; roll-up reporting still to do
+- ☑ **VAR user & rep management** (add/disable reps, reset passwords, region assignment) — shipped 2026-08-18. `ALTER TYPE user_role ADD VALUE` migration applied to prod (dry-run verified first); `GET/POST /api/var/team` + `POST /api/var/team/[id]` (disable/reactivate/reset_password/reassign_region); new `canManageVarTeamMember`/`resolveTargetTenant` in `delegation.ts` (15 unit tests); UI at `/var/team`. "Create customer users" (a VAR provisioning a *login* for one of their own end customers, not a rep) is a smaller, distinct follow-up — not included in this pass.
+- ☑ **Delegated N-level roles** enforcement (Appendix A: Entity → Regional Manager → Sales Rep scoping) wired into customer listings/export/management **and now team management**; roll-up reporting still to do
 - ◐ **End Customer console:** company profile (backend + UI shipped 2026-08-17 — `customer_assets`/`company_profile` schema + APIs already existed from an earlier pass, only the page was missing), locations, departments, contacts, business hours — all in the shipped page
 - ◐ Customer **device/asset register** (register/assign/retire/move/audit) + own reports/exports — register/assign/retire/move shipped 2026-08-17 (backend already existed); **"Audit" (a per-asset change-history log) is not built** — status changes today aren't logged anywhere; **bulk import for assets isn't built either** (API only accepts one asset at a time, unlike customers which has a bulk-import route); own reports/exports page still ☐
 - ☐ **NEW: per-customer license/plan assignment.** Outline lists "Assign licenses, Assign plans" under VAR Customer Management — read as per-customer, not per-tenant. Today licensing/plans resolve at the **tenant** level only (`tenant-limits.ts`); there is no way for a VAR to give one customer more seats/storage than another.
@@ -96,9 +96,9 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 - ❓ **NEW: "archive" as a distinct customer state.** Outline separately lists "Suspend customers" and "Archive customers." Today there is only one binary `is_active` flag (suspend = deactivate); no distinct archived state. Confirm whether this is meant to be a real third state or just alternate wording for suspend before building anything.
 
 > **Plan paused after M2.2 at user request (2026-08-07), resumed 2026-08-17.**
-> Order of work: M2.4 (Company Profile) ☑ → M2.5 (Asset Register UI) next →
-> M2.3 (VAR rep management, needs the role-enum migration) → M2.3b (roll-up
-> reporting). Foundation (roles, RLS, delegation, tenant scoping) is in place.
+> Landed so far: M2.4 (Company Profile) ☑, M2.5 (Asset Register UI) ☑, M2.3
+> (VAR rep management) ☑. Next: M2.3b (roll-up reporting), then the two ❓
+> items above (per-customer licensing, VAR feature toggle) if prioritized.
 
 *3.5-mo: ship VAR Admin + delegated roles; End Customer console trimmed to profile + reports.*
 
