@@ -8,6 +8,7 @@ import type { Transporter } from 'nodemailer'
 import { getAppPath } from '@/lib/app-url'
 import { getTwilioClient, getTwilioConfig, isTwilioConfigured } from '@/lib/twilio/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 
 if (typeof window !== 'undefined') {
   throw new Error('EmailService cannot be imported in the browser')
@@ -71,12 +72,20 @@ function getFromEmail(): string {
  * contents of the padded content cell). `footer` picks the copyright line:
  * 'full' includes the tagline + "All rights reserved" (customer-facing mail),
  * 'short' is a terse copyright (security/account mail).
+ *
+ * `brand` overrides the header/footer name+tagline for a VAR tenant's own
+ * branding (via resolveTenantBrandLabel) — omit it to get the Byte-Back
+ * default, exactly as before. Values are HTML-escaped: a tenant's own name is
+ * admin-entered, not attacker-input, but this costs nothing and closes the
+ * same class of gap as the recipientName escaping above.
  */
-function emailShell(body: string, footer: 'full' | 'short' = 'full'): string {
+function emailShell(body: string, footer: 'full' | 'short' = 'full', brand?: { name: string; tagline: string }): string {
+  const name = escapeHtml(brand?.name || APP_NAME)
+  const tagline = escapeHtml(brand?.tagline || APP_TAGLINE)
   const year = new Date().getFullYear()
   const footerText = footer === 'short'
-    ? `&copy; ${year} ${APP_NAME}.`
-    : `&copy; ${year} ${APP_NAME} — ${APP_TAGLINE}. All rights reserved.`
+    ? `&copy; ${year} ${name}.`
+    : `&copy; ${year} ${name} — ${tagline}. All rights reserved.`
   return `
 <!DOCTYPE html>
 <html>
@@ -91,7 +100,7 @@ function emailShell(body: string, footer: 'full' | 'short' = 'full'): string {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${APP_NAME}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${APP_TAGLINE}</p>
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${name}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${tagline}</p>
             </td>
           </tr>
           <tr>
@@ -525,11 +534,14 @@ export class EmailService {
     orderId: string
     orderType: string
     itemCount: number
+    /** The order's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to, orderNumber, orderId, orderType, itemCount } = params
     const recipientName = escapeHtml(params.recipientName)
     const orderUrl = getAppPath(`/orders/${orderId}`)
     const typeLabel = orderType === 'cpo' ? 'CPO (Certified Pre-Owned)' : 'Trade-In'
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const isCPO = orderType === 'cpo'
 
@@ -584,9 +596,9 @@ export class EmailService {
               </table>
 
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive an email at each stage. If you have questions, reply to this email or log in to the portal and view your order.</p>
-`)
+`, 'full', brand)
 
-    return this.sendEmail(to, `Order #${orderNumber} Confirmed — ${APP_NAME}`, html)
+    return this.sendEmail(to, `Order #${orderNumber} Confirmed — ${brand.name}`, html)
   }
 
   /**
@@ -602,12 +614,15 @@ export class EmailService {
     carrier: string
     status: string
     direction?: string
+    /** The order's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to, orderNumber, orderId, status, direction } = params
     const recipientName = escapeHtml(params.recipientName)
     const trackingNumber = escapeHtml(params.trackingNumber)
     const carrier = escapeHtml(params.carrier)
     const orderUrl = getAppPath(`/orders/${orderId}`)
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const STATUS_COPY: Record<string, { label: string; message: string }> = {
       label_created: { label: 'Shipment Created', message: `A shipping label has been created${direction === 'outbound' ? ' for your order' : ''}. You can track it with the details below.` },
@@ -644,9 +659,9 @@ export class EmailService {
               </table>
 
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive an email each time this shipment's status changes. If you have questions, reply to this email or log in to the portal.</p>
-`)
+`, 'full', brand)
 
-    return this.sendEmail(to, `Order #${orderNumber} — ${copy.label} — ${APP_NAME}`, html)
+    return this.sendEmail(to, `Order #${orderNumber} — ${copy.label} — ${brand.name}`, html)
   }
 
   /**

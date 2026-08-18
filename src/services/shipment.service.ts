@@ -217,7 +217,7 @@ export class ShipmentService {
 
       const { data: order } = await supabase
         .from('orders')
-        .select('order_number, customer:customers(contact_email, contact_name, contact_phone)')
+        .select('order_number, tenant_id, customer:customers(contact_email, contact_name, contact_phone)')
         .eq('id', shipment.order_id)
         .single()
       if (!order) return
@@ -237,6 +237,7 @@ export class ShipmentService {
         carrier: (shipment.carrier as string) || 'Carrier',
         status: shipment.status as string,
         direction: shipment.direction as string | undefined,
+        tenantId: order.tenant_id as string | null,
       }).catch(() => {})
 
       if (customer.contact_phone && EmailService.isTwilioConfigured()) {

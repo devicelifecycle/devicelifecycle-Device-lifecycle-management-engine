@@ -868,6 +868,7 @@ export async function POST(request: NextRequest) {
               orderId: submittedOrder.id,
               orderType: effectiveOrderType,
               itemCount: totalQuantity,
+              tenantId: auth.tenantId,
             })
           }
           if (cust?.contact_phone && EmailService.isTwilioConfigured()) {

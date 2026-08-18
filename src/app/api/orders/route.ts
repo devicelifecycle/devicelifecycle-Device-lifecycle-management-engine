@@ -201,6 +201,7 @@ export async function POST(request: NextRequest) {
           orderId: order.id,
           orderType: orderData.type,
           itemCount: orderData.items.reduce((sum, item) => sum + (item.quantity || 1), 0),
+          tenantId: auth.tenantId,
         })
       }
 
