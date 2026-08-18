@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canAccessOrderFile } from '@/app/api/uploads/order-file/route'
+import { canAccessOrderFile } from '@/lib/order-file-access'
 import { PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
 
 const TENANT_A = 'aaaaaaaa-0000-4000-a000-00000000000a'

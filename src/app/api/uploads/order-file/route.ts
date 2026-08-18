@@ -7,34 +7,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
+import { canAccessOrderFile } from '@/lib/order-file-access'
 import { isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 const BUCKET = 'uploads'
 const MAX_FILE_BYTES = 30 * 1024 * 1024  // 30 MB
-
-// Who may read/attach an order's raw device-list file. This route uses the
-// service-role client (RLS bypassed), so tenant + org isolation MUST be enforced
-// here or a caller could reach another tenant's/org's order by its id (IDOR).
-export function canAccessOrderFile(
-  order: { tenant_id?: string | null; customers?: unknown },
-  profile: { organization_id: string | null; role: string },
-  effectiveRole: string,
-  actorTenant: string | null,
-): boolean {
-  // Tenant isolation: a tenant-scoped actor can only touch orders in their tenant.
-  if (actorTenant && actorTenant !== PLATFORM_TENANT_ID) {
-    if ((order.tenant_id ?? PLATFORM_TENANT_ID) !== actorTenant) return false
-  }
-  // Intra-tenant org scoping for the owning customer and org-bound COE techs.
-  const needsOrgMatch = effectiveRole === 'customer' || (profile.role === 'coe_tech' && !!profile.organization_id)
-  if (needsOrgMatch) {
-    const orderOrg = (order.customers as { organization_id?: string } | null)?.organization_id
-    if (!orderOrg || orderOrg !== profile.organization_id) return false
-  }
-  return true
-}
 
 // ── POST: upload file and attach to order ────────────────────────────────────
 export async function POST(request: NextRequest) {
