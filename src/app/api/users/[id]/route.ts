@@ -273,6 +273,13 @@ export async function DELETE(
       .eq('id', targetId)
 
     if (error) throw error
+
+    // Same defense-in-depth as the PATCH deactivate path: kill the underlying
+    // Supabase Auth session too, not just our own is_active flag.
+    const svc = createServiceRoleClient()
+    await svc.auth.admin.updateUserById(targetId, { password: crypto.randomUUID() })
+      .catch((err) => console.error('Failed to revoke auth session on soft delete:', err))
+
     return NextResponse.json({ success: true, hard: false })
   } catch (error) {
     console.error('Error deleting user:', error)

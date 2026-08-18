@@ -64,3 +64,46 @@ describe('transactional emails share one branded shell', () => {
     expect(html).toContain('All rights reserved')
   })
 })
+
+describe('user/staff-entered text is HTML-escaped before it reaches an email', () => {
+  let sent: { html: string }[]
+  const XSS = '<img src=x onerror=alert(document.cookie)>'
+
+  beforeEach(() => {
+    sent = []
+    vi.spyOn(EmailService, 'sendEmail').mockImplementation(async (...args: unknown[]) => {
+      sent.push({ html: args[2] as string })
+      return true
+    })
+  })
+
+  it('escapes a malicious recipientName instead of rendering it verbatim', async () => {
+    await EmailService.sendWelcomeEmail({ to: 'c@example.com', recipientName: XSS, role: 'customer', tempPassword: 'x' })
+    const { html } = sent[0]
+    expect(html).not.toContain(XSS)
+    expect(html).toContain('&lt;img src=x onerror=alert(document.cookie)&gt;')
+  })
+
+  it('escapes carrier and tracking number on the shipment status email', async () => {
+    await EmailService.sendShipmentStatusEmail({
+      to: 'c@example.com', recipientName: 'Casey', orderNumber: 'PO-1', orderId: 'oid',
+      trackingNumber: XSS, carrier: XSS, status: 'in_transit',
+    })
+    const { html } = sent[0]
+    expect(html).not.toContain(XSS)
+  })
+
+  it('escapes organizationName on the recurring trade-in reminder', async () => {
+    await EmailService.sendRecurringTradeInReminderEmail({
+      to: 'c@example.com', recipientName: 'Casey', organizationName: XSS, frequency: 'monthly',
+    })
+    const { html } = sent[0]
+    expect(html).not.toContain(XSS)
+  })
+
+  it('does not mangle an ordinary name with no special characters', async () => {
+    await EmailService.sendWelcomeEmail({ to: 'c@example.com', recipientName: "O'Brien & Sons", role: 'customer', tempPassword: 'x' })
+    const { html } = sent[0]
+    expect(html).toContain('O&#39;Brien &amp; Sons')
+  })
+})

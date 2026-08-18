@@ -44,6 +44,23 @@ let gmailTransporter: Transporter | null = null
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Byte-Back'
 const APP_TAGLINE = 'Device Lifecycle Management Platform'
 
+/**
+ * Escape HTML-significant characters before interpolating user/staff-entered
+ * text into an email template. Every email below is built with raw template
+ * strings, not a templating engine with auto-escaping, so this is the only
+ * thing standing between a name/company/carrier field containing
+ * "<img src=x onerror=...>" and it executing when the recipient (which may be
+ * an admin, not the person who entered the text) opens the email.
+ */
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 function getFromEmail(): string {
   return process.env.RESEND_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || 'Byte-Back <onboarding@resend.dev>'
 }
@@ -339,7 +356,9 @@ export class EmailService {
     subject: string
     message: string
   }): Promise<boolean> {
-    const { to, recipientName, orderNumber, orderId, fromStatus, toStatus, subject, message } = params
+    const { to, orderNumber, orderId, fromStatus, toStatus, subject } = params
+    const recipientName = escapeHtml(params.recipientName)
+    const message = escapeHtml(params.message)
     const orderUrl = getAppPath(`/orders/${orderId}`)
     const statusLabel = toStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -383,11 +402,12 @@ export class EmailService {
     tempPassword: string
     loginId?: string
   }): Promise<boolean> {
-    const { to, recipientName, role, tempPassword, loginId } = params
+    const { to, role, tempPassword, loginId } = params
+    const recipientName = escapeHtml(params.recipientName)
     const loginUrl = getAppPath('/login')
     const roleLabel = role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     const credentialLabel = loginId ? 'Username (Login ID)' : 'Username (Email)'
-    const credentialValue = loginId ?? to
+    const credentialValue = escapeHtml(loginId ?? to)
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
@@ -428,7 +448,8 @@ export class EmailService {
     recipientName: string
     resetLink: string
   }): Promise<boolean> {
-    const { to, recipientName, resetLink } = params
+    const { to, resetLink } = params
+    const recipientName = escapeHtml(params.recipientName)
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
@@ -456,7 +477,8 @@ export class EmailService {
     recipientName: string
     otp: string
   }): Promise<boolean> {
-    const { to, recipientName, otp } = params
+    const { to, otp } = params
+    const recipientName = escapeHtml(params.recipientName)
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
@@ -481,7 +503,8 @@ export class EmailService {
     to: string
     recipientName: string
   }): Promise<boolean> {
-    const { to, recipientName } = params
+    const { to } = params
+    const recipientName = escapeHtml(params.recipientName)
     if (!to || to.endsWith('@login.local')) return false
 
     const html = emailShell(`
@@ -503,7 +526,8 @@ export class EmailService {
     orderType: string
     itemCount: number
   }): Promise<boolean> {
-    const { to, recipientName, orderNumber, orderId, orderType, itemCount } = params
+    const { to, orderNumber, orderId, orderType, itemCount } = params
+    const recipientName = escapeHtml(params.recipientName)
     const orderUrl = getAppPath(`/orders/${orderId}`)
     const typeLabel = orderType === 'cpo' ? 'CPO (Certified Pre-Owned)' : 'Trade-In'
 
@@ -579,7 +603,10 @@ export class EmailService {
     status: string
     direction?: string
   }): Promise<boolean> {
-    const { to, recipientName, orderNumber, orderId, trackingNumber, carrier, status, direction } = params
+    const { to, orderNumber, orderId, status, direction } = params
+    const recipientName = escapeHtml(params.recipientName)
+    const trackingNumber = escapeHtml(params.trackingNumber)
+    const carrier = escapeHtml(params.carrier)
     const orderUrl = getAppPath(`/orders/${orderId}`)
 
     const STATUS_COPY: Record<string, { label: string; message: string }> = {
@@ -633,7 +660,8 @@ export class EmailService {
     daysRemaining: number
     quotedAmount?: number
   }): Promise<boolean> {
-    const { to, recipientName, orderNumber, orderId, daysRemaining, quotedAmount } = params
+    const { to, orderNumber, orderId, daysRemaining, quotedAmount } = params
+    const recipientName = escapeHtml(params.recipientName)
     const orderUrl = getAppPath(`/orders/${orderId}`)
 
     const urgencyColor = daysRemaining <= 2 ? '#ef4444' : daysRemaining <= 4 ? '#f59e0b' : '#3b82f6'
@@ -691,7 +719,9 @@ export class EmailService {
     organizationName?: string
     frequency: string
   }): Promise<boolean> {
-    const { to, recipientName, organizationName, frequency } = params
+    const { to, frequency } = params
+    const recipientName = escapeHtml(params.recipientName)
+    const organizationName = params.organizationName ? escapeHtml(params.organizationName) : params.organizationName
     const newOrderUrl = getAppPath('/orders/new/trade-in')
     const cadenceLabel = frequency.replace('_', '-')
 
