@@ -17,7 +17,7 @@ import re
 import sys
 import time
 from typing import Any
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode, quote, urlparse
 
 CONDITION_MULTIPLIERS = {
     "excellent": 0.95,
@@ -26,9 +26,23 @@ CONDITION_MULTIPLIERS = {
     "broken": 0.50,
 }
 
-BELL_TRADE_IN_URL = os.getenv("BELL_TRADE_IN_URL", "https://www.bell.ca/Mobility/Trade-in-program")
-BELL_PROXY_AUTH_URL = os.getenv("BELL_PROXY_AUTH_URL", "https://www.bell.ca/ajax/toolbox/CorsProxyAuthenticate")
-BELL_BASE_ADDR = os.getenv("BELL_TRADE_IN_BASE_ADDR", "https://ws1-bell.sbeglobalcare.com/gc-ws-connect-1.9/rest/gcWsConnect/")
+
+def _safe_url(env_name: str, default: str, allowed_hosts: tuple[str, ...]) -> str:
+    """Read a scrape target from env, but only trust it if the hostname is on
+    the allowlist. Defense in depth against a misconfigured/compromised env
+    var pointing the scraper at an internal or attacker-controlled host —
+    falls back to the known-good default rather than failing the worker."""
+    value = os.getenv(env_name, default)
+    host = urlparse(value).hostname or ""
+    if host not in allowed_hosts:
+        print(f"WARNING: {env_name} host '{host}' not in allowlist, using default", file=sys.stderr)
+        return default
+    return value
+
+
+BELL_TRADE_IN_URL = _safe_url("BELL_TRADE_IN_URL", "https://www.bell.ca/Mobility/Trade-in-program", ("www.bell.ca",))
+BELL_PROXY_AUTH_URL = _safe_url("BELL_PROXY_AUTH_URL", "https://www.bell.ca/ajax/toolbox/CorsProxyAuthenticate", ("www.bell.ca",))
+BELL_BASE_ADDR = _safe_url("BELL_TRADE_IN_BASE_ADDR", "https://ws1-bell.sbeglobalcare.com/gc-ws-connect-1.9/rest/gcWsConnect/", ("ws1-bell.sbeglobalcare.com",))
 SCRAPER_CONDITIONS = ("excellent", "good", "fair", "broken")
 DISCOVERY_LIMIT = 450
 

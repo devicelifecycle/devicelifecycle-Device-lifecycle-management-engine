@@ -16,6 +16,7 @@ import sys
 import time
 import uuid
 from typing import Any
+from urllib.parse import urlparse
 
 CONDITION_MULTIPLIERS = {
     "excellent": 0.95,
@@ -24,9 +25,23 @@ CONDITION_MULTIPLIERS = {
     "broken": 0.50,
 }
 
-TELUS_TRADE_IN_URL = os.getenv("TELUS_TRADE_IN_URL", "https://www.telus.com/en/mobility/trade-in-bring-it-back-returns")
+
+def _safe_url(env_name: str, default: str, allowed_hosts: tuple[str, ...]) -> str:
+    """Read a scrape target from env, but only trust it if the hostname is on
+    the allowlist. Defense in depth against a misconfigured/compromised env
+    var pointing the scraper at an internal or attacker-controlled host —
+    falls back to the known-good default rather than failing the worker."""
+    value = os.getenv(env_name, default)
+    host = urlparse(value).hostname or ""
+    if host not in allowed_hosts:
+        print(f"WARNING: {env_name} host '{host}' not in allowlist, using default", file=sys.stderr)
+        return default
+    return value
+
+
+TELUS_TRADE_IN_URL = _safe_url("TELUS_TRADE_IN_URL", "https://www.telus.com/en/mobility/trade-in-bring-it-back-returns", ("www.telus.com",))
 TELUS_API_URLS = [
-    os.getenv("TELUS_DEVICES_API_URL", "https://www.telus.com/mobility/trade-in/backend/devices"),
+    _safe_url("TELUS_DEVICES_API_URL", "https://www.telus.com/mobility/trade-in/backend/devices", ("www.telus.com",)),
     "https://www.telus.com/en/mobility/trade-in-bring-it-back-returns/backend/devices",
     "https://www.telus.com/en/mobility/trade-in/backend/devices",
 ]

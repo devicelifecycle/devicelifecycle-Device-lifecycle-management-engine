@@ -21,7 +21,23 @@ from typing import Any
 
 _IMPERSONATE_AGENTS = ("chrome", "firefox", "edge")
 
-TRADE_IN_URL = os.getenv("APPLE_TRADE_IN_URL", "https://www.apple.com/ca/shop/trade-in")
+
+def _safe_url(env_name: str, default: str, allowed_hosts: tuple[str, ...]) -> str:
+    """Read a scrape target from env, but only trust it if the hostname is on
+    the allowlist. Defense in depth against a misconfigured/compromised env
+    var pointing the scraper at an internal or attacker-controlled host —
+    falls back to the known-good default rather than failing the worker."""
+    from urllib.parse import urlparse
+
+    value = os.getenv(env_name, default)
+    host = urlparse(value).hostname or ""
+    if host not in allowed_hosts:
+        print(f"WARNING: {env_name} host '{host}' not in allowlist, using default", file=sys.stderr)
+        return default
+    return value
+
+
+TRADE_IN_URL = _safe_url("APPLE_TRADE_IN_URL", "https://www.apple.com/ca/shop/trade-in", ("www.apple.com",))
 
 CONDITION_MULTIPLIERS = {
     "excellent": 1.0,
