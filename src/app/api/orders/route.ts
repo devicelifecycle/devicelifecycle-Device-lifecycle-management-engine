@@ -139,8 +139,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Per-tenant module + monthly-transaction gating. No-op for the platform
-    // tenant (core modules on, transactions unlimited by default). Fails open on
-    // any lookup error so it can never wrongly block a legitimate order.
+    // tenant (core modules on, transactions unlimited by default). Fails CLOSED
+    // on a lookup error — a quota check we can't complete must never silently
+    // let the request through, or the limit can be bypassed just by making the
+    // lookup fail (network blip, DB timeout, etc).
     if (auth.tenantId) {
       try {
         const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
@@ -158,7 +160,10 @@ export async function POST(request: NextRequest) {
           const qBlock = quotaBlockMessage(license.transactionsPerMonth, count ?? 0, 1, 'Transactions this month')
           if (qBlock) return NextResponse.json({ error: qBlock }, { status: 403 })
         }
-      } catch { /* fail open — never block an order on a quota lookup error */ }
+      } catch (err) {
+        console.error('Quota check failed — blocking order creation to avoid a limit bypass:', err)
+        return NextResponse.json({ error: 'Could not verify plan limits. Please try again in a moment.' }, { status: 503 })
+      }
     }
 
     let order = await OrderService.createOrder(

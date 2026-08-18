@@ -52,9 +52,13 @@ function buildAuthIdentity(email: string, notificationEmail?: string) {
   }
 }
 
+// 16 bytes of crypto-random base64url — no fixed prefix/suffix. A fixed pattern
+// (e.g. "Dlm-...!9a") doesn't reduce the entropy an attacker has to brute-force,
+// but it does needlessly advertise "this is a Byte-Back generated password" to
+// anyone who intercepts it. Plain high-entropy random is strictly better with
+// no downside.
 function generateTempPassword() {
-  const random = crypto.randomBytes(9).toString('base64url')
-  return `Dlm-${random}!9a`
+  return crypto.randomBytes(16).toString('base64url')
 }
 
 async function findUserByField(field: 'email' | 'notification_email', value: string) {

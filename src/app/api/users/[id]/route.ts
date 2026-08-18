@@ -153,6 +153,20 @@ export async function PATCH(
 
     if (error) throw error
 
+    // Deactivation is already enforced immediately at the app layer (is_active
+    // is re-checked fresh from the DB on every request in requireAuth()), but
+    // the user's underlying Supabase Auth session is untouched by that flag —
+    // their refresh token stays valid at the auth server. Kill it too, as
+    // defense in depth, so a still-active session can never mint a fresh
+    // access token for a deactivated account even via a path that doesn't go
+    // through requireAuth(). Best-effort: never fail the deactivation itself
+    // over this secondary call.
+    if (updateData.is_active === false) {
+      const svc = createServiceRoleClient()
+      await svc.auth.admin.updateUserById(targetId, { password: crypto.randomUUID() })
+        .catch((err) => console.error('Failed to revoke auth session on deactivate:', err))
+    }
+
     // Flush proxy-level profile cache when any routing-sensitive field changes.
     // Comment in profile-cache.ts claims all three are invalidated — ensure code matches.
     const CACHE_INVALIDATING_FIELDS = ['is_active', 'role', 'secondary_role', 'organization_id']

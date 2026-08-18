@@ -141,8 +141,8 @@ export async function POST(request: NextRequest) {
     const existingCustomerId = existingCustomers?.[0]?.id
 
     // Per-tenant customer quota — only for NEW customers, only when a finite
-    // limit is set (unlimited/platform tenant skips the count entirely), and
-    // fails open on any lookup error so it can never wrongly block a create.
+    // limit is set (unlimited/platform tenant skips the count entirely).
+    // Fails CLOSED — a failed lookup must block the create, not silently allow it.
     if (!existingCustomerId && auth.tenantId) {
       try {
         const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
@@ -152,7 +152,10 @@ export async function POST(request: NextRequest) {
           const blocked = quotaBlockMessage(license.customers, count ?? 0, 1, 'Customers')
           if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
         }
-      } catch { /* fail open — never block on a quota lookup error */ }
+      } catch (err) {
+        console.error('Quota check failed — blocking customer creation to avoid a limit bypass:', err)
+        return NextResponse.json({ error: 'Could not verify plan limits. Please try again in a moment.' }, { status: 503 })
+      }
     }
 
     const customer = existingCustomerId

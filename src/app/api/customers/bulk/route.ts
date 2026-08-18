@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Per-tenant customer quota for the whole batch (no-op for platform/unlimited).
+    // Fails CLOSED — a failed lookup must block the import, not silently allow it.
     if (auth.tenantId) {
       try {
         const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
@@ -69,7 +70,10 @@ export async function POST(request: NextRequest) {
           const blocked = quotaBlockMessage(license.customers, count ?? 0, fresh.length, 'Customers')
           if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
         }
-      } catch { /* fail open — never block an import on a quota lookup error */ }
+      } catch (err) {
+        console.error('Quota check failed — blocking bulk import to avoid a limit bypass:', err)
+        return NextResponse.json({ error: 'Could not verify plan limits. Please try again in a moment.' }, { status: 503 })
+      }
     }
 
     const orgId = profile.organization_id ?? undefined

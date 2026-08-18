@@ -89,7 +89,9 @@ export async function POST(request: NextRequest) {
     const { full_name, email, role, password, organization_id, notification_email, phone } = validationResult.data
 
     // Per-tenant user quota. No-op for the platform tenant (unlimited by
-    // default); fails open so a lookup error never blocks provisioning.
+    // default). Fails CLOSED — a failed lookup must block provisioning, not
+    // silently allow it (a lookup error must never become a way to bypass the
+    // limit).
     if (auth.tenantId) {
       try {
         const { data: tenant } = await auth.supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
@@ -99,7 +101,10 @@ export async function POST(request: NextRequest) {
           const blocked = quotaBlockMessage(license.users, count ?? 0, 1, 'Users')
           if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
         }
-      } catch { /* fail open — never block provisioning on a quota lookup error */ }
+      } catch (err) {
+        console.error('Quota check failed — blocking user provisioning to avoid a limit bypass:', err)
+        return NextResponse.json({ error: 'Could not verify plan limits. Please try again in a moment.' }, { status: 503 })
+      }
     }
 
     const provisioned = await UserProvisioningService.provisionUser({
