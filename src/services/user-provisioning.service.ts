@@ -5,9 +5,11 @@
 import crypto from 'node:crypto'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { EmailService } from './email.service'
-import type { User, UserRole } from '@/types'
+import type { User, AppRole } from '@/types'
 
-type ProvisionableRole = UserRole
+// AppRole (not just the 6 core UserRole values) so this can also provision the
+// delegated VAR roles (var_entity_admin/var_regional_manager/var_sales_rep).
+type ProvisionableRole = AppRole
 
 interface ProvisionUserParams {
   fullName: string
@@ -20,6 +22,8 @@ interface ProvisionUserParams {
   oneUserPerRolePerOrganization?: boolean
   /** Tenant the new user belongs to. Omit to inherit the DB default (platform). */
   tenantId?: string
+  /** Delegated VAR scoping — the region a var_regional_manager/var_sales_rep is assigned to. */
+  region?: string
 }
 
 interface ProvisionUserResult {
@@ -32,7 +36,7 @@ interface ProvisionUserResult {
   loginId?: string
 }
 
-const ROLES_REQUIRING_ORG = new Set<UserRole>(['sales', 'customer', 'vendor'])
+const ROLES_REQUIRING_ORG = new Set<AppRole>(['sales', 'customer', 'vendor'])
 
 function buildAuthIdentity(email: string, notificationEmail?: string) {
   const authEmail = email.includes('@') ? email.trim().toLowerCase() : `${email.trim()}@login.local`
@@ -57,7 +61,7 @@ function buildAuthIdentity(email: string, notificationEmail?: string) {
 // but it does needlessly advertise "this is a Byte-Back generated password" to
 // anyone who intercepts it. Plain high-entropy random is strictly better with
 // no downside.
-function generateTempPassword() {
+export function generateTempPassword() {
   return crypto.randomBytes(16).toString('base64url')
 }
 
@@ -205,6 +209,7 @@ export class UserProvisioningService {
         // Only stamp tenant_id when explicitly provided (VAR invite); otherwise
         // omit the key so the column keeps its DB default (platform tenant).
         ...(params.tenantId ? { tenant_id: params.tenantId } : {}),
+        ...(params.region ? { region: params.region } : {}),
       })
       .select()
       .single()
