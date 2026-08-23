@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { BarChart3, Download, FileText, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { ComingSoon } from '@/components/ComingSoon'
 import { useMyCustomer } from '@/hooks/useCustomers'
 import { useOrders } from '@/hooks/useOrders'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -54,6 +55,10 @@ const RECENT_ORDERS = 25
 const RECENT_ASSETS = 8
 
 export default function CustomerReportsPage() {
+  return <ComingSoon title="Reports" />
+}
+
+function CustomerReportsPageImpl() {
   const { customer } = useMyCustomer()
   const [stats, setStats] = useState<ReportStats>(EMPTY_STATS)
   const [loadingStats, setLoadingStats] = useState(true)

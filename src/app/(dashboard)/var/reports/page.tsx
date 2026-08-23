@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react'
 import { BarChart3, Loader2, UserX } from 'lucide-react'
+import { ComingSoon } from '@/components/ComingSoon'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
@@ -25,6 +26,10 @@ interface ReportsData {
 const EMPTY_REPORT: ReportsData = { byRep: [], byRegion: [], unassignedCustomerCount: 0 }
 
 export default function VarReportsPage() {
+  return <ComingSoon title="VAR Reports" />
+}
+
+function VarReportsPageImpl() {
   const [data, setData] = useState<ReportsData>(EMPTY_REPORT)
   const [loading, setLoading] = useState(true)
   const [regionFilter, setRegionFilter] = useState('all')

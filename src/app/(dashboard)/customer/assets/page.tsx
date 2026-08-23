@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { Boxes, Plus, Loader2, X, History } from 'lucide-react'
 import { toast } from 'sonner'
+import { ComingSoon } from '@/components/ComingSoon'
 import { useMyCustomer } from '@/hooks/useCustomers'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -86,6 +87,10 @@ function eventDetailLine(details: AssetEvent['details']): string {
 }
 
 export default function CustomerAssetsPage() {
+  return <ComingSoon title="Device Register" />
+}
+
+function CustomerAssetsPageImpl() {
   const { customer, isLoading: loadingCustomer } = useMyCustomer()
   const [assets, setAssets] = useState<Asset[]>([])
   const [total, setTotal] = useState(0)

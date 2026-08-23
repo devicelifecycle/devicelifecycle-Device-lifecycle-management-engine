@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react'
 import { UserCog, Plus, Loader2, X, KeyRound, Ban, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
+import { ComingSoon } from '@/components/ComingSoon'
 import { useAuth } from '@/hooks/useAuth'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -38,6 +39,10 @@ const ROLE_LABEL: Record<ManagedRole, string> = {
 }
 
 export default function VarTeamPage() {
+  return <ComingSoon title="VAR Team" />
+}
+
+function VarTeamPageImpl() {
   const { user } = useAuth()
   // user.role/secondary_role are typed to the 6 core UserRole values (the
   // delegated VAR roles are a newer, wider AppRole) — compare as strings
