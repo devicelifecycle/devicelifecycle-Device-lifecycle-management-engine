@@ -19,7 +19,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     const { data: order } = await supabase
       .from('orders')
-      .select('id, order_number, created_by_id, assigned_to_id, customer_id, customer:customers(contact_email, contact_phone, company_name, organization_id)')
+      .select('id, order_number, tenant_id, created_by_id, assigned_to_id, customer_id, customer:customers(contact_email, contact_phone, company_name, organization_id)')
       .eq('id', (await params).id)
       .single()
 
@@ -90,10 +90,13 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       )
     }
 
+    const { resolveTenantBrandLabel } = await import('@/lib/tenant-brand-label')
+    const { createServiceRoleClient } = await import('@/lib/supabase/service-role')
+    const brand = await resolveTenantBrandLabel((order as { tenant_id?: string | null }).tenant_id ?? null, createServiceRoleClient())
     const customerSmsSent = customerRecord?.contact_phone && EmailService.isTwilioConfigured()
       ? await EmailService.sendSMS(
           customerRecord.contact_phone,
-          `[Byte-Back] Order ${order.order_number}: ${mismatchedItems.length} device(s) need quote mismatch review. Please check your updated order details.`.slice(0, 160)
+          `[${brand.name}] Order ${order.order_number}: ${mismatchedItems.length} device(s) need quote mismatch review. Please check your updated order details.`.slice(0, 160)
         )
       : false
 

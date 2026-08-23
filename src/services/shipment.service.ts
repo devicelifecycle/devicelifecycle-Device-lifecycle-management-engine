@@ -5,6 +5,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { readServerEnv } from '@/lib/server-env'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 import { ShippingProviderService } from '@/services/shipping-provider.service'
 import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
@@ -222,6 +223,8 @@ export class ShipmentService {
         .single()
       if (!order) return
 
+      const brand = await resolveTenantBrandLabel(order.tenant_id as string | null, supabase)
+
       const customerRaw = order.customer as unknown
       const customer = (Array.isArray(customerRaw) ? customerRaw[0] : customerRaw) as
         | { contact_email?: string | null; contact_name?: string | null; contact_phone?: string | null }
@@ -244,7 +247,7 @@ export class ShipmentService {
         const label = String(shipment.status).replace(/_/g, ' ')
         await EmailService.sendSMS(
           customer.contact_phone,
-          `[Byte-Back] Order #${order.order_number}: shipment ${label}. ${shipment.carrier} tracking ${shipment.tracking_number}.`.slice(0, 160),
+          `[${brand.name}] Order #${order.order_number}: shipment ${label}. ${shipment.carrier} tracking ${shipment.tracking_number}.`.slice(0, 160),
         ).catch(() => {})
       }
     } catch (err) {
@@ -561,7 +564,7 @@ export class ShipmentService {
     // Load order and items
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, status, order_number, type, customer_id, internal_notes, total_quantity, total_amount, quoted_amount, customer:customers(contact_email, contact_phone, contact_name, company_name, organization_id)')
+      .select('id, status, order_number, type, customer_id, internal_notes, total_quantity, total_amount, quoted_amount, tenant_id, customer:customers(contact_email, contact_phone, contact_name, company_name, organization_id)')
       .eq('id', orderId)
       .single()
 
@@ -787,9 +790,10 @@ export class ShipmentService {
           }
 
           if (customerRecord.contact_phone && EmailService.isTwilioConfigured()) {
+            const brand = await resolveTenantBrandLabel((order.tenant_id as string | null) ?? null, createServiceRoleClient())
             await EmailService.sendSMS(
               customerRecord.contact_phone,
-              `[Byte-Back] ${title}: expected ${expectedQuantity}, received ${receivedQuantity}. Review ${orderUrl}`.slice(0, 160)
+              `[${brand.name}] ${title}: expected ${expectedQuantity}, received ${receivedQuantity}. Review ${orderUrl}`.slice(0, 160)
             ).catch(() => {})
           }
         }

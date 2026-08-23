@@ -76,10 +76,18 @@ export async function POST(request: NextRequest) {
 
     if (!sendTo) return NextResponse.json({ ok: true })
 
+    const targetUserId = (data as { user?: { id?: string } })?.user?.id
+    let tenantId: string | null = null
+    if (targetUserId) {
+      const { data: foundUser } = await supabase.from('users').select('tenant_id').eq('id', targetUserId).maybeSingle()
+      tenantId = foundUser?.tenant_id ?? null
+    }
+
     await EmailService.sendPasswordResetOtp({
       to: sendTo,
       recipientName: userName,
       otp,
+      tenantId,
     }).catch(e => console.error('[send-otp] Email send failed:', e))
 
     return NextResponse.json({ ok: true })

@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { generateOrderPDF } from '@/lib/pdf'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 export const dynamic = 'force-dynamic'
 
 
@@ -55,6 +57,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const safeOrderNum = (order.order_number || '').replace(/[^a-zA-Z0-9._-]/g, '_')
     const filename = `${safeOrderNum}-${docType}.pdf`
 
+    const brand = await resolveTenantBrandLabel((order as { tenant_id?: string | null }).tenant_id ?? null, createServiceRoleClient())
+
     const pdfBuffer = generateOrderPDF({
       order_number: order.order_number,
       type: order.type,
@@ -91,7 +95,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         buyback_condition: item.buyback_condition,
         buyback_valid_until: item.buyback_valid_until,
       })),
-    })
+    }, brand.name)
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,

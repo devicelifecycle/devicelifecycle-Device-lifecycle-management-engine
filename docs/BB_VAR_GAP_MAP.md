@@ -51,13 +51,13 @@ current single-tenant flow (all existing data lives on the Byte-Back platform te
 ## 2. VAR Administrator
 | Line | Status | Where |
 |---|---|---|
-| White-label settings (logo, name, colors, support, domain, templates, KB, privacy) | 🟡 Partial | branding editor; templates/KB Planned |
+| White-label settings (logo, name, colors, support, domain, templates, KB, privacy) | 🟡 Partial | branding editor; outbound email/PDF/SMS tenant-branded 2026-08-23; templates/KB Planned |
 | Set Commission/Margin/Holdback model (Input Tab) | ✅ Done | VAR margin self-service |
 | Customer Mgmt (create/suspend/delete/assign/move/archive/search/bulk/reminders) | 🟡 Partial | customer mgmt exists; VAR-scoped Planned |
 | VAR User Mgmt (customer users, reps, disable, reset, perms) | ⏳ Planned | delegated roles |
 | Add/disable reps | ✅ Done (roles) | delegated `var_*` roles seed |
 | VAR Billing (Option A: BB bills/pays VAR; Option B future) | ✅ Done (A) | VAR console invoices |
-| VAR Reporting (revenue/count/growth/MRR/roll-up by rep/region) | 🟡 Partial | margin model view; roll-up Planned |
+| VAR Reporting (revenue/count/growth/MRR/roll-up by rep/region) | ✅ Done | margin model view + roll-up by rep/region (`src/lib/var-rollup.ts`, `GET /api/var/reports`, `/var/reports` UI) shipped 2026-08-23 |
 | VAR Product Config (features/API/workflows/automation/alerts) | ✅ Done (features) | per-VAR feature flags |
 | VAR Support (tickets/KB/chat) | ⏳ Planned | support module |
 | VAR Security (audit/login/API tokens/SSO/password) | 🟡 Partial | audit exists; SSO Planned |

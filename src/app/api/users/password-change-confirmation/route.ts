@@ -27,6 +27,7 @@ export async function POST() {
     await EmailService.sendPasswordChangeConfirmationEmail({
       to,
       recipientName: userFull?.full_name || 'User',
+      tenantId: profile.tenant_id ?? null,
     })
 
     return NextResponse.json({ ok: true })

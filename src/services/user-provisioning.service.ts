@@ -225,6 +225,7 @@ export class UserProvisioningService {
       role: params.role,
       tempPassword,
       loginId,
+      tenantId: params.tenantId ?? null,
     })
 
     return {

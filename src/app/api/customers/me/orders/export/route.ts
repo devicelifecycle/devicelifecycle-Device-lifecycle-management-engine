@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { generateOrderHistoryPDF } from '@/lib/pdf'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,8 @@ export async function GET(request: NextRequest) {
     const rows = orders || []
 
     if (format === 'pdf') {
-      const pdfBuffer = generateOrderHistoryPDF(customer.company_name || customer.contact_name || 'Customer', rows)
+      const brand = await resolveTenantBrandLabel(profile.tenant_id ?? null, createServiceRoleClient())
+      const pdfBuffer = generateOrderHistoryPDF(customer.company_name || customer.contact_name || 'Customer', rows, brand.name)
       return new NextResponse(new Uint8Array(pdfBuffer), {
         status: 200,
         headers: {

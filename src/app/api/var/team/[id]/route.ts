@@ -94,6 +94,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         role: target.role,
         tempPassword,
         loginId: target.email?.endsWith('@login.local') ? target.email.replace('@login.local', '') : undefined,
+        tenantId: target.tenant_id ?? null,
       }).catch((err) => console.error('Failed to send password-reset notification:', err))
     }
     return NextResponse.json({ ok: true, tempPassword, emailSentTo: notifyEmail ?? undefined })

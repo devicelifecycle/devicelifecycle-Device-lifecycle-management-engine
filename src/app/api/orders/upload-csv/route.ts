@@ -854,6 +854,8 @@ export async function POST(request: NextRequest) {
       if ((order as { status?: string }).status === 'submitted') {
         const submittedOrder = order as { id: string; order_number: string }
         ;(async () => {
+          const { resolveTenantBrandLabel } = await import('@/lib/tenant-brand-label')
+          const brand = await resolveTenantBrandLabel(auth.tenantId ?? null, createServiceRoleClient())
           const { data: cust } = await supabase
             .from('customers')
             .select('contact_email, contact_name, contact_phone')
@@ -874,7 +876,7 @@ export async function POST(request: NextRequest) {
           if (cust?.contact_phone && EmailService.isTwilioConfigured()) {
             await EmailService.sendSMS(
               cust.contact_phone,
-              `[Byte-Back] Order #${submittedOrder.order_number} confirmed. Your ${orderTypeLabel} order was received and is now being reviewed.`.slice(0, 160),
+              `[${brand.name}] Order #${submittedOrder.order_number} confirmed. Your ${orderTypeLabel} order was received and is now being reviewed.`.slice(0, 160),
             )
           }
         })().catch(err => console.error('CSV order confirmation email error:', err))

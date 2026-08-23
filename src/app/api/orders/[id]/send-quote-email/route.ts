@@ -8,6 +8,8 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
 import { generateOrderPDF, buildPriceAdjustmentNote } from '@/lib/pdf'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { computeOrderTaxLine } from '@/lib/tax'
 import { safeErrorMessage } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
@@ -147,6 +149,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     after(async () => {
       try {
         // Generate PDF
+        const brand = await resolveTenantBrandLabel((order as { tenant_id?: string | null }).tenant_id ?? null, createServiceRoleClient())
         const pdfBuffer = generateOrderPDF({
       order_number: order.order_number,
       type: order.type,
@@ -183,7 +186,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         buyback_condition: item.buyback_condition,
         buyback_valid_until: item.buyback_valid_until,
       })),
-    })
+    }, brand.name)
 
     // Generate Excel
     const excelBuffer = await buildExcelBuffer(order, bodyValidityDays)

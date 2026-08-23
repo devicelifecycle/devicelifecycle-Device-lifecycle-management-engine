@@ -7,6 +7,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { EmailService } from '@/services/email.service'
 import { ORDER_EMAIL_CONFIG } from '@/lib/constants'
 import { getAppUrl } from '@/lib/app-url'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 import type {
   Notification,
   NotificationType,
@@ -198,6 +199,8 @@ export class NotificationService {
     if (!config) return // No notification configured for this status
 
     const supabase = createServiceRoleClient()
+    const { data: orderTenantRow } = await supabase.from('orders').select('tenant_id').eq('id', order.id).maybeSingle()
+    const brand = await resolveTenantBrandLabel(orderTenantRow?.tenant_id ?? null, supabase)
     const { subject, message } = config
     const subjectText = subject(order.order_number)
     const messageText = message(order.order_number)
@@ -408,6 +411,7 @@ export class NotificationService {
           recipientName: target.name,
           orderNumber: order.order_number,
           orderId: order.id,
+          tenantId: orderTenantRow?.tenant_id ?? null,
           fromStatus,
           toStatus,
           subject: subjectText,
@@ -416,7 +420,7 @@ export class NotificationService {
       )
     }
 
-    const smsText = this.buildSmsText(`[Byte-Back] Order #${order.order_number}:`, messageText)
+    const smsText = this.buildSmsText(`[${brand.name}] Order #${order.order_number}:`, messageText)
 
     const seenPhones = new Set<string>()
     const uniqueSmsTargets = smsTargets.filter(target => {
@@ -554,6 +558,9 @@ export class NotificationService {
         .eq('id', userId)
         .single()
 
+      const { data: orderTenantRow } = await supabase.from('orders').select('tenant_id').eq('id', orderId).maybeSingle()
+      const brand = await resolveTenantBrandLabel(orderTenantRow?.tenant_id ?? null, supabase)
+
       const effectiveEmail = (user as { email?: string; notification_email?: string | null } | null)?.email?.endsWith('@login.local')
         ? (user as { notification_email?: string | null }).notification_email
         : (user as { email?: string } | null)?.email
@@ -572,6 +579,7 @@ export class NotificationService {
         recipientName: (user as { full_name?: string } | null)?.full_name || 'Team Member',
         orderNumber,
         orderId,
+        tenantId: orderTenantRow?.tenant_id ?? null,
         fromStatus: '',
         toStatus: severity === 'breach' ? 'SLA Breach' : 'SLA Warning',
         subject,
@@ -580,7 +588,7 @@ export class NotificationService {
 
       await this.sendSmsIfConfigured(
         (user as { phone?: string | null }).phone,
-        this.buildSmsText(`[Byte-Back] ${subject}`, message)
+        this.buildSmsText(`[${brand.name}] ${subject}`, message)
       )
     } catch (err) {
       console.error('[NotificationService] SLA email failed:', err)
@@ -628,6 +636,8 @@ export class NotificationService {
   }): Promise<void> {
     try {
       const supabase = createServiceRoleClient()
+      const { data: orderTenantRow } = await supabase.from('orders').select('tenant_id').eq('id', input.order_id).maybeSingle()
+      const brand = await resolveTenantBrandLabel(orderTenantRow?.tenant_id ?? null, supabase)
 
       // Get customer and their organization
       const { data: customer } = await supabase
@@ -662,6 +672,7 @@ export class NotificationService {
             recipientName: customer.contact_name || customer.company_name || 'Customer',
             orderNumber: input.order_number,
             orderId: input.order_id,
+            tenantId: orderTenantRow?.tenant_id ?? null,
             fromStatus: 'in_triage',
             toStatus: 'in_triage',
             subject: title,
@@ -703,6 +714,7 @@ export class NotificationService {
           recipientName: customer.contact_name || customer.company_name || 'Customer',
           orderNumber: input.order_number,
           orderId: input.order_id,
+          tenantId: orderTenantRow?.tenant_id ?? null,
           fromStatus: 'in_triage',
           toStatus: 'exception_required',
           subject: title,
@@ -712,7 +724,7 @@ export class NotificationService {
 
       await this.sendSmsIfConfigured(
         customer.contact_phone,
-        this.buildSmsText(`[Byte-Back] ${title}`, message)
+        this.buildSmsText(`[${brand.name}] ${title}`, message)
       )
     } catch (err) {
       console.error('Failed to send exception notification:', err)
@@ -734,6 +746,8 @@ export class NotificationService {
   }): Promise<void> {
     try {
       const supabase = createServiceRoleClient()
+      const { data: orderTenantRow } = await supabase.from('orders').select('tenant_id').eq('id', input.order_id).maybeSingle()
+      const brand = await resolveTenantBrandLabel(orderTenantRow?.tenant_id ?? null, supabase)
 
       const { data: customer } = await supabase
         .from('customers')
@@ -784,6 +798,7 @@ export class NotificationService {
           recipientName: customer.contact_name || customer.company_name || 'Customer',
           orderNumber: input.order_number,
           orderId: input.order_id,
+          tenantId: orderTenantRow?.tenant_id ?? null,
           fromStatus: 'exception_required',
           toStatus: input.approved ? 'exception_approved' : 'exception_rejected',
           subject: title,
@@ -793,7 +808,7 @@ export class NotificationService {
 
       await this.sendSmsIfConfigured(
         customer.contact_phone,
-        this.buildSmsText(`[Byte-Back] ${title}`, message)
+        this.buildSmsText(`[${brand.name}] ${title}`, message)
       )
     } catch (err) {
       console.error('Failed to send exception resolved notification:', err)

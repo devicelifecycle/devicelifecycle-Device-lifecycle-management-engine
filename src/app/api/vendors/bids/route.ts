@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
     const serviceRole = createServiceRoleClient()
     const { data: order, error: orderError } = await serviceRole
       .from('orders')
-      .select('id, order_number, type, status, total_quantity, vendor_id, parent_order_id')
+      .select('id, order_number, type, status, total_quantity, vendor_id, parent_order_id, tenant_id')
       .eq('id', parsed.data.order_id)
       .single()
 
@@ -278,6 +278,7 @@ export async function POST(request: NextRequest) {
                   toStatus: 'Bid Received',
                   subject: bidTitle,
                   message: `${bidMsg} Review and respond at /bids.`,
+                  tenantId: order.tenant_id ?? null,
                 }).catch((err) => console.error('Failed to email admin:', err))
               : null,
           ]).filter(Boolean),
@@ -303,6 +304,7 @@ export async function POST(request: NextRequest) {
                 toStatus: 'Bid Submitted',
                 subject: vendorConfirmTitle,
                 message: vendorConfirmMsg,
+                tenantId: order.tenant_id ?? null,
               }).catch((err) => console.error('Failed to email vendor confirmation:', err))
             : null,
         ])

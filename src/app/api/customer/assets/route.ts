@@ -71,6 +71,18 @@ export async function POST(request: NextRequest) {
     console.error('Failed to register asset:', error)
     return NextResponse.json({ error: 'Failed to register asset' }, { status: 500 })
   }
+
+  // Append-only audit trail (see 20260823000000_customer_asset_audit.sql) — never blocks the request.
+  void supabase.from('customer_asset_events').insert({
+    asset_id: data.id,
+    tenant_id: auth.tenantId,
+    event_type: 'registered',
+    details: { status: 'registered' },
+    actor_id: auth.profile.id,
+  }).then(({ error }) => {
+    if (error) console.error('asset audit insert failed:', error)
+  })
+
   return NextResponse.json({ data }, { status: 201 })
 }
 
@@ -82,23 +94,85 @@ export async function PATCH(request: NextRequest) {
 
   const supabase = createServiceRoleClient()
   const onlyTenant = tenantScoped(auth)
-  let sel = supabase.from('customer_assets').select('id, status, tenant_id').eq('id', parsed.data.id)
+  let sel = supabase.from('customer_assets').select('id, status, assigned_to, location, notes, tenant_id').eq('id', parsed.data.id)
   if (onlyTenant) sel = sel.eq('tenant_id', onlyTenant)
   const { data: current } = await sel.maybeSingle()
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  const changes: Record<string, { from: unknown; to: unknown }> = {}
+
   if (parsed.data.status !== undefined) {
     if (!canTransitionAsset(current.status as AssetStatus, parsed.data.status)) {
       return NextResponse.json({ error: `Cannot move an asset from ${current.status} to ${parsed.data.status}` }, { status: 400 })
     }
+    if (current.status !== parsed.data.status) {
+      changes.status = { from: current.status, to: parsed.data.status }
+    }
     update.status = parsed.data.status
   }
-  if (parsed.data.assigned_to !== undefined) update.assigned_to = parsed.data.assigned_to
-  if (parsed.data.location !== undefined) update.location = parsed.data.location
-  if (parsed.data.notes !== undefined) update.notes = parsed.data.notes
+  if (parsed.data.assigned_to !== undefined && current.assigned_to !== parsed.data.assigned_to) {
+    changes.assigned_to = { from: current.assigned_to, to: parsed.data.assigned_to }
+    update.assigned_to = parsed.data.assigned_to
+  }
+  if (parsed.data.location !== undefined && current.location !== parsed.data.location) {
+    changes.location = { from: current.location, to: parsed.data.location }
+    update.location = parsed.data.location
+  }
+  if (parsed.data.notes !== undefined && current.notes !== parsed.data.notes) {
+    changes.notes = { from: current.notes, to: parsed.data.notes }
+    update.notes = parsed.data.notes
+  }
 
   const { error } = await supabase.from('customer_assets').update(update).eq('id', parsed.data.id)
   if (error) return NextResponse.json({ error: 'Failed to update asset' }, { status: 500 })
+
+  // Fire audit events for each change (fire-and-forget)
+  if (changes.status) {
+    const { from, to } = changes.status
+    let eventType: 'assigned' | 'unassigned' | 'retired' | 'restored' | 'updated'
+    if (from === 'registered' && to === 'assigned') eventType = 'assigned'
+    else if (from === 'assigned' && to === 'registered') eventType = 'unassigned'
+    else if (to === 'retired') eventType = 'retired'
+    else if (from === 'retired' && to === 'registered') eventType = 'restored'
+    else eventType = 'updated'
+
+    void supabase.from('customer_asset_events').insert({
+      asset_id: current.id,
+      tenant_id: current.tenant_id,
+      event_type: eventType,
+      details: { field: 'status', from, to },
+      actor_id: auth.profile.id,
+    }).then(({ error }) => {
+      if (error) console.error('asset audit insert failed:', error)
+    })
+  }
+  if (changes.assigned_to) {
+    void supabase.from('customer_asset_events').insert({
+      asset_id: current.id,
+      tenant_id: current.tenant_id,
+      event_type: 'moved',
+      details: { field: 'assigned_to', from: changes.assigned_to.from, to: changes.assigned_to.to },
+      actor_id: auth.profile.id,
+    }).then(({ error }) => {
+      if (error) console.error('asset audit insert failed:', error)
+    })
+  }
+  if (changes.location || changes.notes) {
+    const detailFields: Record<string, { from: unknown; to: unknown }> = {}
+    if (changes.location) detailFields.location = changes.location
+    if (changes.notes) detailFields.notes = changes.notes
+
+    void supabase.from('customer_asset_events').insert({
+      asset_id: current.id,
+      tenant_id: current.tenant_id,
+      event_type: 'updated',
+      details: detailFields,
+      actor_id: auth.profile.id,
+    }).then(({ error }) => {
+      if (error) console.error('asset audit insert failed:', error)
+    })
+  }
+
   return NextResponse.json({ ok: true })
 }

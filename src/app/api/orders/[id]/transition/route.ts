@@ -238,6 +238,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (currentOrder.type === 'cpo' && currentOrder.status === 'draft' && newStatus === 'submitted') {
       const orderId = (await params).id
       ;(async () => {
+        const { resolveTenantBrandLabel } = await import('@/lib/tenant-brand-label')
+        const brand = await resolveTenantBrandLabel((currentOrder as { tenant_id?: string | null }).tenant_id ?? null, createServiceRoleClient())
         const svc = createServiceRoleClient()
         const { data: vendors } = await svc
           .from('vendors')
@@ -275,12 +277,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                   toStatus: 'submitted',
                   subject: title,
                   message,
+                  tenantId: (currentOrder as { tenant_id?: string | null }).tenant_id ?? null,
                 }).catch(() => {})
               : null,
             vendor.contact_phone && EmailService.isTwilioConfigured()
               ? EmailService.sendSMS(
                   vendor.contact_phone,
-                  `[Byte-Back] New CPO Order #${currentOrder.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
+                  `[${brand.name}] New CPO Order #${currentOrder.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
                 ).catch(() => {})
               : null,
           ]).filter(Boolean),

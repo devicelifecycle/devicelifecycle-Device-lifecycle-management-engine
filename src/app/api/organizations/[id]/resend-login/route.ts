@@ -85,6 +85,7 @@ export async function POST(
       role: orgUser.role,
       tempPassword,
       loginId,
+      tenantId: orgUser.tenant_id ?? null,
     })
 
     return NextResponse.json({

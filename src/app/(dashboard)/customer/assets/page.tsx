@@ -8,7 +8,7 @@
 // cannot see or edit the catalog. Backed by GET/POST/PATCH /api/customer/assets.
 
 import { useEffect, useState } from 'react'
-import { Boxes, Plus, Loader2, X } from 'lucide-react'
+import { Boxes, Plus, Loader2, X, History } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMyCustomer } from '@/hooks/useCustomers'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -19,7 +19,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Pagination } from '@/components/ui/pagination'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { ASSET_STATUSES, ASSET_STATUS_LABEL, canTransitionAsset, type AssetStatus } from '@/lib/assets'
+import { formatDateTime } from '@/lib/utils'
 
 interface Asset {
   id: string
@@ -36,6 +39,50 @@ const STATUS_STYLE: Record<AssetStatus, string> = {
   registered: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
   assigned: 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300',
   retired: 'bg-muted text-muted-foreground',
+}
+
+type AssetEventType = 'registered' | 'assigned' | 'unassigned' | 'retired' | 'restored' | 'moved' | 'updated'
+
+interface AssetEvent {
+  id: string
+  event_type: AssetEventType
+  details: Record<string, unknown> | null
+  actor_id: string | null
+  created_at: string
+}
+
+// Audit-trail pill per event type. The shared Badge ships no colored variants,
+// so tints ride along via className using the same palette as STATUS_STYLE.
+const EVENT_BADGE: Record<AssetEventType, { variant: 'secondary' | 'destructive'; className: string }> = {
+  registered: { variant: 'secondary', className: 'border-transparent bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' },
+  moved: { variant: 'secondary', className: 'border-transparent bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' },
+  assigned: { variant: 'secondary', className: 'border-transparent bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300' },
+  restored: { variant: 'secondary', className: 'border-transparent bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300' },
+  unassigned: { variant: 'secondary', className: 'border-transparent bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
+  retired: { variant: 'destructive', className: '' },
+  updated: { variant: 'secondary', className: 'border-transparent bg-muted text-muted-foreground' },
+}
+
+/** Human phrasing of a free-form details blob; '—' when nothing renders. Shape mirrors what
+ *  POST/PATCH /api/customer/assets writes: {status:'registered'} on create, {field,from,to}
+ *  for status/assigned_to changes, {location?:{from,to}, notes?:{from,to}} for field edits. */
+function eventDetailLine(details: AssetEvent['details']): string {
+  if (!details) return '—'
+  const d = details as Record<string, unknown>
+  const str = (v: unknown): string => (v === undefined || v === null || v === '' ? '—' : String(v))
+  const pretty = (v: unknown): string => {
+    const s = str(v)
+    return (ASSET_STATUSES as readonly string[]).includes(s) ? ASSET_STATUS_LABEL[s as AssetStatus] : s
+  }
+  if (d.field === 'status') return `status: ${pretty(d.from)} → ${pretty(d.to)}`
+  if (d.field === 'assigned_to') return `assigned to: ${str(d.from)} → ${str(d.to)}`
+  if (d.location && typeof d.location === 'object') {
+    const { to } = d.location as { from?: unknown; to?: unknown }
+    return `location: ${str(to)}`
+  }
+  if (d.notes && typeof d.notes === 'object') return 'notes updated'
+  if (d.status === 'registered') return 'Initial registration'
+  return '—'
 }
 
 export default function CustomerAssetsPage() {
@@ -126,7 +173,10 @@ export default function CustomerAssetsPage() {
                       <TableCell>{a.assigned_to || '—'}</TableCell>
                       <TableCell>{a.location || '—'}</TableCell>
                       <TableCell className="text-right">
-                        <AssetActions asset={a} onChange={changeStatus} />
+                        <div className="flex items-center justify-end gap-1">
+                          <AssetActions asset={a} onChange={changeStatus} />
+                          <AssetHistoryDialog asset={a} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -153,6 +203,58 @@ function AssetActions({ asset, onChange }: { asset: Asset; onChange: (a: Asset, 
         {options.map((s) => <SelectItem key={s} value={s}>{ASSET_STATUS_LABEL[s]}</SelectItem>)}
       </SelectContent>
     </Select>
+  )
+}
+
+function AssetHistoryDialog({ asset }: { asset: Asset }) {
+  const [open, setOpen] = useState(false)
+  // Lazy-loaded on first open, then cached per asset for the row's lifetime.
+  const [events, setEvents] = useState<AssetEvent[] | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const openAndLoad = (next: boolean) => {
+    setOpen(next)
+    if (!next || events !== null || loading) return
+    setLoading(true)
+    fetch(`/api/customer/assets/${asset.id}/events`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { events?: AssetEvent[] } | null) => setEvents(j?.events ?? []))
+      .catch(() => toast.error('Could not load history'))
+      .finally(() => setLoading(false))
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={openAndLoad}>
+      <Button type="button" variant="ghost" size="icon" title="History" onClick={() => openAndLoad(true)}>
+        <History className="h-4 w-4" />
+      </Button>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Device history</DialogTitle>
+          <DialogDescription>{asset.label} — most recent first.</DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto pb-2">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+          ) : !events || events.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">No history yet.</p>
+          ) : (
+            events.map((ev) => {
+              const badge = EVENT_BADGE[ev.event_type] ?? EVENT_BADGE.updated
+              return (
+                <div key={ev.id} className="flex items-start justify-between gap-3 border-b border-border/50 py-2.5 last:border-0">
+                  <div className="min-w-0">
+                    <Badge variant={badge.variant} className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}>{ev.event_type}</Badge>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{eventDetailLine(ev.details)}</p>
+                  </div>
+                  <span className="whitespace-nowrap pt-0.5 text-xs text-muted-foreground">{formatDateTime(ev.created_at)}</span>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

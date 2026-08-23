@@ -11,6 +11,7 @@ import { timingSafeEqual } from 'crypto'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { formatCurrency } from '@/lib/utils'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
 export const dynamic = 'force-dynamic'
 const CRON_NAME = 'bid-expiry'
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
 
     for (const bid of expiredBids as unknown as ExpiredBid[]) {
       const vendor = bid.vendor
-      const { data: order } = await service.from('orders').select('order_number').eq('id', bid.order_id).single()
+      const { data: order } = await service.from('orders').select('order_number, tenant_id').eq('id', bid.order_id).single()
       const label = order?.order_number || bid.order_id.slice(0, 8)
       const bidSummary = `${bid.quantity} units at ${formatCurrency(bid.unit_price)}/unit`
 
@@ -114,13 +115,15 @@ export async function GET(request: NextRequest) {
           toStatus: 'Bid Expired',
           subject: `Bid Expired — Order #${label}`,
           message: `Your bid (${bidSummary}) for order #${label} expired without a decision. If the order is still in sourcing, you may submit a new bid.`,
+          tenantId: order?.tenant_id ?? null,
         }).catch(() => {})
       }
 
       if (vendor?.contact_phone && EmailService.isTwilioConfigured()) {
+        const brand = await resolveTenantBrandLabel(order?.tenant_id ?? null, service)
         EmailService.sendSMS(
           vendor.contact_phone,
-          `[Byte-Back] Bid Expired — Order #${label}. Your bid (${bidSummary}) has expired. Submit a new bid if the order is still open.`.slice(0, 160)
+          `[${brand.name}] Bid Expired — Order #${label}. Your bid (${bidSummary}) has expired. Submit a new bid if the order is still open.`.slice(0, 160)
         ).catch(() => {})
       }
 

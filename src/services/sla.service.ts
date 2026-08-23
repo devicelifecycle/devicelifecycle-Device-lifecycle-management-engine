@@ -360,6 +360,7 @@ export class SLAService {
           orderId: order.id,
           daysRemaining,
           quotedAmount: order.quoted_amount ?? undefined,
+          tenantId: (order as { tenant_id?: string | null }).tenant_id ?? null,
         })
         sent++
       }

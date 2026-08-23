@@ -85,7 +85,7 @@ export class RecurringTradeInService {
 
     const { data: due } = await service
       .from('recurring_trade_in_schedules')
-      .select('id, organization_id, frequency')
+      .select('id, organization_id, frequency, tenant_id')
       .eq('is_active', true)
       .lte('next_reminder_at', new Date().toISOString())
 
@@ -123,6 +123,7 @@ export class RecurringTradeInService {
                 recipientName: user.full_name || 'there',
                 organizationName: org?.name,
                 frequency: schedule.frequency,
+                tenantId: (schedule as { tenant_id?: string | null }).tenant_id ?? null,
               })
             }
             return true

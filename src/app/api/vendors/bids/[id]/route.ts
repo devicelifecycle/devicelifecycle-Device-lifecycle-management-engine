@@ -14,6 +14,8 @@ import { NotificationService } from '@/services/notification.service'
 import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
 import { safeErrorMessage, formatCurrency } from '@/lib/utils'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 export const dynamic = 'force-dynamic'
 
 
@@ -52,11 +54,12 @@ export async function PATCH(
     // Get order details for notifications
     const { data: order } = await supabase
       .from('orders')
-      .select('id, order_number, status, type, customer_id, vendor_id, total_amount, quoted_amount')
+      .select('id, order_number, status, type, customer_id, vendor_id, total_amount, quoted_amount, tenant_id')
       .eq('id', updatedBid.order_id)
       .single()
 
     const orderLabel = order?.order_number || updatedBid.order_id.slice(0, 8)
+    const brand = await resolveTenantBrandLabel(order?.tenant_id ?? null, createServiceRoleClient())
 
     // ──────────────────────────────────────────────────────────────
     // QUOTE 1: Notify VENDOR about bid decision (in-app + email)
@@ -105,13 +108,14 @@ export async function PATCH(
             toStatus: status === 'accepted' ? 'Bid Accepted' : 'Bid Rejected',
             subject: vendorTitle,
             message: vendorMessage,
+            tenantId: order?.tenant_id ?? null,
           }).catch((err) => console.error('Failed to email vendor:', err))
         }
 
         if (vendor.contact_phone && EmailService.isTwilioConfigured()) {
           EmailService.sendSMS(
             vendor.contact_phone,
-            `[Byte-Back] ${vendorTitle}. ${vendorMessage}`.slice(0, 160)
+            `[${brand.name}] ${vendorTitle}. ${vendorMessage}`.slice(0, 160)
           ).catch((err) => console.error('Failed to SMS vendor:', err))
         }
       }
@@ -161,13 +165,14 @@ export async function PATCH(
               toStatus: 'sourcing',
               subject: rejTitle,
               message: rejMsg,
+              tenantId: order?.tenant_id ?? null,
             }).catch((err) => console.error('Failed to email customer (rejection):', err))
           }
 
           if (customer.contact_phone && EmailService.isTwilioConfigured()) {
             EmailService.sendSMS(
               customer.contact_phone,
-              `[Byte-Back] ${rejTitle}. ${rejMsg}`.slice(0, 160)
+              `[${brand.name}] ${rejTitle}. ${rejMsg}`.slice(0, 160)
             ).catch((err) => console.error('Failed to SMS customer (rejection):', err))
           }
         }
@@ -233,13 +238,14 @@ export async function PATCH(
                 toStatus: 'quoted',
                 subject: custTitle,
                 message: custMessage,
+                tenantId: order?.tenant_id ?? null,
               }).catch((err) => console.error('Failed to email customer:', err))
             }
 
             if (customer.contact_phone && EmailService.isTwilioConfigured()) {
               EmailService.sendSMS(
                 customer.contact_phone,
-                `[Byte-Back] ${custTitle}. ${custMessage}`.slice(0, 160)
+                `[${brand.name}] ${custTitle}. ${custMessage}`.slice(0, 160)
               ).catch((err) => console.error('Failed to SMS customer:', err))
             }
           }

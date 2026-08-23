@@ -31,13 +31,13 @@ function money(n: number): string {
   return `$${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} CAD`
 }
 
-export function generateRveQuotePDF(data: RveQuotePDFData): Buffer {
+export function generateRveQuotePDF(data: RveQuotePDFData, brandName?: string): Buffer {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
 
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
-  doc.text(APP_NAME, 14, 20)
+  doc.text(brandName || APP_NAME, 14, 20)
   doc.setFontSize(13)
   doc.setFont('helvetica', 'normal')
   doc.text('Residual Value Quote', 14, 28)

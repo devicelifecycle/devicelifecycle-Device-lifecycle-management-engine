@@ -13,6 +13,8 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { EmailService } from '@/services/email.service'
 import { estimateResidualValue } from '@/lib/rve'
 import { generateRveQuotePDF } from '@/lib/rve-pdf'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +60,7 @@ export async function POST(request: NextRequest) {
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
 
     const quoteNumber = `RVE-${Date.now().toString(36).toUpperCase()}`
+    const brand = await resolveTenantBrandLabel(profile.tenant_id ?? null, createServiceRoleClient())
     const pdf = generateRveQuotePDF({
       quoteNumber,
       customerName: customer.company_name || customer.contact_name || 'Customer',
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
       lines: pricedLines,
       total,
       createdAt: new Date().toISOString(),
-    })
+    }, brand.name)
 
     // Preview mode: return the computed numbers without sending.
     if (parsed.data.send === false) {

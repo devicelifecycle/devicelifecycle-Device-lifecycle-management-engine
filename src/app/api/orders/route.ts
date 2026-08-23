@@ -185,6 +185,8 @@ export async function POST(request: NextRequest) {
 
     // Send order confirmation email to customer (fire-and-forget)
     ;(async () => {
+      const { resolveTenantBrandLabel } = await import('@/lib/tenant-brand-label')
+      const brand = await resolveTenantBrandLabel(auth.tenantId ?? null, createServiceRoleClient())
       const { data: customer } = await supabase
         .from('customers')
         .select('contact_email, contact_name, contact_phone')
@@ -208,7 +210,7 @@ export async function POST(request: NextRequest) {
       if (customer?.contact_phone && EmailService.isTwilioConfigured()) {
         await EmailService.sendSMS(
           customer.contact_phone,
-          `[Byte-Back] Order #${order.order_number} confirmed. Your ${orderTypeLabel} order was received and is now being reviewed.`.slice(0, 160)
+          `[${brand.name}] Order #${order.order_number} confirmed. Your ${orderTypeLabel} order was received and is now being reviewed.`.slice(0, 160)
         )
       }
     })().catch(err => console.error('Order confirmation email error:', err))
@@ -248,6 +250,7 @@ export async function POST(request: NextRequest) {
                 toStatus: order.status,
                 subject: title,
                 message,
+                tenantId: auth.tenantId ?? null,
               }).catch(() => {}) as Promise<void>)
             )
           }
@@ -260,6 +263,8 @@ export async function POST(request: NextRequest) {
     // Draft CPO orders (created by internal staff) are NOT yet open — notify on submission instead.
     if (orderData.type === 'cpo' && order.status !== 'draft') {
       ;(async () => {
+        const { resolveTenantBrandLabel } = await import('@/lib/tenant-brand-label')
+        const brand = await resolveTenantBrandLabel(auth.tenantId ?? null, createServiceRoleClient())
         const svc = createServiceRoleClient()
         const { data: vendors } = await svc
           .from('vendors')
@@ -297,12 +302,13 @@ export async function POST(request: NextRequest) {
                   toStatus: 'open_for_bids',
                   subject: title,
                   message,
+                  tenantId: auth.tenantId ?? null,
                 }).catch(() => {})
               : null,
             vendor.contact_phone && EmailService.isTwilioConfigured()
               ? EmailService.sendSMS(
                   vendor.contact_phone,
-                  `[Byte-Back] New CPO Order #${order.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
+                  `[${brand.name}] New CPO Order #${order.order_number} is open for bidding. Log in to submit your bid.`.slice(0, 160)
                 ).catch(() => {})
               : null,
           ]).filter(Boolean),

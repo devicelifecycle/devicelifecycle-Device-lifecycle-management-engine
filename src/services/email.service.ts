@@ -364,12 +364,15 @@ export class EmailService {
     toStatus: string
     subject: string
     message: string
+    /** The record's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to, orderNumber, orderId, fromStatus, toStatus, subject } = params
     const recipientName = escapeHtml(params.recipientName)
     const message = escapeHtml(params.message)
     const orderUrl = getAppPath(`/orders/${orderId}`)
     const statusLabel = toStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
@@ -394,7 +397,7 @@ export class EmailService {
                 </tr>
               </table>
 
-              <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions, reply to this email or contact our support team.</p>`)
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions, reply to this email or contact our support team.</p>`, 'full', brand)
 
     return this.sendEmail(to, subject, html)
   }
@@ -410,6 +413,8 @@ export class EmailService {
     role: string
     tempPassword: string
     loginId?: string
+    /** The record's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to, role, tempPassword, loginId } = params
     const recipientName = escapeHtml(params.recipientName)
@@ -417,10 +422,11 @@ export class EmailService {
     const roleLabel = role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     const credentialLabel = loginId ? 'Username (Login ID)' : 'Username (Email)'
     const credentialValue = escapeHtml(loginId ?? to)
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
-              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your account has been created on ${APP_NAME}. Use the credentials below to sign in:</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your account has been created on ${escapeHtml(brand.name)}. Use the credentials below to sign in:</p>
 
               <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#faf4ec;border-radius:8px;width:100%;border:1px solid #eaddcb;">
                 <tr>
@@ -443,9 +449,9 @@ export class EmailService {
 
               <p style="margin:0 0 8px;color:#ef4444;font-size:13px;font-weight:500;">Please change your password after your first login (Profile → Change password).</p>
               <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions, contact your administrator.</p>
-`)
+`, 'full', brand)
 
-    return this.sendEmail(to, `Account confirmation — Your login details for ${APP_NAME}`, html)
+    return this.sendEmail(to, `Account confirmation — Your login details for ${brand.name}`, html)
   }
 
   /**
@@ -456,9 +462,12 @@ export class EmailService {
     to: string
     recipientName: string
     resetLink: string
+    /** The record's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to, resetLink } = params
     const recipientName = escapeHtml(params.recipientName)
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
@@ -473,9 +482,9 @@ export class EmailService {
               </table>
 
               <p style="margin:0 0 8px;color:#71717a;font-size:13px;">This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
-`, 'short')
+`, 'short', brand)
 
-    return this.sendEmail(to, `Reset your password — ${APP_NAME}`, html)
+    return this.sendEmail(to, `Reset your password — ${brand.name}`, html)
   }
 
   /**
@@ -485,9 +494,12 @@ export class EmailService {
     to: string
     recipientName: string
     otp: string
+    /** The record's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to, otp } = params
     const recipientName = escapeHtml(params.recipientName)
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
@@ -499,9 +511,9 @@ export class EmailService {
 
               <p style="margin:0 0 8px;color:#71717a;font-size:13px;">This code expires in 1 hour. Do not share it with anyone.</p>
               <p style="margin:0;color:#71717a;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
-`, 'short')
+`, 'short', brand)
 
-    return this.sendEmail(to, `Your password reset code — ${APP_NAME}`, html)
+    return this.sendEmail(to, `Your password reset code — ${brand.name}`, html)
   }
 
   /**
@@ -511,17 +523,20 @@ export class EmailService {
   static async sendPasswordChangeConfirmationEmail(params: {
     to: string
     recipientName: string
+    /** The record's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to } = params
     const recipientName = escapeHtml(params.recipientName)
     if (!to || to.endsWith('@login.local')) return false
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your Byte-Back administrator at support@byte-back.ca immediately.</p>
-`, 'short')
+`, 'short', brand)
 
-    return this.sendEmail(to, `Password updated — ${APP_NAME}`, html)
+    return this.sendEmail(to, `Password updated — ${brand.name}`, html)
   }
 
   /**
@@ -674,6 +689,8 @@ export class EmailService {
     orderId: string
     daysRemaining: number
     quotedAmount?: number
+    /** The record's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to, orderNumber, orderId, daysRemaining, quotedAmount } = params
     const recipientName = escapeHtml(params.recipientName)
@@ -684,6 +701,7 @@ export class EmailService {
     const formattedAmount = quotedAmount != null
       ? `$${quotedAmount.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : null
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
@@ -723,7 +741,7 @@ export class EmailService {
               </table>
 
               <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions about the quote, reply to this email or contact our team.</p>
-`)
+`, 'full', brand)
 
     return this.sendEmail(to, `${urgencyText}Quote Awaiting Response — Order #${orderNumber}`, html)
   }
@@ -733,12 +751,15 @@ export class EmailService {
     recipientName: string
     organizationName?: string
     frequency: string
+    /** The record's own tenant — resolves to that VAR's own branding instead of Byte-Back's. Omit for the platform default. */
+    tenantId?: string | null
   }): Promise<boolean> {
     const { to, frequency } = params
     const recipientName = escapeHtml(params.recipientName)
     const organizationName = params.organizationName ? escapeHtml(params.organizationName) : params.organizationName
     const newOrderUrl = getAppPath('/orders/new/trade-in')
     const cadenceLabel = frequency.replace('_', '-')
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
@@ -753,7 +774,7 @@ export class EmailService {
                 </tr>
               </table>
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You can change or turn off this reminder schedule any time from your Team page.</p>
-`)
+`, 'full', brand)
 
     return this.sendEmail(to, 'Time for your next trade-in batch', html)
   }
