@@ -40,9 +40,13 @@ const sourceSerif = Source_Serif_4({
   variable: '--font-source-serif',
 })
 
-export const metadata: Metadata = {
-  title: 'Byte-Back — Device Lifecycle Management Platform',
-  description: 'Enterprise platform for ITAD device lifecycle management',
+export async function generateMetadata(): Promise<Metadata> {
+  const tenant = await getServerTenant()
+  const name = tenant.branding.name
+  return {
+    title: `${name} — Device Lifecycle Management Platform`,
+    description: 'Enterprise platform for ITAD device lifecycle management',
+  }
 }
 
 export default async function RootLayout({
@@ -141,7 +145,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="font-sans antialiased text-foreground">
-        <Providers initialUser={initialUser}>
+        <Providers initialUser={initialUser} initialBranding={tenant.branding}>
           {children}
           <Toaster />
         </Providers>

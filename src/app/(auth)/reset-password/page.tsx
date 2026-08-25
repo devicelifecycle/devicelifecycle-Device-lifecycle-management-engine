@@ -14,6 +14,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import { useAuthBranding } from '@/lib/auth-branding-context'
 
 // Password must be 8+ chars — no complexity requirements
 const PASSWORD_REGEX = /^.{8,}$/
@@ -32,6 +33,32 @@ export default function ResetPasswordPage() {
   // Supabase client is created lazily inside the component — never at module scope —
   // so a misconfigured env in production doesn't crash the module on load.
   const supabaseRef = useRef<ReturnType<typeof createBrowserSupabaseClient> | null>(null)
+
+  const branding = useAuthBranding()
+
+  function BrandedLogo({ className = '' }: { className?: string }) {
+    if (branding.logoUrl) {
+      return (
+        <img
+          src={branding.logoUrl}
+          alt={branding.name}
+          className={`h-6 w-6 object-contain ${className}`}
+        />
+      )
+    }
+    if (branding.logoText) {
+      return (
+        <span
+          className={`flex items-center justify-center font-body font-bold ${className}`}
+          style={{ color: 'var(--primary)' }}
+        >
+          {branding.logoText}
+        </span>
+      )
+    }
+    return <ByteBackMark className={`h-6 w-6 ${className}`} />
+  }
+
 
   function getSupabase() {
     if (!supabaseRef.current) {
@@ -199,9 +226,9 @@ export default function ResetPasswordPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <Link href="/" className="mb-8 flex items-center gap-3 text-foreground">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-          <ByteBackMark className="h-6 w-6" />
+          <BrandedLogo />
         </div>
-        <span className="text-xl font-bold tracking-tight">Byte-Back</span>
+        <span className="text-xl font-bold tracking-tight">{branding.name}</span>
       </Link>
       <Card className="w-full max-w-md shadow-xl animate-fade-in">
         <CardHeader className="text-center pb-2">

@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server'
 import Groq from 'groq-sdk'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { getSystemPrompt, getActivePersonaLabel, type ChatContext } from '@/lib/chat/prompts'
+import { getServerTenant } from '@/lib/tenant-context'
 import { getToolsForRole, executeTool } from '@/lib/chat/tools'
 import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/rate-limit'
 import type { UserRole } from '@/types'
@@ -46,6 +47,9 @@ export async function POST(request: NextRequest) {
     const { data: userFull } = await supabase.from('users').select('full_name').eq('id', authUser.id).single()
     const userName = userFull?.full_name || undefined
 
+    // Tenant branding for white-label system prompt
+    const tenant = await getServerTenant()
+
     // Parse request
     const body = await request.json()
     const messages: Array<{ role: string; content: string }> = body.messages || []
@@ -61,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     // Build Groq messages
     const groq = new Groq({ apiKey: GROQ_API_KEY })
-    const systemPrompt = getSystemPrompt(role, userName, context)
+    const systemPrompt = getSystemPrompt(role, userName, context, tenant.branding.name)
     const tools = getToolsForRole(role)
     const toolCtx = {
       userId: authUser.id,
@@ -160,3 +164,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+

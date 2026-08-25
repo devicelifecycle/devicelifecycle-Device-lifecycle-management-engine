@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ByteBackMark } from '@/components/brand/ByteBackMark'
+import { useBranding } from '@/lib/branding-context'
 import { useAuth } from '@/hooks/useAuth'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
@@ -24,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const { isAuthenticated, isInitializing } = useAuth()
+  const branding = useBranding()
 
   // Desktop: collapsible sidebar (starts open)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -36,18 +38,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [isAuthenticated, isInitializing, router])
 
+  function BrandedLogo({ className = '' }: { className?: string }) {
+    if (branding.logoUrl) {
+      return (
+        <img
+          src={branding.logoUrl}
+          alt={branding.name}
+          className={`h-6 w-6 object-contain ${className}`}
+        />
+      )
+    }
+    if (branding.logoText) {
+      return (
+        <span
+          className={`flex items-center justify-center font-body font-bold ${className}`}
+          style={{ color: `var(--primary)` }}
+        >
+          {branding.logoText}
+        </span>
+      )
+    }
+    return <ByteBackMark className={`h-6 w-6 ${className}`} />
+  }
+
+
   if (isInitializing) {
     return (
       <div className="app-shell-bg grain-overlay flex min-h-screen items-center justify-center px-6 text-foreground">
         <div className="surface-panel relative flex w-full max-w-sm flex-col items-center gap-6 rounded-[2rem] px-10 py-14 text-center">
           <div className="liquid-glass-strong flex h-14 w-14 items-center justify-center rounded-2xl">
-            <ByteBackMark className="h-6 w-6 text-primary" />
+            <BrandedLogo className="h-6 w-6 text-primary" />
           </div>
           <div className="space-y-2">
             <p className="font-body text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Preparing Workspace
             </p>
-            <h1 className="editorial-title text-4xl text-foreground">Loading Byte-Back</h1>
+            <h1 className="editorial-title text-4xl text-foreground">Loading {branding.name || 'Byte-Back'}</h1>
             <p className="font-body text-sm font-light text-muted-foreground">
               Checking session, roles, and the operational canvas.
             </p>

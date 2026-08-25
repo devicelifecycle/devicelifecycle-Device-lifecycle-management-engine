@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
 import { computeOrderTaxLine } from '@/lib/tax'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 export const dynamic = 'force-dynamic'
 
 function formatDate(s?: string | null): string {
@@ -22,6 +24,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const order = await OrderService.getOrderById((await params).id)
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    const brand = await resolveTenantBrandLabel((order as { tenant_id?: string | null }).tenant_id ?? null, createServiceRoleClient())
 
     const { role, organization_id } = profile
     const isInternalRole = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(role)
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const ws1 = wb.addWorksheet('Summary')
     ws1.columns = [{ width: 20 }, { width: 40 }]
     ;[
-      ['Byte-Back — ' + docType],
+      [`${brand.name} — ` + docType],
       [],
       ['Order Number', order.order_number],
       ['Type', (order.type || '').replace(/_/g, ' ').toUpperCase()],

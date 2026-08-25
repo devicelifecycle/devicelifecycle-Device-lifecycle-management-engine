@@ -13,19 +13,22 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { useOrder } from '@/hooks/useOrders'
+import { useBranding } from '@/lib/branding-context'
 import { formatOrderMoney, orderCurrencyLabel, formatRelativeTime, formatDateTime } from '@/lib/utils'
 import { CUSTOMER_STATUS_CONFIG } from '@/lib/constants'
 import { toast } from 'sonner'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import type { OrderStatus } from '@/types'
 
-const COE_ADDRESS = {
-  name: 'Byte-Back COE Warehouse',
+function coeAddress(name: string) {
+  return {
+    name: (name || 'Byte-Back') + ' COE Warehouse',
   line1: '123 COE Drive',
   city: 'Toronto',
   province: 'ON',
   postal: 'M1B 2C3',
   country: 'Canada',
+  }
 }
 
 const CARRIERS = ['FedEx', 'UPS', 'Canada Post', 'USPS', 'DHL', 'Other']
@@ -62,6 +65,7 @@ export default function CustomerOrderDetailPage() {
   const params = useParams()
   const orderId = typeof params.id === 'string' ? params.id : null
   const { order, isLoading, refetch } = useOrder(orderId)
+  const branding = useBranding()
   const [transitioning, setTransitioning] = useState(false)
   const [carrier, setCarrier] = useState('FedEx')
   const [customCarrier, setCustomCarrier] = useState('')
@@ -121,11 +125,11 @@ export default function CustomerOrderDetailPage() {
           notes: shippingNotes.trim() || undefined,
           from_address: {},
           to_address: {
-            name: COE_ADDRESS.name,
-            street1: COE_ADDRESS.line1,
-            city: COE_ADDRESS.city,
-            state: COE_ADDRESS.province,
-            postal_code: COE_ADDRESS.postal,
+            name: coeAddress(branding.name).name,
+            street1: coeAddress(branding.name).line1,
+            city: coeAddress(branding.name).city,
+            state: coeAddress(branding.name).province,
+            postal_code: coeAddress(branding.name).postal,
             country: 'CA',
           },
         }),
@@ -406,10 +410,10 @@ export default function CustomerOrderDetailPage() {
                 <MapPin className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Ship devices to:</p>
-                  <p className="text-sm mt-1 text-slate-700 dark:text-slate-300">{COE_ADDRESS.name}</p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">{COE_ADDRESS.line1}</p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">{COE_ADDRESS.city}, {COE_ADDRESS.province}  {COE_ADDRESS.postal}</p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">{COE_ADDRESS.country}</p>
+                  <p className="text-sm mt-1 text-slate-700 dark:text-slate-300">{coeAddress(branding.name).name}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{coeAddress(branding.name).line1}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{coeAddress(branding.name).city}, {coeAddress(branding.name).province}  {coeAddress(branding.name).postal}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{coeAddress(branding.name).country}</p>
                 </div>
               </div>
             </div>

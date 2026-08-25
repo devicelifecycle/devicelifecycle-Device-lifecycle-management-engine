@@ -17,9 +17,11 @@ import { PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
 export interface TenantBrandLabel {
   name: string
   tagline: string
+  supportEmail?: string | null
+  supportPhone?: string | null
 }
 
-const DEFAULT_LABEL: TenantBrandLabel = { name: DEFAULT_BRANDING.name, tagline: DEFAULT_BRANDING.tagline }
+const DEFAULT_LABEL: TenantBrandLabel = { name: DEFAULT_BRANDING.name, tagline: DEFAULT_BRANDING.tagline, supportEmail: null, supportPhone: null }
 
 /**
  * Pure — resolve a tenant's stored branding JSONB (already fetched by the
@@ -30,7 +32,7 @@ const DEFAULT_LABEL: TenantBrandLabel = { name: DEFAULT_BRANDING.name, tagline: 
 export function brandLabelFromRow(tenantId: string | null | undefined, branding: unknown): TenantBrandLabel {
   if (!tenantId || tenantId === PLATFORM_TENANT_ID) return DEFAULT_LABEL
   const resolved = resolveBranding(branding)
-  return { name: resolved.name, tagline: resolved.tagline }
+  return { name: resolved.name, tagline: resolved.tagline, supportEmail: resolved.supportEmail ?? null, supportPhone: resolved.supportPhone ?? null }
 }
 
 /**

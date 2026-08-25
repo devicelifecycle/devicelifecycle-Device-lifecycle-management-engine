@@ -335,7 +335,7 @@ async function notifyCustomer(
       itemsHtml += '</table>'
     }
 
-    emailBody = `<h2>Price Update for Your Trade-In Quote</h2><p>Market prices have <b>${direction}</b> by approximately <b>${diffPercent}%</b> since we sent your quote for order <b>#${order.order_number}</b>.</p>${itemsHtml}<p>Your original quote is still valid. Log in to review and accept or request a requote at the new market price.</p><p style="color:#6b7280;font-size:12px">This is an automated notification from Byte-Back price monitoring.</p>`
+    emailBody = `<h2>Price Update for Your Trade-In Quote</h2><p>Market prices have <b>${direction}</b> by approximately <b>${diffPercent}%</b> since we sent your quote for order <b>#${order.order_number}</b>.</p>${itemsHtml}<p>Your original quote is still valid. Log in to review and accept or request a requote at the new market price.</p><p style="color:#6b7280;font-size:12px">This is an automated notification from ${brand.name} price monitoring.</p>`
     smsText = `[${brand.name}] Prices ${direction} ~${diffPercent}% for order #${order.order_number}. Log in to review.`
   }
 

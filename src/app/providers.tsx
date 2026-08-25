@@ -9,6 +9,8 @@ import { ThemeProvider } from 'next-themes'
 import { useState } from 'react'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
+import { BrandingProvider } from '@/lib/branding-context'
+import { DEFAULT_BRANDING, type TenantBranding } from '@/lib/branding'
 import type { User } from '@/types'
 
 // Inner component so useRealtimeSync can access the QueryClient context
@@ -23,22 +25,24 @@ function ConditionalRealtimeProvider({ children }: { children: React.ReactNode }
   return <RealtimeSyncProvider>{children}</RealtimeSyncProvider>
 }
 
-export function Providers({ children, initialUser }: { children: React.ReactNode; initialUser?: User | null }) {
+export function Providers({
+  children,
+  initialUser,
+  initialBranding,
+}: {
+  children: React.ReactNode
+  initialUser?: User | null
+  initialBranding?: TenantBranding
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            // 30s default staleTime — prevents spinner on remount when navigating
-            // between pages. Supabase Realtime subscriptions push invalidations for
-            // live data so a tight polling interval isn't needed here.
             staleTime: 30 * 1000,
-            // Keep cache 5min so navigating back shows cached data instantly.
             gcTime: 5 * 60 * 1000,
             refetchOnWindowFocus: false,
             refetchOnReconnect: false,
-            // Skip refetch when navigating to a page whose data is still fresh.
-            // Realtime subscriptions handle live updates; staleTime handles the rest.
             refetchOnMount: false,
             retry: 1,
           },
@@ -51,7 +55,9 @@ export function Providers({ children, initialUser }: { children: React.ReactNode
       <QueryClientProvider client={queryClient}>
         <ConditionalRealtimeProvider>
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-            {children}
+            <BrandingProvider branding={initialBranding ?? DEFAULT_BRANDING}>
+              {children}
+            </BrandingProvider>
           </ThemeProvider>
         </ConditionalRealtimeProvider>
       </QueryClientProvider>

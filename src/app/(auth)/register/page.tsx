@@ -10,15 +10,41 @@ import { ShieldCheck, ArrowLeft } from 'lucide-react'
 import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import { useAuthBranding } from '@/lib/auth-branding-context'
 
 export default function RegisterPage() {
+  const branding = useAuthBranding()
+
+  function BrandedLogo({ className = '' }: { className?: string }) {
+    if (branding.logoUrl) {
+      return (
+        <img
+          src={branding.logoUrl}
+          alt={branding.name}
+          className={`h-5 w-5 object-contain ${className}`}
+        />
+      )
+    }
+    if (branding.logoText) {
+      return (
+        <span
+          className={`flex items-center justify-center font-body font-bold ${className}`}
+          style={{ color: 'var(--primary)' }}
+        >
+          {branding.logoText}
+        </span>
+      )
+    }
+    return <ByteBackMark className={`h-5 w-5 ${className}`} />
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#120f0d] bg-mesh cinematic-grain px-4">
       <Link href="/" className="mb-8 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-          <ByteBackMark className="h-5 w-5" />
+          <BrandedLogo />
         </div>
-        <span className="text-xl font-bold tracking-tight">Byte-Back</span>
+        <span className="text-xl font-bold tracking-tight">{branding.name}</span>
       </Link>
       <Card className="w-full max-w-md shadow-xl border-0 animate-fade-in">
         <CardHeader className="text-center pb-2">

@@ -11,6 +11,8 @@ import { TriageService } from '@/services/triage.service'
 import { EmailService } from '@/services/email.service'
 import { getAppPath } from '@/lib/app-url'
 import { safeErrorMessage } from '@/lib/utils'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 export const dynamic = 'force-dynamic'
 
 function escapeHtml(s: string): string {
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const orderId = (await params).id
     const order = await OrderService.getOrderById(orderId)
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    const brand = await resolveTenantBrandLabel((order as { tenant_id?: string | null }).tenant_id ?? null, createServiceRoleClient())
 
     const customerEmail = order.customer?.contact_email
     const customerName = escapeHtml(order.customer?.contact_name || order.customer?.company_name || 'Valued Customer')
@@ -101,7 +104,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   </div>
   <p style="color:#888;font-size:12px;margin-top:4px;text-align:center">Or copy this link: ${orderUrl}</p>
   <p>If you have any questions about these results, please contact our team.</p>
-  <p style="color:#888;font-size:12px;margin-top:32px">— Byte-Back</p>
+  <p style="color:#888;font-size:12px;margin-top:32px">— ${brand.name}</p>
 </div>`
 
     const sent = await EmailService.sendEmail(

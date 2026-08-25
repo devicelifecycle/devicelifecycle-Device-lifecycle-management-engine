@@ -3,6 +3,8 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { EmailService } from '@/services/email.service'
 import { AuditService } from '@/services/audit.service'
 import { safeErrorMessage } from '@/lib/utils'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 export const dynamic = 'force-dynamic'
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -19,13 +21,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     const { data: order } = await supabase
       .from('orders')
-      .select('id, order_number, status, customer_id, customer:customers(contact_email, contact_name, company_name)')
+      .select('id, order_number, status, customer_id, tenant_id, customer:customers(contact_email, contact_name, company_name)')
       .eq('id', orderId)
       .single()
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
+    const brand = await resolveTenantBrandLabel((order as { tenant_id?: string | null }).tenant_id ?? null, createServiceRoleClient())
 
     if (order.status !== 'quoted') {
       return NextResponse.json({ error: 'Price change notifications can only be sent for quoted orders' }, { status: 400 })
@@ -43,7 +46,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const body = `<p>Hi ${customerName},</p>
 <p>The pricing for your order <b>${order.order_number}</b> has been updated. Please log in to review and accept or decline the new quote.</p>
 <p>If you have any questions, please don't hesitate to reach out to our team.</p>
-<p style="color:#6b7280;font-size:12px;margin-top:24px">This message was sent by your account team at Byte-Back.</p>`
+<p style="color:#6b7280;font-size:12px;margin-top:24px">This message was sent by your account team at ${brand.name}.</p>`
 
     const sent = await EmailService.sendEmail(customerEmail, subject, body)
 

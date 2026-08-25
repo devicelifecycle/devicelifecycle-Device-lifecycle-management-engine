@@ -2,13 +2,19 @@
 // AUTH LAYOUT
 // ============================================================================
 
-export default function AuthLayout({
+import { getServerTenant } from '@/lib/tenant-context'
+import { AuthBrandingProvider } from '@/lib/auth-branding-context'
+
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // Login page has its own full-screen split layout, so the auth layout
-  // is a simple pass-through. Other auth pages (register, forgot-password,
-  // reset-password) manage their own centering via their Card components.
-  return <>{children}</>
+  const tenant = await getServerTenant()
+
+  return (
+    <AuthBrandingProvider branding={tenant.branding}>
+      {children}
+    </AuthBrandingProvider>
+  )
 }

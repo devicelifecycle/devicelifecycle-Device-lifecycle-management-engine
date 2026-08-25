@@ -8,16 +8,23 @@ import type { UserRole } from '@/types'
 export function WelcomeScreen({
   role,
   fullName,
+  headline,
+  body,
   onStart,
   onSkip,
 }: {
   role: UserRole
   fullName?: string
+  headline?: string
+  body?: string
   onStart: () => void
   onSkip: () => void
 }) {
   const copy = WELCOME_COPY[role]
   const firstName = fullName?.split(' ')[0]
+
+  const displayHeadline = headline ?? copy.headline
+  const displayBody = body ?? copy.body
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#06050a]/85 backdrop-blur-md px-6">
@@ -36,8 +43,8 @@ export function WelcomeScreen({
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#3b82f6]">
           {firstName ? `Welcome, ${firstName}` : 'Welcome'}
         </p>
-        <h1 className="mb-3 font-heading italic text-2xl text-white">{copy.headline}</h1>
-        <p className="mb-7 text-sm leading-6 text-white/65">{copy.body}</p>
+        <h1 className="mb-3 font-heading italic text-2xl text-white">{displayHeadline}</h1>
+        <p className="mb-7 text-sm leading-6 text-white/65">{displayBody}</p>
 
         <div className="flex flex-col gap-2.5">
           <button

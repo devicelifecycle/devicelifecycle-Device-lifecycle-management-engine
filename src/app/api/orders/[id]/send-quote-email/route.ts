@@ -28,7 +28,7 @@ function formatDate(s?: string | null): string {
   return new Date(s).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrderById>>, fallbackValidityDays = 30): Promise<Buffer> {
+async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.getOrderById>>, fallbackValidityDays = 30, brandName = 'Byte-Back'): Promise<Buffer> {
   const ExcelJS = await import('exceljs')
   const isQuote = !['payment_processing', 'payment_sent', 'closed'].includes(order!.status)
   const docType = isQuote ? 'Quote' : 'Invoice'
@@ -45,7 +45,7 @@ async function buildExcelBuffer(order: Awaited<ReturnType<typeof OrderService.ge
   const ws1 = wb.addWorksheet('Summary')
   ws1.columns = [{ width: 20 }, { width: 40 }]
   const summaryData: (string | number | null | undefined)[][] = [
-    ['Byte-Back — ' + docType],
+    [`${brandName} — ` + docType],
     [],
     ['Order Number', order!.order_number],
     ['Type', (order!.type || '').replace(/_/g, ' ').toUpperCase()],
@@ -189,7 +189,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }, brand.name)
 
     // Generate Excel
-    const excelBuffer = await buildExcelBuffer(order, bodyValidityDays)
+    const excelBuffer = await buildExcelBuffer(order, bodyValidityDays, brand.name)
 
     // Amounts are CAD; convert to the order's quote currency with its frozen rate.
     const emailFx = order.fx_rate ?? 1
@@ -282,7 +282,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   </div>
   <p style="color:#888;font-size:12px;margin-top:4px;text-align:center">Or copy this link: ${orderUrl}</p>
   <p>If you have any questions, please contact our team.</p>
-  <p style="color:#888;font-size:12px;margin-top:32px">— Byte-Back</p>
+  <p style="color:#888;font-size:12px;margin-top:32px">— ${brand.name}</p>
 </div>`
 
     await EmailService.sendEmailWithAttachments(

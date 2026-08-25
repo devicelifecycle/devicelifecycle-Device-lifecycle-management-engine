@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { getTourSteps } from '@/lib/onboarding/tours'
+import { getTourSteps, WELCOME_COPY } from '@/lib/onboarding/tours'
+import { useBranding } from '@/lib/branding-context'
 import { WelcomeScreen } from './WelcomeScreen'
 import { Spotlight } from './Spotlight'
 import { TourCallout } from './TourCallout'
@@ -19,10 +20,14 @@ async function markOnboardingComplete() {
 
 export function OnboardingTour() {
   const { user } = useAuth()
+  const branding = useBranding()
   const [phase, setPhase] = useState<Phase>('idle')
   const [stepIndex, setStepIndex] = useState(0)
 
   const steps = useMemo(() => (user ? getTourSteps(user.role) : []), [user])
+
+  const brandName = branding.name || 'Byte-Back'
+  const brandCopy = (s: string) => s.replace(/Byte-Back/g, brandName)
 
   useEffect(() => {
     if (!user) return
@@ -79,10 +84,13 @@ export function OnboardingTour() {
   if (!user || phase === 'idle' || phase === 'done') return null
 
   if (phase === 'welcome') {
+    const welcome = WELCOME_COPY[user.role]
     return (
       <WelcomeScreen
         role={user.role}
         fullName={user.full_name}
+        headline={brandCopy(welcome.headline)}
+        body={brandCopy(welcome.body)}
         onStart={handleStart}
         onSkip={finish}
       />

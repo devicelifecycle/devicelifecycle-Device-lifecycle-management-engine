@@ -42,6 +42,7 @@ import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, C
 import type { OrderStatus, OrderItem, PricingMetadata, AuditLog, VendorBid, Vendor, TriageResult, CpoGrade } from '@/types'
 import type { Order } from '@/types'
 import { CPO_GRADE_LABELS } from '@/types'
+import { useBranding } from '@/lib/branding-context'
 
 const COE_ADDRESS = {
   name: 'COE Warehouse',
@@ -170,6 +171,7 @@ export default function OrderDetailClient() {
   const canSendQuote = !isCustomer && !isVendor && ['admin', 'coe_manager', 'sales'].includes(user?.role ?? '')
   const canSendTriageReport = !isCustomer && !isVendor && ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role ?? '')
   const { shipments: orderShipments, refetch: refetchShipments } = useOrderShipments(params.id as string)
+  const branding = useBranding()
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
   const [pricingDialogNotes, setPricingDialogNotes] = useState('')
   const [pricingItemEdits, setPricingItemEdits] = useState<Record<string, { storage?: string; condition?: string; quantity?: number; device_id?: string; deviceLabel?: string }>>({})
@@ -2143,7 +2145,7 @@ export default function OrderDetailClient() {
               <p className="text-sm text-green-700 dark:text-green-300/90 mt-0.5">
                 {order.status === 'closed'
                   ? 'This order has been fully completed and closed. Thank you for fulfilling this order.'
-                  : 'The customer has confirmed delivery. Byte-Back is processing the final payment and will close the order shortly.'}
+                  : `The customer has confirmed delivery. ${branding.name || 'Byte-Back'} is processing the final payment and will close the order shortly.`}
               </p>
             </div>
           </CardContent>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Search, Sparkles } from 'lucide-react'
 import { ByteBackMark } from '@/components/brand/ByteBackMark'
+import { useBranding } from '@/lib/branding-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -32,6 +33,7 @@ const CONDITION_OPTIONS = [
 ]
 
 export default function PublicDeviceValuePage() {
+  const branding = useBranding()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<DeviceResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -84,11 +86,34 @@ export default function PublicDeviceValuePage() {
     }
   }
 
+  function BrandedLogo({ className = '' }: { className?: string }) {
+    if (branding.logoUrl) {
+      return (
+        <img
+          src={branding.logoUrl}
+          alt={branding.name}
+          className={`h-6 w-6 object-contain ${className}`}
+        />
+      )
+    }
+    if (branding.logoText) {
+      return (
+        <span
+          className={`flex items-center justify-center font-body font-bold ${className}`}
+          style={{ color: `var(--primary)` }}
+        >
+          {branding.logoText}
+        </span>
+      )
+    }
+    return <ByteBackMark className={`h-6 w-6 ${className}`} />
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center px-4 py-16">
       <Link href="/" className="mb-8 flex items-center gap-2 text-foreground">
-        <ByteBackMark className="h-6 w-6" />
-        <span className="text-lg font-bold tracking-tight">Byte-Back</span>
+        <BrandedLogo className="h-6 w-6" />
+        <span className="text-lg font-bold tracking-tight">{branding.name || 'Byte-Back'}</span>
       </Link>
 
       <Card className="w-full max-w-lg shadow-xl">

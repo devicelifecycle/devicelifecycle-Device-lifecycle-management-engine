@@ -533,7 +533,7 @@ export class EmailService {
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
-              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your Byte-Back administrator at support@byte-back.ca immediately.</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your ${brand.name} administrator at ${brand.supportEmail || 'support@byte-back.ca'} immediately.</p>
 `, 'short', brand)
 
     return this.sendEmail(to, `Password updated — ${brand.name}`, html)

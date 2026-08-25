@@ -13,6 +13,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { ByteBackMark } from '@/components/brand/ByteBackMark'
+import { useAuthBranding } from '@/lib/auth-branding-context'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,24 @@ const STATS = [
   { value: '6', label: 'Role-based workflows' },
   { value: '100%', label: 'Lifecycle coverage' },
 ]
+
+function BrandedLogo({ className = 'h-8 w-8' }: { className?: string }) {
+  const branding = useAuthBranding()
+  if (branding.logoUrl) {
+    return <img src={branding.logoUrl} alt={branding.name} className={`${className} object-contain`} />
+  }
+  if (branding.logoText) {
+    return (
+      <div
+        className={`${className} flex items-center justify-center rounded-lg bg-primary/10 font-heading text-sm font-bold`}
+        style={{ color: 'var(--primary)' }}
+      >
+        {branding.logoText}
+      </div>
+    )
+  }
+  return <ByteBackMark className={`${className} text-primary`} />
+}
 
 function LoginPageInner() {
   const router = useRouter()
@@ -38,6 +57,7 @@ function LoginPageInner() {
   const { login, isLoading, isAuthenticated, isInitializing, user, verifyMfa } = useAuth()
   const [isNavigating, setIsNavigating] = useState(false)
   const loginHandledNavRef = useRef(false)
+  const branding = useAuthBranding()
 
   useEffect(() => {
     if (searchParams.get('reason') === 'session_expired') setSessionExpired(true)
@@ -133,10 +153,10 @@ function LoginPageInner() {
 
           <div className="flex items-center gap-2">
             <div className="liquid-glass-strong flex h-7 w-7 items-center justify-center rounded-lg">
-              <ByteBackMark className="h-3.5 w-3.5 text-primary" />
+              <BrandedLogo className="h-3.5 w-3.5" />
             </div>
             <span className="font-body text-sm font-bold tracking-tight text-foreground">
-              Byte-Back
+              {branding.name}
             </span>
           </div>
         </header>
@@ -167,7 +187,7 @@ function LoginPageInner() {
 
               {/* Eyebrow label */}
               <div className="eyebrow-label w-fit">
-                Byte-Back
+                {branding.name}
               </div>
 
               {/* Main headline */}
@@ -225,11 +245,11 @@ function LoginPageInner() {
             {/* Mobile logo */}
             <div className="mb-8 flex items-center gap-3 lg:hidden">
               <div className="liquid-glass-strong flex h-10 w-10 items-center justify-center rounded-2xl">
-                <ByteBackMark className="h-5 w-5 text-primary" />
+                <BrandedLogo className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-body text-base font-bold text-foreground">Byte-Back</p>
-                <p className="font-body text-xs text-muted-foreground">Device Lifecycle Management Platform</p>
+                <p className="font-body text-base font-bold text-foreground">{branding.name}</p>
+                <p className="font-body text-xs text-muted-foreground">{branding.tagline}</p>
               </div>
             </div>
 
@@ -395,6 +415,34 @@ function LoginPageInner() {
                       Request access
                     </Link>
                   </p>
+
+                  {/* Footer links */}
+                  <div className="mt-4 flex flex-col gap-2 text-center">
+                    <Link
+                      href="/privacy-policy"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Privacy Policy
+                    </Link>
+                    {branding.supportPhone && (
+                      <a
+                        href={`tel:${branding.supportPhone}`}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {branding.supportPhone}
+                      </a>
+                    )}
+                    {branding.helpUrl && (
+                      <a
+                        href={branding.helpUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Help
+                      </a>
+                    )}
+                  </div>
                 </form>
               )}
             </div>

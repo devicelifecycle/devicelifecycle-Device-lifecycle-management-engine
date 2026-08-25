@@ -37,6 +37,7 @@ import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useDashboardCounts } from '@/hooks/useDashboardCounts'
+import { useBranding } from '@/lib/branding-context'
 
 interface NavItem {
   title: string
@@ -127,6 +128,30 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter()
   const { user, hasRole, logout } = useAuth()
   const counts = useDashboardCounts()
+  const branding = useBranding()
+
+  function BrandedLogo({ className = '' }: { className?: string }) {
+    if (branding.logoUrl) {
+      return (
+        <img
+          src={branding.logoUrl}
+          alt={branding.name}
+          className={`h-4 w-4 object-contain ${className}`}
+        />
+      )
+    }
+    if (branding.logoText) {
+      return (
+        <span
+          className={`flex items-center justify-center font-body font-bold ${className}`}
+          style={{ color: `var(--primary)` }}
+        >
+          {branding.logoText}
+        </span>
+      )
+    }
+    return <ByteBackMark className={`h-4 w-4 ${className}`} />
+  }
 
   const filteredSections = useMemo(
     () =>
@@ -151,11 +176,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-[18px]">
         <div className="liquid-glass-strong flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white">
-          <ByteBackMark className="h-4 w-4 text-primary" />
+          <BrandedLogo className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <p className="font-heading font-bold text-[15px] text-white leading-none tracking-tight">Byte-Back</p>
-          <p className="font-body text-[10px] text-white/35 mt-0.5 font-light tracking-wide">Device Lifecycle Management Platform</p>
+          <p className="font-heading font-bold text-[15px] text-white leading-none tracking-tight">{branding.name || 'Byte-Back'}</p>
+          <p className="font-body text-[10px] text-white/35 mt-0.5 font-light tracking-wide">{branding.tagline || 'Device Lifecycle Management Platform'}</p>
         </div>
       </div>
 

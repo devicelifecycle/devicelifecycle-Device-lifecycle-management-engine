@@ -20,7 +20,7 @@ function makeClient(data: { branding: unknown } | null | 'throw') {
 describe('brandLabelFromRow (pure)', () => {
   it('returns the platform default for a null tenantId', () => {
     expect(brandLabelFromRow(null, { name: 'Should be ignored' }))
-      .toEqual({ name: 'Byte-Back', tagline: 'Device Lifecycle Management Platform' })
+      .toEqual({ name: 'Byte-Back', tagline: 'Device Lifecycle Management Platform', supportEmail: null, supportPhone: null })
   })
 
   it('returns the platform default for the platform tenant id, even with branding set', () => {
@@ -29,12 +29,12 @@ describe('brandLabelFromRow (pure)', () => {
 
   it('resolves a VAR tenant\'s own name and tagline', () => {
     expect(brandLabelFromRow('var-1', { name: 'Evergreen', tagline: 'Evergreen Device Portal', primary: '221 83% 53%' }))
-      .toEqual({ name: 'Evergreen', tagline: 'Evergreen Device Portal' })
+      .toEqual({ name: 'Evergreen', tagline: 'Evergreen Device Portal', supportEmail: null, supportPhone: null })
   })
 
   it('falls back to default when branding is empty/malformed', () => {
-    expect(brandLabelFromRow('var-1', {})).toEqual({ name: 'Byte-Back', tagline: 'Device Lifecycle Management Platform' })
-    expect(brandLabelFromRow('var-1', null)).toEqual({ name: 'Byte-Back', tagline: 'Device Lifecycle Management Platform' })
+    expect(brandLabelFromRow('var-1', {})).toEqual({ name: 'Byte-Back', tagline: 'Device Lifecycle Management Platform', supportEmail: null, supportPhone: null })
+    expect(brandLabelFromRow('var-1', null)).toEqual({ name: 'Byte-Back', tagline: 'Device Lifecycle Management Platform', supportEmail: null, supportPhone: null })
   })
 })
 
@@ -51,7 +51,7 @@ describe('resolveTenantBrandLabel (fetch + resolve)', () => {
 
   it('fetches and resolves a VAR tenant\'s branding', async () => {
     const result = await resolveTenantBrandLabel('var-1', makeClient({ branding: { name: 'Evergreen', tagline: 'Evergreen Portal' } }))
-    expect(result).toEqual({ name: 'Evergreen', tagline: 'Evergreen Portal' })
+    expect(result).toEqual({ name: 'Evergreen', tagline: 'Evergreen Portal', supportEmail: null, supportPhone: null })
   })
 
   it('falls back to default when the tenant row is not found', async () => {

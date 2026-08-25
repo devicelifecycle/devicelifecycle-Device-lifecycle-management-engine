@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation'
 import { MessageCircle, TrendingUp, ClipboardCheck, Gavel, X, Send, Loader2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
+import { useBranding } from '@/lib/branding-context'
 import { ChatMessage } from './ChatMessage'
 import type { ChatMessage as ChatMessageType } from '@/types'
 
@@ -29,11 +30,13 @@ function loadStoredMessages(userId: string): ChatMessageType[] | null {
   }
 }
 
-const WELCOME_MSG: ChatMessageType = {
-  id: 'welcome',
-  role: 'assistant',
-  content: 'Hi! I\'m your Byte-Back assistant. Ask me about orders, pricing, devices, shipments, or anything else on the platform.',
-  timestamp: new Date().toISOString(),
+function welcomeMessage(name: string): ChatMessageType {
+  return {
+    id: 'welcome',
+    role: 'assistant',
+    content: `Hi! I'm your ${name || 'Byte-Back'} assistant. Ask me about orders, pricing, devices, shipments, or anything else on the platform.`,
+    timestamp: new Date().toISOString(),
+  }
 }
 
 // Which specialized persona applies, based on the page the user is on —
@@ -47,7 +50,9 @@ function getContextForPath(pathname: string): 'pricing' | 'triage' | 'sourcing' 
   return undefined
 }
 
-const DEFAULT_PERSONA = { label: 'Byte-Back Assistant', subtitle: 'Powered by Llama 3.3', icon: MessageCircle }
+function defaultPersona(name: string) {
+  return { label: `${name || 'Byte-Back'} Assistant`, subtitle: 'Powered by Llama 3.3', icon: MessageCircle }
+}
 const PERSONA_DETAILS: Record<string, { subtitle: string; icon: typeof MessageCircle }> = {
   'Pricing Agent': { subtitle: 'Watching market & competitor prices', icon: TrendingUp },
   'Triage Copilot': { subtitle: 'Helping with device inspection', icon: ClipboardCheck },
@@ -60,26 +65,27 @@ const CONTEXT_PERSONA_LABEL: Record<string, string> = {
   sourcing: 'Vendor Sourcing Agent',
 }
 
-function resolvePersona(label?: string) {
-  if (!label) return DEFAULT_PERSONA
+function resolvePersona(label?: string, name = '') {
+  if (!label) return defaultPersona(name)
   const details = PERSONA_DETAILS[label]
-  return details ? { label, ...details } : DEFAULT_PERSONA
+  return details ? { label, ...details } : defaultPersona(name)
 }
 
 export function ChatAssistant() {
   const pathname = usePathname()
   const context = getContextForPath(pathname || '')
   const { user } = useAuth()
-  const [persona, setPersona] = useState(DEFAULT_PERSONA)
+  const branding = useBranding()
+  const [persona, setPersona] = useState(() => defaultPersona(branding.name))
 
   // Show the predicted persona for this page immediately (before the first
   // reply confirms it) — the backend re-checks role, so this is just a guess
-  // for display; a customer/vendor would get DEFAULT_PERSONA back regardless.
+  // for display; a customer/vendor would get the default persona back regardless.
   useEffect(() => {
-    setPersona(resolvePersona(context ? CONTEXT_PERSONA_LABEL[context] : undefined))
+    setPersona(resolvePersona(context ? CONTEXT_PERSONA_LABEL[context] : undefined, branding.name))
   }, [context])
   const [isOpen, setIsOpen] = useState(false)
-  const [messages, setMessages] = useState<ChatMessageType[]>([WELCOME_MSG])
+  const [messages, setMessages] = useState<ChatMessageType[]>(() => [welcomeMessage(branding.name)])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -162,7 +168,7 @@ export function ChatAssistant() {
       }
 
       setMessages(prev => [...prev, assistantMsg])
-      setPersona(resolvePersona(data.persona))
+      setPersona(resolvePersona(data.persona, branding.name))
     } catch (e) {
       const errorMsg: ChatMessageType = {
         id: `error-${Date.now()}`,
@@ -185,7 +191,7 @@ export function ChatAssistant() {
 
   const clearChat = () => {
     setMessages([{
-      ...WELCOME_MSG,
+      ...welcomeMessage(branding.name),
       id: `welcome-${Date.now()}`,
       timestamp: new Date().toISOString(),
     }])
@@ -319,4 +325,4 @@ export function ChatAssistant() {
       </button>
     </>
   )
-}
+}
