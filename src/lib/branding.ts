@@ -20,9 +20,18 @@ export interface TenantBranding {
   primaryForeground: string
   /** Support email surfaced in customer-facing UI + email footers. */
   supportEmail: string | null
+  /** Optional secondary brand color as an HSL triplet (darker primary variant). */
+  secondaryColor?: string | null
+  /** Support phone surfaced alongside the support email. */
+  supportPhone?: string | null
+  /** Help/documentation link surfaced in customer-facing UI. */
+  helpUrl?: string | null
   /** Marketing/tagline line. */
   tagline: string
 }
+
+/** Darkened primary-blue variant used when a tenant sets no secondary color. */
+const DEFAULT_SECONDARY_COLOR = '221 83% 41%'
 
 /** Byte-Back platform defaults — the blue-on-blue identity. */
 export const DEFAULT_BRANDING: TenantBranding = {
@@ -33,6 +42,9 @@ export const DEFAULT_BRANDING: TenantBranding = {
   sidebarBg: '222 47% 13%',
   primaryForeground: '0 0% 100%',
   supportEmail: null,
+  secondaryColor: DEFAULT_SECONDARY_COLOR,
+  supportPhone: null,
+  helpUrl: null,
   tagline: 'Device Lifecycle Management Platform',
 }
 
@@ -64,6 +76,9 @@ export function resolveBranding(raw: unknown): TenantBranding {
     primary: cleanHsl(b.primary, DEFAULT_BRANDING.primary),
     sidebarBg: cleanHsl(b.sidebarBg, DEFAULT_BRANDING.sidebarBg),
     primaryForeground: cleanHsl(b.primaryForeground, DEFAULT_BRANDING.primaryForeground),
+    secondaryColor: cleanHsl(b.secondaryColor, DEFAULT_SECONDARY_COLOR),
+    supportPhone: cleanStr(b.supportPhone, 32),
+    helpUrl: cleanStr(b.helpUrl, 500),
     supportEmail: cleanStr(b.supportEmail, 255),
     tagline: cleanStr(b.tagline, 160) ?? DEFAULT_BRANDING.tagline,
   }
@@ -76,6 +91,7 @@ export function resolveBranding(raw: unknown): TenantBranding {
 export function brandingCssVars(b: TenantBranding): Record<string, string> {
   return {
     '--primary': b.primary,
+    '--brand-secondary': b.secondaryColor ?? DEFAULT_SECONDARY_COLOR,
     '--sidebar-bg': b.sidebarBg,
     '--primary-foreground': b.primaryForeground,
   }

@@ -52,3 +52,16 @@ export function resolveFeatures(globalOverrides?: unknown, tenantOverrides?: unk
 export function isFeatureEnabled(features: FeatureFlags, key: FeatureKey): boolean {
   return features[key] === true
 }
+
+/**
+ * Apply a VAR's own on/off toggles on top of its platform ceiling:
+ * effective = ceiling AND var toggle, with unset keys inheriting the ceiling.
+ * A stored `true` under a false ceiling still resolves off — the VAR side can
+ * narrow its plan's modules but never widen them.
+ */
+export function applyVarToggles(ceiling: FeatureFlags, varOverrides?: unknown): FeatureFlags {
+  const t = pickBooleans(varOverrides)
+  const out = { ...DEFAULT_FEATURES }
+  for (const k of FEATURE_KEYS) out[k] = ceiling[k] && (t[k] ?? true)
+  return out
+}

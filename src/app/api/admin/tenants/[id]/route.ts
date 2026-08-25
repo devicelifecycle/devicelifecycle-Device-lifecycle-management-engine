@@ -26,6 +26,9 @@ const brandingSchema = z.object({
   primaryForeground: hsl.optional(),
   supportEmail: z.string().email().max(255).nullable().optional().or(z.literal('')),
   tagline: z.string().max(160).optional(),
+  secondaryColor: hsl.nullable().optional(),
+  supportPhone: z.string().regex(/^[\d ()+-]{0,24}$/, 'Digits/spaces/()+- only, max 24 chars').max(24).nullable().optional(),
+  helpUrl: z.string().max(500).refine((v) => v === '' || /^https?:\/\//i.test(v), 'Must be an http(s) URL or empty').nullable().optional(),
 })
 
 const patchSchema = z.object({

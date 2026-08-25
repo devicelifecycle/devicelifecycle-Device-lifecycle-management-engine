@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
         const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
         const { license } = tenantLimits(tenant?.settings)
         if (license.customers >= 0) {
-          const { count } = await supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', auth.tenantId)
+          const { count } = await supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', auth.tenantId).eq('is_active', true)
           const blocked = quotaBlockMessage(license.customers, count ?? 0, fresh.length, 'Customers')
           if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
         }

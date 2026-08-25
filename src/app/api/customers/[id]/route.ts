@@ -29,6 +29,18 @@ export async function GET(
 
     const { role, organization_id } = profile
 
+    // Per-customer plan override: surface the assigned subscription plan
+    // (id + name) so VAR admins can see what they've assigned.
+    let plan: { id: string; name: string } | null = null
+    if (customer.plan_id) {
+      const { data: assignedPlan } = await supabase
+        .from('subscription_plans')
+        .select('id, name')
+        .eq('id', customer.plan_id)
+        .maybeSingle()
+      plan = assignedPlan
+    }
+
     // Internal roles and sales can view all customers
     if (role === 'admin' || role === 'coe_manager' || role === 'coe_tech' || role === 'sales') {
       let organization = null
@@ -36,7 +48,7 @@ export async function GET(
         const { data: org } = await supabase.from('organizations').select('id, name, type').eq('id', customer.organization_id).single()
         organization = org
       }
-      return NextResponse.json({ ...customer, organization })
+      return NextResponse.json({ ...customer, organization, plan })
     }
 
     // Customer can only view their own customer record
@@ -47,7 +59,7 @@ export async function GET(
           const { data: org } = await supabase.from('organizations').select('id, name, type').eq('id', customer.organization_id).single()
           organization = org
         }
-        return NextResponse.json({ ...customer, organization })
+        return NextResponse.json({ ...customer, organization, plan })
       }
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }

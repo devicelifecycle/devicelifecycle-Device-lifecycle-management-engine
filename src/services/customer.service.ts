@@ -197,13 +197,14 @@ export class CustomerService {
    */
   static async setManagedFields(
     id: string,
-    fields: { is_active?: boolean; assigned_rep_id?: string | null; region?: string | null },
+    fields: { is_active?: boolean; assigned_rep_id?: string | null; region?: string | null; plan_id?: string | null },
   ): Promise<Customer> {
     const supabase = await createServerSupabaseClient()
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (fields.is_active !== undefined) patch.is_active = fields.is_active
     if (fields.assigned_rep_id !== undefined) patch.assigned_rep_id = fields.assigned_rep_id
     if (fields.region !== undefined) patch.region = fields.region
+    if (fields.plan_id !== undefined) patch.plan_id = fields.plan_id
 
     const { data, error } = await supabase
       .from('customers').update(patch).eq('id', id).select().single()

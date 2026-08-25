@@ -14,13 +14,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { ComingSoon } from '@/components/ComingSoon'
 
-// Paused from release — see [[REMAINING_BUILD_PLAN]]. Re-enable by exporting
-// TenantsPageImpl as the default.
-export default function TenantsPage() {
-  return <ComingSoon title="VARs" />
-}
 
 interface Tenant {
   id: string
@@ -34,7 +28,7 @@ interface Tenant {
   created_at: string
 }
 
-function TenantsPageImpl() {
+export default function TenantsPageImpl() {
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')

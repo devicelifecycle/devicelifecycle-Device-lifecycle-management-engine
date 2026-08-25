@@ -9,7 +9,7 @@
 // tenant and only bites once a VAR is assigned a finite plan.
 
 import { resolveLicense, type LicenseLimits } from './licensing'
-import { resolveFeatures, type FeatureFlags } from './features'
+import { resolveFeatures, applyVarToggles, type FeatureFlags } from './features'
 
 export interface TenantLimits {
   license: LicenseLimits
@@ -20,9 +20,13 @@ export function tenantLimits(settings: unknown): TenantLimits {
   const s = (settings && typeof settings === 'object' ? settings : {}) as {
     license?: unknown
     features?: unknown
+    var_feature_overrides?: unknown
   }
   return {
     license: resolveLicense(s.license),
-    features: resolveFeatures(undefined, s.features),
+    // Effective features = platform ceiling AND the VAR's own toggles: a VAR can
+    // switch an included module off for itself but never re-enable one its plan
+    // doesn't include (the write API rejects that too, so storage stays clean).
+    features: applyVarToggles(resolveFeatures(undefined, s.features), s.var_feature_overrides),
   }
 }

@@ -6,10 +6,9 @@
 // Edit a VAR's branding, custom domain, and active status, with a live preview.
 
 import { useCallback, useEffect, useState } from 'react'
-import { ComingSoon } from '@/components/ComingSoon'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, Save } from 'lucide-react'
+import { ArrowLeft, Loader2, Save, Trash2, Upload } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -46,11 +45,8 @@ const LIMIT_LABELS: Record<LimitKey, string> = {
   apiCallsPerMonth: 'API calls / mo', transactionsPerMonth: 'Transactions / mo',
 }
 
-export default function TenantDetailPage() {
-  return <ComingSoon title="VAR Settings" />
-}
 
-function TenantDetailPageImpl() {
+export default function TenantDetailPageImpl() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [tenant, setTenant] = useState<TenantDetail | null>(null)
@@ -62,6 +58,8 @@ function TenantDetailPageImpl() {
   const [isActive, setIsActive] = useState(true)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoBusy, setLogoBusy] = useState<'upload' | 'remove' | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -88,6 +86,43 @@ function TenantDetailPageImpl() {
 
   const set = <K extends keyof TenantBranding>(k: K, v: TenantBranding[K]) =>
     setBranding((b) => ({ ...b, [k]: v }))
+
+
+  const uploadLogo = async () => {
+    if (!logoFile) return
+    setLogoBusy('upload')
+    try {
+      const fd = new FormData()
+      fd.append('file', logoFile)
+      const res = await fetch(`/api/admin/tenants/${id}/logo`, { method: 'POST', body: fd })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Logo upload failed')
+      set('logoUrl', j.logoUrl as string)
+      setLogoFile(null)
+      toast.success('Logo uploaded')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Logo upload failed')
+    } finally {
+      setLogoBusy(null)
+    }
+  }
+
+  const removeLogo = async () => {
+    if (!window.confirm('Remove the tenant logo?')) return
+    setLogoBusy('remove')
+    try {
+      const res = await fetch(`/api/admin/tenants/${id}/logo`, { method: 'DELETE' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to remove logo')
+      set('logoUrl', null)
+      setLogoFile(null)
+      toast.success('Logo removed')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove logo')
+    } finally {
+      setLogoBusy(null)
+    }
+  }
 
   const save = async () => {
     setSaving(true)
@@ -165,15 +200,77 @@ function TenantDetailPageImpl() {
               <Field label="Sidebar (HSL)">
                 <Input value={branding.sidebarBg} disabled={isPlatform} onChange={(e) => set('sidebarBg', e.target.value)} placeholder="222 47% 13%" />
               </Field>
+              <Field label="Secondary color">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label="Secondary color"
+                    value={hslTripletToHex(branding.secondaryColor ?? DEFAULT_SECONDARY_FALLBACK)}
+                    disabled={isPlatform}
+                    onChange={(e) => set('secondaryColor', hexToHslTriplet(e.target.value))}
+                    className="h-9 w-12 cursor-pointer rounded-md border bg-transparent p-1"
+                  />
+                  <span className="font-mono text-xs text-muted-foreground">{branding.secondaryColor ?? DEFAULT_SECONDARY_FALLBACK}</span>
+                </div>
+              </Field>
               <Field label="Support email">
                 <Input value={branding.supportEmail ?? ''} disabled={isPlatform} onChange={(e) => set('supportEmail', e.target.value || null)} placeholder="support@acme.com" />
               </Field>
               <Field label="Custom domain">
                 <Input value={customDomain} onChange={(e) => setCustomDomain(e.target.value)} placeholder="portal.acme.com" />
               </Field>
+              <Field label="Support phone">
+                <Input
+                  value={branding.supportPhone ?? ''}
+                  disabled={isPlatform}
+                  maxLength={24}
+                  placeholder="+1 (555) 010-2030"
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^\d\s()+-]/g, '').slice(0, 24)
+                    set('supportPhone', v === '' ? null : v)
+                  }}
+                />
+              </Field>
+              <Field label="Help URL">
+                <Input
+                  value={branding.helpUrl ?? ''}
+                  disabled={isPlatform}
+                  maxLength={500}
+                  placeholder="https://help.acme.com"
+                  onChange={(e) => set('helpUrl', e.target.value === '' ? null : e.target.value)}
+                />
+                {(branding.helpUrl ?? '') !== '' && !/^https?:\/\/\S+$/i.test(branding.helpUrl ?? '') && (
+                  <p className="text-xs text-destructive">Must be an http(s) URL or empty.</p>
+                )}
+              </Field>
             </div>
             <Field label="Tagline">
               <Input value={branding.tagline} disabled={isPlatform} onChange={(e) => set('tagline', e.target.value)} maxLength={160} />
+            </Field>
+            <Field label="Logo">
+              <div className="flex flex-wrap items-center gap-3">
+                {branding.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={branding.logoUrl} alt="Tenant logo" className="h-10 w-10 rounded-lg border object-contain" />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed text-xs font-bold text-muted-foreground">{branding.logoText}</div>
+                )}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  disabled={isPlatform || logoBusy !== null}
+                  onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                  className="max-w-[240px] text-sm text-muted-foreground"
+                />
+                <Button type="button" variant="outline" size="sm" disabled={isPlatform || !logoFile || logoBusy !== null} onClick={uploadLogo}>
+                  {logoBusy === 'upload' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  Upload
+                </Button>
+                <Button type="button" variant="outline" size="sm" disabled={isPlatform || !branding.logoUrl || logoBusy !== null} onClick={removeLogo}>
+                  {logoBusy === 'remove' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  Remove
+                </Button>
+              </div>
             </Field>
 
             {!isPlatform && (
@@ -302,6 +399,53 @@ function TenantDetailPageImpl() {
       </Card>
     </div>
   )
+}
+
+const DEFAULT_SECONDARY_FALLBACK = '221 83% 41%'
+
+/** "221 83% 41%" -> "#1d4ed8" for <input type="color">. */
+function hslTripletToHex(triplet: string): string {
+  const m = /^(\d{1,3})\s+(\d{1,3})%\s+(\d{1,3})%$/.exec(triplet.trim())
+  if (!m) return hslTripletToHex(DEFAULT_SECONDARY_FALLBACK)
+  const h = Number(m[1]) % 360
+  const s = Math.min(100, Number(m[2])) / 100
+  const l = Math.min(100, Number(m[3])) / 100
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const off = l - c / 2
+  let rgb: [number, number, number] = [0, 0, 0]
+  if (h < 60) rgb = [c, x, 0]
+  else if (h < 120) rgb = [x, c, 0]
+  else if (h < 180) rgb = [0, c, x]
+  else if (h < 240) rgb = [0, x, c]
+  else if (h < 300) rgb = [x, 0, c]
+  else rgb = [c, 0, x]
+  const toHex = (v: number) => Math.round((v + off) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(rgb[0])}${toHex(rgb[1])}${toHex(rgb[2])}`
+}
+
+/** "#1d4ed8" -> "221 83% 41%" stored HSL-triplet format. */
+function hexToHslTriplet(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return DEFAULT_SECONDARY_FALLBACK
+  const n = parseInt(m[1], 16)
+  const r = ((n >> 16) & 255) / 255
+  const g = ((n >> 8) & 255) / 255
+  const b = (n & 255) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  let h = 0
+  let s = 0
+  if (d > 0) {
+    s = d / (1 - Math.abs(2 * l - 1))
+    if (max === r) h = 60 * (((g - b) / d) % 6)
+    else if (max === g) h = 60 * ((b - r) / d + 2)
+    else h = 60 * ((r - g) / d + 4)
+    if (h < 0) h += 360
+  }
+  return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

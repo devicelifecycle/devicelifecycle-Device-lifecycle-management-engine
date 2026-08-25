@@ -53,18 +53,18 @@ current single-tenant flow (all existing data lives on the Byte-Back platform te
 |---|---|---|
 | White-label settings (logo, name, colors, support, domain, templates, KB, privacy) | 🟡 Partial | branding editor; outbound email/PDF/SMS tenant-branded 2026-08-23; templates/KB Planned |
 | Set Commission/Margin/Holdback model (Input Tab) | ✅ Done | VAR margin self-service |
-| Customer Mgmt (create/suspend/delete/assign/move/archive/search/bulk/reminders) | 🟡 Partial | customer mgmt exists; VAR-scoped Planned |
+| Customer Mgmt (create/suspend/delete/assign/move/archive/search/bulk/reminders) | 🟡 Partial | VAR console UI `/var/customers` (search/filters/suspend/reactivate/assign_plan/region move/bulk import/export) ✅ 2026-08-23; per-customer license/plan assignment ✅ 2026-08-23 (`customers.plan_id` FK, `customer-limits.ts`, `assign_plan` action); archive question resolved-documented 2026-08-23 (suspend covers all archive semantics; quota counts now filter is_active); reminders under VAR letterhead Planned |
 | VAR User Mgmt (customer users, reps, disable, reset, perms) | ⏳ Planned | delegated roles |
 | Add/disable reps | ✅ Done (roles) | delegated `var_*` roles seed |
 | VAR Billing (Option A: BB bills/pays VAR; Option B future) | ✅ Done (A) | VAR console invoices |
 | VAR Reporting (revenue/count/growth/MRR/roll-up by rep/region) | ✅ Done | margin model view + roll-up by rep/region (`src/lib/var-rollup.ts`, `GET /api/var/reports`, `/var/reports` UI) shipped 2026-08-23 |
-| VAR Product Config (features/API/workflows/automation/alerts) | ✅ Done (features) | per-VAR feature flags |
+| VAR Product Config (features/API/workflows/automation/alerts) | ✅ Done (features) | per-VAR feature flags + VAR-facing toggle UI `/var/features` (ceiling-respecting, `applyVarToggles` wired into tenantLimits) shipped 2026-08-23 |
 | VAR Support (tickets/KB/chat) | ⏳ Planned | support module |
 | VAR Security (audit/login/API tokens/SSO/password) | 🟡 Partial | audit exists; SSO Planned |
 | VAR Restrictions (cannot see other VARs / global rev / alter BB pricing …) | ✅ Done | RLS + `permission-matrix.ts` |
 
 ## 3. End Customer
-| Dashboard/UserMgmt/CompanySettings/Data/Devices/Reports/Support/Security/Restrictions | 🟡 Partial | existing customer role covers core; company settings Planned |
+| Dashboard/UserMgmt/CompanySettings/Data/Devices/Reports/Support/Security/Restrictions | 🟡 Partial | existing customer role covers core; company settings Planned; asset AUDIT history ✅ 2026-08-23 (`customer_asset_events` + lazy History dialog); asset BULK IMPORT ✅ 2026-08-23 (`/api/customer/assets/bulk`: validation, dup detection, 500-row cap, failure CSV); own Reports page ✅ 2026-08-23 (`/customer/reports` + counters API + PDF/CSV exports) |
 
 ## Enterprise Best Practices (explicitly recommended)
 | RBAC (permission-based, new roles without code) | ✅ Done | `permissions.ts`, RBAC tables |

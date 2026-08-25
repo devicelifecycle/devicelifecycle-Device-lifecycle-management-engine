@@ -9,6 +9,7 @@ import { createUserSchema } from '@/lib/validations'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { quotaBlockMessage } from '@/lib/quota'
+import { resolveCustomerLimits } from '@/lib/customer-limits'
 import { nonPlatformTenantId } from '@/lib/tenant-resolve'
 export const dynamic = 'force-dynamic'
 
@@ -95,7 +96,27 @@ export async function POST(request: NextRequest) {
     if (auth.tenantId) {
       try {
         const { data: tenant } = await auth.supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
-        const { license } = tenantLimits(tenant?.settings)
+        let license = tenantLimits(tenant?.settings).license
+
+        // D1b per-customer plan override: a CUSTOMER-role user counts against
+        // their organization's assigned customer plan (customers.plan_id ->
+        // subscription_plans.limits) instead of the bare VAR tenant license;
+        // with no plan assigned this resolves to the tenant license unchanged,
+        // and every other role keeps the tenant-level check as-is.
+        if (role === 'customer' && organization_id) {
+          const { data: customerRow } = await auth.supabase
+            .from('customers')
+            .select('plan:subscription_plans(limits)')
+            .eq('organization_id', organization_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          // supabase-js types the embed as an array; PostgREST returns an
+          // object for this many-to-one join, so normalize defensively.
+          const embeddedPlan = customerRow?.plan
+          const planRow = Array.isArray(embeddedPlan) ? embeddedPlan[0] ?? null : embeddedPlan ?? null
+          license = resolveCustomerLimits(license, planRow)
+        }
         if (license.users >= 0) {
           const { count } = await auth.supabase.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', auth.tenantId)
           const blocked = quotaBlockMessage(license.users, count ?? 0, 1, 'Users')

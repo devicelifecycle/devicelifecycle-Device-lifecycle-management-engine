@@ -122,3 +122,17 @@ export function computeRve(input: {
     pricing: computeDealPricing({ orderType: 'trade_in', marketValue: residualValue, config: input.config }),
   }
 }
+
+/**
+ * Build a retention table from the ADMIN-CONFIGURED annual depreciation %
+ * (pricing_settings.cpo_depreciation_rate, 0-50, edited in Admin > Pricing):
+ * retention at month m compounds as (1 - rate/100)^(m/12), sampled yearly.
+ * Feeds residualSchedule / estimateResidualValue through their existing
+ * optional `table` parameter so the hardcoded DEFAULT_DEPRECIATION curve
+ * stays as the fallback when no setting exists.
+ */
+export function tableFromAnnualRate(annualPercent: number): DepreciationPoint[] {
+  const rate = clamp(Math.min(Math.max(annualPercent, 0), 50), 0, 100) / 100
+  // Yearly points out to 10 years — the max horizon any RVE route accepts.
+  return Array.from({ length: 11 }, (_, y) => ({ months: y * 12, retention: Math.pow(1 - rate, y) }))
+}

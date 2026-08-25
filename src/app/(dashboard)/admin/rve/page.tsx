@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { ComingSoon } from '@/components/ComingSoon'
-import { Plus, TrendingDown, Trash2, Send, Loader2 } from 'lucide-react'
+import { Plus, RefreshCw, TrendingDown, Trash2, Send, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,9 +20,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils'
 import { residualSchedule, residualRetention } from '@/lib/rve'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 interface DeviceOption { id: string; make: string; model: string }
-interface CustomerOption { id: string; company_name?: string | null; contact_name?: string | null }
 interface Line { id: number; deviceId: string; storage: string; label: string; base: number; loading: boolean }
 
 let nextId = 1
@@ -36,9 +36,7 @@ function RvePageImpl() {
   const [years, setYears] = useState('3')
   const [lines, setLines] = useState<Line[]>([newLine()])
   const [devices, setDevices] = useState<DeviceOption[]>([])
-  const [customers, setCustomers] = useState<CustomerOption[]>([])
-  const [customerId, setCustomerId] = useState('')
-  const [sending, setSending] = useState(false)
+  const [sendOpen, setSendOpen] = useState(false)
 
   const horizon = Math.max(1, Math.min(10, Number(years) || 3))
 
@@ -46,10 +44,6 @@ function RvePageImpl() {
     fetch('/api/devices?page_size=200&for_order_creation=1&sort_by=make&sort_order=asc')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setDevices(d.data || []))
-      .catch(() => {})
-    fetch('/api/customers?page_size=100')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setCustomers(d.data || []))
       .catch(() => {})
   }, [])
 
@@ -99,26 +93,6 @@ function RvePageImpl() {
   const addLine = () => setLines((ls) => [...ls, newLine()])
   const removeLine = (id: number) => setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.id !== id) : ls))
 
-  const sendQuote = async () => {
-    if (!customerId) { toast.error('Pick a customer to send the quote to'); return }
-    const payload = priced.filter((l) => l.base > 0).map((l) => ({ label: l.label, baseValue: l.base }))
-    if (payload.length === 0) { toast.error('Add at least one device with a value'); return }
-    setSending(true)
-    try {
-      const res = await fetch('/api/rve/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, horizonYears: horizon, lines: payload, send: true }),
-      })
-      const data = await res.json()
-      if (res.ok && data.sent) toast.success(`Residual value quote ${data.quoteNumber} sent`)
-      else toast.error(data.error || 'Could not send the quote')
-    } catch {
-      toast.error('Could not send the quote')
-    } finally {
-      setSending(false)
-    }
-  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
@@ -147,7 +121,7 @@ function RvePageImpl() {
 
           <div className="space-y-2">
             {priced.map((l) => (
-              <div key={l.id} className="grid items-end gap-2 sm:grid-cols-[1fr_120px_140px_140px_auto]">
+              <div key={l.id} className="grid items-end gap-2 sm:grid-cols-[1fr_120px_140px_140px_auto_auto]">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Device</Label>
                   <Select value={l.deviceId} onValueChange={(v) => onDevice(l.id, v)}>
@@ -171,6 +145,9 @@ function RvePageImpl() {
                   <Label className="text-xs">Residual @ {horizon}y</Label>
                   <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium tabular-nums">{formatCurrency(l.residual)}</div>
                 </div>
+                <Button type="button" variant="ghost" size="icon" onClick={() => lookupBase(l.id, l.deviceId, l.storage)} disabled={!l.deviceId || !l.storage} className="mb-0.5" aria-label="Fetch market value">
+                  {l.loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <RefreshCw className="h-4 w-4 text-muted-foreground" />}
+                </Button>
                 <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(l.id)} className="mb-0.5" aria-label="Remove line">
                   <Trash2 className="h-4 w-4 text-muted-foreground" />
                 </Button>
@@ -184,21 +161,20 @@ function RvePageImpl() {
             <span className="text-xl font-bold text-primary tabular-nums">{formatCurrency(total)}</span>
           </div>
 
-          <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-1.5">
-              <Label className="text-xs">Send quote to customer</Label>
-              <Select value={customerId} onValueChange={setCustomerId}>
-                <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
-                <SelectContent>
-                  {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.company_name || c.contact_name || 'Customer'}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="button" onClick={sendQuote} disabled={sending || total <= 0}>
-              {sending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />}
-              Send quote
+          <div className="flex justify-end border-t pt-3">
+            <Button type="button" onClick={() => setSendOpen(true)} disabled={total <= 0}>
+              <Send className="mr-1 h-4 w-4" />
+              Send to customer…
             </Button>
           </div>
+
+          {sendOpen && (
+            <SendQuoteDialog
+              horizon={horizon}
+              lines={priced.filter((l) => l.base > 0).map((l) => ({ label: l.label, baseValue: l.base }))}
+              onClose={() => setSendOpen(false)}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -229,5 +205,65 @@ function RvePageImpl() {
         </Card>
       )}
     </div>
+  )
+}
+// Email dialog for the finished quote — POST /api/rve/quote/send regenerates
+// the PDF server-side (pricing engine + configured depreciation) and attaches it.
+function SendQuoteDialog({ horizon, lines, onClose }: {
+  horizon: number
+  lines: Array<{ label: string; baseValue: number }>
+  onClose: () => void
+}) {
+  const [to, setTo] = useState('')
+  const [name, setName] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const send = async () => {
+    if (!/^\S+@\S+\.\S+$/.test(to.trim())) { toast.error('Enter a valid email address'); return }
+    if (!name.trim()) { toast.error('Enter the recipient name'); return }
+    setSending(true)
+    try {
+      const res = await fetch('/api/rve/quote/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ horizonYears: horizon, to_email: to.trim(), recipient_name: name.trim(), lines }),
+      })
+      const j = await res.json().catch(() => null)
+      if (!res.ok || !j?.sent) { toast.error(j?.error || 'Could not send the quote'); return }
+      toast.success(`Quote ${j.quoteNumber} sent`)
+      onClose()
+    } catch {
+      toast.error('Could not send the quote')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Send quote to customer</DialogTitle>
+          <DialogDescription>We regenerate the PDF server-side and attach it to the email.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Recipient name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">To email</Label>
+            <Input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="jane@company.com" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pb-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="button" onClick={send} disabled={sending}>
+            {sending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />}
+            Send
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -171,6 +171,7 @@ export interface Customer extends BaseEntity {
   notes?: string;
   is_active: boolean;
   default_risk_mode?: 'retail' | 'enterprise';
+  plan_id?: string | null;
 }
 
 // ============================================================================

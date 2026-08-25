@@ -1,22 +1,30 @@
 // ============================================================================
-// RESIDUAL VALUE QUOTE — compute + send to a customer
+// RESIDUAL VALUE QUOTE — compute + (optionally) email to the customer on file
 // ============================================================================
 // Staff-generated residual-value quote that mirrors the trade-in quote: device
-// lines → per-line value → total, but each line's value is projected from the
-// depreciation table at the chosen horizon. The server recomputes every residual
-// (never trusts a client-sent residual), renders a PDF, and emails it to the
-// customer. Reuses the tenant-scoped authenticated client, so the customer
-// lookup is bounded by RLS.
+// lines → per-line value → total. Each line's base is either sent explicitly
+// or resolved server-side from the pricing engine's current trade price
+// (device_id + storage/condition). Residuals are ALWAYS recomputed here off
+// the admin-configured annual depreciation rate (pricing_settings
+// .cpo_depreciation_rate) — client math is never trusted. Lines that can't be
+// priced come back as per-line errors instead of failing the whole request.
+// send:false returns just the numbers; send:true renders the PDF and emails it
+// to the customer record. Reuses the tenant-scoped authenticated client for
+// that lookup so it stays RLS-bounded. For an explicit recipient, see
+// ./send/route.ts.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { EmailService } from '@/services/email.service'
-import { estimateResidualValue } from '@/lib/rve'
+import { tableFromAnnualRate } from '@/lib/rve'
+import { loadAnnualDepreciationRate, resolveQuoteLines } from '@/lib/rve-quote'
 import { generateRveQuotePDF } from '@/lib/rve-pdf'
 import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
+
+const conditionSchema = z.enum(['new', 'excellent', 'good', 'fair', 'poor', 'certified']).optional()
 
 const schema = z.object({
   customerId: z.string().uuid(),
@@ -24,7 +32,10 @@ const schema = z.object({
   send: z.boolean().optional(), // false = compute only (preview), true = email it
   lines: z.array(z.object({
     label: z.string().max(120).optional(),
-    baseValue: z.number().min(0).max(1_000_000),
+    baseValue: z.number().min(0).max(1_000_000).optional(),
+    device_id: z.string().uuid().optional(),
+    storage: z.string().max(40).optional(),
+    condition: conditionSchema,
   })).min(1).max(50),
 })
 
@@ -45,13 +56,14 @@ export async function POST(request: NextRequest) {
     }
     const { customerId, horizonYears, lines } = parsed.data
 
-    // Recompute residuals server-side from the depreciation table (authoritative).
+    // Recompute residuals server-side (authoritative): pricing engine for base
+    // values where not sent, admin-configured depreciation for the projection.
+    const table = tableFromAnnualRate(await loadAnnualDepreciationRate())
     const months = horizonYears * 12
-    const pricedLines = lines.map((l) => ({
-      label: l.label ?? '',
-      baseValue: Math.round(l.baseValue * 100) / 100,
-      residualValue: estimateResidualValue(l.baseValue, months),
-    }))
+    const { priced: pricedLines, errors: lineErrors } = await resolveQuoteLines(lines, months, table)
+    if (pricedLines.length === 0) {
+      return NextResponse.json({ error: 'No line could be priced', lineErrors }, { status: 400 })
+    }
     const total = Math.round(pricedLines.reduce((s, l) => s + l.residualValue, 0) * 100) / 100
 
     // Customer lookup is RLS-scoped to the actor's tenant.
@@ -72,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Preview mode: return the computed numbers without sending.
     if (parsed.data.send === false) {
-      return NextResponse.json({ quoteNumber, total, lines: pricedLines, sent: false })
+      return NextResponse.json({ quoteNumber, total, lines: pricedLines, lineErrors, sent: false })
     }
 
     if (!customer.contact_email) {

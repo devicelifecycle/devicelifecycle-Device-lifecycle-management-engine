@@ -21,7 +21,7 @@ export async function GET() {
   const supabase = createServiceRoleClient()
   const [tenantRes, custCount, userCount] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle(),
-    supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+    supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('is_active', true),
     supabase.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
   ])
 

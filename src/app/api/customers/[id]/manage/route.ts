@@ -1,5 +1,5 @@
 // ============================================================================
-// VAR CUSTOMER MANAGEMENT — suspend / reactivate / assign / move
+// VAR CUSTOMER MANAGEMENT — suspend / reactivate / assign / move / assign plan
 // ============================================================================
 // Console actions for a VAR Entity Admin (whole tenant) or Regional Manager
 // (their region only). Tenant isolation is enforced by RLS on the authenticated
@@ -18,13 +18,14 @@ const manageSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('reactivate') }),
   z.object({ action: z.literal('assign'), repId: z.string().uuid().nullable() }),
   z.object({ action: z.literal('move'), region: z.string().min(1).max(80).nullable() }),
+  z.object({ action: z.literal('assign_plan'), planId: z.string().uuid().nullable() }),
 ])
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { profile, effectiveRole } = auth
+    const { supabase, profile, effectiveRole } = auth
     const { id } = await params
 
     // RLS scopes this read to the actor's tenant → null means not found OR not
@@ -51,10 +52,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
+    // An assignment must reference a real catalog row; null clears the override
+    // so the customer inherits the VAR tenant plan again.
+    if (a.action === 'assign_plan' && a.planId) {
+      const { data: plan } = await supabase.from('subscription_plans').select('id').eq('id', a.planId).maybeSingle()
+      if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 400 })
+    }
+
     const fields =
       a.action === 'suspend' ? { is_active: false }
       : a.action === 'reactivate' ? { is_active: true }
       : a.action === 'assign' ? { assigned_rep_id: a.repId }
+      : a.action === 'assign_plan' ? { plan_id: a.planId }
       : { region: a.region }
 
     const updated = await CustomerService.setManagedFields(id, fields)
