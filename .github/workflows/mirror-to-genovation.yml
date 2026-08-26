@@ -1,0 +1,38 @@
+name: Mirror to Genovation-ai/DLM
+
+# Pushes every branch and tag in this repo to https://github.com/Genovation-ai/DLM
+# on every push here, so that second repo stays an exact mirror. Requires a
+# repo secret named MIRROR_TOKEN — a personal access token on the Genovation-ai
+# side with `repo` scope — set at:
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+# The token is only ever read inside this job's environment; it is never
+# logged (GitHub masks registered secret values in Action logs automatically).
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["**"]
+  workflow_dispatch: {}
+
+jobs:
+  mirror:
+    name: Push mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout full history (all branches + tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Push --mirror to Genovation-ai/DLM
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+        run: |
+          if [ -z "$MIRROR_TOKEN" ]; then
+            echo "::error::MIRROR_TOKEN secret is not set on this repo — add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          git push "https://x-access-token:${MIRROR_TOKEN}@github.com/Genovation-ai/DLM.git" --mirror
