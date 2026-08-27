@@ -205,6 +205,10 @@ export const customerSchema = z.object({
   credit_limit: z.number().optional(),
   notes: z.string().optional(),
   default_risk_mode: z.enum(['retail', 'enterprise']).optional(),
+  /** Trade-in quote process spec's Option A/B: 'var_only' (VAR reviews and
+   *  forwards the released quote themselves) vs the default 'var_and_customer'
+   *  (both notified simultaneously). */
+  quote_comm_mode: z.enum(['var_only', 'var_and_customer']).optional(),
   organization_id: z.string().uuid().optional(),
   is_active: z.boolean().optional(),
 })

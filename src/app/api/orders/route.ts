@@ -259,6 +259,55 @@ export async function POST(request: NextRequest) {
       )
     })().catch(err => console.error('Admin order notification error:', err))
 
+    // Notify the VAR (in-app + email) when a trade-in quote is submitted for pricing —
+    // per the trade-in quote process spec, submission notifies VAR + end customer + BB
+    // Admin all three. Only applies to a real VAR tenant (skipped for BB's own direct/
+    // platform-tenant customers, where "the VAR" doesn't exist).
+    if (orderData.type === 'trade_in' && nonPlatformTenantId(auth.tenantId)) {
+      ;(async () => {
+        const svc = createServiceRoleClient()
+        const { data: varStaff } = await svc
+          .from('users')
+          .select('id, email, full_name')
+          .eq('tenant_id', auth.tenantId)
+          .in('role', ['var_entity_admin', 'var_regional_manager', 'var_sales_rep'])
+          .eq('is_active', true)
+        const orderLink = `/orders/${order.id}`
+        const title = `New Trade-In Quote Submitted — #${order.order_number}`
+        const message = `A trade-in quote #${order.order_number} has been submitted for pricing.`
+        await Promise.all(
+          (varStaff || []).flatMap((staff) => {
+            const tasks = [
+              NotificationService.createNotification({
+                user_id: staff.id,
+                type: 'in_app',
+                title,
+                message,
+                link: orderLink,
+                metadata: { order_id: order.id, order_number: order.order_number, status: order.status, audience: 'var' },
+              }).catch(() => {}),
+            ]
+            if (staff.email) {
+              tasks.push(
+                EmailService.sendOrderStatusEmail({
+                  to: staff.email,
+                  recipientName: staff.full_name || 'Team',
+                  orderNumber: order.order_number,
+                  orderId: order.id,
+                  fromStatus: 'new',
+                  toStatus: order.status,
+                  subject: title,
+                  message,
+                  tenantId: auth.tenantId ?? null,
+                }).catch(() => {}) as Promise<void>
+              )
+            }
+            return tasks
+          })
+        )
+      })().catch(err => console.error('VAR order notification error:', err))
+    }
+
     // Notify all active vendors (in-app + email) when a CPO order is open for bidding.
     // Draft CPO orders (created by internal staff) are NOT yet open — notify on submission instead.
     if (orderData.type === 'cpo' && order.status !== 'draft') {

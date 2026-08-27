@@ -1,11 +1,10 @@
-'use client'
+﻿'use client'
 
 // ============================================================================
-// ADMIN — ROLES (RBAC) + delegated role assignment
+// ADMIN — ROLES (RBAC) + delegated role assignment + permission matrix
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
-import { ComingSoon } from '@/components/ComingSoon'
 import { toast } from 'sonner'
 import { Loader2, ShieldCheck, UserPlus } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -13,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import type { PermissionKey } from '@/lib/permissions'
 
 interface Role {
   id: string
@@ -24,12 +24,18 @@ interface Role {
   members: number
 }
 
+interface RbacMatrix {
+  permissions: PermissionKey[]
+  roles: Record<string, PermissionKey[]>
+}
+
 export default function RolesPage() {
-  return <ComingSoon title="Roles & Access" />
+  return <RolesPageImpl />
 }
 
 function RolesPageImpl() {
   const [roles, setRoles] = useState<Role[]>([])
+  const [matrix, setMatrix] = useState<RbacMatrix | null>(null)
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')
   const [roleKey, setRoleKey] = useState('')
@@ -47,7 +53,16 @@ function RolesPageImpl() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  const loadMatrix = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/rbac/permissions')
+      if (res.ok) setMatrix(await res.json())
+    } catch {
+      // matrix is optional / non-blocking
+    }
+  }, [])
+
+  useEffect(() => { void load(); void loadMatrix() }, [load, loadMatrix])
 
   const assign = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,10 +88,10 @@ function RolesPageImpl() {
   const uniqueRoleKeys = Array.from(new Set(roles.map((r) => r.key)))
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <ShieldCheck className="h-6 w-6 text-primary" /> Roles & Access
+          <ShieldCheck className="h-6 w-6 text-primary" /> Roles &amp; Access
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">System roles plus delegated VAR roles (Entity Admin / Regional Manager / Sales Rep). Assign a user to a delegated role below.</p>
       </div>
@@ -128,6 +143,41 @@ function RolesPageImpl() {
           )}
         </CardContent>
       </Card>
+
+      {matrix && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Permission Matrix</CardTitle>
+            <CardDescription>Capabilities granted to each system role (read-only view of the active RBAC map).</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="pb-2 pr-4 font-medium">Permission</th>
+                    {Object.keys(matrix.roles).map((rk) => (
+                      <th key={rk} className="pb-2 pr-4 font-medium">{rk}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrix.permissions.map((p) => (
+                    <tr key={p} className="border-b last:border-0">
+                      <td className="py-2 pr-4 font-mono text-xs">{p}</td>
+                      {Object.entries(matrix.roles).map(([rk, perms]) => (
+                        <td key={rk} className="py-2 pr-4 text-center">
+                          {perms.includes(p) ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

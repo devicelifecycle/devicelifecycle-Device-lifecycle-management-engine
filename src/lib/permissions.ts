@@ -23,7 +23,7 @@ export const PERMISSION_KEYS = [
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number]
 
-const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
+export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   admin: [...PERMISSION_KEYS],
   coe_manager: [
     'tenant.view', 'user.view',
@@ -62,6 +62,14 @@ const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
 export function hasPermission(role: string | null | undefined, permission: PermissionKey): boolean {
   if (!role) return false
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false
+}
+
+/**
+ * Convenience wrapper around {@link hasPermission}. Checks whether role
+ * (or, if omitted, treated as null) is granted permission.
+ */
+export function can(permission: PermissionKey, role?: string | null): boolean {
+  return hasPermission(role ?? null, permission)
 }
 
 /** All permission keys granted to a role. */

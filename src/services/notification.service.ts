@@ -8,6 +8,7 @@ import { EmailService } from '@/services/email.service'
 import { ORDER_EMAIL_CONFIG } from '@/lib/constants'
 import { getAppUrl } from '@/lib/app-url'
 import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
 import type {
   Notification,
   NotificationType,
@@ -210,12 +211,15 @@ export class NotificationService {
     const vendorMessageText = config.vendorMessage
       ? config.vendorMessage(order.order_number)
       : messageText
+    const varMessageText = config.varMessage
+      ? config.varMessage(order.order_number)
+      : messageText
     const orderLink = `/orders/${order.id}`
     const customerOrderLink = `/customer/orders/${order.id}`
 
     // Collect email recipients in parallel
     // isCustomer drives which message body to use when the config defines customerMessage
-    const emailTargets: Array<{ email: string; name: string; userId?: string; isCustomer?: boolean; isVendor?: boolean }> = []
+    const emailTargets: Array<{ email: string; name: string; userId?: string; isCustomer?: boolean; isVendor?: boolean; isVar?: boolean }> = []
     const smsTargets: Array<{ phone: string; name: string }> = []
 
     const lookups: Promise<void>[] = []
@@ -229,9 +233,14 @@ export class NotificationService {
       lookups.push((async () => {
         const { data: cust } = await supabase
           .from('customers')
-          .select('contact_email, contact_name, organization_id')
+          .select('contact_email, contact_name, organization_id, quote_comm_mode')
           .eq('id', order.customer_id!)
           .single()
+        // Quote-communication Option A ("var_only"): the released quote is not
+        // sent to the customer at all — the VAR reviews it and forwards/pushes
+        // it themselves. Only applies to the 'quoted' release moment; every
+        // other status transition still notifies the customer normally.
+        if (toStatus === 'quoted' && cust?.quote_comm_mode === 'var_only') return
         if (cust?.contact_email) {
           emailTargets.push({ email: cust.contact_email, name: cust.contact_name || 'Customer', isCustomer: true })
         }
@@ -368,6 +377,29 @@ export class NotificationService {
       })())
     }
 
+    // VAR tenant staff — mirrors the admin lookup but scoped to the order's own
+    // tenant and the delegated VAR roles; skipped for BB's own platform-tenant
+    // orders, where "the VAR" doesn't exist.
+    if (config.var && orderTenantRow?.tenant_id && orderTenantRow.tenant_id !== PLATFORM_TENANT_ID) {
+      lookups.push((async () => {
+        const { data } = await supabase
+          .from('users')
+          .select('id, email, full_name, notification_email, role')
+          .eq('is_active', true)
+          .eq('tenant_id', orderTenantRow.tenant_id)
+          .in('role', ['var_entity_admin', 'var_regional_manager', 'var_sales_rep'])
+        const varStaff = data || []
+        varStaff.forEach(staff => {
+          inAppUserIds.add((staff as { id: string }).id)
+          const s = staff as { email?: string; notification_email?: string | null; full_name?: string; id: string }
+          const effectiveEmail = s.email?.endsWith('@login.local') ? s.notification_email : s.email
+          if (effectiveEmail) {
+            emailTargets.push({ email: effectiveEmail, name: s.full_name || 'Team', userId: s.id, isVar: true })
+          }
+        })
+      })())
+    }
+
     await Promise.all(lookups)
 
     // Look up notification preferences for every platform-account recipient
@@ -404,7 +436,7 @@ export class NotificationService {
     const sends: Promise<void>[] = []
 
     for (const target of uniqueTargets) {
-      const bodyText = target.isCustomer ? customerMessageText : target.isVendor ? vendorMessageText : messageText
+      const bodyText = target.isCustomer ? customerMessageText : target.isVendor ? vendorMessageText : target.isVar ? varMessageText : messageText
       sends.push(
         EmailService.sendOrderStatusEmail({
           to: target.email,

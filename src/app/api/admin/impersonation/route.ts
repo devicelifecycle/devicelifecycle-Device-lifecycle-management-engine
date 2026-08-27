@@ -49,8 +49,13 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServiceRoleClient()
-  const { data: target } = await supabase.from('users').select('id, tenant_id').eq('id', parsed.data.target_user_id).maybeSingle()
+  const { data: target } = await supabase.from('users').select('id, tenant_id, full_name, email, role').eq('id', parsed.data.target_user_id).maybeSingle()
   if (!target) return NextResponse.json({ error: 'Target user not found' }, { status: 404 })
+  // Server-side backstop for the UI's disabled button — an admin must never be
+  // able to impersonate another admin, regardless of how the request is made.
+  if (target.role === 'admin') {
+    return NextResponse.json({ error: 'Cannot impersonate another admin' }, { status: 403 })
+  }
 
   // Close any dangling active session for this admin before opening a new one.
   await supabase.from('impersonation_log').update({ ended_at: new Date().toISOString() })
@@ -63,7 +68,10 @@ export async function POST(request: NextRequest) {
     console.error('Failed to start impersonation:', error)
     return NextResponse.json({ error: 'Failed to start impersonation' }, { status: 500 })
   }
-  return NextResponse.json({ data }, { status: 201 })
+  return NextResponse.json({
+    data,
+    target: { id: target.id, full_name: target.full_name, email: target.email, role: target.role },
+  }, { status: 201 })
 }
 
 // PATCH — end a session.

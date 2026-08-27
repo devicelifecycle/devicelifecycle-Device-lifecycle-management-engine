@@ -1,11 +1,6 @@
-'use client'
-
-// ============================================================================
-// SUPPORT — TICKETS (list + create), tenant-scoped by the API
-// ============================================================================
+﻿'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ComingSoon } from '@/components/ComingSoon'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { LifeBuoy, Loader2, Plus } from 'lucide-react'
@@ -15,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { STATUS_LABEL, TICKET_PRIORITIES, type TicketStatus } from '@/lib/tickets'
+import { STATUS_LABEL, TICKET_PRIORITIES, ticketSlaState, type TicketStatus, type SlaState } from '@/lib/tickets'
 
 interface Ticket {
   id: string
@@ -24,6 +19,7 @@ interface Ticket {
   priority: string
   created_at: string
   updated_at: string
+  sla_due_at: string | null
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -35,12 +31,17 @@ const STATUS_STYLES: Record<string, string> = {
 const PRIORITY_STYLES: Record<string, string> = {
   low: 'text-muted-foreground', normal: 'text-foreground', high: 'text-amber-600', urgent: 'text-red-600 font-semibold',
 }
-
-export default function TicketsPage() {
-  return <ComingSoon title="Support" />
+const SLA_STYLES: Record<SlaState, string> = {
+  on_track: 'bg-emerald-100 text-emerald-700',
+  due_soon: 'bg-amber-100 text-amber-700',
+  breached: 'bg-red-100 text-red-700',
+  met: 'bg-muted text-muted-foreground',
+}
+const SLA_LABEL: Record<SlaState, string> = {
+  on_track: 'On track', due_soon: 'Due soon', breached: 'Breached', met: 'Met',
 }
 
-function TicketsPageImpl() {
+export default function TicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [subject, setSubject] = useState('')
@@ -126,15 +127,21 @@ function TicketsPageImpl() {
             <p className="py-8 text-center text-sm text-muted-foreground">No tickets yet.</p>
           ) : (
             <div className="divide-y">
-              {tickets.map((t) => (
-                <Link key={t.id} href={`/tickets/${t.id}`} className="flex items-center justify-between gap-4 py-3 hover:bg-muted/40">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{t.subject}</p>
-                    <p className={`text-xs capitalize ${PRIORITY_STYLES[t.priority] ?? ''}`}>{t.priority} priority</p>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[t.status] ?? 'bg-muted'}`}>{STATUS_LABEL[t.status]}</span>
-                </Link>
-              ))}
+              {tickets.map((t) => {
+                const sla = ticketSlaState(t)
+                return (
+                  <Link key={t.id} href={`/tickets/${t.id}`} className="flex items-center justify-between gap-4 py-3 hover:bg-muted/40">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{t.subject}</p>
+                      <p className={`text-xs capitalize ${PRIORITY_STYLES[t.priority] ?? ''}`}>{t.priority} priority</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SLA_STYLES[sla]}`}>{SLA_LABEL[sla]}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[t.status] ?? 'bg-muted'}`}>{STATUS_LABEL[t.status]}</span>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
         </CardContent>

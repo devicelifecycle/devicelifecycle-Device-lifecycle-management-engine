@@ -596,22 +596,32 @@ export const ORDER_EMAIL_CONFIG: Record<string, {
   vendor?: boolean
   admin?: boolean
   assigned?: boolean
+  /** VAR tenant staff (var_entity_admin/var_regional_manager/var_sales_rep) — skipped for platform-tenant orders. */
+  var?: boolean
   subject: (orderNumber: string) => string
   message: (orderNumber: string) => string
   // customerMessage overrides message when sending to customer recipients
   customerMessage?: (orderNumber: string) => string
   // vendorMessage overrides message when sending to vendor recipients
   vendorMessage?: (orderNumber: string) => string
+  // varMessage overrides message when sending to VAR tenant-staff recipients
+  varMessage?: (orderNumber: string) => string
 }> = {
   submitted: {
     admin: true,
+    var: true,
     subject: (n) => `New Order #${n} Submitted`,
     message: (n) => `A new order #${n} has been submitted and is awaiting your review.`,
   },
   quoted: {
+    // customer:true is the default; sendOrderTransitionNotifications suppresses
+    // the direct customer send when the order's customer has quote_comm_mode
+    // 'var_only' (Option A — VAR reviews and forwards it themselves).
     customer: true,
+    var: true,
     subject: (n) => `Quote Ready — Order #${n}`,
     message: (n) => `Your quote for order #${n} is ready for review. Please log in to accept or decline.`,
+    varMessage: (n) => `A trade-in quote for order #${n} has been released. Review it and, if your customer's communication setting is VAR-only, forward it to them yourself.`,
   },
   accepted: {
     customer: true,

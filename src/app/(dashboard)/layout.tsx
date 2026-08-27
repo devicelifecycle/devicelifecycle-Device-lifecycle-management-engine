@@ -9,6 +9,7 @@ import { useBranding } from '@/lib/branding-context'
 import { useAuth } from '@/hooks/useAuth'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner'
 import { PageTransition } from '@/components/ui/motion'
 
 const ChatAssistant = dynamic(
@@ -94,8 +95,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="app-shell-bg grain-overlay flex h-screen overflow-hidden text-foreground">
+      <ImpersonationBanner />
 
-      {/* ── Desktop sidebar — slides in/out ─────────────────────────────── */}
+      {/* ── Desktop sidebar — slides in/out ──────────────────────────── */}
       <AnimatePresence initial={false}>
         {sidebarOpen && (
           <motion.div
@@ -110,7 +112,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       </AnimatePresence>
 
-      {/* ── Mobile sidebar — full-screen drawer ─────────────────────────── */}
+      {/* ── Mobile sidebar — full-screen drawer ────────────────────── */}
       <AnimatePresence>
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
@@ -134,7 +136,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       </AnimatePresence>
 
-      {/* ── Main content ─────────────────────────────────────────────────── */}
+      {/* â”€â”€ Main content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         <Header
           sidebarOpen={sidebarOpen}

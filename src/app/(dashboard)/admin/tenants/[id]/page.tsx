@@ -247,6 +247,59 @@ export default function TenantDetailPageImpl() {
             <Field label="Tagline">
               <Input value={branding.tagline} disabled={isPlatform} onChange={(e) => set('tagline', e.target.value)} maxLength={160} />
             </Field>
+            <div className="border-t pt-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Outbound communications</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Email From name">
+                  <Input value={branding.emailFromName ?? ''} disabled={isPlatform} onChange={(e) => set('emailFromName', e.target.value || null)} placeholder="Your Company" maxLength={120} />
+                </Field>
+                <Field label="Email From address">
+                  <Input value={branding.emailFromAddress ?? ''} disabled={isPlatform} onChange={(e) => set('emailFromAddress', e.target.value || null)} placeholder="no-reply@yourdomain.com" maxLength={255} />
+                </Field>
+                <Field label="SMS sender ID">
+                  <Input value={branding.smsSenderId ?? ''} disabled={isPlatform} onChange={(e) => set('smsSenderId', e.target.value || null)} placeholder="+1 416 555 1234" maxLength={40} />
+                </Field>
+              </div>
+            </div>
+            <div className="border-t pt-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Auth &amp; access</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Allowed IPs">
+                  <Textarea
+                    value={(branding.allowedIps ?? []).join('\n')}
+                    disabled={isPlatform}
+                    onChange={(e) => set('allowedIps', e.target.value.split(/[,\n]/).map((s) => s.trim()).filter(Boolean))}
+                    rows={3}
+                    placeholder={"203.0.113.5\n198.51.100.0/24"}
+                  />
+                </Field>
+                <div className="space-y-4">
+                  <label className="flex items-center justify-between gap-3 rounded-md border p-3">
+                    <span className="text-sm">Require MFA</span>
+                    <Switch checked={!!branding.requireMfa} disabled={isPlatform} onCheckedChange={(v) => set('requireMfa', v)} />
+                  </label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Password min length</Label>
+                    <Input
+                      type="number"
+                      value={branding.passwordPolicy?.minLength ?? ''}
+                      disabled={isPlatform}
+                      onChange={(e) => set('passwordPolicy', { ...(branding.passwordPolicy ?? {}), minLength: e.target.value ? parseInt(e.target.value) : null })}
+                      placeholder="8"
+                    />
+                  </div>
+                  <label className="flex items-center justify-between gap-3 rounded-md border p-3">
+                    <span className="text-sm">Password requires symbol</span>
+                    <Switch
+                      checked={!!branding.passwordPolicy?.requireSymbol}
+                      disabled={isPlatform}
+                      onCheckedChange={(v) => set('passwordPolicy', { ...(branding.passwordPolicy ?? {}), requireSymbol: v })}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
             <Field label="Logo">
               <div className="flex flex-wrap items-center gap-3">
                 {branding.logoUrl ? (

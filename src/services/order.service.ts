@@ -721,7 +721,21 @@ export class OrderService {
     // Auto-create quote when order is submitted (trade_in only): run pricing for all items
     if (toStatus === 'submitted' && order.type === 'trade_in') {
       try {
-        await this.autoQuoteOrderItems(id)
+        const priced = await this.autoQuoteOrderItems(id)
+        // Trade-in quote process spec's auto-release toggle ("near term BB Admin
+        // reviews every quote; medium term it releases automatically"). Only
+        // fires when pricing actually succeeded — a $0/failed auto-quote must
+        // still wait for a human to price it manually.
+        if (priced) {
+          const { data: setting } = await supabase
+            .from('pricing_settings')
+            .select('setting_value')
+            .eq('setting_key', 'auto_release_trade_in_quotes')
+            .maybeSingle()
+          if (setting?.setting_value === 'true') {
+            await this.transitionOrder(id, 'quoted', userId, 'Auto-released by pricing algorithm')
+          }
+        }
       } catch (err) {
         console.error('[OrderService] Auto-quote failed:', err)
       }
@@ -759,8 +773,10 @@ export class OrderService {
   /**
    * Auto-generate quote (prices) for all order items when order is submitted.
    * Runs pricing calculation for each trade_in item and updates order_items.
+   * Returns whether every item priced successfully (total > 0) — the caller
+   * uses this to decide whether the order is eligible for auto-release.
    */
-  static async autoQuoteOrderItems(orderId: string): Promise<void> {
+  static async autoQuoteOrderItems(orderId: string): Promise<boolean> {
     const supabase = await createServerSupabaseClient()
 
     const { data: order, error: orderErr } = await supabase
@@ -769,14 +785,14 @@ export class OrderService {
       .eq('id', orderId)
       .single()
 
-    if (orderErr || !order || order.type !== 'trade_in') return
+    if (orderErr || !order || order.type !== 'trade_in') return false
 
     const { data: items } = await supabase
       .from('order_items')
       .select('id, device_id, quantity, storage, claimed_condition')
       .eq('order_id', orderId)
 
-    if (!items?.length) return
+    if (!items?.length) return false
 
     const riskMode = (order.customer as { default_risk_mode?: 'retail' | 'enterprise' } | null)?.default_risk_mode || 'retail'
     const normalizeStorageForPricing = (raw?: string): string => {
@@ -875,9 +891,10 @@ export class OrderService {
           updated_at: new Date().toISOString(),
         })
         .eq('id', orderId)
-    } else {
-      console.warn(`[autoQuoteOrderItems] orderId=${orderId} computed $0 total — order totals not updated`)
+      return true
     }
+    console.warn(`[autoQuoteOrderItems] orderId=${orderId} computed $0 total — order totals not updated`)
+    return false
   }
 
   /**

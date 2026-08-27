@@ -20,7 +20,13 @@ import {
   buildOperationsSummary,
   type NotificationBreakdown,
 } from '@/lib/operations-metrics'
+import { buildTradeInKpiSummary, type TriageRow } from '@/lib/trade-in-kpis'
 export const dynamic = 'force-dynamic'
+
+// Bounds for the trade-in KPI queries — a quarter is enough sample size for
+// these rates without risking an unbounded table scan.
+const KPI_WINDOW_DAYS = 90
+const KPI_ROW_CAP = 5000
 
 export async function GET() {
   const auth = await requireAuth()
@@ -30,6 +36,7 @@ export async function GET() {
   const supabase = createServiceRoleClient()
   const { thisMonthStart, lastMonthStart } = monthBounds(new Date())
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const kpiWindowStart = new Date(Date.now() - KPI_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
 
   // Bounded sets as rows; large tables via COUNT(head) only.
   const [
@@ -44,6 +51,8 @@ export async function GET() {
     notifEmailFailed,
     notifSmsSent,
     notifSmsFailed,
+    tradeInOrdersRes,
+    triageRowsRes,
   ] = await Promise.all([
     supabase.from('orders').select('id', { count: 'exact', head: true }).gte('created_at', thisMonthStart),
     supabase.from('orders').select('id', { count: 'exact', head: true }).gte('created_at', lastMonthStart).lt('created_at', thisMonthStart),
@@ -56,6 +65,16 @@ export async function GET() {
     supabase.from('notification_attempts').select('id', { count: 'exact', head: true }).eq('channel', 'email').eq('status', 'failed').gte('created_at', thirtyDaysAgo),
     supabase.from('notification_attempts').select('id', { count: 'exact', head: true }).eq('channel', 'sms').eq('status', 'sent').gte('created_at', thirtyDaysAgo),
     supabase.from('notification_attempts').select('id', { count: 'exact', head: true }).eq('channel', 'sms').eq('status', 'failed').gte('created_at', thirtyDaysAgo),
+    // Trade-in quote process KPIs (client spec, section 3) — bounded to the window/cap above.
+    supabase.from('orders')
+      .select('status, submitted_at, received_at')
+      .eq('type', 'trade_in')
+      .gte('created_at', kpiWindowStart)
+      .limit(KPI_ROW_CAP),
+    supabase.from('triage_results')
+      .select('condition_changed, exception_required, exception_approved, exception_approved_by_id, triaged_at, order:orders(received_at)')
+      .gte('created_at', kpiWindowStart)
+      .limit(KPI_ROW_CAP),
   ])
 
   const vars = activeVarsRes.data ?? []
@@ -73,6 +92,36 @@ export async function GET() {
     { channel: 'sms', status: 'failed', count: notifSmsFailed.count ?? 0 },
   ]
 
+  // Trade-in KPIs: resolve the role of whoever decided each exception (needed
+  // to tell a customer dispute apart from a COE/admin rejection) via one
+  // bounded lookup, then shape the rows into what trade-in-kpis.ts expects.
+  const triageRows = triageRowsRes.data ?? []
+  const approverIds = [...new Set(
+    triageRows.map((r) => r.exception_approved_by_id as string | null).filter((id): id is string => !!id),
+  )]
+  const { data: approvers } = approverIds.length
+    ? await supabase.from('users').select('id, role').in('id', approverIds)
+    : { data: [] }
+  const approverRoleById = new Map((approvers ?? []).map((a) => [a.id as string, a.role as string]))
+
+  const shapedTriageRows: TriageRow[] = triageRows.map((r) => {
+    // PostgREST returns an object for this many-to-one embed; supabase-js's
+    // generic types it as an array, so normalize defensively (same pattern as
+    // the users-route customer-plan embed).
+    const embeddedOrder = r.order as { received_at?: string | null } | { received_at?: string | null }[] | null
+    const order = Array.isArray(embeddedOrder) ? embeddedOrder[0] ?? null : embeddedOrder
+    return {
+      condition_changed: r.condition_changed as boolean | null,
+      exception_required: r.exception_required as boolean | null,
+      exception_approved: r.exception_approved as boolean | null,
+      exception_approved_by_role: r.exception_approved_by_id ? approverRoleById.get(r.exception_approved_by_id as string) ?? null : null,
+      triaged_at: r.triaged_at as string | null,
+      order_received_at: order?.received_at ?? null,
+    }
+  })
+
+  const tradeInKpis = buildTradeInKpiSummary(tradeInOrdersRes.data ?? [], shapedTriageRows)
+
   const summary = buildOperationsSummary({
     ordersThisMonth: ordersThisMonth.count ?? 0,
     ordersLastMonth: ordersLastMonth.count ?? 0,
@@ -84,5 +133,5 @@ export async function GET() {
     licenses: buildLicenseTable(vars as Array<{ id: string; name?: string | null; settings?: unknown }>, customersByTenant),
   })
 
-  return NextResponse.json({ data: summary })
+  return NextResponse.json({ data: { ...summary, tradeInKpis } })
 }

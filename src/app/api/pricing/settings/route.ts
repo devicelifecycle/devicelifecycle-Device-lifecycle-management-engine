@@ -9,7 +9,7 @@ import type { PricingSettingsOverrides } from '@/services/pricing.service'
 export const dynamic = 'force-dynamic'
 
 
-const SETTING_KEYS: (keyof PricingSettingsOverrides | 'cpo_depreciation_rate' | 'cpo_buyback_years')[] = [
+const SETTING_KEYS: (keyof PricingSettingsOverrides | 'cpo_depreciation_rate' | 'cpo_buyback_years' | 'auto_release_trade_in_quotes')[] = [
   'channel_green_min', 'channel_yellow_min', 'marketplace_fee_percent',
   'breakage_risk_percent', 'competitive_relevance_min', 'competitor_ceiling_percent',
   'beat_competitor_percent', 'beat_competitor_amount', 'cpo_beat_amount',
@@ -18,6 +18,10 @@ const SETTING_KEYS: (keyof PricingSettingsOverrides | 'cpo_depreciation_rate' | 
   'margin_mode', 'custom_margin_percent', 'custom_margin_amount',
   'prefer_data_driven', 'demand_adjustment_enabled',
   'cpo_depreciation_rate', 'cpo_buyback_years',
+  // Trade-in quote process spec's auto-release toggle: skip BB Admin manual
+  // review and email the customer as soon as the order auto-prices. Default
+  // (row absent) is manual review — matches the spec's "near term" behavior.
+  'auto_release_trade_in_quotes',
 ]
 
 const SETTING_BOUNDS: Record<string, { min: number; max: number }> = {
@@ -88,7 +92,7 @@ export async function PATCH(request: NextRequest) {
 
     for (const [key, value] of updates) {
       let strVal: string
-      if (key === 'prefer_data_driven' || key === 'demand_adjustment_enabled') {
+      if (key === 'prefer_data_driven' || key === 'demand_adjustment_enabled' || key === 'auto_release_trade_in_quotes') {
         strVal = value === true || value === 'true' || value === '1' ? 'true' : 'false'
       } else if (key === 'margin_mode') {
         strVal = value === 'custom' ? 'custom' : 'auto'

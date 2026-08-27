@@ -184,6 +184,10 @@ export default function OrderDetailClient() {
   const [isSendingQuote, setIsSendingQuote] = useState(false)
   const [isSendingQuoteDirect, setIsSendingQuoteDirect] = useState(false)
   const [quoteValidityDays, setQuoteValidityDays] = useState(30)
+  // Whether the validity selector is in "Custom" mode — 15/30/60/90 are presets,
+  // anything else (including a value restored from a previous custom entry)
+  // should render as Custom rather than silently falling back to a preset.
+  const [isCustomValidity, setIsCustomValidity] = useState(false)
   const [isSendingTriageReport, setIsSendingTriageReport] = useState(false)
   const [isNotifyingPriceChange, setIsNotifyingPriceChange] = useState(false)
   const [isGeneratingPostTriageQuote, setIsGeneratingPostTriageQuote] = useState(false)
@@ -3438,7 +3442,14 @@ export default function OrderDetailClient() {
               {canSendQuote && ['draft', 'submitted', 'quoted'].includes(order.status) && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground whitespace-nowrap">Price guarantee:</span>
-                  <Select value={String(quoteValidityDays)} onValueChange={v => setQuoteValidityDays(Number(v))}>
+                  <Select
+                    value={isCustomValidity ? 'custom' : String(quoteValidityDays)}
+                    onValueChange={(v) => {
+                      if (v === 'custom') { setIsCustomValidity(true); return }
+                      setIsCustomValidity(false)
+                      setQuoteValidityDays(Number(v))
+                    }}
+                  >
                     <SelectTrigger className="h-8 text-xs flex-1">
                       <SelectValue />
                     </SelectTrigger>
@@ -3447,8 +3458,20 @@ export default function OrderDetailClient() {
                       <SelectItem value="30">30 days</SelectItem>
                       <SelectItem value="60">60 days</SelectItem>
                       <SelectItem value="90">90 days</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
                     </SelectContent>
                   </Select>
+                  {isCustomValidity && (
+                    <Input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={quoteValidityDays}
+                      onChange={(e) => setQuoteValidityDays(Math.min(365, Math.max(1, Number(e.target.value) || 1)))}
+                      className="h-8 w-16 text-xs"
+                      aria-label="Custom validity in days"
+                    />
+                  )}
                 </div>
               )}
 

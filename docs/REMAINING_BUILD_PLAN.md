@@ -1,4 +1,4 @@
-# Remaining VAR-Platform Build Plan
+﻿# Remaining VAR-Platform Build Plan
 
 Everything below is **additive** (no change to current single-tenant behavior),
 **tested** (pure logic gets unit tests; each phase runs tsc + full suite), and
@@ -40,4 +40,8 @@ and defaults to the platform tenant so it can't destabilize what already works.
 - `impersonation_log` + admin-only start/stop with a visible banner. Auth-sensitive; last.
 
 ## Status
-- [ ] R1  [ ] R2  [ ] R3  [ ] R4  [ ] R5  [ ] R6  [ ] R7  [ ] R8  [ ] R9
+- [x] R1 (done in prior phases)  [x] R2 (done)  [x] R3 (tickets + SLA)  [x] R4 (VAR admin done)
+- [x] R5 (white-label depth)  [x] R6 (quota/feature gating done)  [x] R7 (auth config)  [ ] R8 (runtime domain resolution — optional)  [x] R9 (impersonation)
+
+> See `docs/M4_COMPLETION.md` for the full Month-4 completion record (impersonation,
+> RBAC, API keys, comms/sender config, KB, ticket SLAs, auth enforcement).

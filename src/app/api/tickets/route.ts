@@ -7,6 +7,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { parsePaging } from '@/lib/paging'
 import { z } from 'zod'
+import { TICKET_SLA_HOURS } from '@/lib/tickets'
 export const dynamic = 'force-dynamic'
 
 const createSchema = z.object({
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceRoleClient()
   let query = supabase
     .from('tickets')
-    .select('id, tenant_id, subject, status, priority, created_by, created_at, updated_at', { count: 'exact' })
+    .select('id, tenant_id, subject, status, priority, created_by, created_at, updated_at, sla_due_at', { count: 'exact' })
     .order('updated_at', { ascending: false })
     .range(from, to)
 
@@ -46,11 +47,13 @@ export async function POST(request: NextRequest) {
   }
   const supabase = createServiceRoleClient()
 
+  const priority = parsed.data.priority
   const insert: Record<string, unknown> = {
     subject: parsed.data.subject,
-    priority: parsed.data.priority,
+    priority,
     created_by: auth.profile.id,
     customer_id: parsed.data.customer_id ?? null,
+    sla_due_at: new Date(Date.now() + (TICKET_SLA_HOURS[priority] ?? 24) * 3600 * 1000).toISOString(),
   }
   // Bind the ticket to the caller's tenant (falls back to the column default).
   if (auth.tenantId) insert.tenant_id = auth.tenantId

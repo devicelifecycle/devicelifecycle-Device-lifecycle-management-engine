@@ -175,6 +175,7 @@ const SETTINGS_DEFAULTS: Record<string, string> = {
   prefer_data_driven: 'false',
   cpo_depreciation_rate: '15',
   cpo_buyback_years: '3',
+  auto_release_trade_in_quotes: 'false',
 }
 
 type DepreciationPreviewBrand = 'apple' | 'samsung' | 'google' | 'oneplus' | 'other'
@@ -3588,6 +3589,30 @@ export default function AdminPricingClient() {
               </div>
               <p className="text-xs text-muted-foreground mt-3">Does not apply when the caller passes an explicit margin override (e.g., enterprise orders with custom margin).</p>
             </CardContent>
+          </Card>
+
+          {/* ── Trade-In Quote Auto-Release ──────────────────────────────────── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Trade-In Quote Auto-Release</CardTitle>
+                  <CardDescription>Skip BB Admin review and email the released quote to the customer as soon as an order auto-prices successfully. Off by default — every quote waits for manual review until enabled.</CardDescription>
+                </div>
+                <Switch
+                  checked={settingsForm.auto_release_trade_in_quotes === 'true'}
+                  onCheckedChange={async v => {
+                    setSettingsForm(prev => ({ ...prev, auto_release_trade_in_quotes: v ? 'true' : 'false' }))
+                    await fetch('/api/pricing/settings', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ auto_release_trade_in_quotes: v }),
+                    })
+                    toast.success(`Auto-release ${v ? 'enabled' : 'disabled'}`)
+                  }}
+                />
+              </div>
+            </CardHeader>
           </Card>
         </TabsContent>
       </Tabs>

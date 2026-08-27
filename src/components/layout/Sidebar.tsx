@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bell,
+  BookOpen,
   Boxes,
   Building2,
   ClipboardCheck,
@@ -20,6 +21,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   LogOut,
+  Mail,
   Network,
   Package,
   Receipt,
@@ -32,6 +34,7 @@ import {
   Truck,
   UserCog,
   Users,
+  Key,
 } from 'lucide-react'
 import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { cn } from '@/lib/utils'
@@ -64,6 +67,7 @@ const navSections: NavSection[] = [
       { title: 'Notifications', href: '/notifications', icon: Bell, roles: ['admin', 'coe_manager', 'coe_tech', 'sales', 'vendor'] },
       { title: 'Notifications', href: '/customer/notifications', icon: Bell, roles: ['customer'] },
       { title: 'Support', href: '/tickets', icon: LifeBuoy },
+      { title: 'Knowledge Base', href: '/support/knowledge-base', icon: BookOpen, roles: ['customer', 'vendor', 'sales', 'coe_manager', 'coe_tech', 'admin'] },
     ],
   },
   {
@@ -108,6 +112,9 @@ const navSections: NavSection[] = [
       { title: 'VAR Console', href: '/var', icon: Store, roles: ['admin', 'var_entity_admin', 'var_regional_manager', 'var_sales_rep'] },
       { title: 'Features', href: '/var/features', icon: SlidersHorizontal, roles: ['var_entity_admin', 'admin'] },
       { title: 'Customers', href: '/var/customers', icon: Users, roles: ['var_entity_admin', 'admin'] },
+      { title: 'API Keys', href: '/var/api-keys', icon: Key, roles: ['var_entity_admin', 'admin'] },
+      { title: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen, roles: ['admin', 'var_entity_admin'] },
+      { title: 'Communications', href: '/var/communications', icon: Mail, roles: ['var_entity_admin', 'admin'] },
       { title: 'Pricing', href: '/admin/pricing', icon: DollarSign, roles: ['admin'] },
       { title: 'Residual Value', href: '/admin/rve', icon: TrendingDown, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Commission', href: '/admin/commission', icon: Percent, roles: ['admin'] },
@@ -262,6 +269,25 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </button>
         </div>
       </div>
+      {/* Help / legal footer */}
+      <div className="px-4 pb-4 pt-1 flex items-center justify-center gap-3 text-[10px] text-white/35">
+        {branding.helpUrl && (
+          <a
+            href={branding.helpUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-white/70 transition-colors"
+          >
+            Help
+          </a>
+        )}
+        <Link href="/privacy-policy" className="hover:text-white/70 transition-colors">
+          Privacy Policy
+        </Link>
+      </div>
     </aside>
   )
 }
+
+
+

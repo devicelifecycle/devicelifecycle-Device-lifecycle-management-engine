@@ -19,9 +19,20 @@ export interface TenantBrandLabel {
   tagline: string
   supportEmail?: string | null
   supportPhone?: string | null
+  emailFromName?: string | null
+  emailFromAddress?: string | null
+  smsSenderId?: string | null
 }
 
-const DEFAULT_LABEL: TenantBrandLabel = { name: DEFAULT_BRANDING.name, tagline: DEFAULT_BRANDING.tagline, supportEmail: null, supportPhone: null }
+const DEFAULT_LABEL: TenantBrandLabel = {
+  name: DEFAULT_BRANDING.name,
+  tagline: DEFAULT_BRANDING.tagline,
+  supportEmail: null,
+  supportPhone: null,
+  emailFromName: null,
+  emailFromAddress: null,
+  smsSenderId: null,
+}
 
 /**
  * Pure — resolve a tenant's stored branding JSONB (already fetched by the
@@ -32,7 +43,15 @@ const DEFAULT_LABEL: TenantBrandLabel = { name: DEFAULT_BRANDING.name, tagline: 
 export function brandLabelFromRow(tenantId: string | null | undefined, branding: unknown): TenantBrandLabel {
   if (!tenantId || tenantId === PLATFORM_TENANT_ID) return DEFAULT_LABEL
   const resolved = resolveBranding(branding)
-  return { name: resolved.name, tagline: resolved.tagline, supportEmail: resolved.supportEmail ?? null, supportPhone: resolved.supportPhone ?? null }
+  return {
+    name: resolved.name,
+    tagline: resolved.tagline,
+    supportEmail: resolved.supportEmail ?? null,
+    supportPhone: resolved.supportPhone ?? null,
+    emailFromName: resolved.emailFromName ?? null,
+    emailFromAddress: resolved.emailFromAddress ?? null,
+    smsSenderId: resolved.smsSenderId ?? null,
+  }
 }
 
 /**

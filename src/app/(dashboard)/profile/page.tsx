@@ -9,6 +9,8 @@ import { Bell, CheckCircle2, Clock, Lock, Mail, Save, Shield, Smartphone, User }
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
+import { useBranding } from '@/lib/branding-context'
+import { validatePassword } from '@/lib/password-policy'
 import { Button } from '@/components/ui/button'
 
 // Module-level singleton — prevents a new client being created on every render of MfaCard
@@ -25,6 +27,7 @@ function ChangePasswordCard({ authEmail }: { authEmail: string }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isChanging, setIsChanging] = useState(false)
+  const branding = useBranding()
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
@@ -33,6 +36,11 @@ function ChangePasswordCard({ authEmail }: { authEmail: string }) {
     }
     if (newPassword.length < 8) {
       toast.error('Password must be at least 8 characters')
+      return
+    }
+    const policyError = validatePassword(newPassword, branding.passwordPolicy)
+    if (policyError) {
+      toast.error(policyError)
       return
     }
     setIsChanging(true)
@@ -119,6 +127,7 @@ function ChangePasswordCard({ authEmail }: { authEmail: string }) {
 
 function MfaCard() {
   const { enrollMfa, unenrollMfa, getMfaFactors } = useAuth()
+  const branding = useBranding()
   type TotpFactor = { id: string; friendly_name?: string; status: string }
   const [factors, setFactors] = useState<TotpFactor[]>([])
   const [enrolling, setEnrolling] = useState(false)
@@ -194,6 +203,11 @@ function MfaCard() {
 
   return (
     <Card>
+        {branding.requireMfa && factors.length === 0 && (
+          <div className="m-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            Your organization requires multi-factor authentication. Please enroll an authenticator app below.
+          </div>
+        )}
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <Smartphone className="h-4 w-4" /> Two-Factor Authentication

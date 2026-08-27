@@ -172,6 +172,8 @@ export interface Customer extends BaseEntity {
   is_active: boolean;
   default_risk_mode?: 'retail' | 'enterprise';
   plan_id?: string | null;
+  /** Trade-in quote process spec's Option A/B — who gets notified when a quote is released. */
+  quote_comm_mode?: 'var_only' | 'var_and_customer';
 }
 
 // ============================================================================

@@ -76,6 +76,7 @@ export default function CustomerDetailPage() {
       contact_phone: customer.contact_phone || '',
       notes: customer.notes || '',
       default_risk_mode: customer.default_risk_mode || '',
+      quote_comm_mode: customer.quote_comm_mode || 'var_and_customer',
     })
     setEditing(true)
   }
@@ -200,6 +201,17 @@ export default function CustomerDetailPage() {
                 <p className="text-xs text-muted-foreground">Used when suggesting prices for this customer&apos;s orders</p>
               </div>
               <div className="space-y-2">
+                <Label>Quote Communication</Label>
+                <Select value={form.quote_comm_mode || 'var_and_customer'} onValueChange={v => setForm(f => ({ ...f, quote_comm_mode: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="var_and_customer">VAR + Customer (both notified when a quote is released)</SelectItem>
+                    <SelectItem value="var_only">VAR only (VAR reviews and forwards the quote themselves)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Controls who gets emailed when a trade-in quote is released for this customer</p>
+              </div>
+              <div className="space-y-2">
                 <Label>Notes</Label>
                 <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
               </div>
@@ -229,6 +241,12 @@ export default function CustomerDetailPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Default Risk Mode (Pricing)</p>
                 <p className="font-medium capitalize">{customer.default_risk_mode || 'Retail'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Quote Communication</p>
+                <p className="font-medium">
+                  {customer.quote_comm_mode === 'var_only' ? 'VAR only' : 'VAR + Customer'}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Payment Terms</p>

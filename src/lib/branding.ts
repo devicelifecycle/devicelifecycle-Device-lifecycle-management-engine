@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // WHITE-LABEL BRANDING
 // ============================================================================
 // Normalizes a tenant's branding JSONB into a full object. Empty/invalid ->
@@ -20,6 +20,12 @@ export interface TenantBranding {
   primaryForeground: string
   /** Support email surfaced in customer-facing UI + email footers. */
   supportEmail: string | null
+  /** Branded display name used in the email "From" header (white-label). Falls back to `name`. */
+  emailFromName?: string | null
+  /** Branded verified "From" address for outbound email (white-label). Falls back to the platform/env default. */
+  emailFromAddress?: string | null
+  /** Twilio sender ID / phone number used for outbound SMS (white-label). Falls back to the platform Twilio number. */
+  smsSenderId?: string | null
   /** Optional secondary brand color as an HSL triplet (darker primary variant). */
   secondaryColor?: string | null
   /** Support phone surfaced alongside the support email. */
@@ -28,6 +34,17 @@ export interface TenantBranding {
   helpUrl?: string | null
   /** Marketing/tagline line. */
   tagline: string
+  /** Tenant-level IP allowlist (exact IPv4 addresses or CIDR ranges). Empty/null = no restriction. */
+  allowedIps?: string[] | null
+  /** When true, users in this tenant must enroll MFA (enforced at login). */
+  requireMfa?: boolean | null
+  /** Tenant password policy applied to user-chosen passwords. */
+  passwordPolicy?: {
+    minLength?: number | null
+    requireUppercase?: boolean | null
+    requireNumber?: boolean | null
+    requireSymbol?: boolean | null
+  } | null
 }
 
 /** Darkened primary-blue variant used when a tenant sets no secondary color. */
@@ -42,10 +59,16 @@ export const DEFAULT_BRANDING: TenantBranding = {
   sidebarBg: '222 47% 13%',
   primaryForeground: '0 0% 100%',
   supportEmail: null,
+  emailFromName: null,
+  emailFromAddress: null,
+  smsSenderId: null,
   secondaryColor: DEFAULT_SECONDARY_COLOR,
   supportPhone: null,
   helpUrl: null,
   tagline: 'Device Lifecycle Management Platform',
+  allowedIps: null,
+  requireMfa: null,
+  passwordPolicy: null,
 }
 
 /** HSL triplet like "221 83% 53%" (H 0-360, S/L 0-100%). */
@@ -80,7 +103,26 @@ export function resolveBranding(raw: unknown): TenantBranding {
     supportPhone: cleanStr(b.supportPhone, 32),
     helpUrl: cleanStr(b.helpUrl, 500),
     supportEmail: cleanStr(b.supportEmail, 255),
+    emailFromName: cleanStr(b.emailFromName, 120),
+    emailFromAddress: cleanStr(b.emailFromAddress, 255),
+    smsSenderId: cleanStr(b.smsSenderId, 40),
     tagline: cleanStr(b.tagline, 160) ?? DEFAULT_BRANDING.tagline,
+    allowedIps: Array.isArray(b.allowedIps)
+      ? (b.allowedIps as unknown[]).filter((x) => typeof x === 'string' && x.length > 0).map(String).slice(0, 100)
+      : null,
+    requireMfa: typeof b.requireMfa === 'boolean' ? b.requireMfa : null,
+    passwordPolicy:
+      b.passwordPolicy && typeof b.passwordPolicy === 'object'
+        ? (() => {
+            const p = b.passwordPolicy as Record<string, unknown>
+            return {
+              minLength: typeof p.minLength === 'number' ? p.minLength : null,
+              requireUppercase: !!p.requireUppercase,
+              requireNumber: !!p.requireNumber,
+              requireSymbol: !!p.requireSymbol,
+            }
+          })()
+        : null,
   }
 }
 

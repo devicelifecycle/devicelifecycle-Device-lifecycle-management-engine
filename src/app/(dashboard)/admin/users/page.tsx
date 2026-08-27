@@ -5,8 +5,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Shield, Pencil, Copy, Trash2, Sparkles } from 'lucide-react'
+import { Plus, Shield, Pencil, Copy, Trash2, Sparkles, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +31,7 @@ import { Switch } from '@/components/ui/switch'
 import { USER_ROLE_CONFIG } from '@/lib/constants'
 import { formatDateTime } from '@/lib/utils'
 import type { User, UserRole } from '@/types'
+import { setImpersonation } from '@/lib/impersonation'
 
 const roles: UserRole[] = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor']
 
@@ -167,6 +169,25 @@ export default function AdminUsersPage() {
       toast.success(`${user.full_name} will see the welcome tour again on next login`)
       fetchUsers()
     } catch { toast.error('Failed to reset onboarding') }
+  }
+
+  const router = useRouter()
+
+  const handleImpersonate = async (user: User) => {
+    try {
+      const res = await fetch('/api/admin/impersonation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_user_id: user.id, reason: 'Admin impersonation from User Management' }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to impersonate')
+      setImpersonation(json.data.id, json.target)
+      toast.success(`Now impersonating ${user.full_name}`)
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to impersonate')
+    }
   }
 
   const handleHardDelete = async () => {
@@ -423,6 +444,15 @@ export default function AdminUsersPage() {
                             <Sparkles className="h-4 w-4" />
                           </Button>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleImpersonate(u)}
+                          disabled={u.role === 'admin'}
+                          title={u.role === 'admin' ? 'Cannot impersonate another admin' : 'Impersonate this user'}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

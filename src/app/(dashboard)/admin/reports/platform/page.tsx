@@ -5,16 +5,22 @@
 // ============================================================================
 
 import { useEffect, useState } from 'react'
-import { Activity, Building2, Database, KeyRound, Loader2, Plug, Receipt, ShieldAlert, Users } from 'lucide-react'
+import { Activity, Building2, ClipboardCheck, Database, KeyRound, Loader2, Plug, Receipt, ShieldAlert, Users } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
 import type { PlatformSummary } from '@/lib/platform-metrics'
 import type { OperationsSummary } from '@/lib/operations-metrics'
+import type { TradeInKpiSummary } from '@/lib/trade-in-kpis'
 
+type OperationsSummaryWithKpis = OperationsSummary & { tradeInKpis: TradeInKpiSummary }
+
+/** '—' for a null metric (no qualifying data in the window) rather than a misleading 0. */
+const pctOrDash = (v: number | null): string => (v === null ? '—' : `${v}%`)
+const daysOrDash = (v: number | null): string => (v === null ? '—' : `${v} day${v === 1 ? '' : 's'}`)
 
 export default function PlatformReportPageImpl() {
   const [data, setData] = useState<PlatformSummary | null>(null)
-  const [ops, setOps] = useState<OperationsSummary | null>(null)
+  const [ops, setOps] = useState<OperationsSummaryWithKpis | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -122,6 +128,23 @@ export default function PlatformReportPageImpl() {
                   </tbody>
                 </table>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base"><ClipboardCheck className="h-4 w-4" /> Trade-in quote process KPIs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Metric icon={<Activity className="h-4 w-4" />} label="Quote-to-acceptance conversion" value={pctOrDash(ops.tradeInKpis.quoteConversionRatePct)} sub="90-day window" />
+                <Metric icon={<Activity className="h-4 w-4" />} label="Device receipt time" value={daysOrDash(ops.tradeInKpis.deviceReceiptTimeDays)} sub="Submission → arrival" />
+                <Metric icon={<Activity className="h-4 w-4" />} label="Inspection turnaround" value={daysOrDash(ops.tradeInKpis.inspectionTurnaroundDays)} sub="Receipt → final grade" />
+                <Metric icon={<Activity className="h-4 w-4" />} label="Grade adjustment rate" value={pctOrDash(ops.tradeInKpis.gradeAdjustmentRatePct)} sub="Final value differed from estimate" />
+                <Metric icon={<Activity className="h-4 w-4" />} label="Customer dispute rate" value={pctOrDash(ops.tradeInKpis.customerDisputeRatePct)} sub="Of adjusted offers" />
+                <Metric icon={<Database className="h-4 w-4" />} label="Recovery value" value="Not yet tracked" sub="No disposition-routing data source exists yet" />
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">Settlement accuracy is also not yet tracked — no device-level settlement/reconciliation data source exists yet.</p>
             </CardContent>
           </Card>
 

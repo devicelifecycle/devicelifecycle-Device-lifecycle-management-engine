@@ -20,6 +20,13 @@ interface BrandingContextValue {
   supportPhone: string | null
   helpUrl: string | null
   supportEmail: string | null
+  requireMfa: boolean
+  passwordPolicy: {
+    minLength?: number | null
+    requireUppercase?: boolean | null
+    requireNumber?: boolean | null
+    requireSymbol?: boolean | null
+  } | null
   tagline: string
 }
 
@@ -41,6 +48,8 @@ export function BrandingProvider({
     supportPhone: branding.supportPhone ?? null,
     helpUrl: branding.helpUrl ?? null,
     supportEmail: branding.supportEmail ?? null,
+    requireMfa: branding.requireMfa ?? false,
+    passwordPolicy: branding.passwordPolicy ?? null,
     tagline: branding.tagline,
   }
 

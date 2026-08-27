@@ -8,7 +8,7 @@ import type { Transporter } from 'nodemailer'
 import { getAppPath } from '@/lib/app-url'
 import { getTwilioClient, getTwilioConfig, isTwilioConfigured } from '@/lib/twilio/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { resolveTenantBrandLabel, type TenantBrandLabel } from '@/lib/tenant-brand-label'
 
 if (typeof window !== 'undefined') {
   throw new Error('EmailService cannot be imported in the browser')
@@ -62,8 +62,16 @@ function escapeHtml(input: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function getFromEmail(): string {
-  return process.env.RESEND_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || 'Byte-Back <onboarding@resend.dev>'
+function getFromEmail(brand?: TenantBrandLabel | null): string {
+  const rawAddress =
+    brand?.emailFromAddress ||
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.GMAIL_FROM_EMAIL ||
+    'onboarding@resend.dev'
+  // Strip any "Name <addr>" wrapper so we keep only the verified address.
+  const address = rawAddress.match(/<([^>]+)>/)?.[1] ?? rawAddress
+  const displayName = brand?.emailFromName || brand?.name || APP_NAME
+  return `${displayName} <${address}>`
 }
 
 /**
@@ -178,17 +186,18 @@ export class EmailService {
   static async sendEmail(
     to: string | string[],
     subject: string,
-    html: string
+    html: string,
+    brand?: TenantBrandLabel | null
   ): Promise<boolean> {
     const toList = Array.isArray(to) ? to : [to]
     const recipient = toList.join(', ')
-    const from = getFromEmail()
+    const from = getFromEmail(brand)
 
     // Prefer Gmail SMTP — easiest path, sends to anyone with no domain verification
     const gmail = getGmailTransporter()
     if (gmail) {
       try {
-        const fromEmail = process.env.GMAIL_FROM_EMAIL || `${APP_NAME} <${process.env.GMAIL_USER}>`
+        const fromEmail = `${brand?.emailFromName || brand?.name || APP_NAME} <${process.env.GMAIL_USER}>`
         await gmail.sendMail({
           from: fromEmail,
           to: toList,
@@ -245,7 +254,8 @@ export class EmailService {
     to: string | string[],
     subject: string,
     html: string,
-    attachments: Array<{ filename: string; content: Buffer; contentType: string }>
+    attachments: Array<{ filename: string; content: Buffer; contentType: string }>,
+    brand?: TenantBrandLabel | null
   ): Promise<boolean> {
     const toList = Array.isArray(to) ? to : [to]
     const recipient = toList.join(', ')
@@ -315,7 +325,8 @@ export class EmailService {
    */
   static async sendSMS(
     phoneNumber: string,
-    message: string
+    message: string,
+    options?: { brand?: TenantBrandLabel | null }
   ): Promise<boolean> {
     // Strip non-digits from phone number
     const digits = phoneNumber.replace(/\D/g, '')
@@ -329,7 +340,7 @@ export class EmailService {
     const e164 = `+1${local}` // North American number
 
     const tw = getTwilioClient()
-    const twilioFrom = getTwilioConfig()?.phoneNumber
+    const twilioFrom = options?.brand?.smsSenderId || getTwilioConfig()?.phoneNumber
     if (tw && twilioFrom) {
       try {
         await tw.messages.create({
@@ -399,7 +410,7 @@ export class EmailService {
 
               <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions, reply to this email or contact our support team.</p>`, 'full', brand)
 
-    return this.sendEmail(to, subject, html)
+    return this.sendEmail(to, subject, html, brand)
   }
 
   /**
@@ -451,7 +462,7 @@ export class EmailService {
               <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions, contact your administrator.</p>
 `, 'full', brand)
 
-    return this.sendEmail(to, `Account confirmation — Your login details for ${brand.name}`, html)
+    return this.sendEmail(to, `Account confirmation — Your login details for ${brand.name}`, html, brand)
   }
 
   /**
@@ -484,7 +495,7 @@ export class EmailService {
               <p style="margin:0 0 8px;color:#71717a;font-size:13px;">This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
 `, 'short', brand)
 
-    return this.sendEmail(to, `Reset your password — ${brand.name}`, html)
+    return this.sendEmail(to, `Reset your password — ${brand.name}`, html, brand)
   }
 
   /**
@@ -513,7 +524,7 @@ export class EmailService {
               <p style="margin:0;color:#71717a;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
 `, 'short', brand)
 
-    return this.sendEmail(to, `Your password reset code — ${brand.name}`, html)
+    return this.sendEmail(to, `Your password reset code — ${brand.name}`, html, brand)
   }
 
   /**
@@ -536,7 +547,7 @@ export class EmailService {
               <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your ${brand.name} administrator at ${brand.supportEmail || 'support@byte-back.ca'} immediately.</p>
 `, 'short', brand)
 
-    return this.sendEmail(to, `Password updated — ${brand.name}`, html)
+    return this.sendEmail(to, `Password updated — ${brand.name}`, html, brand)
   }
 
   /**
@@ -613,7 +624,7 @@ export class EmailService {
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive an email at each stage. If you have questions, reply to this email or log in to the portal and view your order.</p>
 `, 'full', brand)
 
-    return this.sendEmail(to, `Order #${orderNumber} Confirmed — ${brand.name}`, html)
+    return this.sendEmail(to, `Order #${orderNumber} Confirmed — ${brand.name}`, html, brand)
   }
 
   /**
@@ -676,7 +687,7 @@ export class EmailService {
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You'll receive an email each time this shipment's status changes. If you have questions, reply to this email or log in to the portal.</p>
 `, 'full', brand)
 
-    return this.sendEmail(to, `Order #${orderNumber} — ${copy.label} — ${brand.name}`, html)
+    return this.sendEmail(to, `Order #${orderNumber} — ${copy.label} — ${brand.name}`, html, brand)
   }
 
   /**
@@ -743,7 +754,7 @@ export class EmailService {
               <p style="margin:0;color:#a1a1aa;font-size:13px;">If you have questions about the quote, reply to this email or contact our team.</p>
 `, 'full', brand)
 
-    return this.sendEmail(to, `${urgencyText}Quote Awaiting Response — Order #${orderNumber}`, html)
+    return this.sendEmail(to, `${urgencyText}Quote Awaiting Response — Order #${orderNumber}`, html, brand)
   }
 
   static async sendRecurringTradeInReminderEmail(params: {
@@ -776,6 +787,6 @@ export class EmailService {
               <p style="margin:0;color:#a1a1aa;font-size:13px;">You can change or turn off this reminder schedule any time from your Team page.</p>
 `, 'full', brand)
 
-    return this.sendEmail(to, 'Time for your next trade-in batch', html)
+    return this.sendEmail(to, 'Time for your next trade-in batch', html, brand)
   }
 }
