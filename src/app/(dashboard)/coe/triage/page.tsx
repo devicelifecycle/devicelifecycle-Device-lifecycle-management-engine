@@ -9,6 +9,7 @@ import {
   ClipboardCheck, Search, AlertTriangle, CheckCircle2, Plus, Smartphone,
   Loader2, ShieldAlert, ShieldCheck, ShieldQuestion, Hash, FileText,
   Upload, X, CheckCircle, XCircle, AlertCircle, PackageSearch, Trash2, Download, FileSpreadsheet,
+  ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -142,6 +143,23 @@ function StatusPill({ value, label }: { value: 'yes' | 'no' | 'unknown'; label: 
 }
 
 export default function COETriagePage() {
+  // "How triage works" guide — starts open, then remembers the tech's last
+  // choice. Defaults to open on both server and first client render (no
+  // localStorage during SSR) and only flips after mount if they'd previously
+  // collapsed it, so there's no hydration mismatch.
+  const [guideOpen, setGuideOpen] = useState(true)
+  useEffect(() => {
+    const stored = localStorage.getItem('dlm_triage_guide_open')
+    if (stored !== null) setGuideOpen(stored === 'true')
+  }, [])
+  const toggleGuide = () => {
+    setGuideOpen((v) => {
+      const next = !v
+      try { localStorage.setItem('dlm_triage_guide_open', String(next)) } catch { /* storage unavailable */ }
+      return next
+    })
+  }
+
   const [pendingItems, setPendingItems] = useState<IMEIRecord[]>([])
   const [completedItems, setCompletedItems] = useState<IMEIRecord[]>([])
   const [showCompleted, setShowCompleted] = useState(false)
@@ -1169,6 +1187,37 @@ export default function COETriagePage() {
           </Badge>
         </div>
       </div>
+
+      {/* How triage works — collapsible step guide */}
+      <Card className="border-primary/20 bg-primary/[0.03]">
+        <button type="button" onClick={toggleGuide} className="flex w-full items-center justify-between gap-2 p-4 text-left">
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <ClipboardCheck className="h-4 w-4 text-primary" /> How triage works
+          </span>
+          {guideOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {guideOpen && (
+          <CardContent className="pt-0 pb-4">
+            <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {[
+                { title: 'Get devices into the queue', body: 'Search an order under Order Intake, upload a device list, or add one manually with "Add Device".' },
+                { title: 'Look up the device', body: 'IMEI lookup checks carrier lock, blacklist status, and warranty — TestPod can auto-fill battery health and screen condition.' },
+                { title: 'Inspect and grade', body: 'Open a device from Pending Queue and fill in physical condition, screen, battery health, and the functional test checklist.' },
+                { title: 'Submit', body: 'The system compares your grading to what the customer claimed and works out any price change automatically.' },
+                { title: 'Exceptions get flagged', body: 'A big enough condition change, or a locked device, needs a human decision — check Exceptions in the sidebar to resolve those.' },
+              ].map((step, i) => (
+                <li key={step.title} className="flex gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{i + 1}</span>
+                  <div>
+                    <p className="text-sm font-medium">{step.title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{step.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        )}
+      </Card>
 
       <Tabs defaultValue="queue">
         <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
