@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { useEffect, useState } from 'react'
+import { ComingSoon } from '@/components/ComingSoon'
 import { Activity, Building2, ClipboardCheck, Database, KeyRound, Loader2, Plug, Receipt, ShieldAlert, Users } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
@@ -18,7 +19,11 @@ type OperationsSummaryWithKpis = OperationsSummary & { tradeInKpis: TradeInKpiSu
 const pctOrDash = (v: number | null): string => (v === null ? '—' : `${v}%`)
 const daysOrDash = (v: number | null): string => (v === null ? '—' : `${v} day${v === 1 ? '' : 's'}`)
 
-export default function PlatformReportPageImpl() {
+export default function PlatformReportPage() {
+  return <ComingSoon title="Platform Analytics" />
+}
+
+function PlatformReportPageImpl() {
   const [data, setData] = useState<PlatformSummary | null>(null)
   const [ops, setOps] = useState<OperationsSummaryWithKpis | null>(null)
   const [loading, setLoading] = useState(true)

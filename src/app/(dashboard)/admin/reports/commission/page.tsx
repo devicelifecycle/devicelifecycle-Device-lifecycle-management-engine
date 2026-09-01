@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { ComingSoon } from '@/components/ComingSoon'
 import { BarChart3, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -21,7 +22,11 @@ import { projectVolume, effectiveTakeRate } from '@/lib/commission-report'
 interface VarOption { id: string; name: string; type: string }
 
 
-export default function CommissionReportPageImpl() {
+export default function CommissionReportPage() {
+  return <ComingSoon title="Commission Report" />
+}
+
+function CommissionReportPageImpl() {
   const [vars, setVars] = useState<VarOption[]>([])
   const [tenantId, setTenantId] = useState('')
   const [config, setConfig] = useState<CommissionConfig>(DEFAULT_COMMISSION_CONFIG)

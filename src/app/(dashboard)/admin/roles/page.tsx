@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { ComingSoon } from '@/components/ComingSoon'
 import { Loader2, ShieldCheck, UserPlus } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,7 +31,7 @@ interface RbacMatrix {
 }
 
 export default function RolesPage() {
-  return <RolesPageImpl />
+  return <ComingSoon title="Roles & Access" />
 }
 
 function RolesPageImpl() {

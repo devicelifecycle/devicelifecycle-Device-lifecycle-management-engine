@@ -5,10 +5,15 @@ import { BookOpen, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ComingSoon } from '@/components/ComingSoon'
 
 interface Article { id: string; title: string; slug: string; category: string; body: string; updated_at: string }
 
 export default function KnowledgeBasePage() {
+  return <ComingSoon title="Knowledge Base" />
+}
+
+function KnowledgeBasePageImpl() {
   const [articles, setArticles] = useState<{ id: string; title: string; category: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<Article | null>(null)
