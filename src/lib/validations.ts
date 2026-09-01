@@ -552,7 +552,7 @@ export const triageSubmitSchema = z.object({
   physical_condition: z.enum(DEVICE_CONDITION_VALUES),
   functional_grade: z.enum(DEVICE_CONDITION_VALUES),
   cosmetic_grade: z.enum(DEVICE_CONDITION_VALUES),
-  screen_condition: z.enum(['good', 'cracked', 'damaged', 'dead']),
+  screen_condition: z.enum(['good', 'cracked', 'damaged', 'dead', 'locked']),
   battery_health: z.coerce.number().min(0).max(100),
   storage_verified: z.boolean(),
   original_accessories: z.boolean(),

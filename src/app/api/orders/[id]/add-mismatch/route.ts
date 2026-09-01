@@ -18,10 +18,13 @@ function calculatePriceAdjustment(
   actual: DeviceCondition,
   quotedPrice: number
 ): number {
-  const order: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
+  // 'certified' sits alongside 'excellent' (same pricing tier) — omitting it
+  // made indexOf return -1 for a certified device, which skewed the step count
+  // for any mismatch involving a CPO 'certified' claimed/actual condition.
+  const order: DeviceCondition[] = ['new', 'certified', 'excellent', 'good', 'fair', 'poor']
   const claimedIdx = order.indexOf(claimed)
   const actualIdx = order.indexOf(actual)
-  if (actualIdx <= claimedIdx || quotedPrice <= 0) return 0
+  if (claimedIdx === -1 || actualIdx === -1 || actualIdx <= claimedIdx || quotedPrice <= 0) return 0
   const downgradeSteps = actualIdx - claimedIdx
   const pctPerStep = 0.15
   const reduction = quotedPrice * (1 - Math.pow(1 - pctPerStep, downgradeSteps))

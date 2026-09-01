@@ -19,7 +19,7 @@ export interface TriageInput {
   physical_condition: DeviceCondition
   functional_grade: DeviceCondition
   cosmetic_grade: DeviceCondition
-  screen_condition: 'good' | 'cracked' | 'damaged' | 'dead'
+  screen_condition: 'good' | 'cracked' | 'damaged' | 'dead' | 'locked'
   battery_health: number // Percentage 0-100
   storage_verified: boolean
   original_accessories: boolean
@@ -238,7 +238,11 @@ export class TriageService {
       finalCondition = this.downgradeCondition(finalCondition)
     }
 
-    // Screen condition affects grade significantly
+    // Screen condition affects grade significantly. A locked device is a
+    // special case — the tech couldn't get past the lock screen to verify
+    // function at all, so the condition genuinely can't be assessed. Don't
+    // guess 'poor'; force a human review instead (see exceptionRequired below).
+    const isLocked = input.screen_condition === 'locked'
     if (input.screen_condition === 'damaged' || input.screen_condition === 'dead') {
       finalCondition = 'poor'
     } else if (input.screen_condition === 'cracked') {
@@ -255,16 +259,21 @@ export class TriageService {
       imeiRecord.quoted_price || 0
     )
 
-    // Determine if exception is required
-    const exceptionRequired = conditionChanged && priceAdjustment < -50 // More than $50 adjustment
-    
+    // Determine if exception is required. A locked device always needs a
+    // human decision regardless of the price math above — its true condition
+    // is unknown until someone gets it unlocked.
+    const exceptionRequired = isLocked || (conditionChanged && priceAdjustment < -50) // More than $50 adjustment
+
     let exceptionReason: string | undefined
     if (exceptionRequired) {
-      exceptionReason = `Condition changed from ${imeiRecord.claimed_condition} to ${finalCondition}. ` +
-        `Price adjustment: $${priceAdjustment.toFixed(2)}. ` +
-        `Failed tests: ${failedTests}/${totalTests}. ` +
-        `Battery health: ${input.battery_health}%. ` +
-        `Screen: ${input.screen_condition}.`
+      exceptionReason = isLocked
+        ? `Device is locked and could not be fully verified during inspection. ` +
+          `Failed tests: ${failedTests}/${totalTests}. Battery health: ${input.battery_health}%.`
+        : `Condition changed from ${imeiRecord.claimed_condition} to ${finalCondition}. ` +
+          `Price adjustment: $${priceAdjustment.toFixed(2)}. ` +
+          `Failed tests: ${failedTests}/${totalTests}. ` +
+          `Battery health: ${input.battery_health}%. ` +
+          `Screen: ${input.screen_condition}.`
     }
 
     return {
@@ -281,9 +290,13 @@ export class TriageService {
    * Downgrade a condition by one level
    */
   private static downgradeCondition(condition: DeviceCondition): DeviceCondition {
-    const order: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
+    // 'certified' sits alongside 'excellent' (same 0.9x pricing multiplier, see
+    // calculatePriceAdjustment below) — missing it here meant indexOf returned
+    // -1 for a certified CPO device, which downgradeCondition then read as
+    // "one before 'new'" and silently upgraded the device instead.
+    const order: DeviceCondition[] = ['new', 'certified', 'excellent', 'good', 'fair', 'poor']
     const currentIndex = order.indexOf(condition)
-    return currentIndex < order.length - 1 ? order[currentIndex + 1] : 'poor'
+    return currentIndex >= 0 && currentIndex < order.length - 1 ? order[currentIndex + 1] : 'poor'
   }
 
   /**

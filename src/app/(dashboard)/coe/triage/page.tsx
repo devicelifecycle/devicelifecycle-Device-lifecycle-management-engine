@@ -30,7 +30,7 @@ import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 import type { IMEIRecord, DeviceCondition, Device } from '@/types'
 
 const conditions: DeviceCondition[] = ['new', 'excellent', 'good', 'fair', 'poor']
-const screenConditions = ['good', 'cracked', 'damaged', 'dead'] as const
+const screenConditions = ['good', 'cracked', 'damaged', 'dead', 'locked'] as const
 
 /**
  * Client-side-only heuristic for the "notify customer" checkbox's INITIAL
@@ -47,7 +47,7 @@ function looksLikeLikelyDowngrade(
   batteryHealth: string
 ): boolean {
   if (claimedCondition && physicalCondition !== claimedCondition) return true
-  if (screenCondition === 'cracked' || screenCondition === 'damaged' || screenCondition === 'dead') return true
+  if (screenCondition === 'cracked' || screenCondition === 'damaged' || screenCondition === 'dead' || screenCondition === 'locked') return true
   const battery = parseInt(batteryHealth, 10)
   if (Number.isFinite(battery) && battery < 80) return true
   return false
