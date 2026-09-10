@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { useAuthBranding } from '@/lib/auth-branding-context'
+import { validatePassword } from '@/lib/password-policy'
 
 // Password must be 8+ chars — no complexity requirements
 const PASSWORD_REGEX = /^.{8,}$/
@@ -147,6 +148,12 @@ export default function ResetPasswordPage() {
 
     if (!PASSWORD_REGEX.test(password)) {
       setError('Password must be at least 8 characters')
+      return
+    }
+
+    const policyError = validatePassword(password, branding.passwordPolicy)
+    if (policyError) {
+      setError(policyError)
       return
     }
 

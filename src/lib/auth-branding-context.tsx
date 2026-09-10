@@ -25,6 +25,7 @@ interface TenantBrandingContextValue {
   supportPhone: string | null
   helpUrl: string | null
   tagline: string
+  passwordPolicy: TenantBranding['passwordPolicy']
 }
 
 const AuthBrandingContext = createContext<TenantBrandingContextValue | null>(null)
@@ -52,6 +53,7 @@ export function AuthBrandingProvider({
     supportPhone: branding.supportPhone ?? null,
     helpUrl: branding.helpUrl ?? null,
     tagline: branding.tagline,
+    passwordPolicy: branding.passwordPolicy,
   }
 
   return (
