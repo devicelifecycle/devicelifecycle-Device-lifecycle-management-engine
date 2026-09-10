@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
       `Your Residual Value Quote (${quoteNumber})`,
       html,
       [{ filename: `${quoteNumber}.pdf`, content: pdf, contentType: 'application/pdf' }],
+      brand,
     )
 
     return NextResponse.json({ quoteNumber, total, sent })

@@ -292,7 +292,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       [
         { filename: `${filenameBase}.pdf`, content: Buffer.from(pdfBuffer), contentType: 'application/pdf' },
         { filename: `${filenameBase}.xlsx`, content: excelBuffer, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-      ]
+      ],
+      brand
     )
     // Send success is logged by EmailService's notification_attempts instrumentation
   } catch (bgError) {

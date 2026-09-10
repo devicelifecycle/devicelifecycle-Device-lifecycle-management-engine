@@ -259,7 +259,7 @@ export class EmailService {
   ): Promise<boolean> {
     const toList = Array.isArray(to) ? to : [to]
     const recipient = toList.join(', ')
-    const from = getFromEmail()
+    const from = getFromEmail(brand)
 
     const gmail = getGmailTransporter()
     if (gmail) {

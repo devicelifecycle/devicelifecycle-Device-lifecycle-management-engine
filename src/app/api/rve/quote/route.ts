@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
        residual value is <strong>$${total.toFixed(2)} CAD</strong>.</p>
        <p>This is an estimate from our depreciation table, not a binding offer.</p>`,
       [{ filename: `${quoteNumber}.pdf`, content: pdf, contentType: 'application/pdf' }],
+      brand,
     )
 
     return NextResponse.json({ quoteNumber, total, sent })
