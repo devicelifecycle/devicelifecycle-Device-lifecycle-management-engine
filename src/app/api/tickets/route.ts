@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceRoleClient()
   let query = supabase
     .from('tickets')
-    .select('id, tenant_id, subject, status, priority, created_by, created_at, updated_at, sla_due_at', { count: 'exact' })
+    .select('id, tenant_id, subject, status, priority, created_by, created_at, updated_at, sla_due_at, resolved_at', { count: 'exact' })
     .order('updated_at', { ascending: false })
     .range(from, to)
 

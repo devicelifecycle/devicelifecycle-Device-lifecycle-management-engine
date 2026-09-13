@@ -39,16 +39,25 @@ export const TICKET_SLA_HOURS: Record<TicketPriority, number> = {
 export type SlaState = 'on_track' | 'due_soon' | 'breached' | 'met'
 
 /**
- * Derive a ticket's SLA state from its status + due time. Resolved/closed
- * tickets are considered "met". Open tickets past `sla_due_at` are "breached";
- * those inside the final 25% of their window are "due_soon".
+ * Derive a ticket's SLA state from its status + due time. A resolved/closed
+ * ticket is "met" only if it was actually resolved by its due time — one
+ * resolved after `sla_due_at` (per `resolved_at`) stays "breached" so SLA
+ * reporting reflects reality instead of every closed ticket reading as met.
+ * Open tickets past `sla_due_at` are "breached"; those inside the final 25%
+ * of their window are "due_soon".
  */
 export function ticketSlaState(ticket: {
   status: TicketStatus
   sla_due_at: string | null
   created_at: string
+  resolved_at?: string | null
 }): SlaState {
-  if (ticket.status === 'resolved' || ticket.status === 'closed') return 'met'
+  if (ticket.status === 'resolved' || ticket.status === 'closed') {
+    if (ticket.sla_due_at && ticket.resolved_at) {
+      return new Date(ticket.resolved_at).getTime() > new Date(ticket.sla_due_at).getTime() ? 'breached' : 'met'
+    }
+    return 'met'
+  }
   if (!ticket.sla_due_at) return 'on_track'
   const due = new Date(ticket.sla_due_at).getTime()
   const now = Date.now()

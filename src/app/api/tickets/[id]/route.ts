@@ -69,7 +69,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!canTransitionTicket(s.ticket.status as TicketStatus, parsed.data.status)) {
       return NextResponse.json({ error: `Cannot move a ticket from ${s.ticket.status} to ${parsed.data.status}` }, { status: 400 })
     }
-    await s.supabase.from('tickets').update({ status: parsed.data.status, updated_at: new Date().toISOString() }).eq('id', id)
+    const isResolving = parsed.data.status === 'resolved' || parsed.data.status === 'closed'
+    await s.supabase.from('tickets').update({
+      status: parsed.data.status,
+      // Stamp when the ticket actually resolved (for SLA reporting), clear it
+      // on reopen so a later re-resolution gets a fresh, accurate timestamp.
+      resolved_at: isResolving ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
   }
 
   if (parsed.data.message?.trim()) {

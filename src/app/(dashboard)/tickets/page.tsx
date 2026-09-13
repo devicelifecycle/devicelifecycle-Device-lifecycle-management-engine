@@ -20,6 +20,7 @@ interface Ticket {
   created_at: string
   updated_at: string
   sla_due_at: string | null
+  resolved_at: string | null
 }
 
 const STATUS_STYLES: Record<string, string> = {

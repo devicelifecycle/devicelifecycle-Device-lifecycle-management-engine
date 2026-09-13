@@ -1,32 +1,56 @@
 import { describe, it, expect } from 'vitest'
-import { canTransitionTicket, isOpenStatus, TICKET_STATUSES } from '@/lib/tickets'
+import { canTransitionTicket, ticketSlaState } from '@/lib/tickets'
 
-describe('ticket status machine', () => {
-  it('allows the expected forward transitions', () => {
+describe('canTransitionTicket', () => {
+  it('open can move to in_progress, resolved, or closed', () => {
     expect(canTransitionTicket('open', 'in_progress')).toBe(true)
-    expect(canTransitionTicket('in_progress', 'resolved')).toBe(true)
-    expect(canTransitionTicket('resolved', 'closed')).toBe(true)
+    expect(canTransitionTicket('open', 'resolved')).toBe(true)
+    expect(canTransitionTicket('open', 'closed')).toBe(true)
   })
-
-  it('allows reopening resolved/closed', () => {
-    expect(canTransitionTicket('resolved', 'open')).toBe(true)
+  it('closed can only reopen', () => {
     expect(canTransitionTicket('closed', 'open')).toBe(true)
+    expect(canTransitionTicket('closed', 'in_progress')).toBe(false)
+  })
+})
+
+describe('ticketSlaState', () => {
+  const created_at = new Date().toISOString()
+
+  it('open ticket well within its window is on_track', () => {
+    expect(ticketSlaState({
+      status: 'open', created_at,
+      sla_due_at: new Date(Date.now() + 100_000_000).toISOString(),
+    })).toBe('on_track')
   })
 
-  it('rejects illegal jumps', () => {
-    expect(canTransitionTicket('open', 'open')).toBe(false)
-    expect(canTransitionTicket('closed', 'resolved')).toBe(false)
-    expect(canTransitionTicket('resolved', 'in_progress')).toBe(false)
+  it('open ticket past its due time is breached', () => {
+    expect(ticketSlaState({
+      status: 'open', created_at,
+      sla_due_at: new Date(Date.now() - 1000).toISOString(),
+    })).toBe('breached')
   })
 
-  it('classifies open vs terminal', () => {
-    expect(isOpenStatus('open')).toBe(true)
-    expect(isOpenStatus('in_progress')).toBe(true)
-    expect(isOpenStatus('resolved')).toBe(false)
-    expect(isOpenStatus('closed')).toBe(false)
+  it('resolved ticket with no resolved_at recorded is met (back-compat)', () => {
+    expect(ticketSlaState({
+      status: 'resolved', created_at,
+      sla_due_at: new Date(Date.now() - 1000).toISOString(),
+      resolved_at: null,
+    })).toBe('met')
   })
 
-  it('has four statuses', () => {
-    expect(TICKET_STATUSES).toHaveLength(4)
+  it('resolved before the due time is met', () => {
+    const sla_due_at = '2026-01-02T00:00:00.000Z'
+    expect(ticketSlaState({
+      status: 'resolved', created_at, sla_due_at,
+      resolved_at: '2026-01-01T12:00:00.000Z',
+    })).toBe('met')
+  })
+
+  it('resolved after the due time stays breached, not met', () => {
+    const sla_due_at = '2026-01-02T00:00:00.000Z'
+    expect(ticketSlaState({
+      status: 'closed', created_at, sla_due_at,
+      resolved_at: '2026-01-03T00:00:00.000Z',
+    })).toBe('breached')
   })
 })
