@@ -21,9 +21,14 @@ function onlyTenantId(auth: { effectiveRole: string; tenantId: string | null }):
   return auth.effectiveRole !== 'admin' ? auth.tenantId : null
 }
 
+// Internal staff tool — a customer/vendor account has no legitimate reason to
+// read or write another account's follow-up notes.
+const STAFF_ROLES = ['admin', 'coe_manager', 'coe_tech', 'sales', 'var_entity_admin', 'var_regional_manager', 'var_sales_rep']
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (!STAFF_ROLES.includes(auth.effectiveRole)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { page, limit, from, to } = parsePaging(request)
   const customerId = new URL(request.url).searchParams.get('customer_id')
   const scoped = onlyTenantId(auth)
@@ -43,6 +48,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (!STAFF_ROLES.includes(auth.effectiveRole)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
   if (!isValidDueDate(parsed.data.due_at)) {
@@ -68,6 +74,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (!STAFF_ROLES.includes(auth.effectiveRole)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = patchSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
 

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { canTransitionTicket, type TicketStatus } from '@/lib/tickets'
+import { resolveOwnCustomerId } from '@/lib/customer-self-scope'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -14,13 +15,21 @@ const patchSchema = z.object({
   message: z.string().min(1).max(5000).optional(),
 })
 
-// Load the ticket + enforce that a non-admin can only touch its own tenant's.
-async function loadScoped(id: string, auth: { effectiveRole: string; tenantId: string | null }) {
+// Load the ticket + enforce that a non-admin can only touch its own tenant's,
+// and that a plain 'customer' account can only touch its own ticket.
+async function loadScoped(id: string, auth: { effectiveRole: string; tenantId: string | null; profile: { id: string; organization_id: string | null } }) {
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase.from('tickets').select('*').eq('id', id).maybeSingle()
   if (error || !data) return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) }
   if (auth.effectiveRole !== 'admin' && auth.tenantId && data.tenant_id !== auth.tenantId) {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  }
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return { error: own.response }
+    if (data.customer_id !== own.customerId && data.created_by !== auth.profile.id) {
+      return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) }
+    }
   }
   return { ticket: data, supabase }
 }
@@ -28,6 +37,7 @@ async function loadScoped(id: string, auth: { effectiveRole: string; tenantId: s
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const s = await loadScoped(id, auth)
   if (s.error) return s.error
@@ -41,6 +51,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
 
   const parsed = patchSchema.safeParse(await request.json().catch(() => null))

@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ASSET_STATUSES } from '@/lib/assets'
+import { resolveOwnCustomerId } from '@/lib/customer-self-scope'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -53,12 +54,21 @@ function firstIssue(error: z.ZodError): string {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const parsed = bulkSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
   }
-  const { customer_id: customerId } = parsed.data
+
+  // A plain 'customer' account may only bulk-import against its own customer
+  // row, regardless of what customer_id it supplied.
+  let customerId = parsed.data.customer_id
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    customerId = own.customerId
+  }
   const rows = parsed.data.rows
 
   const supabase = createServiceRoleClient()

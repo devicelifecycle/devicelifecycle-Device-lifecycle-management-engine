@@ -8,6 +8,15 @@
 import { computeDealPricing, type CommissionConfig } from './commission'
 import { computeInvoiceTotals, type InvoiceLineItem, type InvoiceTotals } from './billing'
 
+/**
+ * Order statuses where money has actually moved (payment sent or the order
+ * closed) — the only statuses that should ever count toward billed revenue.
+ * Single source of truth for both the period→new-invoice route and the
+ * existing-invoice reconcile route, which previously used two different
+ * status lists and produced different totals for the same tenant+period.
+ */
+export const BILLABLE_ORDER_STATUSES = ['payment_sent', 'closed'] as const
+
 export interface PeriodOrder {
   order_number: string
   /** 'trade_in' | 'cpo' — anything else is treated as trade_in. */

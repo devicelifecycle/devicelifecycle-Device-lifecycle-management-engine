@@ -7,6 +7,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { canTransitionAsset, type AssetStatus } from '@/lib/assets'
 import { parsePaging } from '@/lib/paging'
+import { resolveOwnCustomerId } from '@/lib/customer-self-scope'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -35,9 +36,18 @@ function tenantScoped(auth: { effectiveRole: string; tenantId: string | null }):
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { page, limit, from, to } = parsePaging(request)
-  const customerId = new URL(request.url).searchParams.get('customer_id')
   const onlyTenant = tenantScoped(auth)
+
+  // A plain 'customer' account is pinned to its own customer row — tenant_id
+  // alone doesn't separate customers within the same tenant.
+  let customerId = new URL(request.url).searchParams.get('customer_id')
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    customerId = own.customerId
+  }
 
   const supabase = createServiceRoleClient()
   let query = supabase.from('customer_assets')
@@ -54,12 +64,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
 
+  // A plain 'customer' account may only register assets against its own
+  // customer row, regardless of what customer_id it supplied.
+  let customerId = parsed.data.customer_id
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    customerId = own.customerId
+  }
+
   const supabase = createServiceRoleClient()
   const insert: Record<string, unknown> = {
-    customer_id: parsed.data.customer_id, label: parsed.data.label,
+    customer_id: customerId, label: parsed.data.label,
     serial_number: parsed.data.serial_number ?? null, device_id: parsed.data.device_id ?? null,
     location: parsed.data.location ?? null, assigned_to: parsed.data.assigned_to ?? null, notes: parsed.data.notes ?? null,
   }
@@ -89,13 +109,22 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = patchSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
 
+  let ownCustomerId: string | null = null
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    ownCustomerId = own.customerId
+  }
+
   const supabase = createServiceRoleClient()
   const onlyTenant = tenantScoped(auth)
-  let sel = supabase.from('customer_assets').select('id, status, assigned_to, location, notes, tenant_id').eq('id', parsed.data.id)
+  let sel = supabase.from('customer_assets').select('id, customer_id, status, assigned_to, location, notes, tenant_id').eq('id', parsed.data.id)
   if (onlyTenant) sel = sel.eq('tenant_id', onlyTenant)
+  if (ownCustomerId) sel = sel.eq('customer_id', ownCustomerId)
   const { data: current } = await sel.maybeSingle()
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 

@@ -48,7 +48,11 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || undefined
-    const scope = customerScopeFilter({ role: profile.role, userId: profile.id, region: profile.region })
+    // Use effectiveRole (the caller's currently-active role for dual-role
+    // accounts), not profile.role — otherwise a user active in a narrower
+    // role (e.g. switched into var_sales_rep while their stored primary role
+    // is var_entity_admin) would still get the broader role's unscoped export.
+    const scope = customerScopeFilter({ role: effectiveRole, userId: profile.id, region: profile.region })
 
     const result = await CustomerService.getCustomers({
       page: 1,

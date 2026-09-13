@@ -19,6 +19,7 @@ const marginSpec = z.object({
 const configSchema = z.object({
   platformCommissionPct: z.number().min(0).max(1),
   productMarginPct: z.number().min(0).max(1),
+  holdbackPct: z.number().min(0).max(1),
   corpMargin: marginSpec,
   repMargin: marginSpec,
 })

@@ -5,11 +5,20 @@
 /** Minimal structural header type (compatible with next/headers ReadonlyHeaders). */
 type HeadersLike = { get(name: string): string | null }
 
-/** Best-effort client IP from proxy headers (falls back to 'unknown'). */
+/**
+ * Best-effort client IP from proxy headers (falls back to 'unknown').
+ * Prefers `x-real-ip` (set by the trusted edge proxy) over `x-forwarded-for`;
+ * when only XFF is present, takes the LAST entry (appended by the nearest
+ * trusted proxy) rather than the first, which a client can freely set —
+ * mirrors rate-limit.ts's getClientIp so both consumers agree, since this one
+ * gates the tenant IP allowlist and must not trust a spoofable header.
+ */
 export function getClientIp(headers: HeadersLike): string {
+  const realIp = headers.get('x-real-ip')?.trim()
+  if (realIp) return realIp
   const xff = headers.get('x-forwarded-for')
-  if (xff) return xff.split(',')[0].trim()
-  return headers.get('x-real-ip')?.trim() || 'unknown'
+  if (xff) return xff.split(',').pop()?.trim() || 'unknown'
+  return 'unknown'
 }
 
 /** True if `ip` is in `allowlist` (exact IPv4 addresses or CIDR ranges). */

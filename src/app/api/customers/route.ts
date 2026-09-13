@@ -21,17 +21,20 @@ export async function GET(request: NextRequest) {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
 
-    const { supabase, profile } = auth
+    const { supabase, profile, effectiveRole } = auth
 
-    if (['customer', 'vendor'].includes(profile.role)) {
+    // Gate on effectiveRole (the caller's currently-active role for dual-role
+    // accounts) — profile.role is the stored primary role and can disagree
+    // with which role the user actually switched into for this session.
+    if (['customer', 'vendor'].includes(effectiveRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const searchParams = request.nextUrl.searchParams
-    const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)
+    const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(effectiveRole)
     // Delegated VAR roles get narrowed to their region / assigned customers.
     // Inert (null) for internal + platform roles, so their listing is unchanged.
-    const scope = customerScopeFilter({ role: profile.role, userId: profile.id, region: profile.region })
+    const scope = customerScopeFilter({ role: effectiveRole, userId: profile.id, region: profile.region })
     const filters = {
       search: searchParams.get('search') || undefined,
       is_active: searchParams.get('is_active') === 'true' ? true :

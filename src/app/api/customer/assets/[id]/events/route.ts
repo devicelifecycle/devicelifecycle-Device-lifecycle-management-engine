@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { resolveOwnCustomerId } from '@/lib/customer-self-scope'
 import { isValidUUID } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
@@ -23,9 +24,17 @@ export async function GET(
 ) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   if (!isValidUUID(id)) {
     return NextResponse.json({ error: 'Invalid asset ID format' }, { status: 400 })
+  }
+
+  let ownCustomerId: string | null = null
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    ownCustomerId = own.customerId
   }
 
   const supabase = createServiceRoleClient()
@@ -35,6 +44,7 @@ export async function GET(
   let assetQuery = supabase.from('customer_assets').select('id').eq('id', id)
   const onlyTenant = tenantScoped(auth)
   if (onlyTenant) assetQuery = assetQuery.eq('tenant_id', onlyTenant)
+  if (ownCustomerId) assetQuery = assetQuery.eq('customer_id', ownCustomerId)
   const { data: asset } = await assetQuery.maybeSingle()
   if (!asset) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 

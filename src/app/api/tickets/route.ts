@@ -8,6 +8,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { parsePaging } from '@/lib/paging'
 import { z } from 'zod'
 import { TICKET_SLA_HOURS } from '@/lib/tickets'
+import { resolveOwnCustomerId } from '@/lib/customer-self-scope'
 export const dynamic = 'force-dynamic'
 
 const createSchema = z.object({
@@ -20,6 +21,7 @@ const createSchema = z.object({
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { page, limit, from, to } = parsePaging(request)
   const supabase = createServiceRoleClient()
@@ -32,6 +34,15 @@ export async function GET(request: NextRequest) {
   // Admins see every tenant; everyone else is scoped to their own tenant.
   if (auth.effectiveRole !== 'admin' && auth.tenantId) query = query.eq('tenant_id', auth.tenantId)
 
+  // A plain 'customer' account only sees tickets tied to its own customer
+  // record or created by itself — tenant_id alone doesn't separate customers
+  // within the same tenant.
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    query = query.or(`customer_id.eq.${own.customerId},created_by.eq.${auth.profile.id}`)
+  }
+
   const { data, error, count } = await query
   if (error) return NextResponse.json({ error: 'Failed to load tickets' }, { status: 500 })
   return NextResponse.json({ data, total: count ?? 0, page, limit })
@@ -40,11 +51,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
   }
+
+  // A plain 'customer' account can only open a ticket against its own
+  // customer row, regardless of what customer_id it supplied.
+  let customerId = parsed.data.customer_id ?? null
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    customerId = own.customerId
+  }
+
   const supabase = createServiceRoleClient()
 
   const priority = parsed.data.priority
@@ -52,7 +74,7 @@ export async function POST(request: NextRequest) {
     subject: parsed.data.subject,
     priority,
     created_by: auth.profile.id,
-    customer_id: parsed.data.customer_id ?? null,
+    customer_id: customerId,
     sla_due_at: new Date(Date.now() + (TICKET_SLA_HOURS[priority] ?? 24) * 3600 * 1000).toISOString(),
   }
   // Bind the ticket to the caller's tenant (falls back to the column default).

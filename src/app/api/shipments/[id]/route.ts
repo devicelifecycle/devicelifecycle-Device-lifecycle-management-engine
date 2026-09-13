@@ -2,7 +2,7 @@
 // SHIPMENT BY ID API ROUTE
 // ============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { ShipmentService } from '@/services/shipment.service'
 import { shipmentPatchSchema } from '@/lib/validations'
@@ -117,9 +117,11 @@ export async function PATCH(
         data.status,
         data.metadata
       )
-      // Notify the customer (email + SMS) on every status change — fire-and-forget
-      // so a mail hiccup never fails the status update.
-      void ShipmentService.notifyCustomerOfShipmentStatus(shipment.id)
+      // Notify the customer (email + SMS) on every status change — deferred via
+      // after() so it runs post-response but the runtime keeps the function
+      // alive for it (a bare `void` fire-and-forget can get frozen mid-flight
+      // once the response is sent on Vercel's serverless runtime).
+      after(() => ShipmentService.notifyCustomerOfShipmentStatus(shipment.id))
       return NextResponse.json(updated)
     }
 

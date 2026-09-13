@@ -2,7 +2,7 @@
 // SHIPMENTS API ROUTE
 // ============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ShipmentService } from '@/services/shipment.service'
@@ -194,8 +194,10 @@ export async function POST(request: NextRequest) {
     })
 
     // Email + SMS the customer that a shipment was created, with tracking —
-    // fire-and-forget. Subsequent status changes email them too (PATCH route).
-    void ShipmentService.notifyCustomerOfShipmentStatus(shipment.id)
+    // deferred via after() so the runtime keeps the function alive for it past
+    // the response (a bare `void` can get frozen mid-flight on Vercel).
+    // Subsequent status changes email them too (PATCH route).
+    after(() => ShipmentService.notifyCustomerOfShipmentStatus(shipment.id))
 
     const responsePayload: Shipment = shipment
 

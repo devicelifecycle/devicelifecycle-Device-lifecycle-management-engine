@@ -9,11 +9,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { commissionConfigFromSettings } from '@/lib/commission'
-import { reconcilePeriod, type PeriodOrder } from '@/lib/billing-reconcile'
+import { reconcilePeriod, type PeriodOrder, BILLABLE_ORDER_STATUSES } from '@/lib/billing-reconcile'
 export const dynamic = 'force-dynamic'
-
-// Statuses that don't count toward billed revenue.
-const NON_BILLABLE = ['draft', 'submitted', 'cancelled', 'rejected']
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth()
@@ -38,7 +35,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       .eq('tenant_id', invoice.tenant_id)
       .gte('created_at', invoice.period_start)
       .lte('created_at', `${invoice.period_end}T23:59:59`)
-      .not('status', 'in', `(${NON_BILLABLE.join(',')})`),
+      .in('status', BILLABLE_ORDER_STATUSES),
   ])
 
   const config = commissionConfigFromSettings(tenant?.settings)

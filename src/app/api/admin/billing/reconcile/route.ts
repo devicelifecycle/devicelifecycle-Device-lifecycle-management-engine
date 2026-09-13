@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { commissionConfigFromSettings } from '@/lib/commission'
-import { reconcilePeriod, type PeriodOrder } from '@/lib/billing-reconcile'
+import { reconcilePeriod, type PeriodOrder, BILLABLE_ORDER_STATUSES } from '@/lib/billing-reconcile'
 import { formatInvoiceNumber } from '@/lib/billing'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
@@ -23,9 +23,6 @@ const reconcileSchema = z.object({
   period_start: z.string().regex(DATE),
   period_end: z.string().regex(DATE),
 })
-
-/** Statuses where the money has actually moved (payment sent or period closed). */
-const BILLABLE_STATUSES = ['payment_sent', 'closed']
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
@@ -73,7 +70,7 @@ export async function POST(request: NextRequest) {
     supabase.from('orders')
       .select('order_number, type, final_amount, quoted_amount, total_amount')
       .eq('tenant_id', tenant_id)
-      .in('status', BILLABLE_STATUSES)
+      .in('status', BILLABLE_ORDER_STATUSES)
       .gte('created_at', period_start)
       .lte('created_at', `${period_end}T23:59:59`),
   ])

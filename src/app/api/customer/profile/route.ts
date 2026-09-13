@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveCompanyProfile } from '@/lib/company-profile'
+import { resolveOwnCustomerId } from '@/lib/customer-self-scope'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,14 @@ function onlyTenantId(auth: { effectiveRole: string; tenantId: string | null }):
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
-  const customerId = new URL(request.url).searchParams.get('customer_id')
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  let customerId = new URL(request.url).searchParams.get('customer_id')
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    customerId = own.customerId
+  }
   if (!customerId) return NextResponse.json({ error: 'customer_id is required' }, { status: 400 })
 
   const supabase = createServiceRoleClient()
@@ -38,14 +46,24 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (auth.effectiveRole === 'vendor') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = patchSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
+
+  // A plain 'customer' account may only update its own company profile,
+  // regardless of what customer_id it supplied.
+  let customerId = parsed.data.customer_id
+  if (auth.effectiveRole === 'customer') {
+    const own = await resolveOwnCustomerId(auth)
+    if (!own.ok) return own.response
+    customerId = own.customerId
+  }
 
   // Normalize + sanitize before storing, so only valid, capped data is saved.
   const profile = resolveCompanyProfile(parsed.data.profile)
 
   const supabase = createServiceRoleClient()
-  let up = supabase.from('customers').update({ company_profile: profile }).eq('id', parsed.data.customer_id)
+  let up = supabase.from('customers').update({ company_profile: profile }).eq('id', customerId)
   const scoped = onlyTenantId(auth)
   if (scoped) up = up.eq('tenant_id', scoped)
   const { data, error } = await up.select('id').single()
