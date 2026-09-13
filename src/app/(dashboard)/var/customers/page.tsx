@@ -260,8 +260,11 @@ function AssignPlanDialog({ customer, plans, onClose, onSaved }: {
   onClose: () => void
   onSaved: () => void
 }) {
-  // '' sentinel = "Inherit tenant plan", sent to the API as a null override.
-  const [planId, setPlanId] = useState(customer.plan_id ?? '')
+  // Radix SelectItem rejects value="" (reserved to mean "no selection"), so
+  // this sentinel stands in for "Inherit tenant plan" and is translated back
+  // to null before it reaches the API.
+  const INHERIT = '__inherit__'
+  const [planId, setPlanId] = useState(customer.plan_id ?? INHERIT)
   const [saving, setSaving] = useState(false)
 
   const save = async () => {
@@ -270,11 +273,11 @@ function AssignPlanDialog({ customer, plans, onClose, onSaved }: {
       const res = await fetch(`/api/customers/${customer.id}/manage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'assign_plan', planId: planId || null }),
+        body: JSON.stringify({ action: 'assign_plan', planId: planId === INHERIT ? null : planId }),
       })
       const j = await res.json().catch(() => null)
       if (!res.ok) { toast.error(j?.error || 'Could not assign plan'); return }
-      toast.success(planId ? `Plan assigned to ${customer.company_name}` : `${customer.company_name} now inherits the tenant plan`)
+      toast.success(planId !== INHERIT ? `Plan assigned to ${customer.company_name}` : `${customer.company_name} now inherits the tenant plan`)
       onClose()
       onSaved()
     } catch {
@@ -296,7 +299,7 @@ function AssignPlanDialog({ customer, plans, onClose, onSaved }: {
           <Select value={planId} onValueChange={setPlanId}>
             <SelectTrigger><SelectValue placeholder="Choose a plan" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Inherit tenant plan</SelectItem>
+              <SelectItem value={INHERIT}>Inherit tenant plan</SelectItem>
               {plans.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>

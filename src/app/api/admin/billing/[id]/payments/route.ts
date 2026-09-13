@@ -55,6 +55,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const invoice = await loadInvoice(supabase, id)
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // A refund can never exceed what's still net-paid on the invoice — without
+  // this, refunding the same payment twice (or refunding more than was ever
+  // paid) drives net negative with nothing stopping it.
+  if (parsed.data.kind === 'refund') {
+    const { data: existingRows } = await supabase.from('invoice_payments').select('kind, amount').eq('invoice_id', id)
+    const existingSummary = summarizePayments(invoice.total ?? 0, (existingRows ?? []) as PaymentRecord[])
+    if (parsed.data.amount > existingSummary.net) {
+      return NextResponse.json(
+        { error: `Refund of ${parsed.data.amount} exceeds the ${existingSummary.net} still net-paid on this invoice` },
+        { status: 400 },
+      )
+    }
+  }
+
   const { error } = await supabase.from('invoice_payments')
     .insert({ invoice_id: id, kind: parsed.data.kind, amount: parsed.data.amount, note: parsed.data.note ?? null, created_by: g.auth.profile.id })
   if (error) {

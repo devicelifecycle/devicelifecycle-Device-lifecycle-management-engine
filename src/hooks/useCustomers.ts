@@ -175,8 +175,12 @@ async function fetchMyCustomer(): Promise<Customer | null> {
  * Only fetches when user has customer role.
  */
 export function useMyCustomer() {
-  const { user } = useAuth()
-  const isCustomer = user?.role === 'customer'
+  const { user, hasRole } = useAuth()
+  // hasRole checks the effective (currently-active) role, not just the
+  // stored primary role -- a dual-role account switched into 'customer'
+  // must still resolve here, or every customer-console page hangs forever
+  // (the query never runs, so `customer` stays undefined indefinitely).
+  const isCustomer = !!user && hasRole('customer')
   const query = useQuery({
     queryKey: ['customers', 'me'],
     queryFn: fetchMyCustomer,

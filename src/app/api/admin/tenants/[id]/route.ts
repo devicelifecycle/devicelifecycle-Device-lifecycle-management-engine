@@ -17,6 +17,15 @@ export const dynamic = 'force-dynamic'
 const PLATFORM_TENANT_ID = 'a0000000-0000-4000-a000-0000000000bb'
 const hsl = z.string().regex(/^\d{1,3}\s+\d{1,3}%\s+\d{1,3}%$/, 'HSL triplet like "221 83% 53%"')
 
+// IPv4 address or CIDR range only — matches what network.ts's ipInAllowlist
+// actually parses. An entry that doesn't match this silently matches nothing,
+// which for an *allowlist* means every request from that tenant gets
+// rejected, including the admin trying to fix their own mistake.
+const ipOrCidr = z.string().regex(
+  /^(\d{1,3}\.){3}\d{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))?$/,
+  'Must be an IPv4 address (1.2.3.4) or CIDR range (1.2.3.0/24)',
+)
+
 const brandingSchema = z.object({
   name: z.string().max(120).optional(),
   logoText: z.string().max(6).optional(),
@@ -29,7 +38,7 @@ const brandingSchema = z.object({
   secondaryColor: hsl.nullable().optional(),
   supportPhone: z.string().regex(/^[\d ()+-]{0,24}$/, 'Digits/spaces/()+- only, max 24 chars').max(24).nullable().optional(),
   helpUrl: z.string().max(500).refine((v) => v === '' || /^https?:\/\//i.test(v), 'Must be an http(s) URL or empty').nullable().optional(),
-  allowedIps: z.array(z.string().max(64)).max(100).nullable().optional(),
+  allowedIps: z.array(ipOrCidr).max(100).nullable().optional(),
 })
 
 const patchSchema = z.object({

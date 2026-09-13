@@ -46,10 +46,10 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { profile } = auth
+    const { profile, effectiveRole } = auth
 
-    // Same internal-staff gate as the compute route.
-    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+    // Same internal-staff gate as the compute route, on effectiveRole.
+    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(effectiveRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -31,13 +31,14 @@ function CustomerCompanyProfilePageImpl() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!customer?.id) return
+    if (loadingCustomer) return // wait for the customer lookup to settle first
+    if (!customer?.id) { setLoading(false); return } // no customer resolved -- stop spinning forever
     fetch(`/api/customer/profile?customer_id=${customer.id}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { data?: { profile?: CompanyProfile } } | null) => d?.data?.profile && setProfile(d.data.profile))
       .catch(() => toast.error('Could not load company profile'))
       .finally(() => setLoading(false))
-  }, [customer?.id])
+  }, [customer?.id, loadingCustomer])
 
   const save = async () => {
     if (!customer?.id) return

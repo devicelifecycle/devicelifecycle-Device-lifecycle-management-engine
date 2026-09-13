@@ -103,7 +103,8 @@ function CustomerAssetsPageImpl() {
   const limit = 20
 
   const load = () => {
-    if (!customer?.id) return
+    if (loadingCustomer) return // wait for the customer lookup to settle first
+    if (!customer?.id) { setLoading(false); return } // no customer resolved -- stop spinning forever
     setLoading(true)
     fetch(`/api/customer/assets?customer_id=${customer.id}&page=${page}&limit=${limit}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -114,7 +115,7 @@ function CustomerAssetsPageImpl() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [customer?.id, page])
+  useEffect(load, [customer?.id, page, loadingCustomer])
 
   const changeStatus = async (asset: Asset, status: AssetStatus) => {
     if (!canTransitionAsset(asset.status, status)) return

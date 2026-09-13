@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils'
-import { residualSchedule, residualRetention } from '@/lib/rve'
+import { residualSchedule, residualRetention, tableFromAnnualRate, type DepreciationPoint } from '@/lib/rve'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 interface DeviceOption { id: string; make: string; model: string }
@@ -37,6 +37,13 @@ function RvePageImpl() {
   const [lines, setLines] = useState<Line[]>([newLine()])
   const [devices, setDevices] = useState<DeviceOption[]>([])
   const [sendOpen, setSendOpen] = useState(false)
+  // Admin-configured depreciation rate (pricing_settings.cpo_depreciation_rate)
+  // -- both /api/rve/quote routes project the emailed PDF off this same rate
+  // via tableFromAnnualRate(). Falls back to undefined (the hardcoded
+  // DEFAULT_DEPRECIATION curve) only until this loads, so the on-screen
+  // preview matches what the customer actually receives instead of always
+  // showing the generic curve.
+  const [depreciationTable, setDepreciationTable] = useState<DepreciationPoint[] | undefined>(undefined)
 
   const horizon = Math.max(1, Math.min(10, Number(years) || 3))
 
@@ -44,6 +51,16 @@ function RvePageImpl() {
     fetch('/api/devices?page_size=200&for_order_creation=1&sort_by=make&sort_order=asc')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setDevices(d.data || []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/pricing/settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const rate = Number(d?.data?.cpo_depreciation_rate)
+        if (Number.isFinite(rate)) setDepreciationTable(tableFromAnnualRate(rate))
+      })
       .catch(() => {})
   }, [])
 
@@ -83,12 +100,12 @@ function RvePageImpl() {
   }
 
   const priced = useMemo(
-    () => lines.map((l) => ({ ...l, residual: Math.round(l.base * residualRetention(horizon * 12) * 100) / 100 })),
-    [lines, horizon],
+    () => lines.map((l) => ({ ...l, residual: Math.round(l.base * residualRetention(horizon * 12, depreciationTable) * 100) / 100 })),
+    [lines, horizon, depreciationTable],
   )
   const total = useMemo(() => priced.reduce((s, l) => s + l.residual, 0), [priced])
   const scheduleFor = priced.find((l) => l.base > 0)
-  const schedule = scheduleFor ? residualSchedule(scheduleFor.base, horizon) : []
+  const schedule = scheduleFor ? residualSchedule(scheduleFor.base, horizon, depreciationTable) : []
 
   const addLine = () => setLines((ls) => [...ls, newLine()])
   const removeLine = (id: number) => setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.id !== id) : ls))

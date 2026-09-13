@@ -38,16 +38,24 @@ function CommissionSettingsPageImpl() {
   const [config, setConfig] = useState<CommissionConfig>(DEFAULT)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // A failed load must never let Save silently overwrite the tenant's real
+  // rates with DEFAULT — track it explicitly and block Save until reloaded.
+  const [loadFailed, setLoadFailed] = useState(false)
 
-  useEffect(() => {
+  const loadConfig = () => {
+    setLoading(true)
+    setLoadFailed(false)
     fetch('/api/admin/commission')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.config) setConfig(j.config) })
-      .catch(() => {})
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((j) => { if (j?.config) setConfig(j.config); else setLoadFailed(true) })
+      .catch(() => setLoadFailed(true))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(loadConfig, [])
 
   const save = async () => {
+    if (loadFailed) { toast.error('Reload the current settings before saving'); return }
     setSaving(true)
     try {
       const res = await fetch('/api/admin/commission', {
@@ -89,6 +97,13 @@ function CommissionSettingsPageImpl() {
           price and never appear as separate line items to the VAR.
         </p>
       </div>
+
+      {loadFailed && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>Couldn&apos;t load the current commission settings — showing defaults. Saving now would overwrite the real rates.</span>
+          <Button size="sm" variant="outline" onClick={loadConfig}>Retry</Button>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         {/* ── Config ─────────────────────────────────────────────── */}
@@ -136,7 +151,7 @@ function CommissionSettingsPageImpl() {
             </CardContent>
           </Card>
 
-          <Button onClick={save} disabled={saving} className="w-full sm:w-auto">
+          <Button onClick={save} disabled={saving || loadFailed} className="w-full sm:w-auto">
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save settings
           </Button>

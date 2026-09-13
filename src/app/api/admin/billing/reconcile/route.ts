@@ -49,15 +49,22 @@ export async function POST(request: NextRequest) {
 
   // Idempotency guard: invoices carry period_start/period_end columns natively,
   // so an existing live invoice for this exact tenant+period means already done.
-  const { data: existing } = await supabase
+  // Fails CLOSED — a failed/ambiguous lookup must block invoice creation, not
+  // silently allow a duplicate. Uses a list rather than .maybeSingle(), which
+  // errors (and, if the error is discarded, silently passes) when more than
+  // one live invoice already exists for the period.
+  const { data: existingRows, error: existingErr } = await supabase
     .from('invoices')
     .select('id, invoice_number')
     .eq('tenant_id', tenant_id)
     .eq('period_start', period_start)
     .eq('period_end', period_end)
     .neq('status', 'void')
-    .maybeSingle()
-  if (existing) {
+  if (existingErr) {
+    return NextResponse.json({ error: 'Failed to check for an existing invoice' }, { status: 500 })
+  }
+  if (existingRows && existingRows.length > 0) {
+    const existing = existingRows[0]
     return NextResponse.json(
       { error: 'An invoice for this VAR and period already exists', data: { id: existing.id, invoice_number: existing.invoice_number } },
       { status: 409 },

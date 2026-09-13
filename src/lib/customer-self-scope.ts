@@ -25,14 +25,22 @@ export type SelfScopeResult =
  * Resolves the caller's own customers.id when effectiveRole === 'customer'.
  * Callers must force every query's customer_id to this value — never trust a
  * client-supplied customer_id for this role.
+ *
+ * An organization can have more than one customers row (POST /api/customers
+ * explicitly checks for this — `.eq('is_active', true).limit(1)` rather than
+ * assuming uniqueness), so this can't use `.maybeSingle()`, which errors on
+ * more than one match. Prefers the oldest active row, matching that route's
+ * own reuse logic, falling back to the oldest row of any status.
  */
 export async function resolveOwnCustomerId(auth: SelfScopeAuth): Promise<SelfScopeResult> {
   if (!auth.profile.organization_id) {
     return { ok: false, response: NextResponse.json({ error: 'No organization associated with this account' }, { status: 400 }) }
   }
   const supabase = createServiceRoleClient()
-  const { data: customer } = await supabase
-    .from('customers').select('id').eq('organization_id', auth.profile.organization_id).maybeSingle()
+  const { data: customers } = await supabase
+    .from('customers').select('id, is_active').eq('organization_id', auth.profile.organization_id)
+    .order('created_at', { ascending: true })
+  const customer = customers?.find((c) => c.is_active) ?? customers?.[0]
   if (!customer) {
     return { ok: false, response: NextResponse.json({ error: 'Customer profile not found' }, { status: 404 }) }
   }

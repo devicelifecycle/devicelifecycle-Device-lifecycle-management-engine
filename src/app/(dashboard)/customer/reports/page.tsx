@@ -59,7 +59,7 @@ export default function CustomerReportsPage() {
 }
 
 function CustomerReportsPageImpl() {
-  const { customer } = useMyCustomer()
+  const { customer, isLoading: loadingCustomer } = useMyCustomer()
   const [stats, setStats] = useState<ReportStats>(EMPTY_STATS)
   const [loadingStats, setLoadingStats] = useState(true)
   const [recentAssets, setRecentAssets] = useState<RecentAsset[]>([])
@@ -79,14 +79,15 @@ function CustomerReportsPageImpl() {
 
   // Latest additions to the device register, straight off the register's list API.
   useEffect(() => {
-    if (!customer?.id) return
+    if (loadingCustomer) return // wait for the customer lookup to settle first
+    if (!customer?.id) { setLoadingAssets(false); return } // no customer resolved -- stop spinning forever
     setLoadingAssets(true)
     fetch(`/api/customer/assets?customer_id=${customer.id}&page=1&limit=${RECENT_ASSETS}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { data?: RecentAsset[] } | null) => setRecentAssets(d?.data ?? []))
       .catch(() => setRecentAssets([]))
       .finally(() => setLoadingAssets(false))
-  }, [customer?.id])
+  }, [customer?.id, loadingCustomer])
 
   // Order history uses the same scoped list API as the My Orders page.
   const { orders, total, isLoading: loadingOrders } = useOrders({

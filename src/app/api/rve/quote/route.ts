@@ -43,10 +43,12 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { supabase, profile } = auth
+    const { supabase, profile, effectiveRole } = auth
 
-    // Residual quotes are prepared by internal staff.
-    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
+    // Residual quotes are prepared by internal staff. Gate on effectiveRole
+    // (the currently-active role), not profile.role, so a dual-role account
+    // switched into a non-staff role can't still pass this check.
+    if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(effectiveRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

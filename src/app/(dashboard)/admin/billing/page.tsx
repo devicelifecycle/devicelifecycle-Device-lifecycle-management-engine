@@ -132,6 +132,14 @@ function BillingPageImpl() {
         body: JSON.stringify({ tenant_id: recTenantId, period_start: recStart, period_end: recEnd }),
       })
       const j = await res.json().catch(() => ({}))
+      if (res.status === 409 && j?.data?.invoice_number) {
+        // Not a failure -- this VAR+period was already reconciled. Surface it
+        // as the informational "already done" result the page's own copy
+        // promises, instead of a red error toast.
+        toast.info(`Invoice ${j.data.invoice_number} already exists for this VAR and period`)
+        await load()
+        return
+      }
       if (!res.ok) throw new Error(j?.error || 'Failed to reconcile period')
       setReconcileResult(j.data)
       toast.success(`Commission invoice ${j.data.invoice_number} created (${j.data.orders_count} orders)`)
