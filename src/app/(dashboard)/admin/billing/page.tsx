@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ComingSoon } from '@/components/ComingSoon'
-import { Calculator, Loader2, Plus, Receipt, Wallet } from 'lucide-react'
+import { Calculator, Loader2, Plus, Receipt, RefreshCw, Wallet } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -69,9 +69,11 @@ function BillingPageImpl() {
   const [recTenantId, setRecTenantId] = useState('')
   const [recStart, setRecStart] = useState('')
   const [recEnd, setRecEnd] = useState('')
+  const [recFee, setRecFee] = useState('')
   const [reconciling, setReconciling] = useState(false)
   const [reconcileResult, setReconcileResult] = useState<{ invoice_number: string; orders_count: number; total_commission: number } | null>(null)
   const [paymentsTarget, setPaymentsTarget] = useState<Invoice | null>(null)
+  const [rebuildingId, setRebuildingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -129,7 +131,12 @@ function BillingPageImpl() {
       const res = await fetch('/api/admin/billing/reconcile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: recTenantId, period_start: recStart, period_end: recEnd }),
+        body: JSON.stringify({
+          tenant_id: recTenantId,
+          period_start: recStart,
+          period_end: recEnd,
+          subscription_fee: recFee.trim() === '' ? undefined : Number(recFee) || 0,
+        }),
       })
       const j = await res.json().catch(() => ({}))
       if (res.status === 409 && j?.data?.invoice_number) {
@@ -148,6 +155,27 @@ function BillingPageImpl() {
       toast.error(err instanceof Error ? err.message : 'Failed to reconcile period')
     } finally {
       setReconciling(false)
+    }
+  }
+
+  // Rebuild a draft invoice's commission lines from its own period. Unlike the
+  // "reconcile a period" form (which creates a NEW invoice and can't carry a
+  // subscription fee), this route reuses the invoice's stored subscription_fee
+  // — so a manually created draft with a fee is the only way to get an invoice
+  // carrying both the fee and per-deal commission lines.
+  const reconcileDraft = async (inv: Invoice) => {
+    setRebuildingId(inv.id)
+    try {
+      const res = await fetch(`/api/admin/billing/${inv.id}/reconcile`, { method: 'POST' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to rebuild invoice lines')
+      const orders = j?.data?.orders ?? 0
+      toast.success(`Rebuilt from ${orders} order${orders === 1 ? '' : 's'} in the period`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to rebuild invoice lines')
+    } finally {
+      setRebuildingId(null)
     }
   }
 
@@ -220,7 +248,7 @@ function BillingPageImpl() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Calculator className="h-4 w-4" /> Reconcile period</CardTitle>
-          <CardDescription>Aggregates a VAR's payment-sent and closed orders in the period into one draft commission invoice. Re-running the same VAR + period returns the existing invoice.</CardDescription>
+          <CardDescription>Aggregates a VAR&apos;s payment-sent and closed orders in the period into one draft commission invoice, plus an optional flat subscription fee. Re-running the same VAR + period reports the existing invoice instead of billing twice.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={reconcile} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:items-end">
@@ -242,6 +270,10 @@ function BillingPageImpl() {
             <div className="space-y-1.5">
               <Label className="text-xs">Period end</Label>
               <Input type="date" value={recEnd} onChange={(e) => setRecEnd(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Subscription fee <span className="text-muted-foreground">(optional)</span></Label>
+              <Input type="number" min={0} step="0.01" value={recFee} onChange={(e) => setRecFee(e.target.value)} placeholder="0.00" />
             </div>
             <Button type="submit" disabled={reconciling} className="sm:col-span-2 lg:col-span-3 lg:w-auto lg:justify-self-start">
               {reconciling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
@@ -299,6 +331,19 @@ function BillingPageImpl() {
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setPaymentsTarget(inv)}>
                             <Wallet className="mr-1 h-3 w-3" /> Payments
                           </Button>
+                          {inv.status === 'draft' && (
+                            <Button
+                              size="sm" variant="outline" className="h-7 px-2 text-xs"
+                              disabled={rebuildingId === inv.id}
+                              title="Rebuild this draft's commission lines from its period's orders, keeping its subscription fee"
+                              onClick={() => reconcileDraft(inv)}
+                            >
+                              {rebuildingId === inv.id
+                                ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                : <RefreshCw className="mr-1 h-3 w-3" />}
+                              Rebuild lines
+                            </Button>
+                          )}
                           {NEXT_ACTIONS.filter((a) => canTransitionInvoice(inv.status as InvoiceStatus, a.to)).map((a) => (
                             <Button key={a.to} size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => transition(inv.id, a.to)}>
                               {a.label}

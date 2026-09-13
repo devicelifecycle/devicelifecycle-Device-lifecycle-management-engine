@@ -22,6 +22,11 @@ const reconcileSchema = z.object({
   tenant_id: z.string().uuid(),
   period_start: z.string().regex(DATE),
   period_end: z.string().regex(DATE),
+  // Flat platform fee for the period, on top of per-deal commission. Without
+  // it a reconciled invoice could only ever carry commission lines, and a
+  // manually created draft could only ever carry a fee -- no invoice could
+  // bill both, which is what the billing page's own copy promises.
+  subscription_fee: z.number().min(0).max(1_000_000).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -33,7 +38,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
   }
-  const { tenant_id, period_start, period_end } = parsed.data
+  const { tenant_id, period_start, period_end, subscription_fee } = parsed.data
 
   const startMs = Date.parse(`${period_start}T00:00:00Z`)
   const endMs = Date.parse(`${period_end}T00:00:00Z`)
@@ -89,7 +94,7 @@ export async function POST(request: NextRequest) {
     amount: (o.final_amount as number) ?? (o.quoted_amount as number) ?? (o.total_amount as number) ?? 0,
   }))
 
-  const { lineItems, totals } = reconcilePeriod(orders, config)
+  const { lineItems, totals } = reconcilePeriod(orders, config, subscription_fee ?? 0)
 
   // Atomic, concurrency-safe numbering -- same scheme as manual draft creation.
   const year = Number(period_start.slice(0, 4))
