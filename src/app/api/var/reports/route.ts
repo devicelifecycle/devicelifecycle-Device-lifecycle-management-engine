@@ -24,6 +24,8 @@ const VAR_CONSOLE_ROLES = new Set([
 // fetches like the other aggregate report routes do.
 const MAX_CUSTOMERS = 5000
 const MAX_ORDERS = 5000
+// Ids per .in() batch — keeps the generated query string well inside limits.
+const ID_CHUNK = 300
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -109,17 +111,33 @@ export async function GET(request: NextRequest) {
   // Orders are only fetched for rep-assigned customers: the roll-up attributes
   // orders through a rep, so an unassigned customer's orders would be loaded
   // and then ignored, spending the bounded order budget on unusable rows.
-  let orders: Array<{ customer_id: string | null; total_amount: number | null }> | null = null
+  //
+  // Fetched in chunks: a single .in() with thousands of UUIDs builds a query
+  // string large enough to be rejected outright, which would fail the whole
+  // report rather than degrade it.
+  const orders: Array<{ customer_id: string | null; total_amount: number | null }> = []
   const customerIds = (assignedCustomers ?? []).map((c) => c.id)
-  if (customerIds.length > 0) {
+  let ordersTruncated = false
+  for (let i = 0; i < customerIds.length; i += ID_CHUNK) {
+    if (orders.length >= MAX_ORDERS) { ordersTruncated = true; break }
+    const chunk = customerIds.slice(i, i + ID_CHUNK)
     const { data, error } = await svc
       .from('orders')
       .select('customer_id, total_amount')
-      .in('customer_id', customerIds)
-      .limit(MAX_ORDERS)
+      .in('customer_id', chunk)
+      .limit(MAX_ORDERS - orders.length)
     if (error) return NextResponse.json({ error: 'Failed to load report' }, { status: 500 })
-    orders = data
+    orders.push(...(data ?? []))
   }
+  if (orders.length >= MAX_ORDERS) ordersTruncated = true
 
-  return NextResponse.json({ data: buildVarRollup(repList, customers, orders ?? []) })
+  return NextResponse.json({
+    data: buildVarRollup(repList, customers, orders),
+    // Surfaced so the UI can say the numbers are partial rather than showing a
+    // quietly wrong total as if it were complete.
+    truncated: {
+      customers: (assignedCustomers ?? []).length >= MAX_CUSTOMERS || unassigned.length >= MAX_CUSTOMERS,
+      orders: ordersTruncated,
+    },
+  })
 }

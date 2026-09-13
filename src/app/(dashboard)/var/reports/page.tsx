@@ -25,6 +25,10 @@ interface ReportsData {
 
 const EMPTY_REPORT: ReportsData = { byRep: [], byRegion: [], unassignedCustomerCount: 0 }
 
+/** Whether the API had to cap its row fetches, so totals are partial. */
+interface Truncation { customers: boolean; orders: boolean }
+const NOT_TRUNCATED: Truncation = { customers: false, orders: false }
+
 export default function VarReportsPage() {
   return <ComingSoon title="VAR Reports" />
 }
@@ -34,6 +38,9 @@ function VarReportsPageImpl() {
   const [loading, setLoading] = useState(true)
   const [regionFilter, setRegionFilter] = useState('all')
   const [repFilter, setRepFilter] = useState('all')
+  const [truncated, setTruncated] = useState<Truncation>(NOT_TRUNCATED)
+  const [regionOptions, setRegionOptions] = useState<string[]>([])
+  const [repOptions, setRepOptions] = useState<Array<{ id: string; name: string }>>([])
 
   // Filters re-query the scoped endpoint rather than slicing locally — the
   // API applies ?region= / ?rep_id= on top of the caller's scope.
@@ -45,10 +52,29 @@ function VarReportsPageImpl() {
     const qs = params.toString()
     fetch(`/api/var/reports${qs ? `?${qs}` : ''}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => setData(j?.data ?? EMPTY_REPORT))
-      .catch(() => setData(EMPTY_REPORT))
+      .then((j) => {
+        setData(j?.data ?? EMPTY_REPORT)
+        // Absent on the early-return paths (empty roster) — treat as complete.
+        setTruncated({ customers: !!j?.truncated?.customers, orders: !!j?.truncated?.orders })
+      })
+      .catch(() => { setData(EMPTY_REPORT); setTruncated(NOT_TRUNCATED) })
       .finally(() => setLoading(false))
   }, [regionFilter, repFilter])
+
+  // Filter choices come from an UNFILTERED fetch, not from `data`. Deriving
+  // them from the filtered response ate its own options: picking a rep
+  // collapsed byRegion to that rep's region, so the region dropdown lost every
+  // other choice and the user had to reset to "All reps" to filter by region.
+  useEffect(() => {
+    fetch('/api/var/reports')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const all = (j?.data ?? EMPTY_REPORT) as ReportsData
+        setRegionOptions(all.byRegion.map((r) => r.region))
+        setRepOptions(all.byRep.map((r) => ({ id: r.repId, name: r.repName })))
+      })
+      .catch(() => {})
+  }, [])
 
   const totalCustomers = data.byRep.reduce((s, r) => s + r.customerCount, 0)
   const totalOrders = data.byRep.reduce((s, r) => s + r.orderCount, 0)
@@ -70,8 +96,8 @@ function VarReportsPageImpl() {
             <SelectTrigger className="w-40"><SelectValue placeholder="All regions" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All regions</SelectItem>
-              {data.byRegion.map((r) => (
-                <SelectItem key={r.region} value={r.region}>{r.region}</SelectItem>
+              {regionOptions.map((r) => (
+                <SelectItem key={r} value={r}>{r}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -79,8 +105,8 @@ function VarReportsPageImpl() {
             <SelectTrigger className="w-44"><SelectValue placeholder="All reps" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All reps</SelectItem>
-              {data.byRep.map((r) => (
-                <SelectItem key={r.repId} value={r.repId}>{r.repName}</SelectItem>
+              {repOptions.map((r) => (
+                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -99,6 +125,17 @@ function VarReportsPageImpl() {
             <Metric label="Orders" value={totalOrders.toLocaleString()} />
             <Metric label="Order value" value={formatCurrency(totalValue)} />
           </div>
+
+          {(truncated.customers || truncated.orders) && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <UserX className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                This report hit its row limit, so the totals below cover only part of your{' '}
+                {truncated.orders && truncated.customers ? 'customers and orders' : truncated.orders ? 'order history' : 'customer list'}.
+                Filter by rep or region for exact figures.
+              </span>
+            </div>
+          )}
 
           {data.unassignedCustomerCount > 0 && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">

@@ -9,7 +9,7 @@
 // pulled automatically from the pricing engine, and the finished quote can be
 // emailed to a customer as a PDF. Admin-side; additive.
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { ComingSoon } from '@/components/ComingSoon'
 import { Plus, RefreshCw, TrendingDown, Trash2, Send, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -67,9 +67,20 @@ function RvePageImpl() {
   const setLine = (id: number, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)))
 
+  // Per-line request counter. The storage field fires a lookup as the user
+  // types, so responses can land out of order — a late reply for "12" would
+  // otherwise overwrite the correct base for "128GB", and the quote would be
+  // sent at the wrong value. Only the newest request for a line may apply.
+  const lookupSeq = useRef<Map<number, number>>(new Map())
+  const lookupTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+
   // Auto-pull the device's current value from the pricing engine, then depreciate.
   const lookupBase = useCallback(async (id: number, deviceId: string, storage: string) => {
     if (!deviceId || !storage) return
+    const seq = (lookupSeq.current.get(id) ?? 0) + 1
+    lookupSeq.current.set(id, seq)
+    const isStale = () => lookupSeq.current.get(id) !== seq
+
     setLine(id, { loading: true })
     try {
       const res = await fetch('/api/pricing/calculate', {
@@ -79,10 +90,27 @@ function RvePageImpl() {
       })
       const data = res.ok ? await res.json() : null
       const base = data?.success ? Number(data.trade_price) || 0 : 0
+      if (isStale()) return
       setLine(id, { base, loading: false })
     } catch {
+      if (isStale()) return
       setLine(id, { base: 0, loading: false })
     }
+  }, [])
+
+  // Typing shouldn't fire a pricing call per keystroke; settle first.
+  const scheduleLookup = useCallback((id: number, deviceId: string, storage: string) => {
+    const existing = lookupTimers.current.get(id)
+    if (existing) clearTimeout(existing)
+    lookupTimers.current.set(id, setTimeout(() => {
+      lookupTimers.current.delete(id)
+      void lookupBase(id, deviceId, storage)
+    }, 400))
+  }, [lookupBase])
+
+  useEffect(() => {
+    const timers = lookupTimers.current
+    return () => { timers.forEach(clearTimeout); timers.clear() }
   }, [])
 
   const onDevice = (id: number, deviceId: string) => {
@@ -96,7 +124,7 @@ function RvePageImpl() {
     const line = lines.find((l) => l.id === id)
     const d = devices.find((x) => x.id === line?.deviceId)
     setLine(id, { storage, label: d ? `${d.make} ${d.model}${storage ? ` ${storage}` : ''}` : line?.label ?? '' })
-    if (line?.deviceId && storage) lookupBase(id, line.deviceId, storage)
+    if (line?.deviceId && storage) scheduleLookup(id, line.deviceId, storage)
   }
 
   const priced = useMemo(
