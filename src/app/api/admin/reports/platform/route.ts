@@ -19,7 +19,9 @@ export async function GET() {
   const [plansRes, tenantsRes, invoicesRes, custTotal, custActive, orderCount, deviceCount] = await Promise.all([
     supabase.from('subscription_plans').select('slug, monthly_price'),
     supabase.from('tenants').select('is_active, plan, type'),
-    supabase.from('invoices').select('status, total').limit(5000),
+    // Ordered so a past-cap truncation is deterministic (most recent invoices
+    // kept) instead of an arbitrary, unordered subset of rows.
+    supabase.from('invoices').select('status, total').order('created_at', { ascending: false }).limit(5000),
     supabase.from('customers').select('id', { count: 'exact', head: true }),
     supabase.from('customers').select('id', { count: 'exact', head: true }).neq('is_active', false),
     supabase.from('orders').select('id', { count: 'exact', head: true }),

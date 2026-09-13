@@ -119,14 +119,18 @@ function CustomerAssetsPageImpl() {
 
   const changeStatus = async (asset: Asset, status: AssetStatus) => {
     if (!canTransitionAsset(asset.status, status)) return
-    const res = await fetch('/api/customer/assets', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: asset.id, status }),
-    })
-    if (!res.ok) { toast.error('Could not update status'); return }
-    toast.success(`Marked ${ASSET_STATUS_LABEL[status].toLowerCase()}`)
-    load()
+    try {
+      const res = await fetch('/api/customer/assets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: asset.id, status }),
+      })
+      if (!res.ok) { toast.error('Could not update status'); return }
+      toast.success(`Marked ${ASSET_STATUS_LABEL[status].toLowerCase()}`)
+      load()
+    } catch {
+      toast.error('Could not update status')
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / limit))

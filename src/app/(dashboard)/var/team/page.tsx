@@ -65,19 +65,31 @@ function VarTeamPageImpl() {
   useEffect(load, [])
 
   const act = async (id: string, action: 'disable' | 'reactivate' | 'reset_password') => {
-    const res = await fetch(`/api/var/team/${id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) { toast.error(data.error || 'Could not update team member'); return }
-    if (action === 'reset_password') {
-      toast.success(data.emailSentTo ? `New password emailed to ${data.emailSentTo}` : 'Password reset — no email on file to notify')
-    } else {
-      toast.success(action === 'disable' ? 'Team member disabled' : 'Team member reactivated')
+    try {
+      const res = await fetch(`/api/var/team/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(data.error || 'Could not update team member'); return }
+      if (action === 'reset_password') {
+        if (data.emailSentTo) {
+          toast.success(`New password emailed to ${data.emailSentTo}`)
+        } else if (data.tempPassword) {
+          // No email on file -- surface the password instead of discarding
+          // it, or the rep is locked out with no way to recover it.
+          toast.success(`Password reset. No email on file -- new temporary password: ${data.tempPassword}`, { duration: Infinity })
+        } else {
+          toast.success('Password reset')
+        }
+      } else {
+        toast.success(action === 'disable' ? 'Team member disabled' : 'Team member reactivated')
+      }
+      load()
+    } catch {
+      toast.error('Could not update team member')
     }
-    load()
   }
 
   return (
@@ -186,7 +198,16 @@ function AddTeamMemberForm({ isEntityAdmin, onDone }: { isEntityAdmin: boolean; 
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'Could not create team member'); return }
-      toast.success(data.emailSent ? `Invite sent to ${data.emailSentTo}` : 'Team member created')
+      if (data.emailSent) {
+        toast.success(`Invite sent to ${data.emailSentTo}`)
+      } else if (data.tempPassword) {
+        // No email on file to notify -- the temp password would otherwise be
+        // generated and silently discarded, permanently locking the new rep
+        // out. Surface it so the admin can hand it off some other way.
+        toast.success(`Team member created. No email on file -- temporary password: ${data.tempPassword}`, { duration: Infinity })
+      } else {
+        toast.success('Team member created')
+      }
       onDone()
     } catch {
       toast.error('Could not create team member')
