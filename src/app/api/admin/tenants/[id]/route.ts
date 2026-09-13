@@ -9,7 +9,6 @@ import { resolveBranding } from '@/lib/branding'
 import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
 import { resolveLicense, LIMIT_KEYS } from '@/lib/licensing'
 import { resolveWhiteLabel } from '@/lib/templates'
-import { resolveSecurityConfig } from '@/lib/security-config'
 import { resolveIntegrations } from '@/lib/integrations-config'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
@@ -55,11 +54,14 @@ const patchSchema = z.object({
     knowledgeBaseUrl: z.string().max(500).nullable().optional(),
     privacyPolicyUrl: z.string().max(500).nullable().optional(),
   }).optional(),
-  security: z.object({
-    passwordMinLength: z.number().int().min(8).max(128).optional(),
-    mfaRequired: z.boolean().optional(),
-    ipAllowlist: z.array(z.string().max(64)).max(200).optional(),
-  }).optional(),
+  // NOTE: a `security` block ({ passwordMinLength, mfaRequired, ipAllowlist })
+  // used to be accepted here and written to settings.security. Nothing ever
+  // read it back for enforcement, and no UI ever sent it, while three
+  // identically-named controls on `branding` ARE live: branding.allowedIps
+  // (enforced in requireAuth), branding.passwordPolicy (enforced on both
+  // password-set flows) and branding.requireMfa. Accepting the dead block
+  // meant an operator could set a security control that silently did nothing,
+  // so it's gone — use the branding fields above.
   integrations: z.object({
     smsProvider: z.string().max(20).optional(),
     smsFrom: z.string().max(40).nullable().optional(),
@@ -97,7 +99,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     data: {
       ...data,
       branding: resolveBranding(data.branding),
-      security: resolveSecurityConfig(settings.security),
       integrations: resolveIntegrations(settings.integrations),
       features: resolveFeatures(undefined, settings.features),
       license: resolveLicense(settings.license),
@@ -138,7 +139,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.plan !== undefined) update.plan = parsed.data.plan || null
 
   // Merge feature/license/white-label/security/integrations overrides into settings JSONB (known keys only).
-  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel || parsed.data.security || parsed.data.integrations) {
+  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel || parsed.data.integrations) {
     const settings = { ...(existing.settings as Record<string, unknown> ?? {}) }
     if (parsed.data.features) {
       const cur = { ...(settings.features as Record<string, boolean> ?? {}) }
@@ -153,9 +154,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (parsed.data.whitelabel) {
       // Normalize through the resolver so only valid, sanitized values are stored.
       settings.whitelabel = resolveWhiteLabel({ ...(settings.whitelabel as object ?? {}), ...parsed.data.whitelabel })
-    }
-    if (parsed.data.security) {
-      settings.security = resolveSecurityConfig({ ...(settings.security as object ?? {}), ...parsed.data.security })
     }
     if (parsed.data.integrations) {
       settings.integrations = resolveIntegrations({ ...(settings.integrations as object ?? {}), ...parsed.data.integrations })

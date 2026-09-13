@@ -78,12 +78,28 @@ export async function GET() {
   ])
 
   const vars = activeVarsRes.data ?? []
-  // Per-VAR customer totals: one bounded COUNT per active VAR.
-  const counts = await Promise.all(
-    vars.map((v) => supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', v.id as string)),
-  )
+  // Per-VAR customer totals in ONE grouped aggregate. This used to be a COUNT
+  // per active VAR, so a platform with a few hundred VARs fired a few hundred
+  // round trips to render a single page.
   const customersByTenant: Record<string, number> = {}
-  vars.forEach((v, i) => { customersByTenant[v.id as string] = counts[i].count ?? 0 })
+  if (vars.length > 0) {
+    const { data: countRows, error: countsError } = await supabase.rpc('customer_counts_by_tenant', {
+      p_tenant_ids: vars.map((v) => v.id as string),
+    })
+    if (countsError) {
+      console.error('Failed to count customers per tenant:', countsError)
+      return NextResponse.json({ error: 'Failed to build operations report' }, { status: 500 })
+    }
+    for (const row of (countRows ?? []) as Array<{ tenant_id: string; customer_count: number }>) {
+      customersByTenant[row.tenant_id] = Number(row.customer_count) || 0
+    }
+    // A VAR with zero customers has no row in a GROUP BY result — keep it in
+    // the table at 0 rather than dropping it from the licence report.
+    for (const v of vars) {
+      const id = v.id as string
+      if (!(id in customersByTenant)) customersByTenant[id] = 0
+    }
+  }
 
   const notifications: NotificationBreakdown[] = [
     { channel: 'email', status: 'sent', count: notifEmailSent.count ?? 0 },

@@ -5,6 +5,15 @@
 // length with no complexity rules (platform standard); MFA-required and an IP
 // allowlist are opt-in. Empty allowlist = allow all, so this is a no-op until a
 // tenant sets restrictions.
+//
+// ⚠ NO PRODUCTION CALLERS as of 2026-09-12. Nothing in the app reads or writes
+// settings.security — the admin tenant API used to accept a `security` block
+// and store it, but no code ever enforced it, so an operator could set a
+// security control that silently did nothing; that surface was removed. The
+// equivalents that ARE enforced live on tenant BRANDING: branding.allowedIps
+// (checked in requireAuth), branding.passwordPolicy (checked on both
+// password-set flows), and branding.requireMfa. Wire this module into a real
+// enforcement point before exposing it again.
 
 export interface SecurityConfig {
   /** Minimum password length. Floor 8 (platform standard), max 128. */
