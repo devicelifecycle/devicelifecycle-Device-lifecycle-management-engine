@@ -15,11 +15,21 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { DEFAULT_BRANDING, type TenantBranding } from '@/lib/branding'
 import { DEFAULT_FEATURES, FEATURE_KEYS, type FeatureFlags, type FeatureKey } from '@/lib/features'
 import { DEFAULT_LICENSE, LIMIT_KEYS, UNLIMITED, type LicenseLimits, type LimitKey } from '@/lib/licensing'
 import { DEFAULT_WHITELABEL, type WhiteLabelContent } from '@/lib/templates'
 import { Textarea } from '@/components/ui/textarea'
+
+/** A row from GET /api/admin/plans (already normalized by normalizePlan). */
+interface PlanOption {
+  slug: string
+  name: string
+  isActive: boolean
+  limits: LicenseLimits
+  features: FeatureFlags
+}
 
 interface TenantDetail {
   id: string
@@ -61,6 +71,14 @@ function TenantDetailPageImpl() {
   const [whitelabel, setWhitelabel] = useState<WhiteLabelContent>(DEFAULT_WHITELABEL)
   const [customDomain, setCustomDomain] = useState('')
   const [isActive, setIsActive] = useState(true)
+  // tenants.plan holds a plan SLUG, and this is the only place it can be set.
+  // It drives MRR/ARR in Platform Analytics. Note enforcement does NOT read the
+  // plan: tenantLimits() resolves quotas/features from settings.license and
+  // settings.features only. So picking a plan copies its limits into the fields
+  // below (visibly, for review) rather than silently applying them elsewhere.
+  const NO_PLAN = '__none__'
+  const [plan, setPlan] = useState<string>(NO_PLAN)
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -78,14 +96,38 @@ function TenantDetailPageImpl() {
       if (data.whitelabel) setWhitelabel(data.whitelabel)
       setCustomDomain(data.custom_domain ?? '')
       setIsActive(data.is_active)
+      setPlan(data.plan || NO_PLAN)
     } catch {
       toast.error('Failed to load tenant')
     } finally {
       setLoading(false)
     }
+    // NO_PLAN is a module-stable constant; load only depends on the tenant id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => { void load() }, [load])
+
+  // Plan catalog for the assignment dropdown. A retired plan is still listed
+  // so a tenant already on one doesn't silently show as unassigned.
+  useEffect(() => {
+    fetch('/api/admin/plans')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) setPlanOptions(j.data as PlanOption[]) })
+      .catch(() => {})
+  }, [])
+
+  // Only on an explicit pick — never on initial load, which would clobber the
+  // tenant's saved quotas with plan defaults before the admin touched anything.
+  const choosePlan = (slug: string) => {
+    setPlan(slug)
+    if (slug === NO_PLAN) return
+    const picked = planOptions.find((p) => p.slug === slug)
+    if (!picked) return
+    setLicense(picked.limits)
+    setFeatures(picked.features)
+    toast.info(`Quotas and features filled in from "${picked.name}" — review, then Save.`)
+  }
 
   const isPlatform = tenant?.type === 'platform'
 
@@ -139,6 +181,9 @@ function TenantDetailPageImpl() {
           branding: isPlatform ? undefined : branding,
           is_active: isPlatform ? undefined : isActive,
           custom_domain: customDomain.trim() || null,
+          // The platform tenant is Byte-Back itself — it is never on a VAR
+          // subscription plan, so don't send (or clear) one for it.
+          plan: isPlatform ? undefined : (plan === NO_PLAN ? null : plan),
           features,
           license,
           whitelabel,
@@ -405,6 +450,27 @@ function TenantDetailPageImpl() {
             <CardDescription>Blank = unlimited.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {!isPlatform && (
+              <div className="space-y-1.5 border-b pb-3">
+                <Label className="text-sm">Subscription plan</Label>
+                <Select value={plan} onValueChange={choosePlan}>
+                  <SelectTrigger><SelectValue placeholder="No plan" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_PLAN}>No plan</SelectItem>
+                    {planOptions.map((p) => (
+                      <SelectItem key={p.slug} value={p.slug}>
+                        {p.name}{p.isActive ? '' : ' (retired)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Sets this VAR&apos;s monthly recurring revenue in Platform Analytics. Picking a plan
+                  fills in the quotas and features below from it — they stay editable, and those
+                  fields (not the plan) are what actually gets enforced.
+                </p>
+              </div>
+            )}
             {LIMIT_KEYS.map((k) => (
               <div key={k} className="flex items-center justify-between gap-4">
                 <span className="text-sm">{LIMIT_LABELS[k]}</span>

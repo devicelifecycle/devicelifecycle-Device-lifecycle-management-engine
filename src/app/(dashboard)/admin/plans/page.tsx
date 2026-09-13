@@ -7,11 +7,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ComingSoon } from '@/components/ComingSoon'
-import { Layers, Loader2, Plus } from 'lucide-react'
+import { Layers, Loader2, Plus, Pencil, Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils'
 import { annualize } from '@/lib/plans'
 import { UNLIMITED } from '@/lib/licensing'
@@ -41,6 +42,8 @@ function PlansPageImpl() {
   const [slug, setSlug] = useState('')
   const [price, setPrice] = useState('')
   const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<Plan | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -75,6 +78,49 @@ function PlansPageImpl() {
       toast.error(err instanceof Error ? err.message : 'Failed to create plan')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const setActive = async (plan: Plan, isActive: boolean) => {
+    setBusyId(plan.id)
+    try {
+      const res = await fetch(`/api/admin/plans/${plan.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: isActive }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to update plan')
+      const onPlan = typeof j.tenantsOnPlan === 'number' ? j.tenantsOnPlan : 0
+      toast.success(
+        isActive
+          ? `"${plan.name}" reactivated`
+          : onPlan > 0
+            ? `"${plan.name}" retired — ${onPlan} VAR${onPlan === 1 ? '' : 's'} already on it keep it`
+            : `"${plan.name}" retired`,
+      )
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update plan')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const remove = async (plan: Plan) => {
+    if (!window.confirm(`Permanently delete the "${plan.name}" plan? This can't be undone.`)) return
+    setBusyId(plan.id)
+    try {
+      const res = await fetch(`/api/admin/plans/${plan.id}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => ({}))
+      // 409 = VARs are still on this plan; the API's message names the count.
+      if (!res.ok) throw new Error(j?.error || 'Failed to delete plan')
+      toast.success(`"${plan.name}" deleted`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete plan')
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -123,10 +169,112 @@ function PlansPageImpl() {
               <div className="border-t pt-2 text-xs text-muted-foreground">
                 <p>Customers: {cap(p.limits.customers)} · Users: {cap(p.limits.users)}</p>
               </div>
+              <div className="flex flex-wrap gap-2 border-t pt-3">
+                <Button size="sm" variant="outline" onClick={() => setEditing(p)} disabled={busyId === p.id}>
+                  <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setActive(p, !p.isActive)} disabled={busyId === p.id}>
+                  {busyId === p.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    : p.isActive ? <Archive className="mr-1 h-3.5 w-3.5" /> : <ArchiveRestore className="mr-1 h-3.5 w-3.5" />}
+                  {p.isActive ? 'Retire' : 'Reactivate'}
+                </Button>
+                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => remove(p)} disabled={busyId === p.id}>
+                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {editing && (
+        <EditPlanDialog
+          plan={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); void load() }}
+        />
+      )}
     </div>
+  )
+}
+
+function EditPlanDialog({ plan, onClose, onSaved }: { plan: Plan; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(plan.name)
+  const [price, setPrice] = useState(String(plan.monthlyPrice))
+  const [customers, setCustomers] = useState(String(plan.limits.customers))
+  const [users, setUsers] = useState(String(plan.limits.users))
+  const [saving, setSaving] = useState(false)
+
+  // Blank = unlimited, matching the tenant licence editor's convention.
+  const toLimit = (v: string) => (v.trim() === '' ? UNLIMITED : Math.max(-1, Math.trunc(Number(v) || 0)))
+
+  const save = async () => {
+    if (name.trim().length < 2) { toast.error('Name must be at least 2 characters'); return }
+    const monthly = Number(price)
+    if (!Number.isFinite(monthly) || monthly < 0) { toast.error('Monthly price must be 0 or more'); return }
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/admin/plans/${plan.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          monthly_price: monthly,
+          limits: { ...plan.limits, customers: toLimit(customers), users: toLimit(users) },
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to save plan')
+      const onPlan = typeof j.tenantsOnPlan === 'number' ? j.tenantsOnPlan : 0
+      toast.success(onPlan > 0
+        ? `"${name.trim()}" saved — applies to ${onPlan} VAR${onPlan === 1 ? '' : 's'} on this plan`
+        : `"${name.trim()}" saved`)
+      onSaved()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save plan')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit plan</DialogTitle>
+          <DialogDescription>
+            The slug <span className="font-mono">{plan.slug}</span> can&apos;t change — VARs are assigned to a plan by slug.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Monthly price ({plan.currency})</Label>
+            <Input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Customers</Label>
+              <Input type="number" min={-1} value={customers === String(UNLIMITED) ? '' : customers}
+                onChange={(e) => setCustomers(e.target.value)} placeholder="Unlimited" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Users</Label>
+              <Input type="number" min={-1} value={users === String(UNLIMITED) ? '' : users}
+                onChange={(e) => setUsers(e.target.value)} placeholder="Unlimited" />
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pb-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}Save
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
