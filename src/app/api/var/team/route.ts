@@ -95,7 +95,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (!canManageVarTeamMember(profile.role, effectiveRole, profile.region, body.role as ManagedVarRole, body.region ?? null)) {
-      return NextResponse.json({ error: 'You are not permitted to create this role in this region' }, { status: 403 })
+      // Region is matched exactly, so "ON" vs "Ontario" is a rejection. Name
+      // the expected value rather than leaving the user to guess it.
+      const isRegionMismatch =
+        effectiveRole === 'var_regional_manager' &&
+        body.role === 'var_sales_rep' &&
+        !!profile.region &&
+        body.region !== profile.region
+      return NextResponse.json(
+        {
+          error: isRegionMismatch
+            ? `You can only add sales reps in your own region — enter "${profile.region}" exactly.`
+            : 'You are not permitted to create this role in this region',
+          expectedRegion: isRegionMismatch ? profile.region : undefined,
+        },
+        { status: 403 },
+      )
     }
     // A regional manager creating a sales rep always stamps their own region —
     // canManageVarTeamMember already required body.region === profile.region

@@ -47,13 +47,25 @@ export async function GET() {
       return query
     }
 
-    const [ordersRes, totalRes, registeredRes, assignedRes, retiredRes] = await Promise.all([
+    // Order COUNTS are exact head queries, not the length of the windowed row
+    // fetch below — otherwise a customer past MAX_ORDERS would see a capped
+    // "total orders" metric directly above an order-history card showing their
+    // real (larger) total.
+    const orderTotalCount = serviceRole
+      .from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', customer.id)
+    const orderActiveCount = serviceRole
+      .from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', customer.id)
+      .not('status', 'in', `(${TERMINAL_STATUSES.join(',')})`)
+
+    const [ordersRes, orderTotalRes, orderActiveRes, totalRes, registeredRes, assignedRes, retiredRes] = await Promise.all([
       serviceRole
         .from('orders')
         .select('type, status, quoted_amount, total_amount')
         .eq('customer_id', customer.id)
         .order('created_at', { ascending: false })
         .limit(MAX_ORDERS),
+      orderTotalCount,
+      orderActiveCount,
       assetCount(),
       assetCount('registered'),
       assetCount('assigned'),
@@ -69,9 +81,11 @@ export async function GET() {
     return NextResponse.json({
       data: {
         orders: {
-          total: rows.length,
-          active: rows.filter((o) => !TERMINAL_STATUSES.includes(o.status)).length,
+          total: orderTotalRes.count ?? rows.length,
+          active: orderActiveRes.count ?? rows.filter((o) => !TERMINAL_STATUSES.includes(o.status)).length,
         },
+        // Summed over the most recent MAX_ORDERS orders only (see above) — the
+        // counts are exact, this money figure is windowed.
         tradeInValue,
         assets: {
           total: totalRes.count ?? 0,

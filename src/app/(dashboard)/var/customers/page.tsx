@@ -72,6 +72,7 @@ function VarCustomersPageImpl() {
   const [status, setStatus] = useState<'active' | 'suspended'>('active')
 
   const [plans, setPlans] = useState<PlanOption[]>([])
+  const [plansVisible, setPlansVisible] = useState(true)
   const [planTarget, setPlanTarget] = useState<VarCustomer | null>(null)
   const [moveTarget, setMoveTarget] = useState<VarCustomer | null>(null)
   const limit = 20
@@ -100,8 +101,16 @@ function VarCustomersPageImpl() {
 
   useEffect(() => {
     fetch('/api/var/plans')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => setPlans(j?.data ?? []))
+      .then(async (r) => {
+        // /api/var/plans is admin + entity-admin only, but a regional manager
+        // can reach this page. Track that separately so the Plan column can
+        // say "not visible to your role" instead of "Unknown plan", and the
+        // assign-plan action can be hidden rather than opening an empty list.
+        if (r.status === 403) { setPlansVisible(false); return }
+        if (!r.ok) return
+        const j = await r.json()
+        setPlans(j?.data ?? [])
+      })
       .catch(() => {})
   }, [])
 
@@ -123,8 +132,14 @@ function VarCustomersPageImpl() {
     }
   }
 
-  const planName = (planId: string | null): string =>
-    planId ? plans.find((p) => p.id === planId)?.name ?? 'Unknown plan' : 'Inherited'
+  const planName = (planId: string | null): string => {
+    if (!planId) return 'Inherited'
+    const found = plans.find((p) => p.id === planId)
+    if (found) return found.name
+    // Distinguish "your role can't see the plan catalog" from "this plan id
+    // doesn't resolve", which look identical otherwise.
+    return plansVisible ? 'Unknown plan' : 'Assigned'
+  }
 
   const exportHref = `/api/customers/export${debouncedSearch.trim() ? `?search=${encodeURIComponent(debouncedSearch.trim())}` : ''}`
   const totalPages = Math.max(1, Math.ceil(total / limit))
@@ -221,9 +236,11 @@ function VarCustomersPageImpl() {
                                   <RotateCcw className="mr-2 h-4 w-4" /> Reactivate
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem onClick={() => setPlanTarget(c)}>
-                                <Layers className="mr-2 h-4 w-4" /> Assign plan…
-                              </DropdownMenuItem>
+                              {plansVisible && (
+                                <DropdownMenuItem onClick={() => setPlanTarget(c)}>
+                                  <Layers className="mr-2 h-4 w-4" /> Assign plan…
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => setMoveTarget(c)}>
                                 <MapPin className="mr-2 h-4 w-4" /> Move to region…

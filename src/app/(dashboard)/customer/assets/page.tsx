@@ -376,8 +376,15 @@ interface ImportRow {
   notes?: string
 }
 
+/** A failure as the bulk endpoint reports it — row_index is relative to the rows POSTed. */
 interface FailedRow {
   row_index: number
+  reason: string
+}
+
+/** A failure as shown to the user — `line` is the physical CSV line number. */
+interface ResultFailure {
+  line: number
   reason: string
 }
 
@@ -444,7 +451,7 @@ function ImportAssetCsvDialog({ customerId, open, onOpenChange, onImported }: {
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [parsing, setParsing] = useState(false)
-  const [result, setResult] = useState<{ imported: number; failed: FailedRow[] } | null>(null)
+  const [result, setResult] = useState<{ imported: number; failed: ResultFailure[] } | null>(null)
 
   const reset = () => { setStage('pick'); setPreview(null); setResult(null); setSubmitting(false); setParsing(false) }
   const close = (next: boolean) => { onOpenChange(next); if (!next) reset() }
@@ -474,19 +481,45 @@ function ImportAssetCsvDialog({ customerId, open, onOpenChange, onImported }: {
 
   const submit = async () => {
     if (!preview || submitting) return
+    // Only valid rows are sent — the preview promises flagged rows are
+    // skipped, so sending them anyway just to have the server reject them
+    // would contradict the count on the button.
+    const sending = preview.filter((p) => !p.issue)
+    // Rows the user was already told would be skipped, carried into the result
+    // so it accounts for every line in the file, not just server-side failures.
+    const skipped: ResultFailure[] = preview
+      .filter((p) => p.issue)
+      .map((p) => ({ line: p.line + 1, reason: p.issue as string }))
+
+    if (sending.length === 0) {
+      toast.error('No valid rows to import')
+      return
+    }
+
     setSubmitting(true)
     try {
       const res = await fetch('/api/customer/assets/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer_id: customerId, rows: preview.map((p) => p.row) }),
+        body: JSON.stringify({ customer_id: customerId, rows: sending.map((p) => p.row) }),
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'Import failed'); return }
-      setResult(data as { imported: number; failed: FailedRow[] })
+      const body = data as { imported: number; failed: FailedRow[] }
+      // The server's row_index is relative to what we SENT, so map it back to
+      // the physical CSV line before showing it — otherwise a server-only
+      // failure (e.g. a serial already registered) points at the wrong line.
+      const serverFailures: ResultFailure[] = (body.failed ?? []).map((f) => ({
+        line: (sending[f.row_index]?.line ?? f.row_index + 1) + 1,
+        reason: f.reason,
+      }))
+      setResult({
+        imported: body.imported,
+        failed: [...skipped, ...serverFailures].sort((a, b) => a.line - b.line),
+      })
       setStage('result')
-      if ((data as { imported: number }).imported > 0) {
-        toast.success(`Imported ${data.imported} device${data.imported === 1 ? '' : 's'}`)
+      if (body.imported > 0) {
+        toast.success(`Imported ${body.imported} device${body.imported === 1 ? '' : 's'}`)
         onImported() // refresh the register table behind the dialog
       }
     } catch {
@@ -498,10 +531,9 @@ function ImportAssetCsvDialog({ customerId, open, onOpenChange, onImported }: {
 
   const downloadFailures = () => {
     if (!result) return
-    // Row index + 2 = the physical CSV line (1-based, plus the header row).
     const lines = [
       'line,reason',
-      ...result.failed.map((f) => `${f.row_index + 2},"${f.reason.replace(/"/g, '""')}"`),
+      ...result.failed.map((f) => `${f.line},"${f.reason.replace(/"/g, '""')}"`),
     ]
     const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
     const anchor = document.createElement('a')
@@ -594,8 +626,8 @@ function ImportAssetCsvDialog({ customerId, open, onOpenChange, onImported }: {
               <>
                 <div className="max-h-[40vh] space-y-2 overflow-auto rounded-md border border-border p-3">
                   {result.failed.map((f) => (
-                    <div key={f.row_index} className="text-xs">
-                      <span className="font-mono text-muted-foreground">Line {f.row_index + 2}: </span>
+                    <div key={`${f.line}-${f.reason}`} className="text-xs">
+                      <span className="font-mono text-muted-foreground">Line {f.line}: </span>
                       <span className="text-destructive">{f.reason}</span>
                     </div>
                   ))}

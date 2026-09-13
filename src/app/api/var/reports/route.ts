@@ -67,22 +67,50 @@ export async function GET(request: NextRequest) {
   if (repsError) return NextResponse.json({ error: 'Failed to load report' }, { status: 500 })
 
   const repList = reps ?? []
+
+  // Customers in scope with NO rep assigned. These can't appear in the
+  // assigned-rep fetch below (it filters on assigned_rep_id), so without this
+  // second query unassignedCustomerCount would be structurally always 0 and
+  // the "unassigned customers" callout could never fire. A sales rep only ever
+  // sees their own customers, so unassigned ones aren't theirs to see.
+  let unassigned: Array<{ id: string; assigned_rep_id: string | null; region: string | null }> = []
+  if (level !== 'own') {
+    let unassignedQuery = svc
+      .from('customers')
+      .select('id, assigned_rep_id, region')
+      .eq('tenant_id', scopeTenantId)
+      .is('assigned_rep_id', null)
+      .limit(MAX_CUSTOMERS)
+    // A regional manager's view is their region, so only count unassigned
+    // customers sitting in it; an explicit ?region= narrows the same way.
+    const effectiveRegion = level === 'region' ? profile.region : region
+    if (effectiveRegion) unassignedQuery = unassignedQuery.eq('region', effectiveRegion)
+    const { data: unassignedRows, error: unassignedError } = await unassignedQuery
+    if (unassignedError) return NextResponse.json({ error: 'Failed to load report' }, { status: 500 })
+    unassigned = unassignedRows ?? []
+  }
+
   if (repList.length === 0) {
-    return NextResponse.json({ data: buildVarRollup([], [], []) })
+    return NextResponse.json({ data: buildVarRollup([], unassigned, []) })
   }
 
   // Two bounded hops: customers assigned to the scoped reps, then those
   // customers' orders — selecting only the columns the roll-up needs.
   const repIds = repList.map((r) => r.id)
-  const { data: customers, error: customersError } = await svc
+  const { data: assignedCustomers, error: customersError } = await svc
     .from('customers')
     .select('id, assigned_rep_id, region')
     .in('assigned_rep_id', repIds)
     .limit(MAX_CUSTOMERS)
   if (customersError) return NextResponse.json({ error: 'Failed to load report' }, { status: 500 })
 
+  const customers = [...(assignedCustomers ?? []), ...unassigned]
+
+  // Orders are only fetched for rep-assigned customers: the roll-up attributes
+  // orders through a rep, so an unassigned customer's orders would be loaded
+  // and then ignored, spending the bounded order budget on unusable rows.
   let orders: Array<{ customer_id: string | null; total_amount: number | null }> | null = null
-  const customerIds = (customers ?? []).map((c) => c.id)
+  const customerIds = (assignedCustomers ?? []).map((c) => c.id)
   if (customerIds.length > 0) {
     const { data, error } = await svc
       .from('orders')
@@ -93,5 +121,5 @@ export async function GET(request: NextRequest) {
     orders = data
   }
 
-  return NextResponse.json({ data: buildVarRollup(repList, customers ?? [], orders ?? []) })
+  return NextResponse.json({ data: buildVarRollup(repList, customers, orders ?? []) })
 }

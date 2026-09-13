@@ -44,14 +44,19 @@ function VarFeaturesPageImpl() {
   const [rows, setRows] = useState<FeatureRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [denied, setDenied] = useState(false)
   const [saving, setSaving] = useState(false)
   // Unsaved toggle changes keyed by feature; rows stay as last persisted.
   const [draft, setDraft] = useState<Partial<Record<FeatureKey, boolean>>>({})
 
   useEffect(() => {
     fetch('/api/var/features')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
+      .then(async (r) => {
+        // A 403 means this role can't manage features — distinct from an
+        // outage, which is what the generic failure message implies.
+        if (r.status === 403) { setDenied(true); return }
+        if (!r.ok) { setLoadFailed(true); return }
+        const j = await r.json()
         if (j?.data?.features) setRows(j.data.features)
         else setLoadFailed(true)
       })
@@ -99,7 +104,13 @@ function VarFeaturesPageImpl() {
         </p>
       </div>
 
-      {loadFailed && (
+      {denied && (
+        <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+          Your role doesn&apos;t include managing feature availability. An entity admin for your organization can change these.
+        </div>
+      )}
+
+      {loadFailed && !denied && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           Unable to load your feature configuration.
         </div>
@@ -109,7 +120,7 @@ function VarFeaturesPageImpl() {
         <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading features…
         </div>
-      ) : !loadFailed && (
+      ) : !loadFailed && !denied && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Modules</CardTitle>
