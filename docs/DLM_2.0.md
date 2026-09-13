@@ -98,7 +98,7 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 > **Plan paused after M2.2 at user request (2026-08-07), resumed 2026-08-17.**
 > Landed so far: M2.4 (Company Profile) ☑, M2.5 (Asset Register UI) ☑, M2.3
 > (VAR rep management) ☑, M2.3b (roll-up reporting) ☑ 2026-08-23, customer-asset audit log + own reports/exports ☑ 2026-08-23, VAR Admin console UI (`/var/customers` + `/var/features`) ☑ 2026-08-23, per-customer license/plan assignment ☑ 2026-08-23.
-> Next: Month 2 COMPLETE except final QA gate.
+> **2026-09-12 manual QA gate: done.** A full UI-to-API wiring audit (not just file-existence/tsc) found and fixed real bugs: cross-customer IDOR across every `/api/customer/*` + tickets + reminders route (any customer could read/write another customer's data — see Security section below), `useMyCustomer` gating on stored role instead of active role (hung 3 customer pages on a permanent spinner for dual-role accounts), a Radix `SelectItem value=""` crash in the Assign-Plan dialog, VAR team temp passwords generated then silently discarded (permanent rep lock-out for login-ID accounts), and a `customer-self-scope` helper that broke on any org with more than one `customers` row. All fixed, tested, and pushed. Remaining lower-severity items (free-text region matching a regional manager's exact stored value, `unassignedCustomerCount` structurally always 0, filter-derivation UX, 5000-row report caps) are tracked but not blocking — cosmetic/scale, not correctness.
 
 *3.5-mo: ship VAR Admin + delegated roles; End Customer console trimmed to profile + reports.*
 
@@ -115,6 +115,8 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 - ☑ **Confirmed 2026-09-10: commission is never itemized to the VAR.** Verified directly against code — neither `pdf.ts` nor `rve-pdf.ts` (the two PDF generators) references commission anywhere in their output. Closed.
 
 > **Month 3 core build is essentially done as of 2026-08-25** — billing reconciliation, RVE sendable quotes, the admin un-pause, and the reporting suite all landed. What's left: the commission-itemization QA check above, a UI confirmation pass on payments/refunds, and the manual signoff on the un-paused admin pages.
+>
+> **2026-09-12 manual QA gate: done, with real bugs found and fixed.** Worst: the RVE admin page priced its on-screen preview off the hardcoded default depreciation curve while the emailed PDF priced off the admin-configured rate — at defaults, a $1,000 device showed $300 on screen and $614 in the customer's PDF. Also fixed: unbounded invoice refunds (could drive net-paid negative with no cap), a billing-reconcile idempotency check that discarded its own error and could let a duplicate invoice through, a UI/API status-list mismatch between the two reconcile routes (already fixed 2026-09-10, re-verified consistent), an unvalidated IP-allowlist field that could self-lock a whole tenant out on a typo, and a commission-settings page that could silently overwrite real rates with defaults on a failed load. Known, not-yet-fixed gaps: no UI can assign a tenant's subscription plan (so Platform Analytics MRR/ARR reads $0.00 structurally), a manually-created invoice's subscription fee and its commission-line reconciliation are two disjoint code paths (no invoice can carry both today), and Plans has no edit/delete. These are feature gaps, not correctness bugs — tracked for a future pass.
 
 *3.5-mo: billing reconciliation + RVE sendable are must-haves; defer deep BB reporting dashboards to launch buffer.*
 
