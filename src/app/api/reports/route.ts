@@ -56,8 +56,12 @@ export async function GET(request: NextRequest) {
       { count: openExceptions },
     ] = await Promise.all([
       supabase
+        // order_items has no `trade_in_price` column — selecting it failed the
+        // query outright, and because the error is discarded the "Top devices"
+        // table rendered empty with $0 revenue on every report. The real
+        // per-item money columns are final_price (settled) and quoted_price.
         .from('order_items')
-        .select('device_id, trade_in_price, created_at, device_catalog!inner(make,model)')
+        .select('device_id, final_price, quoted_price, created_at, device_catalog!inner(make,model)')
         .gte('created_at', since)
         .limit(2000),
       supabase
@@ -79,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     const deviceMap = new Map<string, { make: string; model: string; count: number; total: number }>()
     for (const row of (itemRows || []) as unknown as Array<{
-      device_id: string; trade_in_price: number | null;
+      device_id: string; final_price: number | null; quoted_price: number | null;
       device_catalog: { make: string; model: string } | null
     }>) {
       const key = row.device_id
@@ -87,7 +91,9 @@ export async function GET(request: NextRequest) {
       if (!catalog) continue
       const existing = deviceMap.get(key) || { make: catalog.make, model: catalog.model, count: 0, total: 0 }
       existing.count++
-      existing.total += row.trade_in_price || 0
+      // Settled price where the item has one, else what it was quoted at —
+      // same precedence the billing and order totals use.
+      existing.total += row.final_price ?? row.quoted_price ?? 0
       deviceMap.set(key, existing)
     }
     const topDevices = Array.from(deviceMap.values())

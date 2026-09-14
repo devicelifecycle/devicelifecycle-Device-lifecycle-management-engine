@@ -8,6 +8,7 @@ import { NotificationService } from './notification.service'
 import type {
   OrderException,
   DiscrepancyDetails,
+  DeviceCondition,
   OrderDiscrepancyResponse,
   UserRole,
 } from '@/types'
@@ -44,27 +45,45 @@ export class ExceptionService {
       throw new Error(`Failed to fetch exceptions: ${exError.message}`)
     }
 
-    // Get triage results for price/condition details, matching on order_item_id
+    // Triage results carry the price/condition detail, but NOT the columns this
+    // used to ask for: triage_results has no order_item_id / claimed_condition /
+    // actual_condition. It links to the device through imei_record_id, the
+    // claimed condition lives on imei_records, and the triage outcome is
+    // final_condition. The old select named three non-existent columns, so this
+    // whole endpoint threw on every call.
     const { data: triageResults, error: triageError } = await supabase
       .from('triage_results')
-      .select('id, order_id, order_item_id, claimed_condition, actual_condition, price_adjustment, mismatch_severity, approval_status')
+      .select('id, order_id, imei_record_id, final_condition, price_adjustment, mismatch_severity, approval_status, imei_record:imei_records(order_item_id, claimed_condition)')
       .eq('order_id', orderId)
 
     if (triageError) {
       throw new Error(`Failed to fetch triage results: ${triageError.message}`)
     }
 
+    // An embedded to-one row comes back as an object, but the generated types
+    // widen it to an array — normalize before matching.
+    const itemIdOf = (t: { imei_record?: unknown }): string | null => {
+      const rec = Array.isArray(t.imei_record) ? t.imei_record[0] : t.imei_record
+      return (rec as { order_item_id?: string | null } | null | undefined)?.order_item_id ?? null
+    }
+    const claimedOf = (t: { imei_record?: unknown }): string | null => {
+      const rec = Array.isArray(t.imei_record) ? t.imei_record[0] : t.imei_record
+      return (rec as { claimed_condition?: string | null } | null | undefined)?.claimed_condition ?? null
+    }
+
     // Build response with detailed discrepancy info - properly join triage to each exception
     const discrepancies: DiscrepancyDetails[] = (exceptions || []).map(ex => {
-      // FIXED: Match triage result by order_item_id, not just by order_id
-      const triage = triageResults?.find(t => t.order_item_id === ex.order_item_id)
-      
+      // Match triage result to the exception's item, via the IMEI record.
+      const triage = triageResults?.find(t => itemIdOf(t) === ex.order_item_id)
+
       return {
         exceptionId: ex.id,
         itemId: ex.order_item_id,
         deviceName: ex.summary.split(':')[0] || 'Unknown Device',
-        claimedCondition: triage?.claimed_condition || 'unknown',
-        actualCondition: triage?.actual_condition || 'unknown',
+        // 'unknown' is outside DeviceCondition but is the long-standing
+        // placeholder this endpoint returns when no triage row matched.
+        claimedCondition: ((triage ? claimedOf(triage) : null) || 'unknown') as DeviceCondition,
+        actualCondition: (triage?.final_condition || 'unknown') as DeviceCondition,
         priceDifference: triage?.price_adjustment,
         severity: ex.severity,
         type: ex.exception_type,

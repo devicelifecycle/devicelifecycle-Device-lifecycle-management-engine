@@ -2202,7 +2202,11 @@ export class PricingService {
     // Fetch all conditions — deduplicate by name, prefer exact condition match
       const { data } = await supabase
       .from('competitor_prices')
-      .select('competitor_name, trade_in_price, condition, retrieved_at, scraped_at, updated_at')
+      // NOTE: competitor_prices has no `retrieved_at` column. Selecting it made
+      // this query fail, and since the error is discarded the engine silently
+      // saw ZERO competitor prices — trade-in pricing quietly lost its
+      // competitor inputs instead of erroring.
+      .select('competitor_name, trade_in_price, condition, scraped_at, updated_at')
       .eq('device_id', deviceId)
       .eq('storage', normalizedStorage)
       .not('trade_in_price', 'is', null)
@@ -2220,13 +2224,15 @@ export class PricingService {
       const name = getApprovedTradeInPricingCompetitorName(cp.competitor_name)
       if (!name) continue
       const existing = byName.get(name)
+      // scraped_at is the real freshness column (there is no retrieved_at).
+      const rowTs = cp.scraped_at || cp.updated_at || undefined
       if (!existing) {
-        byName.set(name, { price: p, retrieved_at: cp.retrieved_at || cp.scraped_at || cp.updated_at || undefined })
+        byName.set(name, { price: p, retrieved_at: rowTs })
       } else {
         const existingTs = existing.retrieved_at ? new Date(existing.retrieved_at).getTime() : 0
-        const currentTs = new Date(cp.retrieved_at || cp.scraped_at || cp.updated_at || 0).getTime()
+        const currentTs = new Date(rowTs || 0).getTime()
         if (currentTs >= existingTs) {
-          byName.set(name, { price: p, retrieved_at: cp.retrieved_at || cp.scraped_at || cp.updated_at || undefined })
+          byName.set(name, { price: p, retrieved_at: rowTs })
         }
       }
     }

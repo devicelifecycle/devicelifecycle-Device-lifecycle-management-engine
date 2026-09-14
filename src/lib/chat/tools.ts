@@ -464,10 +464,13 @@ async function getShipmentTracking(args: Record<string, unknown>, ctx: ToolConte
     }
   }
 
-  // Find shipments for this order
+  // Find shipments for this order. The column is `direction` (inbound/outbound)
+  // — there is no `shipments.type`. Selecting it failed the query outright, and
+  // because the error is discarded the assistant then told the customer "no
+  // shipments created yet" for orders that in fact had shipments.
   const { data: shipments } = await supabase
     .from('shipments')
-    .select('id, type, carrier, tracking_number, status, label_url, estimated_delivery, created_at')
+    .select('id, direction, carrier, tracking_number, status, label_url, estimated_delivery, created_at')
     .eq('order_id', order.id)
     .order('created_at', { ascending: false })
 
@@ -483,7 +486,7 @@ async function getShipmentTracking(args: Record<string, unknown>, ctx: ToolConte
     order_number: order.order_number,
     order_status: order.status,
     shipments: shipments.map(s => ({
-      type: s.type,
+      type: s.direction,
       carrier: s.carrier || 'Pending',
       tracking_number: s.tracking_number || 'Pending',
       status: s.status,
