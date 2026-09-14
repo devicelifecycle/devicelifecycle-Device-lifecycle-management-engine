@@ -112,17 +112,16 @@ export default function TenantDetailPageImpl() {
       .catch(() => {})
   }, [])
 
-  // Only on an explicit pick — never on initial load, which would clobber the
-  // tenant's saved quotas with plan defaults before the admin touched anything.
-  const choosePlan = (slug: string) => {
-    setPlan(slug)
-    if (slug === NO_PLAN) return
-    const picked = planOptions.find((p) => p.slug === slug)
-    if (!picked) return
-    setLicense(picked.limits)
-    setFeatures(picked.features)
-    toast.info(`Quotas and features filled in from "${picked.name}" — review, then Save.`)
-  }
+  // Picking a plan sets ONLY tenants.plan (the price/MRR link). It deliberately
+  // does NOT rewrite the quota and feature fields below.
+  //
+  // It used to copy them in, which was actively dangerous: a plan stores its
+  // limits as a partial JSON blob, and normalizePlan fills every unspecified
+  // key from DEFAULT_LICENSE/DEFAULT_FEATURES — which are unlimited and
+  // modules-on. So assigning a plan to a VAR capped at 200 customers with CPO
+  // disabled silently widened it to unlimited with CPO enabled. Quotas are
+  // enforced from settings.license, so that was a real, invisible cap removal.
+  const choosePlan = (slug: string) => setPlan(slug)
 
   const isPlatform = tenant?.type === 'platform'
 
@@ -460,9 +459,9 @@ export default function TenantDetailPageImpl() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Sets this VAR&apos;s monthly recurring revenue in Platform Analytics. Picking a plan
-                  fills in the quotas and features below from it — they stay editable, and those
-                  fields (not the plan) are what actually gets enforced.
+                  Sets this VAR&apos;s monthly recurring revenue in Platform Analytics. It does not
+                  change the quotas or features below — those are what actually get enforced, and
+                  you set them here explicitly.
                 </p>
               </div>
             )}

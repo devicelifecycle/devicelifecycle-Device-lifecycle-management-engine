@@ -69,12 +69,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!canTransitionTicket(s.ticket.status as TicketStatus, parsed.data.status)) {
       return NextResponse.json({ error: `Cannot move a ticket from ${s.ticket.status} to ${parsed.data.status}` }, { status: 400 })
     }
-    const isResolving = parsed.data.status === 'resolved' || parsed.data.status === 'closed'
+    const RESOLVED_STATES: TicketStatus[] = ['resolved', 'closed']
+    const wasResolved = RESOLVED_STATES.includes(s.ticket.status as TicketStatus)
+    const isResolved = RESOLVED_STATES.includes(parsed.data.status)
+    // Stamp only on the transition INTO a resolved state. resolved -> closed
+    // must KEEP the original timestamp: re-stamping it there would move the
+    // resolution time to the close time, so a ticket fixed inside its SLA but
+    // closed days later would flip from "met" to "breached". Reopening clears
+    // it, so a later re-resolution is timed fresh.
+    const resolvedAt = isResolved
+      ? (wasResolved ? s.ticket.resolved_at : new Date().toISOString())
+      : null
     await s.supabase.from('tickets').update({
       status: parsed.data.status,
-      // Stamp when the ticket actually resolved (for SLA reporting), clear it
-      // on reopen so a later re-resolution gets a fresh, accurate timestamp.
-      resolved_at: isResolving ? new Date().toISOString() : null,
+      resolved_at: resolvedAt,
       updated_at: new Date().toISOString(),
     }).eq('id', id)
   }

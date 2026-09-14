@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils'
-import { residualSchedule, residualRetention, tableFromAnnualRate, type DepreciationPoint } from '@/lib/rve'
+import { residualSchedule, residualRetention, tableFromAnnualRate, normalizeAnnualDepreciationRate, type DepreciationPoint } from '@/lib/rve'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 interface DeviceOption { id: string; make: string; model: string }
@@ -58,10 +58,16 @@ function RvePageImpl() {
     fetch('/api/pricing/settings')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        const rate = Number(d?.data?.cpo_depreciation_rate)
-        if (Number.isFinite(rate)) setDepreciationTable(tableFromAnnualRate(rate))
+        // normalizeAnnualDepreciationRate is the SAME fallback the server uses
+        // (src/lib/rve-quote.ts). Applying it even when the setting is absent
+        // is the point: falling back to the hardcoded DEFAULT_DEPRECIATION
+        // curve here while the server compounds 15%/yr is what made the
+        // on-screen quote and the emailed PDF disagree.
+        setDepreciationTable(tableFromAnnualRate(normalizeAnnualDepreciationRate(d?.data?.cpo_depreciation_rate)))
       })
-      .catch(() => {})
+      .catch(() => {
+        setDepreciationTable(tableFromAnnualRate(normalizeAnnualDepreciationRate(undefined)))
+      })
   }, [])
 
   const setLine = (id: number, patch: Partial<Line>) =>
@@ -98,15 +104,20 @@ function RvePageImpl() {
     }
   }, [])
 
+  /** Drop any debounced lookup still pending for a line. */
+  const cancelPendingLookup = useCallback((id: number) => {
+    const existing = lookupTimers.current.get(id)
+    if (existing) { clearTimeout(existing); lookupTimers.current.delete(id) }
+  }, [])
+
   // Typing shouldn't fire a pricing call per keystroke; settle first.
   const scheduleLookup = useCallback((id: number, deviceId: string, storage: string) => {
-    const existing = lookupTimers.current.get(id)
-    if (existing) clearTimeout(existing)
+    cancelPendingLookup(id)
     lookupTimers.current.set(id, setTimeout(() => {
       lookupTimers.current.delete(id)
       void lookupBase(id, deviceId, storage)
     }, 400))
-  }, [lookupBase])
+  }, [lookupBase, cancelPendingLookup])
 
   useEffect(() => {
     const timers = lookupTimers.current
@@ -118,6 +129,10 @@ function RvePageImpl() {
     const line = lines.find((l) => l.id === id)
     const label = d ? `${d.make} ${d.model}${line?.storage ? ` ${line.storage}` : ''}` : ''
     setLine(id, { deviceId, label })
+    // Picking a device supersedes any keystroke-debounced lookup still pending
+    // for this line — otherwise that stale timer fires afterwards and can win
+    // the sequence race, pricing the NEW device at the OLD device's value.
+    cancelPendingLookup(id)
     if (line?.storage) lookupBase(id, deviceId, line.storage)
   }
   const onStorage = (id: number, storage: string) => {

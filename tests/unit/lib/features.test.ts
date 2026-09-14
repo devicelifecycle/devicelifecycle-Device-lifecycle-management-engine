@@ -19,6 +19,23 @@ describe('feature flags', () => {
     expect(DEFAULT_FEATURES.vendor_auction).toBe(false)
   })
 
+  // These flags are ENFORCED now (src/lib/supabase/require-feature.ts), so a
+  // default of false would switch a live, shipped module off for every tenant
+  // that has no explicit override. Guarding the defaults keeps that from
+  // regressing silently.
+  it('defaults to ON for modules that are actually built and running', () => {
+    expect(DEFAULT_FEATURES.knowledge_base).toBe(true)
+    expect(DEFAULT_FEATURES.chat).toBe(true)
+    expect(DEFAULT_FEATURES.impersonation).toBe(true)
+    expect(DEFAULT_FEATURES.rve).toBe(true)
+    expect(DEFAULT_FEATURES.reporting).toBe(true)
+  })
+
+  it('defaults to OFF only where nothing is built to enable', () => {
+    expect(DEFAULT_FEATURES.api_access).toBe(false) // no public API to unlock
+    expect(DEFAULT_FEATURES.sso).toBe(false)
+  })
+
   it('tenant override wins over global override wins over default', () => {
     const f = resolveFeatures({ sso: true, chat: true }, { chat: false })
     expect(f.sso).toBe(true)   // from global

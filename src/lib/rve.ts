@@ -131,6 +131,22 @@ export function computeRve(input: {
  * optional `table` parameter so the hardcoded DEFAULT_DEPRECIATION curve
  * stays as the fallback when no setting exists.
  */
+/**
+ * Fallback annual depreciation % when `pricing_settings.cpo_depreciation_rate`
+ * is missing or out of range. Shared so the server and the admin RVE screen
+ * cannot disagree: they previously fell back differently (server 15%/yr
+ * compounding, client the hardcoded DEFAULT_DEPRECIATION curve), so on any
+ * deployment where nobody had opened Pricing Settings, the on-screen quote and
+ * the emailed PDF showed different numbers for the same device.
+ */
+export const DEFAULT_ANNUAL_DEPRECIATION_RATE = 15
+
+/** Parse a stored depreciation-rate setting, falling back to the shared default. */
+export function normalizeAnnualDepreciationRate(raw: unknown): number {
+  const v = raw != null && raw !== '' ? parseFloat(String(raw)) : NaN
+  return Number.isFinite(v) && v >= 0 && v <= 50 ? v : DEFAULT_ANNUAL_DEPRECIATION_RATE
+}
+
 export function tableFromAnnualRate(annualPercent: number): DepreciationPoint[] {
   const rate = clamp(Math.min(Math.max(annualPercent, 0), 50), 0, 100) / 100
   // Yearly points out to 10 years — the max horizon any RVE route accepts.

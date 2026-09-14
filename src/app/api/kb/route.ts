@@ -3,6 +3,7 @@
 // ============================================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { featureGate } from '@/lib/supabase/require-feature'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveTenantWhiteLabel } from '@/lib/templates'
 import { z } from 'zod'
@@ -24,6 +25,8 @@ function slugify(s: string): string {
 export async function GET() {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  const gated = await featureGate(auth.tenantId, 'knowledge_base', 'Knowledge base')
+  if (gated) return gated
   const admin = auth.effectiveRole === 'admin'
   const supabase = createServiceRoleClient()
   let query = supabase
@@ -50,6 +53,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  const gatedWrite = await featureGate(auth.tenantId, 'knowledge_base', 'Knowledge base')
+  if (gatedWrite) return gatedWrite
   if (!['admin', 'var_entity_admin'].includes(auth.effectiveRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

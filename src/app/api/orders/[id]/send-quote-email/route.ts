@@ -9,7 +9,7 @@ import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
 import { generateOrderPDF, buildPriceAdjustmentNote } from '@/lib/pdf'
 import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
-import { resolveTenantWhiteLabel, renderWhiteLabelEmail, renderTemplate, isDefaultWhiteLabel } from '@/lib/templates'
+import { resolveTenantWhiteLabel, renderWhiteLabelEmail, renderTemplate, DEFAULT_WHITELABEL } from '@/lib/templates'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { computeOrderTaxLine } from '@/lib/tax'
 import { safeErrorMessage } from '@/lib/utils'
@@ -157,16 +157,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // the hardcoded wording below untouched for every tenant that hasn't
         // customized it, so this is a no-op until a VAR actually writes copy.
         const whitelabel = await resolveTenantWhiteLabel(orderTenantId, svcClient)
-        const usesCustomCopy = !isDefaultWhiteLabel(whitelabel)
         const rendered = renderWhiteLabelEmail(whitelabel, {
           company: brand.name,
           customer: order.customer?.company_name ?? order.customer?.contact_name ?? 'there',
         })
-        const customSubject = usesCustomCopy ? rendered.subject : ''
-        // VAR-authored copy is escaped before it reaches the customer's inbox —
+        // Each field is judged on its own. Treating them as one unit meant a VAR
+        // that customized ONLY its signature also silently replaced the subject
+        // with the generic "Your quote from {company}" template -- dropping the
+        // order number, so every quote to a customer threaded together in their
+        // inbox. A field the VAR never touched keeps the built-in wording.
+        const customSubject = whitelabel.quoteSubject !== DEFAULT_WHITELABEL.quoteSubject ? rendered.subject : ''
+        // VAR-authored copy is escaped before it reaches the customer's inbox --
         // it's operator input, not trusted markup.
-        const customIntroHtml = usesCustomCopy ? escapeHtml(rendered.intro) : ''
-        const signature = usesCustomCopy
+        const customIntroHtml = whitelabel.quoteIntro !== DEFAULT_WHITELABEL.quoteIntro
+          ? escapeHtml(rendered.intro)
+          : ''
+        const signature = whitelabel.notificationSignature !== DEFAULT_WHITELABEL.notificationSignature
           ? renderTemplate(whitelabel.notificationSignature, { company: brand.name })
           : brand.name
         const pdfBuffer = generateOrderPDF({

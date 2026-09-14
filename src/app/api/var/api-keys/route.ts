@@ -3,6 +3,7 @@
 // ============================================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { featureGate } from '@/lib/supabase/require-feature'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createHash, randomBytes } from 'crypto'
 import { z } from 'zod'
@@ -21,6 +22,8 @@ export async function GET() {
   if (!['admin', 'var_entity_admin'].includes(auth.effectiveRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+  const gated = await featureGate(auth.tenantId, 'api_access', 'API access')
+  if (gated) return gated
   const supabase = createServiceRoleClient()
   let query = supabase
     .from('api_keys')
@@ -37,6 +40,8 @@ export async function POST(req: NextRequest) {
   if (!['admin', 'var_entity_admin'].includes(auth.effectiveRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+  const gated = await featureGate(auth.tenantId, 'api_access', 'API access')
+  if (gated) return gated
   const parsed = createSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })

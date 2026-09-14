@@ -16,14 +16,20 @@ export const dynamic = 'force-dynamic'
 const PLATFORM_TENANT_ID = 'a0000000-0000-4000-a000-0000000000bb'
 const hsl = z.string().regex(/^\d{1,3}\s+\d{1,3}%\s+\d{1,3}%$/, 'HSL triplet like "221 83% 53%"')
 
-// IPv4 address or CIDR range only — matches what network.ts's ipInAllowlist
-// actually parses. An entry that doesn't match this silently matches nothing,
-// which for an *allowlist* means every request from that tenant gets
-// rejected, including the admin trying to fix their own mistake.
-const ipOrCidr = z.string().regex(
-  /^(\d{1,3}\.){3}\d{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))?$/,
-  'Must be an IPv4 address (1.2.3.4) or CIDR range (1.2.3.0/24)',
-)
+// IPv4 address or CIDR range only — that is exactly what network.ts's
+// ipInAllowlist parses. An entry it cannot parse silently matches nothing,
+// which for an *allowlist* means every request from that tenant is rejected,
+// including the admin trying to undo their own typo.
+//
+// Octets are range-checked rather than just shape-checked: a plain \d{1,3}
+// pattern accepts "999.999.999.999", which looks saved but can never match.
+const ipOrCidr = z.string().refine((v) => {
+  const [addr, bits, ...rest] = v.split('/')
+  if (rest.length > 0) return false
+  if (bits !== undefined && !/^(3[0-2]|[12]?[0-9])$/.test(bits)) return false
+  const octets = addr.split('.')
+  return octets.length === 4 && octets.every((o) => /^\d{1,3}$/.test(o) && Number(o) <= 255)
+}, 'Must be an IPv4 address (1.2.3.4) or CIDR range (1.2.3.0/24)')
 
 const brandingSchema = z.object({
   name: z.string().max(120).optional(),

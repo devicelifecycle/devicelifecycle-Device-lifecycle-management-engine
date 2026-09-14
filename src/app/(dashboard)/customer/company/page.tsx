@@ -28,6 +28,10 @@ export default function CustomerCompanyProfilePageImpl() {
   useEffect(() => {
     if (loadingCustomer) return // wait for the customer lookup to settle first
     if (!customer?.id) { setLoading(false); return } // no customer resolved -- stop spinning forever
+    // Re-assert loading before each fetch: if the customer id changes (auth
+    // re-hydration), the form must not paint EMPTY_COMPANY_PROFILE with Save
+    // enabled, or a click there PATCHes an empty profile over the stored one.
+    setLoading(true)
     fetch(`/api/customer/profile?customer_id=${customer.id}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { data?: { profile?: CompanyProfile } } | null) => d?.data?.profile && setProfile(d.data.profile))

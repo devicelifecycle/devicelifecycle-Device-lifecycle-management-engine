@@ -10,7 +10,7 @@
 
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { PricingService } from '@/services/pricing.service'
-import { estimateResidualValue, tableFromAnnualRate, type DepreciationPoint } from './rve'
+import { estimateResidualValue, tableFromAnnualRate, normalizeAnnualDepreciationRate, type DepreciationPoint } from './rve'
 import type { DeviceCondition } from '@/types'
 
 const round2 = (n: number): number => Math.round(n * 100) / 100
@@ -41,8 +41,8 @@ export async function loadAnnualDepreciationRate(): Promise<number> {
     .select('setting_value')
     .eq('setting_key', 'cpo_depreciation_rate')
     .maybeSingle()
-  const v = data?.setting_value != null ? parseFloat(String(data.setting_value)) : NaN
-  return Number.isFinite(v) && v >= 0 && v <= 50 ? v : 15
+  // Shared with the admin RVE screen so the two can never fall back differently.
+  return normalizeAnnualDepreciationRate(data?.setting_value)
 }
 
 /** The effective retention table for RVE projections this deployment uses. */

@@ -15,7 +15,17 @@ export const FEATURE_KEYS = [
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
 export type FeatureFlags = Record<FeatureKey, boolean>
 
-/** Core modules on by default; advanced/optional ones off until enabled. */
+/**
+ * Default = what a tenant gets with nothing configured.
+ *
+ * These MUST reflect what is actually built and running, because the flags are
+ * now enforced (see require-feature.ts). A module that ships and works but
+ * defaults to false would be switched off for everyone the moment enforcement
+ * lands — the flag defaults stop being cosmetic once something reads them.
+ *
+ * So: on for modules that exist and work today; off only for the two that are
+ * genuinely not built (a public API for api_access to guard, and SSO).
+ */
 export const DEFAULT_FEATURES: FeatureFlags = {
   trade_in: true,
   cpo: true,
@@ -23,12 +33,15 @@ export const DEFAULT_FEATURES: FeatureFlags = {
   billing: true,
   reporting: true,
   notifications: true,
-  api_access: false,
-  sso: false,
+  knowledge_base: true,  // kb_articles + /api/kb are live
+  chat: true,            // the AI assistant is live
+  impersonation: true,   // admin impersonation is live and audited
+  api_access: false,     // no public API exists for a key to unlock yet
+  sso: false,            // not built
+  // Off deliberately: this flag means the PER-VAR vendor auction, which the
+  // client deferred ("not initially"). Byte-Back's own single-tenant vendor
+  // bidding is a different, already-live thing and is not gated by this.
   vendor_auction: false,
-  knowledge_base: false,
-  chat: false,
-  impersonation: false,
 }
 
 function pickBooleans(raw: unknown): Partial<FeatureFlags> {

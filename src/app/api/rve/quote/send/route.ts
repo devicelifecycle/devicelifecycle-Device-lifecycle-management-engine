@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { featureGate } from '@/lib/supabase/require-feature'
 import { EmailService } from '@/services/email.service'
 import { tableFromAnnualRate } from '@/lib/rve'
 import { loadAnnualDepreciationRate, resolveQuoteLines } from '@/lib/rve-quote'
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
     if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(effectiveRole)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+    const gated = await featureGate(auth.tenantId, 'rve', 'Residual Value Estimator')
+    if (gated) return gated
 
     const parsed = schema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) {
