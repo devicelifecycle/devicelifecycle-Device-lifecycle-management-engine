@@ -9,7 +9,6 @@ import { resolveBranding } from '@/lib/branding'
 import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
 import { resolveLicense, LIMIT_KEYS } from '@/lib/licensing'
 import { resolveWhiteLabel } from '@/lib/templates'
-import { resolveIntegrations } from '@/lib/integrations-config'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -68,16 +67,15 @@ const patchSchema = z.object({
   // password-set flows) and branding.requireMfa. Accepting the dead block
   // meant an operator could set a security control that silently did nothing,
   // so it's gone — use the branding fields above.
-  integrations: z.object({
-    smsProvider: z.string().max(20).optional(),
-    smsFrom: z.string().max(40).nullable().optional(),
-    smtpHost: z.string().max(255).nullable().optional(),
-    smtpPort: z.number().int().nullable().optional(),
-    smtpUser: z.string().max(255).nullable().optional(),
-    paymentProvider: z.string().max(20).optional(),
-    ssoProvider: z.string().max(20).optional(),
-    ssoEntityId: z.string().max(300).nullable().optional(),
-  }).optional(),
+  // An `integrations` block ({ smsProvider, smsFrom, smtpHost, smtpPort,
+  // smtpUser, paymentProvider, ssoProvider, ssoEntityId }) was accepted here
+  // too, and was equally inert: no UI ever sent it, and nothing reads it back
+  // for behavior. Mail still goes out through Resend/Gmail env vars and SMS
+  // through TWILIO_* env vars regardless of what was stored, so configuring a
+  // tenant's own SMTP server or SSO provider changed nothing while reporting
+  // success. Removed for the same reason as `security` above — the per-tenant
+  // sender identity that IS honored lives on branding (emailFromName /
+  // emailFromAddress / smsSenderId, consumed in email.service.ts).
 })
 
 async function guard() {
@@ -100,12 +98,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Failed to load tenant' }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown; security?: unknown; integrations?: unknown }
+  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown }
   return NextResponse.json({
     data: {
       ...data,
       branding: resolveBranding(data.branding),
-      integrations: resolveIntegrations(settings.integrations),
       features: resolveFeatures(undefined, settings.features),
       license: resolveLicense(settings.license),
       whitelabel: resolveWhiteLabel(settings.whitelabel),
@@ -144,8 +141,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.custom_domain !== undefined) update.custom_domain = parsed.data.custom_domain || null
   if (parsed.data.plan !== undefined) update.plan = parsed.data.plan || null
 
-  // Merge feature/license/white-label/security/integrations overrides into settings JSONB (known keys only).
-  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel || parsed.data.integrations) {
+  // Merge feature/license/white-label overrides into settings JSONB (known keys only).
+  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel) {
     const settings = { ...(existing.settings as Record<string, unknown> ?? {}) }
     if (parsed.data.features) {
       const cur = { ...(settings.features as Record<string, boolean> ?? {}) }
@@ -160,9 +157,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (parsed.data.whitelabel) {
       // Normalize through the resolver so only valid, sanitized values are stored.
       settings.whitelabel = resolveWhiteLabel({ ...(settings.whitelabel as object ?? {}), ...parsed.data.whitelabel })
-    }
-    if (parsed.data.integrations) {
-      settings.integrations = resolveIntegrations({ ...(settings.integrations as object ?? {}), ...parsed.data.integrations })
     }
     update.settings = settings
   }

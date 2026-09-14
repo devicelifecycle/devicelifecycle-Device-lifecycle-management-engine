@@ -50,6 +50,31 @@ export interface TenantBranding {
 /** Darkened primary-blue variant used when a tenant sets no secondary color. */
 const DEFAULT_SECONDARY_COLOR = '221 83% 41%'
 
+/**
+ * "221 83% 53%" -> "#2563eb". Needed wherever CSS custom properties can't
+ * reach — email clients strip them, so a tenant-branded email has to inline
+ * real hex values.
+ */
+export function hslTripletToHex(triplet: string, fallback = DEFAULT_SECONDARY_COLOR): string {
+  const m = /^(\d{1,3})\s+(\d{1,3})%\s+(\d{1,3})%$/.exec((triplet ?? '').trim())
+  if (!m) return triplet === fallback ? '#1d4ed8' : hslTripletToHex(fallback, fallback)
+  const h = Number(m[1]) % 360
+  const s = Math.min(100, Number(m[2])) / 100
+  const l = Math.min(100, Number(m[3])) / 100
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const off = l - c / 2
+  let rgb: [number, number, number] = [0, 0, 0]
+  if (h < 60) rgb = [c, x, 0]
+  else if (h < 120) rgb = [x, c, 0]
+  else if (h < 180) rgb = [0, c, x]
+  else if (h < 240) rgb = [0, x, c]
+  else if (h < 300) rgb = [x, 0, c]
+  else rgb = [c, 0, x]
+  const toHex = (v: number) => Math.round((v + off) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(rgb[0])}${toHex(rgb[1])}${toHex(rgb[2])}`
+}
+
 /** Byte-Back platform defaults — the blue-on-blue identity. */
 export const DEFAULT_BRANDING: TenantBranding = {
   name: 'Byte-Back',

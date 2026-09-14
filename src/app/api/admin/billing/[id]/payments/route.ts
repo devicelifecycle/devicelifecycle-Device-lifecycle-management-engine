@@ -55,25 +55,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const invoice = await loadInvoice(supabase, id)
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // A refund can never exceed what's still net-paid on the invoice — without
-  // this, refunding the same payment twice (or refunding more than was ever
-  // paid) drives net negative with nothing stopping it.
-  if (parsed.data.kind === 'refund') {
-    const { data: existingRows } = await supabase.from('invoice_payments').select('kind, amount').eq('invoice_id', id)
-    const existingSummary = summarizePayments(invoice.total ?? 0, (existingRows ?? []) as PaymentRecord[])
-    if (parsed.data.amount > existingSummary.net) {
-      return NextResponse.json(
-        { error: `Refund of ${parsed.data.amount} exceeds the ${existingSummary.net} still net-paid on this invoice` },
-        { status: 400 },
-      )
-    }
-  }
-
-  const { error } = await supabase.from('invoice_payments')
-    .insert({ invoice_id: id, kind: parsed.data.kind, amount: parsed.data.amount, note: parsed.data.note ?? null, created_by: g.auth.profile.id })
+  // The refund cap and the insert happen together inside record_invoice_payment,
+  // serialized on the invoice row. Doing the check here in JS and inserting
+  // afterwards was a read-then-write race: two refunds issued at the same
+  // moment both read the same net, both passed the cap, and both inserted.
+  const { data: result, error } = await supabase.rpc('record_invoice_payment', {
+    p_invoice_id: id,
+    p_kind: parsed.data.kind,
+    p_amount: parsed.data.amount,
+    p_note: parsed.data.note ?? null,
+    p_created_by: g.auth.profile.id,
+  })
   if (error) {
     console.error('Failed to record payment:', error)
     return NextResponse.json({ error: 'Failed to record payment' }, { status: 500 })
+  }
+
+  const outcome = (result ?? {}) as { ok?: boolean; error?: string; net?: number }
+  if (!outcome.ok) {
+    if (outcome.error === 'exceeds_net') {
+      return NextResponse.json(
+        { error: `Refund of ${parsed.data.amount} exceeds the ${outcome.net ?? 0} still net-paid on this invoice` },
+        { status: 400 },
+      )
+    }
+    if (outcome.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ error: 'Failed to record payment' }, { status: 400 })
   }
 
   // Recompute; if the balance is cleared and the invoice is "sent", mark it paid.

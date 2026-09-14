@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { DEFAULT_BRANDING, type TenantBranding } from '@/lib/branding'
+import { DEFAULT_BRANDING, hslTripletToHex, type TenantBranding } from '@/lib/branding'
 import { DEFAULT_FEATURES, FEATURE_KEYS, type FeatureFlags, type FeatureKey } from '@/lib/features'
 import { DEFAULT_LICENSE, LIMIT_KEYS, UNLIMITED, type LicenseLimits, type LimitKey } from '@/lib/licensing'
 import { DEFAULT_WHITELABEL, type WhiteLabelContent } from '@/lib/templates'
@@ -67,10 +67,10 @@ export default function TenantDetailPageImpl() {
   const [customDomain, setCustomDomain] = useState('')
   const [isActive, setIsActive] = useState(true)
   // tenants.plan holds a plan SLUG, and this is the only place it can be set.
-  // It drives MRR/ARR in Platform Analytics. Note enforcement does NOT read the
-  // plan: tenantLimits() resolves quotas/features from settings.license and
-  // settings.features only. So picking a plan copies its limits into the fields
-  // below (visibly, for review) rather than silently applying them elsewhere.
+  // It drives MRR/ARR in Platform Analytics. Enforcement does NOT read the
+  // plan — tenantLimits() resolves quotas and features from settings.license
+  // and settings.features only — so the plan is a pricing label here, and the
+  // enforced numbers are the fields below (see choosePlan).
   const NO_PLAN = '__none__'
   const [plan, setPlan] = useState<string>(NO_PLAN)
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([])
@@ -522,25 +522,6 @@ export default function TenantDetailPageImpl() {
 const DEFAULT_SECONDARY_FALLBACK = '221 83% 41%'
 
 /** "221 83% 41%" -> "#1d4ed8" for <input type="color">. */
-function hslTripletToHex(triplet: string): string {
-  const m = /^(\d{1,3})\s+(\d{1,3})%\s+(\d{1,3})%$/.exec(triplet.trim())
-  if (!m) return hslTripletToHex(DEFAULT_SECONDARY_FALLBACK)
-  const h = Number(m[1]) % 360
-  const s = Math.min(100, Number(m[2])) / 100
-  const l = Math.min(100, Number(m[3])) / 100
-  const c = (1 - Math.abs(2 * l - 1)) * s
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
-  const off = l - c / 2
-  let rgb: [number, number, number] = [0, 0, 0]
-  if (h < 60) rgb = [c, x, 0]
-  else if (h < 120) rgb = [x, c, 0]
-  else if (h < 180) rgb = [0, c, x]
-  else if (h < 240) rgb = [0, x, c]
-  else if (h < 300) rgb = [x, 0, c]
-  else rgb = [c, 0, x]
-  const toHex = (v: number) => Math.round((v + off) * 255).toString(16).padStart(2, '0')
-  return `#${toHex(rgb[0])}${toHex(rgb[1])}${toHex(rgb[2])}`
-}
 
 /** "#1d4ed8" -> "221 83% 41%" stored HSL-triplet format. */
 function hexToHslTriplet(hex: string): string {

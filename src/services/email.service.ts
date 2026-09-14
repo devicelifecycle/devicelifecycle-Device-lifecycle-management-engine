@@ -87,9 +87,22 @@ function getFromEmail(brand?: TenantBrandLabel | null): string {
  * admin-entered, not attacker-input, but this costs nothing and closes the
  * same class of gap as the recipientName escaping above.
  */
-function emailShell(body: string, footer: 'full' | 'short' = 'full', brand?: { name: string; tagline: string }): string {
+function emailShell(
+  body: string,
+  footer: 'full' | 'short' = 'full',
+  brand?: { name: string; tagline: string; primaryHex?: string | null; secondaryHex?: string | null },
+): string {
   const name = escapeHtml(brand?.name || APP_NAME)
   const tagline = escapeHtml(brand?.tagline || APP_TAGLINE)
+  // The header bar is the most visible brand surface a VAR's customer sees, and
+  // it was a hardcoded Byte-Back blue for every tenant — so a VAR could set its
+  // brand colors and still send its customers Byte-Back-blue mail. Email
+  // clients strip CSS custom properties, so these are inlined hex values.
+  // Anything not matching #rrggbb is rejected rather than interpolated.
+  const hex = (v: string | null | undefined, fallback: string) =>
+    typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : fallback
+  const headerTo = hex(brand?.primaryHex, '#3b82f6')
+  const headerFrom = hex(brand?.secondaryHex, '#1d4ed8')
   const year = new Date().getFullYear()
   const footerText = footer === 'short'
     ? `&copy; ${year} ${name}.`
@@ -107,7 +120,7 @@ function emailShell(body: string, footer: 'full' | 'short' = 'full', brand?: { n
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <tr>
-            <td style="background:#1d4ed8;background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:26px 32px;border-bottom:3px solid #93c5fd;">
+            <td style="background:${headerFrom};background:linear-gradient(135deg,${headerTo},${headerFrom});padding:26px 32px;border-bottom:3px solid #93c5fd;">
               <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.01em;">${name}</h1><p style="margin:5px 0 0;color:#dbeafe;font-size:12px;letter-spacing:0.03em;">${tagline}</p>
             </td>
           </tr>

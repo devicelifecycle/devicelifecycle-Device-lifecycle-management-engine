@@ -4,7 +4,16 @@
 // Stored under settings.integrations. Holds only NON-SECRET configuration
 // (provider names, hosts, from-addresses, SSO entity id). Secrets (SMTP
 // passwords, API keys, payment keys) live in the secret store / env, never here.
-// Empty resolves to "nothing configured", so this changes no live behavior.
+//
+// ⚠ NO PRODUCTION CALLERS as of 2026-09-14. Nothing reads settings.integrations
+// for behavior: mail always goes out via the Resend/Gmail env vars and SMS via
+// TWILIO_*, whatever is stored here. The admin tenant API used to accept and
+// persist this block, which meant an operator could configure a tenant's own
+// SMTP server or SSO provider, get a success response, and change nothing — so
+// that surface was removed. The per-tenant sender identity that IS honored
+// lives on tenant BRANDING (emailFromName / emailFromAddress / smsSenderId,
+// read in email.service.ts). Wire this into a real send path before exposing
+// it again.
 
 export type SmsProvider = 'none' | 'twilio'
 export type PaymentProvider = 'none' | 'stripe'

@@ -11,7 +11,7 @@
 // Falls back to the platform default on a null/platform tenant id, or on any
 // lookup error — a branding lookup failure must never block a send.
 
-import { resolveBranding, DEFAULT_BRANDING } from '@/lib/branding'
+import { resolveBranding, DEFAULT_BRANDING, hslTripletToHex } from '@/lib/branding'
 import { PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
 
 export interface TenantBrandLabel {
@@ -22,6 +22,9 @@ export interface TenantBrandLabel {
   emailFromName?: string | null
   emailFromAddress?: string | null
   smsSenderId?: string | null
+  /** Brand colors as hex — email clients strip CSS custom properties. */
+  primaryHex?: string | null
+  secondaryHex?: string | null
 }
 
 const DEFAULT_LABEL: TenantBrandLabel = {
@@ -32,6 +35,8 @@ const DEFAULT_LABEL: TenantBrandLabel = {
   emailFromName: null,
   emailFromAddress: null,
   smsSenderId: null,
+  primaryHex: null,
+  secondaryHex: null,
 }
 
 /**
@@ -51,6 +56,8 @@ export function brandLabelFromRow(tenantId: string | null | undefined, branding:
     emailFromName: resolved.emailFromName ?? null,
     emailFromAddress: resolved.emailFromAddress ?? null,
     smsSenderId: resolved.smsSenderId ?? null,
+    primaryHex: hslTripletToHex(resolved.primary),
+    secondaryHex: hslTripletToHex(resolved.secondaryColor ?? ''),
   }
 }
 
