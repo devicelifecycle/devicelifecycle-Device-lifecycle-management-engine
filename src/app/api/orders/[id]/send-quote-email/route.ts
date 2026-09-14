@@ -9,6 +9,7 @@ import { OrderService } from '@/services/order.service'
 import { EmailService } from '@/services/email.service'
 import { generateOrderPDF, buildPriceAdjustmentNote } from '@/lib/pdf'
 import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { resolveTenantWhiteLabel, renderWhiteLabelEmail, renderTemplate, isDefaultWhiteLabel } from '@/lib/templates'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { computeOrderTaxLine } from '@/lib/tax'
 import { safeErrorMessage } from '@/lib/utils'
@@ -149,7 +150,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     after(async () => {
       try {
         // Generate PDF
-        const brand = await resolveTenantBrandLabel((order as { tenant_id?: string | null }).tenant_id ?? null, createServiceRoleClient())
+        const orderTenantId = (order as { tenant_id?: string | null }).tenant_id ?? null
+        const svcClient = createServiceRoleClient()
+        const brand = await resolveTenantBrandLabel(orderTenantId, svcClient)
+        // The VAR's own quote copy, if it set any. isDefaultWhiteLabel keeps
+        // the hardcoded wording below untouched for every tenant that hasn't
+        // customized it, so this is a no-op until a VAR actually writes copy.
+        const whitelabel = await resolveTenantWhiteLabel(orderTenantId, svcClient)
+        const usesCustomCopy = !isDefaultWhiteLabel(whitelabel)
+        const rendered = renderWhiteLabelEmail(whitelabel, {
+          company: brand.name,
+          customer: order.customer?.company_name ?? order.customer?.contact_name ?? 'there',
+        })
+        const customSubject = usesCustomCopy ? rendered.subject : ''
+        // VAR-authored copy is escaped before it reaches the customer's inbox —
+        // it's operator input, not trusted markup.
+        const customIntroHtml = usesCustomCopy ? escapeHtml(rendered.intro) : ''
+        const signature = usesCustomCopy
+          ? renderTemplate(whitelabel.notificationSignature, { company: brand.name })
+          : brand.name
         const pdfBuffer = generateOrderPDF({
       order_number: order.order_number,
       type: order.type,
@@ -263,7 +282,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
   <h2 style="color:#111">Your ${docType} — Order ${safeOrderNumHtml}</h2>
   <p>Hi ${customerName},</p>
-  <p>Please find your <strong>${docType.toLowerCase()}</strong> for order <strong>${safeOrderNumHtml}</strong> attached as a PDF and Excel file.</p>
+  <p>${customIntroHtml || `Please find your <strong>${docType.toLowerCase()}</strong> for order <strong>${safeOrderNumHtml}</strong> attached as a PDF and Excel file.`}</p>
   ${isQuote ? `<p style="margin:8px 0;font-size:13px;color:#2563eb;font-weight:600">This quote is valid for ${quoteValidityDays} days${order.quote_expires_at ? ` (expires ${formatDate(order.quote_expires_at)})` : ''}.</p>` : ''}
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
     <tr><td style="padding:6px 12px;background:#f5f5f5;font-weight:600;border:1px solid #e0e0e0">Order Number</td><td style="padding:6px 12px;border:1px solid #e0e0e0">${safeOrderNumHtml}</td></tr>
@@ -282,12 +301,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   </div>
   <p style="color:#888;font-size:12px;margin-top:4px;text-align:center">Or copy this link: ${orderUrl}</p>
   <p>If you have any questions, please contact our team.</p>
-  <p style="color:#888;font-size:12px;margin-top:32px">— ${brand.name}</p>
+  <p style="color:#888;font-size:12px;margin-top:32px">— ${escapeHtml(signature)}</p>
 </div>`
 
     await EmailService.sendEmailWithAttachments(
       customerEmail,
-      `${docType} — Order ${order.order_number}`,
+      customSubject || `${docType} — Order ${order.order_number}`,
       html,
       [
         { filename: `${filenameBase}.pdf`, content: Buffer.from(pdfBuffer), contentType: 'application/pdf' },

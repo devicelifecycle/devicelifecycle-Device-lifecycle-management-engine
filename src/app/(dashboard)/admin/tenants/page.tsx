@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Building2, Loader2, Plus, ShieldCheck } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -29,11 +28,7 @@ interface Tenant {
   created_at: string
 }
 
-export default function TenantsPage() {
-  return <ComingSoon title="VARs" />
-}
-
-function TenantsPageImpl() {
+export default function TenantsPageImpl() {
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')

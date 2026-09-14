@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { resolveTenantWhiteLabel } from '@/lib/templates'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -35,7 +36,15 @@ export async function GET() {
   }
   const { data, error } = await query
   if (error) return NextResponse.json({ error: 'Failed to load articles' }, { status: 500 })
-  return NextResponse.json({ data })
+
+  // A VAR can point its users at its own hosted knowledge base
+  // (settings.whitelabel.knowledgeBaseUrl). The field was editable and stored
+  // but surfaced nowhere, so the link never reached a single user. Returned
+  // here because this is the endpoint that answers "where is this tenant's
+  // knowledge base" — resolveTenantWhiteLabel only ever yields an http(s) URL
+  // or null.
+  const { knowledgeBaseUrl } = await resolveTenantWhiteLabel(auth.tenantId, supabase)
+  return NextResponse.json({ data, knowledgeBaseUrl })
 }
 
 export async function POST(req: NextRequest) {

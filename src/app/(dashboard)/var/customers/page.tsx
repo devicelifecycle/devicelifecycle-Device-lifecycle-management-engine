@@ -16,7 +16,6 @@ import {
   Ban, Download, Layers, Loader2, MapPin, MoreHorizontal, RotateCcw, Search, Upload, Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -54,11 +53,7 @@ const STATUS_BADGE = {
 
 const MAX_IMPORT_ROWS = 1000 // server cap on POST /api/customers/bulk
 
-export default function VarCustomersPage() {
-  return <ComingSoon title="VAR Customers" />
-}
-
-function VarCustomersPageImpl() {
+export default function VarCustomersPageImpl() {
   const [customers, setCustomers] = useState<VarCustomer[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)

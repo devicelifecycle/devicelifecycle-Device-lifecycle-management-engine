@@ -14,7 +14,6 @@
 import { useEffect, useState } from 'react'
 import { Loader2, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -36,11 +35,7 @@ const PLAN_BADGE = {
   out: 'inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground',
 }
 
-export default function VarFeaturesPage() {
-  return <ComingSoon title="VAR Features" />
-}
-
-function VarFeaturesPageImpl() {
+export default function VarFeaturesPageImpl() {
   const [rows, setRows] = useState<FeatureRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)

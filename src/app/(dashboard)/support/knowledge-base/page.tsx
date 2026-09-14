@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { BookOpen, Loader2 } from 'lucide-react'
+import { BookOpen, ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,12 +17,18 @@ function KnowledgeBasePageImpl() {
   const [articles, setArticles] = useState<{ id: string; title: string; category: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<Article | null>(null)
+  // The tenant's own hosted knowledge base, if it published one.
+  const [externalUrl, setExternalUrl] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const res = await fetch('/api/kb')
-      if (res.ok) setArticles((await res.json()).data ?? [])
+      if (res.ok) {
+        const body = await res.json()
+        setArticles(body.data ?? [])
+        setExternalUrl(typeof body.knowledgeBaseUrl === 'string' ? body.knowledgeBaseUrl : null)
+      }
     } catch { toast.error('Failed to load knowledge base') } finally { setLoading(false) }
   }, [])
   useEffect(() => { void load() }, [load])
@@ -51,6 +57,18 @@ function KnowledgeBasePageImpl() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><BookOpen className="h-6 w-6 text-primary" /> Knowledge Base</h1>
         <p className="mt-1 text-sm text-muted-foreground">Helpful articles and guides.</p>
       </div>
+
+      {externalUrl && (
+        <a
+          href={externalUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm transition-colors hover:bg-muted"
+        >
+          <span>Browse our full help centre</span>
+          <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </a>
+      )}
       {loading ? (
         <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
       ) : articles.length === 0 ? (

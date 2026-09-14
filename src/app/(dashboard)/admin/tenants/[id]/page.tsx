@@ -8,7 +8,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { ArrowLeft, Loader2, Save, Trash2, Upload } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -57,11 +56,7 @@ const LIMIT_LABELS: Record<LimitKey, string> = {
 }
 
 
-export default function TenantDetailPage() {
-  return <ComingSoon title="VAR Settings" />
-}
-
-function TenantDetailPageImpl() {
+export default function TenantDetailPageImpl() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [tenant, setTenant] = useState<TenantDetail | null>(null)

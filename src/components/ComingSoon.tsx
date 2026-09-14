@@ -21,7 +21,7 @@ const ROLLOUT_PHASES: RolloutPhase[] = [
     label: 'Phase 2',
     title: 'VAR & Customer Consoles',
     description: 'Reseller self-service — team management, roll-up reporting, customer management — plus each customer’s own company profile, device register, and reports.',
-    live: false,
+    live: true,
   },
   {
     label: 'Phase 3',

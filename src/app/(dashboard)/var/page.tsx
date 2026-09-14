@@ -7,7 +7,6 @@
 // margin model (BB take + the VAR's corp/rep cuts), and invoices from BB.
 
 import { useEffect, useState } from 'react'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Loader2, Building2, Percent, Receipt } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
@@ -37,11 +36,7 @@ const STATUS_STYLES: Record<string, string> = {
   void: 'bg-red-100 text-red-700',
 }
 
-export default function VarConsolePage() {
-  return <ComingSoon title="VAR Console" />
-}
-
-function VarConsolePageImpl() {
+export default function VarConsolePageImpl() {
   const [data, setData] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
 

@@ -10,7 +10,6 @@
 import { useEffect, useState } from 'react'
 import { Building2, Plus, Trash2, Loader2, MapPin, Users2, Contact as ContactIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { useMyCustomer } from '@/hooks/useCustomers'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -20,11 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { EMPTY_COMPANY_PROFILE, type CompanyProfile, type Location, type Contact } from '@/lib/company-profile'
 
-export default function CustomerCompanyProfilePage() {
-  return <ComingSoon title="Company Profile" />
-}
-
-function CustomerCompanyProfilePageImpl() {
+export default function CustomerCompanyProfilePageImpl() {
   const { customer, isLoading: loadingCustomer } = useMyCustomer()
   const [profile, setProfile] = useState<CompanyProfile>(EMPTY_COMPANY_PROFILE)
   const [loading, setLoading] = useState(true)

@@ -72,3 +72,28 @@ export function renderWhiteLabelEmail(
     intro: renderTemplate(w.quoteIntro, vars),
   }
 }
+
+/**
+ * Fetch + resolve a tenant's white-label copy. Mirrors resolveTenantBrandLabel:
+ * the content must follow the RECORD's tenant (whose order this is), never the
+ * request host, and any lookup failure falls back to platform defaults rather
+ * than throwing — customized copy must never be the reason a send fails.
+ *
+ * `supabase` is intentionally untyped for the same reason documented in
+ * tenant-brand-label.ts (the generated client type triggers tsc's "excessively
+ * deep" instantiation inside shared helpers).
+ */
+export async function resolveTenantWhiteLabel(
+  tenantId: string | null | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+): Promise<WhiteLabelContent> {
+  if (!tenantId) return DEFAULT_WHITELABEL
+  try {
+    const { data } = await supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle()
+    const settings = (data?.settings ?? {}) as { whitelabel?: unknown }
+    return resolveWhiteLabel(settings.whitelabel)
+  } catch {
+    return DEFAULT_WHITELABEL
+  }
+}
