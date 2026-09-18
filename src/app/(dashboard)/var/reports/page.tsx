@@ -149,7 +149,12 @@ export default function VarReportsPageImpl() {
             </CardHeader>
             <CardContent>
               {data.byRep.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">No reps to report on yet.</p>
+                <div className="py-10 text-center">
+                  <p className="text-sm font-medium">No reps to report on yet</p>
+                  <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                    This rolls up customers, orders and order value per sales rep. Add sales reps on the Team page and assign customers to them, and their numbers appear here.
+                  </p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>

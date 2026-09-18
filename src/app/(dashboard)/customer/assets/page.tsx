@@ -162,7 +162,12 @@ export default function CustomerAssetsPageImpl() {
           {loadingCustomer || loading ? (
             <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
           ) : assets.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No devices registered yet.</p>
+            <div className="py-10 text-center">
+              <p className="text-sm font-medium">No devices registered yet</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                Your device register is a private record of the hardware your company owns &mdash; assign devices to people, retire them, and keep a full history of every change. Add one device, or import a CSV.
+              </p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>

@@ -165,7 +165,12 @@ export default function VarTeamPageImpl() {
           ) : loading ? (
             <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
           ) : members.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No team members yet.</p>
+            <div className="py-10 text-center">
+              <p className="text-sm font-medium">No team members yet</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                Add regional managers and sales reps here. Everyone you add only sees their own scope &mdash; a sales rep sees the customers assigned to them, a regional manager sees their whole region.
+              </p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>

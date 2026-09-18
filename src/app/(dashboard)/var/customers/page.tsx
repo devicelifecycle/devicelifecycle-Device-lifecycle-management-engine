@@ -185,7 +185,12 @@ export default function VarCustomersPageImpl() {
           ) : loadFailed ? (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">Unable to load your customers.</div>
           ) : customers.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No customers found.</p>
+            <div className="py-10 text-center">
+              <p className="text-sm font-medium">No customers found</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                Nothing matches your current search or filters. Clear them to see every customer in your scope, or use Import to add customers in bulk from a CSV.
+              </p>
+            </div>
           ) : (
             <>
               <div className="overflow-x-auto">

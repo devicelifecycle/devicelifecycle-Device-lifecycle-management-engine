@@ -118,7 +118,12 @@ export default function TenantsPageImpl() {
               <Loader2 className="h-4 w-4 animate-spin" /> Loading tenants…
             </div>
           ) : tenants.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No tenants yet.</p>
+            <div className="py-8 text-center">
+              <p className="text-sm font-medium">No VARs yet</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                A VAR is a reseller with its own branded portal, its own customers and its own team, fully isolated from every other VAR. Creating one is additive &mdash; existing customers, orders and data stay on the platform tenant.
+              </p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
