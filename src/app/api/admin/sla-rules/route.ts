@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const rules = await SLAService.getSLARules()
     return NextResponse.json({ data: rules })
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const body = await request.json()
     const validationResult = createSLARuleSchema.safeParse(body)
@@ -41,13 +41,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Add default escalation_user_ids field
-    const slaData = {
-      ...validationResult.data,
-      escalation_user_ids: []
-    }
-
-    const rule = await SLAService.createSLARule(slaData)
+    const d = validationResult.data
+    const rule = await SLAService.createSLARule({
+      name: d.name,
+      description: d.description ?? null,
+      from_status: d.from_status,
+      order_type: d.order_type ?? null,
+      warning_hours: d.warning_hours,
+      breach_hours: d.breach_hours,
+      escalation_user_ids: d.escalation_user_ids,
+      is_active: d.is_active,
+    })
     return NextResponse.json(rule, { status: 201 })
   } catch (error) {
     console.error('Error creating SLA rule:', error)

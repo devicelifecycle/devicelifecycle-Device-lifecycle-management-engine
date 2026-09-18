@@ -656,17 +656,43 @@ export const priceCalculationV2Schema = z.object({
 // SLA SCHEMAS
 // ============================================================================
 
+// Mirrors the sla_rules table exactly (initial schema: name, description,
+// from_status, order_type NULL = all types, warning/breach hours,
+// escalation_user_ids, is_active). An earlier version of this schema required
+// a `to_status` and an `applies_to_order_types` array — neither is a column,
+// and the admin page never sent `to_status`, so every "Create rule" attempt
+// from /admin/sla-rules was a 400 (found by the settings-parity sweep,
+// 2026-09-18). breach must exceed warning or the breach state is unreachable.
 export const createSLARuleSchema = z.object({
-  name: z.string().min(1, 'Rule name is required'),
+  name: z.string().min(1, 'Rule name is required').max(255),
+  description: z.string().max(1000).optional().nullable(),
   from_status: z.enum(ORDER_STATUS_VALUES),
-  to_status: z.enum(ORDER_STATUS_VALUES),
-  warning_hours: z.coerce.number().min(1),
-  breach_hours: z.coerce.number().min(1),
-  applies_to_order_types: z.array(z.enum(ORDER_TYPE_VALUES)).default(['cpo', 'trade_in']),
+  order_type: z.enum(ORDER_TYPE_VALUES).optional().nullable(),
+  warning_hours: z.coerce.number().int().min(1),
+  breach_hours: z.coerce.number().int().min(1),
+  escalation_user_ids: z.array(z.string().uuid()).default([]),
   is_active: z.boolean().default(true),
+}).refine((r) => r.breach_hours > r.warning_hours, {
+  message: 'breach_hours must be greater than warning_hours',
+  path: ['breach_hours'],
 })
 
-export const updateSLARuleSchema = createSLARuleSchema.partial()
+// .partial() is not available on a refined schema; the update shape is the
+// same fields, all optional, with the ordering rule re-checked only when both
+// hours are present in the patch.
+export const updateSLARuleSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(1000).optional().nullable(),
+  from_status: z.enum(ORDER_STATUS_VALUES).optional(),
+  order_type: z.enum(ORDER_TYPE_VALUES).optional().nullable(),
+  warning_hours: z.coerce.number().int().min(1).optional(),
+  breach_hours: z.coerce.number().int().min(1).optional(),
+  escalation_user_ids: z.array(z.string().uuid()).optional(),
+  is_active: z.boolean().optional(),
+}).refine(
+  (r) => r.warning_hours === undefined || r.breach_hours === undefined || r.breach_hours > r.warning_hours,
+  { message: 'breach_hours must be greater than warning_hours', path: ['breach_hours'] },
+)
 
 // ============================================================================
 // VENDOR BID SCHEMAS

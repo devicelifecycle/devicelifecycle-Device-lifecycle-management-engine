@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { SLAService } from '@/services/sla.service'
 import { updateSLARuleSchema } from '@/lib/validations'
+import type { SLARule } from '@/types'
 export const dynamic = 'force-dynamic'
 
 
@@ -16,7 +17,7 @@ export async function PATCH(
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const body = await request.json()
     const validationResult = updateSLARuleSchema.safeParse(body)
@@ -26,7 +27,10 @@ export async function PATCH(
         { status: 400 }
       )
     }
-    const rule = await SLAService.updateSLARule((await params).id, validationResult.data)
+    // null is meaningful here: it clears description, and sets order_type to
+    // NULL = "applies to all types". Passed through as-is.
+    const patch: Partial<SLARule> = validationResult.data
+    const rule = await SLAService.updateSLARule((await params).id, patch)
     return NextResponse.json(rule)
   } catch (error) {
     console.error('Error updating SLA rule:', error)
@@ -44,7 +48,7 @@ export async function DELETE(
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     await SLAService.deleteSLARule((await params).id)
     return NextResponse.json({ success: true })

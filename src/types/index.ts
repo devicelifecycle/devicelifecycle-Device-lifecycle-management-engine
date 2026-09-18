@@ -670,10 +670,11 @@ export interface Shipment extends BaseEntity {
 
 export interface SLARule extends BaseEntity {
   name: string;
-  description?: string;
+  description?: string | null;
   
   from_status: OrderStatus;
-  order_type?: OrderType;
+  /** NULL = applies to all order types (DB comment on sla_rules.order_type). */
+  order_type?: OrderType | null;
   
   warning_hours: number;
   breach_hours: number;
