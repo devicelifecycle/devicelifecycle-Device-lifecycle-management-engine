@@ -51,9 +51,12 @@ describe('RBAC permissions (mirrors current 6 roles)', () => {
     }
   })
 
-  it('VAR entity/regional can set their own margins; rep cannot', () => {
+  it('only the VAR entity admin can set the tenant-wide margins; regional manager and rep cannot', () => {
     expect(hasPermission('var_entity_admin', 'commission.var_margins')).toBe(true)
-    expect(hasPermission('var_regional_manager', 'commission.var_margins')).toBe(true)
+    // Margins are one setting for the whole tenant; a regional manager's scope
+    // is one region's reps and customers (Appendix A), not the VAR's economics.
+    expect(hasPermission('var_regional_manager', 'commission.var_margins')).toBe(false)
+    expect(hasPermission('var_regional_manager', 'commission.view')).toBe(true)
     expect(hasPermission('var_sales_rep', 'commission.var_margins')).toBe(false)
     expect(hasPermission('var_sales_rep', 'order.create')).toBe(true)
   })

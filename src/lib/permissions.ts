@@ -46,11 +46,15 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     'pricing.view', 'commission.view', 'commission.var_margins',
     'billing.view', 'reports.view', 'audit.view',
   ],
+  // No commission.var_margins: the margin model is stored once per tenant
+  // (settings.commission) and the outline puts "Corp Tab / Rep Tab margin
+  // input fields" under the VAR Administrator, not the regional tier. A
+  // regional manager editing it would be changing every region's economics.
   var_regional_manager: [
     'tenant.view', 'user.create', 'user.view',
     'customer.create', 'customer.update', 'customer.view',
     'order.create', 'order.update', 'order.view',
-    'commission.view', 'commission.var_margins', 'reports.view',
+    'commission.view', 'reports.view',
   ],
   var_sales_rep: [
     'customer.create', 'customer.view',
