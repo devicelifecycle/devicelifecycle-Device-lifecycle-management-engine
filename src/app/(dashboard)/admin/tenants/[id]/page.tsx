@@ -9,7 +9,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, Save, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Loader2, Save, Trash2, Upload, UserPlus } from 'lucide-react'
+import { formatDateTime } from '@/lib/utils'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -535,6 +536,8 @@ export default function TenantDetailPageImpl() {
         </CardContent>
       </Card>
 
+      {!isPlatform && <VarAdministrators tenantId={id} tenantActive={isActive} />}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Data retention</CardTitle>
@@ -610,6 +613,122 @@ function hexToHslTriplet(hex: string): string {
     if (h < 0) h += 360
   }
   return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
+}
+
+interface VarAdmin {
+  id: string
+  full_name: string
+  email: string
+  notification_email: string | null
+  is_active: boolean
+  last_login_at: string | null
+  created_at: string
+}
+
+/**
+ * The VAR's entity administrators — the accounts that own the VAR console.
+ * This is the only place a `var_entity_admin` can be created: /var/team
+ * refuses to (an entity admin must not mint peers) and the Users page only
+ * knows the six core roles.
+ */
+function VarAdministrators({ tenantId, tenantActive }: { tenantId: string; tenantActive: boolean }) {
+  const [admins, setAdmins] = useState<VarAdmin[]>([])
+  const [loading, setLoading] = useState(true)
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/admin/tenants/${tenantId}/admins`)
+      if (!res.ok) throw new Error()
+      setAdmins((await res.json()).data ?? [])
+    } catch {
+      toast.error('Failed to load VAR administrators')
+    } finally {
+      setLoading(false)
+    }
+  }, [tenantId])
+
+  useEffect(() => { void load() }, [load])
+
+  const invite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (fullName.trim().length < 2 || !email.trim()) { toast.error('Enter a name and an email'); return }
+    setCreating(true)
+    try {
+      const res = await fetch(`/api/admin/tenants/${tenantId}/admins`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: fullName.trim(), email: email.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Failed to create administrator')
+      if (data.emailSent) {
+        toast.success(`Invite sent to ${data.emailSentTo}`)
+      } else if (data.tempPassword) {
+        // Same rule as /var/team: never discard a password we can't email —
+        // that is a permanent lock-out for the account.
+        toast.success(`Administrator created. No email could be sent — temporary password: ${data.tempPassword}`, { duration: Infinity })
+      } else {
+        toast.success('Administrator created')
+      }
+      setFullName(''); setEmail('')
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create administrator')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base"><UserPlus className="h-4 w-4" /> VAR administrators</CardTitle>
+        <CardDescription>
+          The people who run this VAR&apos;s console. They add their own regional managers and sales
+          reps from there; you only need to create the first administrator.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading ? (
+          <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+        ) : admins.length === 0 ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+            No administrator yet — nobody can sign in to this VAR&apos;s console until you add one.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="pb-2 pr-4 font-medium">Name</th><th className="pb-2 pr-4 font-medium">Email</th>
+                <th className="pb-2 pr-4 font-medium">Status</th><th className="pb-2 font-medium">Last login</th>
+              </tr></thead>
+              <tbody>
+                {admins.map((a) => (
+                  <tr key={a.id} className="border-b last:border-0">
+                    <td className="py-2 pr-4 font-medium">{a.full_name}</td>
+                    <td className="py-2 pr-4 text-muted-foreground">{a.notification_email ?? a.email}</td>
+                    <td className="py-2 pr-4">{a.is_active ? 'Active' : 'Disabled'}</td>
+                    <td className="py-2 text-muted-foreground">{a.last_login_at ? formatDateTime(a.last_login_at) : 'never'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <form onSubmit={invite} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <Field label="Full name"><Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Jordan Lee" maxLength={120} /></Field>
+          <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jordan@acme.com" /></Field>
+          <Button type="submit" disabled={creating || !tenantActive}>
+            {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+            Invite administrator
+          </Button>
+        </form>
+        {!tenantActive && <p className="text-xs text-muted-foreground">Reactivate the VAR to add administrators.</p>}
+      </CardContent>
+    </Card>
+  )
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
