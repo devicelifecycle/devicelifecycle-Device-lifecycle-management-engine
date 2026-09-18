@@ -10,7 +10,6 @@
 // emailed to a customer as a PDF. Admin-side; additive.
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Plus, RefreshCw, TrendingDown, Trash2, Send, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -28,11 +27,7 @@ interface Line { id: number; deviceId: string; storage: string; label: string; b
 let nextId = 1
 const newLine = (): Line => ({ id: nextId++, deviceId: '', storage: '', label: '', base: 0, loading: false })
 
-export default function RvePage() {
-  return <ComingSoon title="Residual Value" />
-}
-
-function RvePageImpl() {
+export default function RvePageImpl() {
   const [years, setYears] = useState('3')
   const [lines, setLines] = useState<Line[]>([newLine()])
   const [devices, setDevices] = useState<DeviceOption[]>([])

@@ -9,7 +9,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Percent, DollarSign, Loader2, Save } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,11 +29,7 @@ const DEFAULT: CommissionConfig = {
 }
 
 
-export default function CommissionSettingsPage() {
-  return <ComingSoon title="Commission" />
-}
-
-function CommissionSettingsPageImpl() {
+export default function CommissionSettingsPageImpl() {
   const [config, setConfig] = useState<CommissionConfig>(DEFAULT)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

@@ -6,7 +6,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Calculator, Loader2, Plus, Receipt, RefreshCw, Wallet } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -53,11 +52,7 @@ const STATUS_STYLES: Record<string, string> = {
   void: 'bg-red-100 text-red-700',
 }
 
-export default function BillingPage() {
-  return <ComingSoon title="Billing" />
-}
-
-function BillingPageImpl() {
+export default function BillingPageImpl() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [vars, setVars] = useState<VarOption[]>([])
   const [loading, setLoading] = useState(true)

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Mail, MessageSquare, Save } from 'lucide-react'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,11 +15,7 @@ interface Comms {
   name: string | null
 }
 
-export default function VarCommunicationsPage() {
-  return <ComingSoon title="Communications" />
-}
-
-function VarCommunicationsPageImpl() {
+export default function VarCommunicationsPageImpl() {
   const [form, setForm] = useState({ emailFromName: '', emailFromAddress: '', smsSenderId: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

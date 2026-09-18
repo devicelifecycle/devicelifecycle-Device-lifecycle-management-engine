@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Copy, Key, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,11 +21,7 @@ interface ApiKey {
   revoked_at: string | null
 }
 
-export default function VarApiKeysPage() {
-  return <ComingSoon title="API Keys" />
-}
-
-function VarApiKeysPageImpl() {
+export default function VarApiKeysPageImpl() {
   const { isAdmin } = useAuth()
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)

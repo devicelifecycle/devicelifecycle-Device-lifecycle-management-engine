@@ -145,7 +145,7 @@ const FAQ_BY_VAR_ROLE: Record<DelegatedRole, FaqEntry[]> = {
     },
     {
       question: 'How do I connect my own systems to the platform?',
-      answer: 'API Keys (once that page is switched on for your console — it shows "Coming Soon" until then) → Create a key, then call the read-only endpoints listed on that page (orders, customers, devices) with the key as a bearer token. Keys are shown once — copy it when it appears. If the page says API access is not enabled on your plan, ask your platform contact to switch it on.',
+      answer: 'API Keys → Create a key, then call the read-only endpoints listed on that page (orders, customers, devices) with the key as a bearer token. Keys are shown once — copy it when it appears. If the page says API access is not enabled on your plan, ask your platform contact to switch it on.',
     },
     {
       question: 'Can I change my corp and rep margins myself?',

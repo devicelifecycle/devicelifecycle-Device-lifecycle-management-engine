@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { BookOpen, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { ComingSoon } from '@/components/ComingSoon'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,11 +21,7 @@ interface Article {
   updated_at: string
 }
 
-export default function AdminKnowledgeBasePage() {
-  return <ComingSoon title="Knowledge Base" />
-}
-
-function AdminKnowledgeBasePageImpl() {
+export default function AdminKnowledgeBasePageImpl() {
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
