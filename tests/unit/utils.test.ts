@@ -12,7 +12,14 @@ import {
 describe('utils security and formatting', () => {
   it('sanitizeSearchInput escapes wildcard and strips filter-breaking chars', () => {
     const result = sanitizeSearchInput('  %iphone_(pro),v2.1  ')
-    expect(result).toBe('\\%iphone\\_prov21')
+    expect(result).toBe('\\%iphone\\_prov2.1')
+  })
+
+  it('sanitizeSearchInput keeps dots so email and domain searches can match', () => {
+    // PostgREST consumes only the first two dots of `column.op.value`; the rest
+    // are literal. Stripping them turned "acme.com" into "acmecom" → 0 rows.
+    expect(sanitizeSearchInput('john@acme.com')).toBe('john@acme.com')
+    expect(sanitizeSearchInput('acme.com,x)')).toBe('acme.comx')
   })
 
   it('sanitizeCsvCell neutralizes formula injection', () => {

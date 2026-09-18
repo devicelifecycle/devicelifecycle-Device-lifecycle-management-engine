@@ -286,12 +286,15 @@ export function safeErrorMessage(error: unknown, fallback = 'An unexpected error
 /**
  * Sanitize search input for use in Supabase .or() / .ilike() filters.
  * Escapes Postgres LIKE wildcards (%, _) and strips characters that could
- * break the PostgREST filter syntax (commas, dots, parens).
+ * break the PostgREST or=(...) grammar: commas and parentheses. Dots are KEPT —
+ * the grammar consumes only the first two (column.op.value); stripping them made
+ * every email/domain search miss ("acme.com" → "acmecom" → 0 rows, verified live
+ * 2026-09-18) across all 14 search callers.
  */
 export function sanitizeSearchInput(input: string): string {
   return input
     .replace(/[%_\\]/g, '\\$&')  // Escape LIKE wildcards
-    .replace(/[,().]/g, '')       // Strip PostgREST filter-breaking chars
+    .replace(/[,()]/g, '')        // Strip PostgREST filter-breaking chars (dots are literal in values)
     .trim()
     .slice(0, 200)                // Limit length to prevent abuse
 }
