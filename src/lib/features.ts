@@ -36,7 +36,11 @@ export const DEFAULT_FEATURES: FeatureFlags = {
   knowledge_base: true,  // kb_articles + /api/kb are live
   chat: true,            // the AI assistant is live
   impersonation: true,   // admin impersonation is live and audited
-  api_access: false,     // no public API exists for a key to unlock yet
+  // Opt-in per tenant. The public API (/api/v1, read-only) exists as of
+  // 2026-09-18; a platform admin turns this on for a VAR that licenses it, and
+  // that one switch gates both key creation (/api/var/api-keys) and every v1
+  // call made with those keys.
+  api_access: false,
   sso: false,            // not built
   // Off deliberately: this flag means the PER-VAR vendor auction, which the
   // client deferred ("not initially"). Byte-Back's own single-tenant vendor

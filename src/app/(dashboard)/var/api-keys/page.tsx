@@ -102,16 +102,43 @@ function VarApiKeysPageImpl() {
         <p className="mt-1 text-sm text-muted-foreground">Programmatic access for your tenant. Keep keys secret — they are shown only once.</p>
       </div>
 
-      {/* The key store, hashing and revocation are real; what does not exist yet
-          is a public API for a key to call — requireApiKey() currently guards no
-          routes. Saying so is the difference between "not built yet" and an
-          integrator burning a day wondering why their key 404s everything. */}
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-        <span className="font-medium">No public API endpoints are available yet.</span>{' '}
-        You can create, view and revoke keys here, and they are stored securely — but there is
-        currently nothing for a key to call. We&apos;ll publish the API surface and its
-        documentation before keys become usable.
-      </div>
+      {/* Keep this list in step with src/app/api/v1 — it is the only in-product
+          reference an integrator sees. Full details live in docs/PUBLIC_API_v1.md. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Using your key</CardTitle>
+          <CardDescription>
+            Read-only access to your tenant&apos;s data at <code>/api/v1</code>. Send the key as a
+            bearer token; every response is limited to your tenant.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
+{`curl https://<your-domain>/api/v1/me \\
+  -H "Authorization: Bearer dlm_…"`}
+          </pre>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b text-left uppercase tracking-wide text-muted-foreground">
+                <th className="pb-1.5 pr-4 font-medium">Endpoint</th><th className="pb-1.5 font-medium">Filters</th>
+              </tr></thead>
+              <tbody className="[&_td]:py-1.5 [&_td]:pr-4 [&_code]:font-mono">
+                <tr className="border-b"><td><code>GET /api/v1/me</code></td><td>— (any scope; identifies the key)</td></tr>
+                <tr className="border-b"><td><code>GET /api/v1/orders</code></td><td><code>status</code>, <code>type</code>, <code>customer_id</code>, <code>updated_since</code>, <code>limit</code>, <code>offset</code></td></tr>
+                <tr className="border-b"><td><code>GET /api/v1/orders/{'{id}'}</code></td><td>includes line items and device details</td></tr>
+                <tr className="border-b"><td><code>GET /api/v1/customers</code></td><td><code>q</code>, <code>is_active</code>, <code>limit</code>, <code>offset</code></td></tr>
+                <tr className="border-b"><td><code>GET /api/v1/customers/{'{id}'}</code></td><td></td></tr>
+                <tr><td><code>GET /api/v1/devices</code></td><td><code>customer_id</code>, <code>status</code>, <code>limit</code>, <code>offset</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Lists return <code>{'{ data, page: { limit, offset, total } }'}</code>; <code>limit</code> is capped at 200.
+            Rate limit: 100 requests per minute per key. The <code>read</code> scope is required for every
+            endpoint except <code>/me</code>; <code>write</code> is reserved for a future release and unlocks nothing today.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
