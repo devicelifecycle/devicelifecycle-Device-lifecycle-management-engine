@@ -357,7 +357,8 @@ export interface PriceCalculationResultV2 {
 export interface Order extends BaseEntity {
   order_number: string;
   type: OrderType;
-  direction?: OrderDirection;
+  /** DB column is `order_direction` (see 20260407 migration); `direction` never existed on the row. */
+  order_direction?: OrderDirection;
   status: OrderStatus;
   discrepancy_count?: number;
   unresolved_discrepancy_count?: number;

@@ -100,6 +100,18 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'Can I make a user see the welcome tour again?',
       answer: 'Yes — on the Users page, use Reset Onboarding on their row. It clears their completion flag so the welcome screen and guided tour show again on their next login.',
     },
+    {
+      question: 'How do I require two-factor authentication for a VAR?',
+      answer: 'VARs → open the VAR → switch on Require MFA and save. From then on every one of that VAR’s users must sign in with an authenticator app: the API refuses single-factor sessions, and users see a banner pointing them to Profile to set one up. It applies to everyone in that VAR immediately, including users who have not enrolled yet — that is the point of turning it on.',
+    },
+    {
+      question: 'What does the Data Retention page actually delete?',
+      answer: 'Nothing. It is a dry run: for each VAR it shows how many rows of each data class (audit log, notifications, delivery attempts, order timeline, SLA breaches, ended impersonation sessions) a retention run would remove under the policy set on that VAR’s page. Business records — orders, customers, invoices, devices — are never candidates. Set a policy, watch the numbers, and execution is a separate step that is not built yet.',
+    },
+    {
+      question: 'How does a VAR get API access?',
+      answer: 'VARs → open the VAR → Features → turn on API access. That one switch lets them create keys on their API Keys page and makes those keys work against the read-only /api/v1 endpoints (orders, customers, devices). Turn it off and every key in that VAR stops working immediately.',
+    },
   ],
 }
 
@@ -130,6 +142,18 @@ const FAQ_BY_VAR_ROLE: Record<DelegatedRole, FaqEntry[]> = {
     {
       question: 'Why is a customer\'s plan showing as "Inherited"?',
       answer: 'That customer has no plan of their own, so they use your organization\'s. Assign a specific plan from the customer\'s row if one of them needs different limits.',
+    },
+    {
+      question: 'How do I connect my own systems to the platform?',
+      answer: 'API Keys → Create a key, then call the read-only endpoints listed on that page (orders, customers, devices) with the key as a bearer token. Keys are shown once — copy it when it appears. If the page says API access is not enabled on your plan, ask your platform contact to switch it on.',
+    },
+    {
+      question: 'Can I change my corp and rep margins myself?',
+      answer: 'Yes — on your VAR Console, the Margin model card has inputs for your corp margin and rep margin. Percent margins are a share of each deal; fixed margins are a dollar amount per deal. The platform’s own commission is not editable from there.',
+    },
+    {
+      question: 'How do I change the sender name on emails my customers receive?',
+      answer: 'Communications → set the From name, From address and SMS sender ID. Emails and texts to your customers then go out under that identity instead of the platform’s.',
     },
   ],
   var_regional_manager: [

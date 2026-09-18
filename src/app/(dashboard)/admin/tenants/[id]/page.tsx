@@ -327,13 +327,16 @@ export default function TenantDetailPageImpl() {
                   <label className="flex items-start justify-between gap-3 rounded-md border p-3">
                     <span className="min-w-0">
                       <span className="block text-sm">Require MFA</span>
-                      {/* Says exactly what it does today. It prompts; it does not
-                          yet block a user who ignores the prompt. Promising
-                          enforcement we don't perform would be worse than the
-                          gap itself for anyone relying on it for compliance. */}
+                      {/* Enforced server-side in requireAuth() since 2026-09-18:
+                          a session without a completed MFA challenge (aal2) is
+                          refused by every API route. Say so plainly, including
+                          the consequence for users who haven't enrolled yet —
+                          an operator flipping this is locking people out until
+                          they set up an authenticator, and should know that. */}
                       <span className="mt-0.5 block text-xs text-muted-foreground">
-                        Prompts everyone in this organization to enrol an authenticator.
-                        Does not yet block access for users who haven&apos;t enrolled.
+                        Blocks every user in this organization who signs in without an authenticator
+                        app — including users who have not enrolled one yet. They keep access to their
+                        Profile page to set one up, and are shown a banner telling them to.
                       </span>
                     </span>
                     <Switch checked={!!branding.requireMfa} disabled={isPlatform} onCheckedChange={(v) => set('requireMfa', v)} />
