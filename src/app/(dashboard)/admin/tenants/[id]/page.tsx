@@ -318,8 +318,18 @@ export default function TenantDetailPageImpl() {
                   />
                 </Field>
                 <div className="space-y-4">
-                  <label className="flex items-center justify-between gap-3 rounded-md border p-3">
-                    <span className="text-sm">Require MFA</span>
+                  <label className="flex items-start justify-between gap-3 rounded-md border p-3">
+                    <span className="min-w-0">
+                      <span className="block text-sm">Require MFA</span>
+                      {/* Says exactly what it does today. It prompts; it does not
+                          yet block a user who ignores the prompt. Promising
+                          enforcement we don't perform would be worse than the
+                          gap itself for anyone relying on it for compliance. */}
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        Prompts everyone in this organization to enrol an authenticator.
+                        Does not yet block access for users who haven&apos;t enrolled.
+                      </span>
+                    </span>
                     <Switch checked={!!branding.requireMfa} disabled={isPlatform} onCheckedChange={(v) => set('requireMfa', v)} />
                   </label>
                   <div className="space-y-1.5">

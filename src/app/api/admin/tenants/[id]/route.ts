@@ -43,6 +43,29 @@ const brandingSchema = z.object({
   supportPhone: z.string().regex(/^[\d ()+-]{0,24}$/, 'Digits/spaces/()+- only, max 24 chars').max(24).nullable().optional(),
   helpUrl: z.string().max(500).refine((v) => v === '' || /^https?:\/\//i.test(v), 'Must be an http(s) URL or empty').nullable().optional(),
   allowedIps: z.array(ipOrCidr).max(100).nullable().optional(),
+  // ── Fields the admin tenant editor has always rendered controls for, but
+  // which were missing from this schema — so zod stripped them on every save
+  // and the values could never even be STORED. Same defect allowedIps had.
+  // Comparing the 16 fields the page edits against the 13 this schema accepted
+  // is how these surfaced; keep the two in sync when adding a control.
+  requireMfa: z.boolean().nullable().optional(),
+  // Why passwordPolicy being unsettable mattered: it is the value both
+  // password-set flows validate against, so it was always null and the policy
+  // enforcement had nothing to enforce. minLength floors at 8 to match the
+  // platform standard — a tenant may raise it, never weaken it. Complexity
+  // rules stay opt-in per tenant; the platform default remains a flat minimum.
+  passwordPolicy: z.object({
+    minLength: z.number().int().min(8).max(128).nullable().optional(),
+    requireUppercase: z.boolean().optional(),
+    requireNumber: z.boolean().optional(),
+    requireSymbol: z.boolean().optional(),
+  }).nullable().optional(),
+  // Per-tenant sender identity. Consumed by email.service.ts getFromEmail()
+  // and the SMS path; a VAR can also set these from /var/communications, but
+  // a platform admin could not, because these were dropped here.
+  emailFromName: z.string().max(120).nullable().optional(),
+  emailFromAddress: z.string().email().max(255).nullable().optional().or(z.literal('')),
+  smsSenderId: z.string().max(40).nullable().optional(),
 })
 
 const patchSchema = z.object({
