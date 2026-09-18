@@ -39,10 +39,20 @@ export async function requireApiKey(
   }
 
   // Best-effort "last used" heartbeat (never blocks the request).
-  void supabase
+  //
+  // A supabase-js builder is lazy: it only sends the request when something
+  // calls .then() on it. `void builder` did nothing at all, so last_used_at
+  // stayed NULL forever and the API Keys page showed "never" for keys in daily
+  // use (verified live 2026-09-18). Attaching handlers starts the request
+  // without awaiting it, and swallows a failure so it can't fail the caller.
+  supabase
     .from('api_keys')
     .update({ last_used_at: new Date().toISOString() })
     .eq('id', data.id)
+    .then(
+      () => undefined,
+      (err: unknown) => console.warn('api_keys.last_used_at heartbeat failed', err),
+    )
 
   return {
     ctx: {

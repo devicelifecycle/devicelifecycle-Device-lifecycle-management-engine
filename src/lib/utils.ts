@@ -311,7 +311,13 @@ export function normalizeCompetitorName(name?: string): string {
 }
 
 /** UUID v4 regex for validation */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+// Any 8-4-4-4-12 hex string — the same set Postgres' uuid type accepts. The
+// check exists for filter-injection safety, not RFC-4122 conformance: the
+// earlier version also demanded a v1–v5 version nibble and an RFC variant,
+// which rejected real rows whose ids were seeded by hand (e.g.
+// 10000000-0000-0000-0000-000000000001) and turned every lookup of them into a
+// 400 across the 20 routes that guard with this.
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * Check if a string is a valid UUID (safe for DB queries / filter injection).

@@ -57,6 +57,10 @@ describe('utils helpers', () => {
   it('isValidUUID validates UUID format', () => {
     expect(isValidUUID('550e8400-e29b-41d4-a716-446655440000')).toBe(true)
     expect(isValidUUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')).toBe(true)
+    // Hand-seeded ids are valid Postgres uuids even though they are not RFC-4122 v1-v5.
+    expect(isValidUUID('10000000-0000-0000-0000-000000000001')).toBe(true)
+    expect(isValidUUID('10000000-0000-0000-0000-00000000000g')).toBe(false)
+    expect(isValidUUID('10000000-0000-0000-0000-0000000000011')).toBe(false)
     expect(isValidUUID('invalid')).toBe(false)
     expect(isValidUUID("'; DROP TABLE orders--")).toBe(false)
     expect(isValidUUID('')).toBe(false)

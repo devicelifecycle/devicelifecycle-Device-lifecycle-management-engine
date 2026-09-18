@@ -371,8 +371,12 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
 
       const userId = authData.user.id
 
-      // Update last_login_at in background — don't block navigation
-      void supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userId)
+      // Update last_login_at in background — don't block navigation.
+      // A supabase-js builder only sends its request once .then() is called;
+      // the earlier bare `void builder` never did, so last_login_at was NULL
+      // for every one of the 23 live users (verified 2026-09-18).
+      supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userId)
+        .then(({ error }: { error: unknown }) => { if (error) console.warn('last_login_at update failed', error) })
 
       // ── Fast path 1: localStorage cache matches the authenticated user ──
       // Most common case for returning users — navigate immediately with no DB call.
