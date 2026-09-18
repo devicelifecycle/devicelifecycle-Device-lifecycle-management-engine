@@ -9,6 +9,7 @@ import { resolveBranding } from '@/lib/branding'
 import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
 import { resolveLicense, LIMIT_KEYS } from '@/lib/licensing'
 import { resolveWhiteLabel } from '@/lib/templates'
+import { resolveRetentionPolicy, RETENTION_KEYS, RETENTION_MIN_DAYS, RETENTION_MAX_DAYS } from '@/lib/retention'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -82,6 +83,11 @@ const patchSchema = z.object({
     knowledgeBaseUrl: z.string().max(500).nullable().optional(),
     privacyPolicyUrl: z.string().max(500).nullable().optional(),
   }).optional(),
+  // Days to keep per data class; null = keep forever. Read by the retention
+  // dry-run report only — nothing deletes on the strength of this yet.
+  retention: z.record(
+    z.number().int().min(RETENTION_MIN_DAYS).max(RETENTION_MAX_DAYS).nullable(),
+  ).optional(),
   // NOTE: a `security` block ({ passwordMinLength, mfaRequired, ipAllowlist })
   // used to be accepted here and written to settings.security. Nothing ever
   // read it back for enforcement, and no UI ever sent it, while three
@@ -121,7 +127,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Failed to load tenant' }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown }
+  const settings = (data.settings ?? {}) as { features?: unknown; license?: unknown; whitelabel?: unknown; retention?: unknown }
   return NextResponse.json({
     data: {
       ...data,
@@ -129,6 +135,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       features: resolveFeatures(undefined, settings.features),
       license: resolveLicense(settings.license),
       whitelabel: resolveWhiteLabel(settings.whitelabel),
+      retention: resolveRetentionPolicy(settings.retention),
     },
   })
 }
@@ -165,7 +172,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.plan !== undefined) update.plan = parsed.data.plan || null
 
   // Merge feature/license/white-label overrides into settings JSONB (known keys only).
-  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel) {
+  if (parsed.data.features || parsed.data.license || parsed.data.whitelabel || parsed.data.retention) {
     const settings = { ...(existing.settings as Record<string, unknown> ?? {}) }
     if (parsed.data.features) {
       const cur = { ...(settings.features as Record<string, boolean> ?? {}) }
@@ -180,6 +187,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (parsed.data.whitelabel) {
       // Normalize through the resolver so only valid, sanitized values are stored.
       settings.whitelabel = resolveWhiteLabel({ ...(settings.whitelabel as object ?? {}), ...parsed.data.whitelabel })
+    }
+    if (parsed.data.retention) {
+      const cur = { ...(settings.retention as Record<string, number | null> ?? {}) }
+      for (const k of RETENTION_KEYS) if (k in parsed.data.retention) cur[k] = parsed.data.retention[k]
+      settings.retention = cur
     }
     update.settings = settings
   }

@@ -153,7 +153,9 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 > - **Granular RBAC** — `requirePermission()` guards one route (the catalog endpoint guarding itself); `useCan()` has no UI callers. The `permissions` and `role_permissions` tables are seeded and read by nothing. Still scaffolding.
 > - **`PATCH /api/var/margins`** — VAR self-service margin control with no front end.
 >
-> **Not started:** SSO, data retention.
+> **Not started:** SSO (parked until the client names the IdP).
+>
+> **Data retention — ◐ stage 1 shipped 2026-09-18 (policy + dry run; deletion deliberately not built).** Per-tenant policy `settings.retention` (days per data class, floor 30 / ceiling 3650, null = forever) editable on the VAR page; `GET /api/admin/retention[?days=N]` counts, per VAR × class, what a run WOULD remove under the tenant's policy or a what-if uniform N; `/admin/retention` renders it with an explicit "dry run only" banner and a failures list so a count that errored reads as *unknown*, never as 0. Six classes, all operational exhaust: audit_logs, notifications, notification_attempts, order_timeline, sla_breaches, ended impersonation sessions. Business records (orders, customers, invoices, assets, triage) are excluded by design and a test forbids adding them. Timestamp columns verified live (audit_logs uses `timestamp`, not `created_at`) and the exact HEAD-count query was run against production for all six. Stage 2 — a scheduled job that executes the plan — is a separate decision to take after watching the numbers.
 >
 > **Live chat — resolved 2026-09-18 (product decision):** the existing AI
 > `ChatAssistant` is what's wanted; no human-staffed live-chat widget will be
@@ -174,7 +176,7 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 > **Feature flags:** 5 of 12 enforced (see Month 1). The other 7 are settable controls that currently change nothing.
 - ❓ **NEW: "Restart services" (BB Admin Support) doesn't map to a serverless architecture.** The platform runs on Vercel (no persistent server process to restart). Needs clarification on actual intent — redeploy? clear a specific cache? restart a background/cron job?
 - ❓ **NEW: "Encryption keys" (BB Admin Security) — app-layer feature or infra-level (Supabase-managed)?** Not clearly an application feature to build; likely already handled at the infrastructure layer. Confirm before scoping.
-- ❓ **NEW: data retention policies** (BB Admin Security lists this explicitly) — no scheduled data-retention/deletion policy exists anywhere in the codebase today.
+- ◐ **Data retention policies** — policy model + dry-run report shipped 2026-09-18 (see the Month 4 status note); execution job intentionally deferred.
 
 *3.5-mo: auth enforcement + impersonation + launch are fixed; API/public-API and vendor auction move to a post-launch fast-follow.*
 
@@ -219,7 +221,7 @@ above with no new finding. ✅ built · ◐ partial · ☐ not built · ❓ need
 
 **BB Admin Support** (impersonate VAR/customer, reset accounts, force password reset, view/export logs, restart services) — ✅ impersonation shipped 2026-08-27 (session swap + banner, admin-only, can't target another admin); logs exist; ❓ "restart services" (Month 4 new item).
 
-**BB Admin Security** (roles, permissions, SSO, MFA, API keys, encryption keys, audit logs, IP restrictions, password policy, retention policies) — *(re-verified 2026-09-18)* ◐ roles/audit shipped; IP restrictions ✅ genuinely enforced, and now format-validated so a typo can't lock a whole tenant out; API keys ✅ — management UI plus the read-only public API at `/api/v1` (shipped 2026-09-18, verified end-to-end against production); permissions ◐ catalog/guard infra exists, used by one route, and the `permissions`/`role_permissions` tables are seeded but read by nothing; **password policy ◐ — the "zero callers" note was wrong**, it is enforced on both password-set flows, but client-side only, with no server-side re-validation; **MFA ✅ enforced 2026-09-18** in `requireAuth()` (aal2 assurance check, 403 `mfa_required`, fails closed — see the Month 4 status note); ☐ SSO, retention policies; ❓ encryption keys (Month 4 new item).
+**BB Admin Security** (roles, permissions, SSO, MFA, API keys, encryption keys, audit logs, IP restrictions, password policy, retention policies) — *(re-verified 2026-09-18)* ◐ roles/audit shipped; IP restrictions ✅ genuinely enforced, and now format-validated so a typo can't lock a whole tenant out; API keys ✅ — management UI plus the read-only public API at `/api/v1` (shipped 2026-09-18, verified end-to-end against production); permissions ◐ catalog/guard infra exists, used by one route, and the `permissions`/`role_permissions` tables are seeded but read by nothing; **password policy ◐ — the "zero callers" note was wrong**, it is enforced on both password-set flows, but client-side only, with no server-side re-validation; **MFA ✅ enforced 2026-09-18** in `requireAuth()` (aal2 assurance check, 403 `mfa_required`, fails closed — see the Month 4 status note); retention policies ◐ (per-tenant policy + dry-run report 2026-09-18, no deletion yet); ☐ SSO; ❓ encryption keys (Month 4 new item).
 
 **2. VAR Administrator** ("should feel like they own the software," never see another VAR, everything tenant-limited) — ✅ matches tenant isolation exactly.
 

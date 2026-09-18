@@ -6,6 +6,7 @@
 // Edit a VAR's branding, custom domain, and active status, with a live preview.
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Loader2, Save, Trash2, Upload } from 'lucide-react'
@@ -18,6 +19,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { DEFAULT_BRANDING, hslTripletToHex, type TenantBranding } from '@/lib/branding'
 import { DEFAULT_FEATURES, FEATURE_KEYS, type FeatureFlags, type FeatureKey } from '@/lib/features'
 import { DEFAULT_LICENSE, LIMIT_KEYS, UNLIMITED, type LicenseLimits, type LimitKey } from '@/lib/licensing'
+import { RETENTION_TARGETS, RETENTION_MIN_DAYS, RETENTION_MAX_DAYS, resolveRetentionPolicy, type RetentionPolicy } from '@/lib/retention'
 import { DEFAULT_WHITELABEL, type WhiteLabelContent } from '@/lib/templates'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -42,6 +44,7 @@ interface TenantDetail {
   features: FeatureFlags
   license: LicenseLimits
   whitelabel: WhiteLabelContent
+  retention: RetentionPolicy
 }
 
 const FEATURE_LABELS: Record<FeatureKey, string> = {
@@ -64,6 +67,7 @@ export default function TenantDetailPageImpl() {
   const [features, setFeatures] = useState<FeatureFlags>(DEFAULT_FEATURES)
   const [license, setLicense] = useState<LicenseLimits>(DEFAULT_LICENSE)
   const [whitelabel, setWhitelabel] = useState<WhiteLabelContent>(DEFAULT_WHITELABEL)
+  const [retention, setRetention] = useState<RetentionPolicy>(resolveRetentionPolicy(undefined))
   const [customDomain, setCustomDomain] = useState('')
   const [isActive, setIsActive] = useState(true)
   // tenants.plan holds a plan SLUG, and this is the only place it can be set.
@@ -89,6 +93,7 @@ export default function TenantDetailPageImpl() {
       setFeatures(data.features)
       setLicense(data.license)
       if (data.whitelabel) setWhitelabel(data.whitelabel)
+      setRetention(resolveRetentionPolicy(data.retention))
       setCustomDomain(data.custom_domain ?? '')
       setIsActive(data.is_active)
       setPlan(data.plan || NO_PLAN)
@@ -181,6 +186,7 @@ export default function TenantDetailPageImpl() {
           features,
           license,
           whitelabel,
+          retention,
         }),
       })
       const j = await res.json().catch(() => ({}))
@@ -522,6 +528,52 @@ export default function TenantDetailPageImpl() {
           <Button onClick={save} disabled={saving} className="w-full sm:w-auto">
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save white-label content
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Data retention</CardTitle>
+          <CardDescription>
+            Days to keep each class of operational data. Blank = keep forever. This drives the
+            dry-run report on <Link href="/admin/retention" className="text-primary hover:underline">Data Retention</Link> —
+            nothing is deleted on the strength of these values yet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {RETENTION_TARGETS.map((t) => (
+            <div key={t.key} className="flex items-center justify-between gap-4">
+              <div>
+                <span className="text-sm">{t.label}</span>
+                <p className="text-xs text-muted-foreground">{t.description}</p>
+              </div>
+              <Input
+                type="number"
+                min={RETENTION_MIN_DAYS}
+                max={RETENTION_MAX_DAYS}
+                className="w-36 shrink-0"
+                placeholder="Forever"
+                value={retention[t.key] ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setRetention((r) => ({ ...r, [t.key]: v === '' ? null : Math.floor(Number(v) || 0) }))
+                }}
+                onBlur={(e) => {
+                  // Below the floor is almost always a typo (3 for 365); clear it
+                  // rather than save a policy the API would reject anyway.
+                  const n = Number(e.target.value)
+                  if (e.target.value !== '' && (n < RETENTION_MIN_DAYS || n > RETENTION_MAX_DAYS)) {
+                    toast.error(`Keep between ${RETENTION_MIN_DAYS} and ${RETENTION_MAX_DAYS} days, or leave blank for forever`)
+                    setRetention((r) => ({ ...r, [t.key]: null }))
+                  }
+                }}
+              />
+            </div>
+          ))}
+          <Button onClick={save} disabled={saving} className="mt-2 w-full sm:w-auto">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save retention policy
           </Button>
         </CardContent>
       </Card>
