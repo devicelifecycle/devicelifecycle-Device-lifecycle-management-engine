@@ -14,27 +14,53 @@
 // The users.is_active check is still performed per-request so a deactivated
 // account is blocked even within the JWT window.
 
-import { cache } from 'react'
 import { NextResponse } from 'next/server'
 import { cookies, headers } from 'next/headers'
+import { workUnitAsyncStorage } from 'next/dist/server/app-render/work-unit-async-storage.external'
 import { createServerSupabaseClient } from './server'
 import type { User } from '@supabase/supabase-js'
 import { getClientIp, ipInAllowlist } from '@/lib/network'
 
 /**
  * Why a request was denied. requireAuth() returns null for every failure so
- * its 150+ call sites stay unchanged, and this records WHICH failure it was so
+ * its 200+ call sites stay unchanged, and this records WHICH failure it was so
  * unauthorized() can answer 403 instead of 401 for an MFA block.
  *
  * That distinction is the whole point: a 401 tells the client "you are logged
  * out", so it bounces to /login — which would loop a user away from /profile,
  * the one page where they can actually enrol and clear the block.
  *
- * React cache() is per-request, so this cannot leak between concurrent
- * requests. It is already used this way in a route handler by getServerTenant.
+ * Storage: a WeakMap keyed by Next's per-request work-unit store. That store
+ * is what `headers()`/`cookies()` resolve through, so it is exactly one object
+ * per request, reachable SYNCHRONOUSLY (unauthorized() must stay sync — ten
+ * call sites use it inside synchronous guard helpers), and garbage-collected
+ * with the request. It is a Next internal (`next/dist/...external`), so every
+ * access is guarded: if it is ever unavailable the API still blocks, it just
+ * answers 401 instead of 403.
+ *
+ * Why not React cache(): it does NOT memoize inside route handlers — verified
+ * 2026-09-18 with a probe route (two calls in one request returned different
+ * objects). It only memoizes during a React render.
  */
 type DenyReason = 'unauthenticated' | 'mfa_required'
-const requestDenyState = cache((): { reason: DenyReason } => ({ reason: 'unauthenticated' }))
+const denyReasons = new WeakMap<object, DenyReason>()
+
+function requestKey(): object | null {
+  try {
+    const store = workUnitAsyncStorage.getStore()
+    return store ? (store as object) : null
+  } catch {
+    return null
+  }
+}
+function setDenyReason(reason: DenyReason) {
+  const key = requestKey()
+  if (key) denyReasons.set(key, reason)
+}
+function getDenyReason(): DenyReason {
+  const key = requestKey()
+  return (key && denyReasons.get(key)) || 'unauthenticated'
+}
 
 /**
  * Authenticator Assurance Level from the access token. Supabase sets aal2 once
@@ -129,7 +155,7 @@ export async function requireAuth(): Promise<AuthContext | null> {
   // always reach the page that clears the block.
   const requireMfa = (tenantBranding as { branding?: { requireMfa?: boolean | null } } | undefined)?.branding?.requireMfa
   if (requireMfa === true && accessTokenAal(session.access_token) !== 'aal2') {
-    requestDenyState().reason = 'mfa_required'
+    setDenyReason('mfa_required')
     return null
   }
 
@@ -207,17 +233,11 @@ export async function requireAuth(): Promise<AuthContext | null> {
  * readable code when the block was an unmet MFA policy — the client treats 401
  * as "session gone" and redirects to /login, which would bounce the user away
  * from /profile where they enrol. Signature is unchanged and it stays
- * synchronous, so all 154 call sites (10 of which use it inside synchronous
+ * synchronous, so all 200+ call sites (10 of which use it inside synchronous
  * guard helpers) keep working untouched.
  */
 export function unauthorized(message = 'Unauthorized') {
-  let reason: DenyReason = 'unauthenticated'
-  try {
-    reason = requestDenyState().reason
-  } catch {
-    // cache() outside a request scope — fall back to the plain 401.
-  }
-  if (reason === 'mfa_required') {
+  if (getDenyReason() === 'mfa_required') {
     return NextResponse.json(
       { error: 'Two-factor authentication is required by your organization.', code: 'mfa_required' },
       { status: 403 },
