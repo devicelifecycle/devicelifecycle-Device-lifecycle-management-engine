@@ -13,9 +13,15 @@ import { commissionConfigFromSettings } from '@/lib/commission'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
+// Percent margins are a FRACTION (0.125 = 12.5%), so anything above 1 is a
+// >100% take — always a units mistake (someone sent 12.5 meaning 12.5%), and
+// one that would silently price every deal wrong. Refuse it here.
 const marginSchema = z.object({
   type: z.enum(['fixed', 'percent']),
   value: z.number().min(0).max(1_000_000),
+}).refine((m) => m.type !== 'percent' || m.value <= 1, {
+  message: 'Percent margins are a fraction between 0 and 1 (0.125 = 12.5%)',
+  path: ['value'],
 })
 const patchSchema = z.object({
   corpMargin: marginSchema.optional(),

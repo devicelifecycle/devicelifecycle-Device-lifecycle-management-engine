@@ -12,9 +12,14 @@ export const dynamic = 'force-dynamic'
 
 const PLATFORM_TENANT_ID = 'a0000000-0000-4000-a000-0000000000bb'
 
+// Same rule as PATCH /api/var/margins: a percent margin is a fraction, so >1
+// is a units mistake that would misprice every deal, not a policy.
 const marginSpec = z.object({
   type: z.enum(['fixed', 'percent']),
   value: z.number().min(0).max(1_000_000),
+}).refine((m) => m.type !== 'percent' || m.value <= 1, {
+  message: 'Percent margins are a fraction between 0 and 1 (0.125 = 12.5%)',
+  path: ['value'],
 })
 const configSchema = z.object({
   platformCommissionPct: z.number().min(0).max(1),

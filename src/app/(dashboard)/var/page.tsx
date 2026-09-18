@@ -3,13 +3,21 @@
 // ============================================================================
 // VAR CONSOLE — a reseller's view of its own tenant
 // ============================================================================
-// Read-only summary of the caller's tenant: identity/branding, the blended
-// margin model (BB take + the VAR's corp/rep cuts), and invoices from BB.
+// Summary of the caller's tenant: identity/branding, the blended margin model
+// (BB take + the VAR's corp/rep cuts — the VAR's own two are editable here),
+// and invoices from BB.
 
-import { useEffect, useState } from 'react'
-import { Loader2, Building2, Percent, Receipt } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { Loader2, Building2, Percent, Receipt, Save } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
+import { hasPermission } from '@/lib/permissions'
+import { useCan } from '@/hooks/useCan'
 import type { TenantBranding } from '@/lib/branding'
 import type { CommissionConfig, MarginSpec } from '@/lib/commission'
 
@@ -39,14 +47,22 @@ const STATUS_STYLES: Record<string, string> = {
 export default function VarConsolePageImpl() {
   const [data, setData] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
+  // The server gate (PATCH /api/var/margins) checks the ACTIVE role only, so
+  // mirror that here rather than useCan()'s active-or-secondary union — a
+  // control that renders and then 403s is worse than one that doesn't render.
+  const { role } = useCan()
+  const canEditMargins = hasPermission(role, 'commission.var_margins')
 
-  useEffect(() => {
-    fetch('/api/var/overview')
+  const load = useCallback(() => {
+    return fetch('/api/var/overview')
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => setData(j?.data ?? null))
       .catch(() => {})
-      .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    load().finally(() => setLoading(false))
+  }, [load])
 
   if (loading) {
     return (
@@ -110,6 +126,13 @@ export default function VarConsolePageImpl() {
             )}
             <Row label="Your corp margin" value={margin(commission.corpMargin)} />
             <Row label="Your rep margin" value={margin(commission.repMargin)} />
+            {canEditMargins && !data.isPlatform && (
+              <MarginEditor
+                corp={commission.corpMargin}
+                rep={commission.repMargin}
+                onSaved={load}
+              />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -152,6 +175,90 @@ export default function VarConsolePageImpl() {
           )}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+/**
+ * The VAR's own two margin inputs (outline: "Corp Tab / Rep Tab margin input
+ * fields"). BB's platform commission, product margin and holdback are not
+ * editable from here — the API refuses them and the fields aren't rendered.
+ */
+function MarginEditor({ corp, rep, onSaved }: { corp: MarginSpec; rep: MarginSpec; onSaved: () => Promise<void> }) {
+  const [corpDraft, setCorpDraft] = useState<MarginSpec>(corp)
+  const [repDraft, setRepDraft] = useState<MarginSpec>(rep)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setCorpDraft(corp); setRepDraft(rep) }, [corp, rep])
+
+  const dirty = corpDraft.type !== corp.type || corpDraft.value !== corp.value
+    || repDraft.type !== rep.type || repDraft.value !== rep.value
+
+  const save = async () => {
+    for (const [label, m] of [['Corp', corpDraft], ['Rep', repDraft]] as const) {
+      if (m.type === 'percent' && (m.value < 0 || m.value > 1)) {
+        toast.error(`${label} margin must be between 0% and 100%`); return
+      }
+      if (m.type === 'fixed' && m.value < 0) { toast.error(`${label} margin cannot be negative`); return }
+    }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/var/margins', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ corpMargin: corpDraft, repMargin: repDraft }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to save margins')
+      toast.success('Margins saved')
+      await onSaved()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save margins')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3 border-t pt-3">
+      <p className="text-xs text-muted-foreground">
+        Set your own corp and rep margins. Percent margins are a share of the deal (enter 12.5 for
+        12.5%); fixed margins are a dollar amount per deal.
+      </p>
+      <MarginInput label="Corp margin" value={corpDraft} onChange={setCorpDraft} />
+      <MarginInput label="Rep margin" value={repDraft} onChange={setRepDraft} />
+      <Button size="sm" onClick={save} disabled={saving || !dirty}>
+        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+        Save margins
+      </Button>
+    </div>
+  )
+}
+
+function MarginInput({ label, value, onChange }: { label: string; value: MarginSpec; onChange: (m: MarginSpec) => void }) {
+  // Percent margins are stored as a fraction (0.125) but typed as a percentage (12.5).
+  const shown = value.type === 'percent' ? Number((value.value * 100).toFixed(4)) : value.value
+  return (
+    <div className="grid grid-cols-[1fr_120px_120px] items-end gap-2">
+      <Label className="text-xs">{label}</Label>
+      <Select
+        value={value.type}
+        onValueChange={(t) => onChange({ type: t as MarginSpec['type'], value: 0 })}
+      >
+        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="percent">Percent</SelectItem>
+          <SelectItem value="fixed">Fixed $</SelectItem>
+        </SelectContent>
+      </Select>
+      <Input
+        type="number" min={0} step={value.type === 'percent' ? 0.1 : 1} className="h-9"
+        value={Number.isFinite(shown) ? shown : ''}
+        onChange={(e) => {
+          const n = Number(e.target.value)
+          if (!Number.isFinite(n)) return
+          onChange({ type: value.type, value: value.type === 'percent' ? n / 100 : n })
+        }}
+      />
     </div>
   )
 }
