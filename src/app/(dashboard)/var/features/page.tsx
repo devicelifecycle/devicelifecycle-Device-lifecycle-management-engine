@@ -28,6 +28,10 @@ interface FeatureRow {
   override: boolean | null
   /** Current VAR-side switch position (override ?? ceiling). */
   varEnabled: boolean
+  /** False = platform-controlled; render read-only, don't offer a live switch. */
+  varToggleable?: boolean
+  /** Why it's locked, straight from the API so the UI doesn't invent a reason. */
+  lockedReason?: string
 }
 
 const PLAN_BADGE = {
@@ -138,14 +142,22 @@ export default function VarFeaturesPageImpl() {
                       <p className="mt-0.5 text-xs text-muted-foreground">{r.description}</p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
+                      {/* A module the VAR can't control renders read-only. It
+                          used to render a live switch that saved and changed
+                          nothing — e.g. "disable Billing", which is Byte-Back
+                          invoicing this organization, not theirs to switch. */}
                       <Switch
                         checked={valueFor(r)}
-                        disabled={!r.ceilingEnabled}
+                        disabled={!r.ceilingEnabled || r.varToggleable === false}
                         onCheckedChange={(checked) => setDraft((d) => ({ ...d, [r.key]: checked }))}
                       />
-                      {!r.ceilingEnabled && (
+                      {!r.ceilingEnabled ? (
                         <span className="text-[11px] text-muted-foreground">Not available on your plan</span>
-                      )}
+                      ) : r.varToggleable === false ? (
+                        <span className="max-w-[15rem] text-right text-[11px] text-muted-foreground">
+                          {r.lockedReason ?? 'Managed by Byte-Back'}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 ))}

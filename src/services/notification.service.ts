@@ -586,9 +586,19 @@ export class NotificationService {
       const supabase = createServiceRoleClient()
       const { data: user } = await supabase
         .from('users')
-        .select('email, full_name, phone, notification_email')
+        .select('email, full_name, phone, notification_email, notification_preferences')
         .eq('id', userId)
         .single()
+
+      // This is one of the few paths that messages a platform user on their OWN
+      // email/phone, so their per-channel preferences apply here. They were not
+      // being read at all: a user who switched SMS off in their profile still
+      // got SLA texts, and the same for email. Absent/legacy rows default to on,
+      // matching how the order-transition path treats them.
+      const prefs = (user as { notification_preferences?: { email?: boolean; sms?: boolean } } | null)
+        ?.notification_preferences ?? {}
+      const emailOptedOut = prefs.email === false
+      const smsOptedOut = prefs.sms === false
 
       const { data: orderTenantRow } = await supabase.from('orders').select('tenant_id').eq('id', orderId).maybeSingle()
       const brand = await resolveTenantBrandLabel(orderTenantRow?.tenant_id ?? null, supabase)
@@ -606,22 +616,26 @@ export class NotificationService {
         ? `Order #${orderNumber} has BREACHED its SLA deadline. Immediate action is required.`
         : `Order #${orderNumber} is approaching its SLA deadline.${hoursRemaining != null ? ` ${hoursRemaining} hours remaining.` : ''}`
 
-      await EmailService.sendOrderStatusEmail({
-        to: effectiveEmail,
-        recipientName: (user as { full_name?: string } | null)?.full_name || 'Team Member',
-        orderNumber,
-        orderId,
-        tenantId: orderTenantRow?.tenant_id ?? null,
-        fromStatus: '',
-        toStatus: severity === 'breach' ? 'SLA Breach' : 'SLA Warning',
-        subject,
-        message,
-      })
+      if (!emailOptedOut) {
+        await EmailService.sendOrderStatusEmail({
+          to: effectiveEmail,
+          recipientName: (user as { full_name?: string } | null)?.full_name || 'Team Member',
+          orderNumber,
+          orderId,
+          tenantId: orderTenantRow?.tenant_id ?? null,
+          fromStatus: '',
+          toStatus: severity === 'breach' ? 'SLA Breach' : 'SLA Warning',
+          subject,
+          message,
+        })
+      }
 
-      await this.sendSmsIfConfigured(
-        (user as { phone?: string | null }).phone,
-        this.buildSmsText(`[${brand.name}] ${subject}`, message)
-      )
+      if (!smsOptedOut) {
+        await this.sendSmsIfConfigured(
+          (user as { phone?: string | null }).phone,
+          this.buildSmsText(`[${brand.name}] ${subject}`, message)
+        )
+      }
     } catch (err) {
       console.error('[NotificationService] SLA email failed:', err)
     }

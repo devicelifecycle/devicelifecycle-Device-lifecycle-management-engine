@@ -4,6 +4,8 @@ import {
   isFeatureEnabled,
   DEFAULT_FEATURES,
   FEATURE_KEYS,
+  isVarToggleable,
+  VAR_TOGGLEABLE_FEATURES,
 } from '@/lib/features'
 
 describe('feature flags', () => {
@@ -34,6 +36,32 @@ describe('feature flags', () => {
   it('defaults to OFF only where nothing is built to enable', () => {
     expect(DEFAULT_FEATURES.api_access).toBe(false) // no public API to unlock
     expect(DEFAULT_FEATURES.sso).toBe(false)
+  })
+})
+
+// A VAR-facing switch that saves and changes nothing is the exact defect this
+// codebase keeps producing. A module may only be offered as a VAR self-serve
+// toggle if some route actually gates on it.
+describe('VAR-toggleable modules are limited to ones enforcement honors', () => {
+  it('excludes modules that are not the VAR\'s to control', () => {
+    for (const key of ['billing', 'notifications', 'impersonation', 'sso', 'vendor_auction'] as const) {
+      expect(isVarToggleable(key), `${key} must not be VAR-toggleable`).toBe(false)
+    }
+  })
+
+  it('includes the modules that do have a real enforcement point', () => {
+    // trade_in/cpo -> /api/orders, rve -> /api/rve/*, knowledge_base -> /api/kb,
+    // api_access -> /api/var/api-keys, reporting -> /api/var/reports,
+    // chat -> /api/chat.
+    for (const key of ['trade_in', 'cpo', 'rve', 'reporting', 'api_access', 'knowledge_base', 'chat'] as const) {
+      expect(isVarToggleable(key), `${key} should be VAR-toggleable`).toBe(true)
+    }
+  })
+
+  it('every VAR-toggleable module is a real feature key', () => {
+    for (const key of VAR_TOGGLEABLE_FEATURES) {
+      expect(FEATURE_KEYS).toContain(key)
+    }
   })
 
   it('tenant override wins over global override wins over default', () => {

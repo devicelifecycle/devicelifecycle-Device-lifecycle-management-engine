@@ -6,6 +6,7 @@
 import { NextRequest } from 'next/server'
 import Groq from 'groq-sdk'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { featureGate } from '@/lib/supabase/require-feature'
 import { getSystemPrompt, getActivePersonaLabel, type ChatContext } from '@/lib/chat/prompts'
 import { getServerTenant } from '@/lib/tenant-context'
 import { getToolsForRole, executeTool } from '@/lib/chat/tools'
@@ -41,6 +42,11 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
+
+    // The assistant is a per-tenant module a VAR can switch off for its own
+    // organization. Without this the Features toggle saved and did nothing.
+    const gated = await featureGate(auth.tenantId, 'chat', 'Chat assistant')
+    if (gated) return gated
 
     const role = profile.role as UserRole
     // Fetch full_name for system prompt context (not in requireAuth select)

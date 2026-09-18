@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { getTourSteps, WELCOME_COPY } from '@/lib/onboarding/tours'
+import { getTourSteps, getWelcomeCopy } from '@/lib/onboarding/tours'
 import { useBranding } from '@/lib/branding-context'
 import { WelcomeScreen } from './WelcomeScreen'
 import { Spotlight } from './Spotlight'
@@ -84,7 +84,7 @@ export function OnboardingTour() {
   if (!user || phase === 'idle' || phase === 'done') return null
 
   if (phase === 'welcome') {
-    const welcome = WELCOME_COPY[user.role]
+    const welcome = getWelcomeCopy(user.role)
     return (
       <WelcomeScreen
         role={user.role}

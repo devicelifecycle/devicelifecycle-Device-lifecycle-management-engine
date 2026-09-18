@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { featureGate } from '@/lib/supabase/require-feature'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { delegationLevel } from '@/lib/delegation'
 import { PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
@@ -35,6 +36,9 @@ export async function GET(request: NextRequest) {
   if (!VAR_CONSOLE_ROLES.has(effectiveRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const gated = await featureGate(tenantId, 'reporting', 'Reporting')
+  if (gated) return gated
 
   // A platform admin has no VAR of their own, so they report on the platform
   // tenant's own roster (the tenant their auth context resolves to) — never

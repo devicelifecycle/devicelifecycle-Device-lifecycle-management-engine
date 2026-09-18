@@ -5,7 +5,7 @@
 // SLA timings, etc.) — not generic filler. Keep it that way: if a workflow
 // changes, update the relevant answers here too.
 
-import type { UserRole } from '@/types'
+import type { UserRole, DelegatedRole } from '@/types'
 
 export interface FaqEntry {
   question: string
@@ -103,6 +103,66 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
   ],
 }
 
-export function getFaqForRole(role: UserRole): FaqEntry[] {
-  return FAQ_BY_ROLE[role] || []
+/**
+ * FAQ for the delegated VAR roles. Kept in its own map because `UserRole`
+ * deliberately excludes them (see src/types), but `users.role` really does
+ * hold these values — so without this a VAR user opened Help and was told
+ * "No FAQ content yet for your role".
+ */
+const FAQ_BY_VAR_ROLE: Record<DelegatedRole, FaqEntry[]> = {
+  var_entity_admin: [
+    {
+      question: 'What can I see, and what stays private?',
+      answer: 'You see your own organization only — your customers, your team, and your orders. You can never see another reseller\'s data, and they can never see yours. Your customers only ever see your branding, not the platform\'s.',
+    },
+    {
+      question: 'How do the three team roles differ?',
+      answer: 'Entity Admin (you) manages the whole organization. A Regional Manager manages the sales reps and customers in one region. A Sales Rep sees only the customers assigned to them. Every list, export, and report is automatically scoped to whichever level the person sits at.',
+    },
+    {
+      question: 'How do I add someone to my team?',
+      answer: 'Team → Add a team member. Pick their role and region. If you enter an email we send them an invite; if you enter a login ID instead, the temporary password is shown to you once on screen — copy it then, because it is not stored and cannot be shown again.',
+    },
+    {
+      question: 'What does the Features page actually change?',
+      answer: 'It turns modules on or off for your organization, within whatever your plan allows. You can switch something off that your plan includes, but you cannot switch on something it does not.',
+    },
+    {
+      question: 'Why is a customer\'s plan showing as "Inherited"?',
+      answer: 'That customer has no plan of their own, so they use your organization\'s. Assign a specific plan from the customer\'s row if one of them needs different limits.',
+    },
+  ],
+  var_regional_manager: [
+    {
+      question: 'Why do I only see some customers?',
+      answer: 'Your view is scoped to your region. Customers in other regions, and reps outside your region, are not shown to you anywhere — including in Reports and exports.',
+    },
+    {
+      question: 'Why was I blocked from adding a team member?',
+      answer: 'A Regional Manager can add Sales Reps in their own region only. The region has to match yours exactly — if you get a rejection, the message names the exact value expected.',
+    },
+    {
+      question: 'What does the unassigned-customers warning on Reports mean?',
+      answer: 'Those customers have no sales rep assigned, so their orders are not counted in any rep\'s totals. Assign them to a rep to bring them into the roll-up.',
+    },
+  ],
+  var_sales_rep: [
+    {
+      question: 'Why can I only see my own customers?',
+      answer: 'Sales Reps are scoped to the customers assigned to them. If a customer you expect is missing, ask your regional manager or entity admin to assign them to you.',
+    },
+    {
+      question: 'Where do I see how I\'m doing?',
+      answer: 'Reports shows your customers, order count, and order value. It reads the same live order records as everywhere else, so the numbers always match the orders themselves.',
+    },
+  ],
+}
+
+/**
+ * FAQ for any role. Total by construction — an unknown role returns an empty
+ * list rather than throwing, and every role the database can actually store
+ * has real content.
+ */
+export function getFaqForRole(role: string): FaqEntry[] {
+  return FAQ_BY_ROLE[role as UserRole] ?? FAQ_BY_VAR_ROLE[role as DelegatedRole] ?? []
 }

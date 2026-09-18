@@ -67,6 +67,35 @@ export function isFeatureEnabled(features: FeatureFlags, key: FeatureKey): boole
 }
 
 /**
+ * Modules a VAR may switch off for its own organization.
+ *
+ * Not every flag makes sense as a VAR self-serve toggle, and offering one that
+ * can't be honored is how this surface ended up lying: the Features page
+ * rendered a live switch for all 12, so a VAR could "disable Billing" (i.e.
+ * opt out of being invoiced by Byte-Back) or "disable Notifications" (silently
+ * suppressing transactional order mail) and the switch would save, toast
+ * success, and change nothing.
+ *
+ * Excluded on purpose:
+ *   billing        — this is Byte-Back invoicing the VAR; not the VAR's call.
+ *   notifications  — suppressing transactional order mail/SMS is a support
+ *                    and compliance decision, not a self-serve switch.
+ *   impersonation  — a support capability keyed to the TARGET user's tenant,
+ *                    not the actor's, so a toggle here wouldn't gate it.
+ *   sso / vendor_auction — nothing built to gate yet.
+ *
+ * The platform ceiling (settings.features) still controls all 12 — this only
+ * governs which ones a VAR may narrow for itself.
+ */
+export const VAR_TOGGLEABLE_FEATURES: FeatureKey[] = [
+  'trade_in', 'cpo', 'rve', 'reporting', 'api_access', 'knowledge_base', 'chat',
+]
+
+export function isVarToggleable(key: FeatureKey): boolean {
+  return VAR_TOGGLEABLE_FEATURES.includes(key)
+}
+
+/**
  * Apply a VAR's own on/off toggles on top of its platform ceiling:
  * effective = ceiling AND var toggle, with unset keys inheriting the ceiling.
  * A stored `true` under a false ceiling still resolves off — the VAR side can

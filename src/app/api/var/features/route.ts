@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { FEATURE_KEYS, resolveFeatures, type FeatureKey } from '@/lib/features'
+import { FEATURE_KEYS, resolveFeatures, isVarToggleable, type FeatureKey } from '@/lib/features'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +47,23 @@ interface FeatureRow {
   varEnabled: boolean
   /** What enforcement actually uses: ceiling AND var toggle. */
   effective: boolean
+  /**
+   * Whether the VAR may change this one. False = platform-controlled; the UI
+   * must render it read-only. Previously every module rendered a live switch,
+   * including ones no VAR toggle could ever affect.
+   */
+  varToggleable: boolean
+  /** Shown next to a locked row so it's clear WHY it can't be changed. */
+  lockedReason?: string
+}
+
+/** Why a given module isn't the VAR's to switch — surfaced in the UI. */
+const LOCKED_REASON: Partial<Record<FeatureKey, string>> = {
+  billing: 'Managed by Byte-Back — this is how your organization is invoiced.',
+  notifications: 'Managed by Byte-Back — transactional order updates can\'t be switched off here.',
+  impersonation: 'Managed by Byte-Back support.',
+  sso: 'Not available yet.',
+  vendor_auction: 'Not available yet.',
 }
 
 function featureRows(settings: unknown): FeatureRow[] {
@@ -67,6 +84,8 @@ function featureRows(settings: unknown): FeatureRow[] {
       override,
       varEnabled: override ?? ceiling[key],
       effective: ceiling[key] && (override ?? true),
+      varToggleable: isVarToggleable(key),
+      lockedReason: isVarToggleable(key) ? undefined : LOCKED_REASON[key],
     }
   })
 }
@@ -125,6 +144,17 @@ export async function PUT(request: NextRequest) {
   if (aboveCeiling.length > 0) {
     return NextResponse.json(
       { error: `Not available on your plan: ${aboveCeiling.map((k) => FEATURE_META[k].label).join(', ')}` },
+      { status: 400 },
+    )
+  }
+
+  // Reject writes to modules that aren't the VAR's to control. Enforced here,
+  // not just hidden in the UI — otherwise a stored override sits in settings
+  // looking meaningful while nothing honors it.
+  const notToggleable = FEATURE_KEYS.filter((k) => k in parsed.data.overrides && !isVarToggleable(k))
+  if (notToggleable.length > 0) {
+    return NextResponse.json(
+      { error: `Managed by Byte-Back, not configurable here: ${notToggleable.map((k) => FEATURE_META[k].label).join(', ')}` },
       { status: 400 },
     )
   }
