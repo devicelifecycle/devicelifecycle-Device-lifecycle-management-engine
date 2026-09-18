@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner'
+import { MfaRequiredBanner } from '@/components/layout/MfaRequiredBanner'
 import { PageTransition } from '@/components/ui/motion'
 
 const ChatAssistant = dynamic(
@@ -96,6 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="app-shell-bg grain-overlay flex h-screen overflow-hidden text-foreground">
       <ImpersonationBanner />
+      <MfaRequiredBanner />
 
       {/* ── Desktop sidebar — slides in/out ──────────────────────────── */}
       <AnimatePresence initial={false}>

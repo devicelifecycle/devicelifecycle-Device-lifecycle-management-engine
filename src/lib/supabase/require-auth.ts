@@ -14,11 +14,45 @@
 // The users.is_active check is still performed per-request so a deactivated
 // account is blocked even within the JWT window.
 
+import { cache } from 'react'
 import { NextResponse } from 'next/server'
 import { cookies, headers } from 'next/headers'
 import { createServerSupabaseClient } from './server'
 import type { User } from '@supabase/supabase-js'
 import { getClientIp, ipInAllowlist } from '@/lib/network'
+
+/**
+ * Why a request was denied. requireAuth() returns null for every failure so
+ * its 150+ call sites stay unchanged, and this records WHICH failure it was so
+ * unauthorized() can answer 403 instead of 401 for an MFA block.
+ *
+ * That distinction is the whole point: a 401 tells the client "you are logged
+ * out", so it bounces to /login — which would loop a user away from /profile,
+ * the one page where they can actually enrol and clear the block.
+ *
+ * React cache() is per-request, so this cannot leak between concurrent
+ * requests. It is already used this way in a route handler by getServerTenant.
+ */
+type DenyReason = 'unauthenticated' | 'mfa_required'
+const requestDenyState = cache((): { reason: DenyReason } => ({ reason: 'unauthenticated' }))
+
+/**
+ * Authenticator Assurance Level from the access token. Supabase sets aal2 once
+ * a user has completed an MFA challenge; a user with no enrolled factor can
+ * never reach it. Decoded locally — no network call on the hot path.
+ */
+export function accessTokenAal(accessToken: string | undefined): string | null {
+  if (!accessToken) return null
+  try {
+    const payload = accessToken.split('.')[1]
+    if (!payload) return null
+    const json = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+    const claims = JSON.parse(json) as { aal?: unknown }
+    return typeof claims.aal === 'string' ? claims.aal : null
+  } catch {
+    return null
+  }
+}
 
 export interface AuthProfile {
   id: string
@@ -78,6 +112,25 @@ export async function requireAuth(): Promise<AuthContext | null> {
   if (Array.isArray(allowedIps) && allowedIps.length > 0) {
     const h = await headers()
     if (!ipInAllowlist(getClientIp(h), allowedIps)) return null
+  }
+
+  // MFA enforcement (tenant-level policy). Opt-in per tenant: when branding
+  // .requireMfa is not explicitly true this is a no-op, so nothing changes for
+  // a tenant that hasn't turned it on.
+  //
+  // aal2 means the user completed an MFA challenge. A user with no enrolled
+  // factor can never reach aal2, so this covers both "never enrolled" and
+  // "enrolled but signed in without the second factor". Enabling MFA therefore
+  // requires everyone to re-authenticate — that is the intent of turning it on,
+  // not a bug.
+  //
+  // The remediation path stays open: /profile enrols through the Supabase
+  // client directly, never through these API routes, so a blocked user can
+  // always reach the page that clears the block.
+  const requireMfa = (tenantBranding as { branding?: { requireMfa?: boolean | null } } | undefined)?.branding?.requireMfa
+  if (requireMfa === true && accessTokenAal(session.access_token) !== 'aal2') {
+    requestDenyState().reason = 'mfa_required'
+    return null
   }
 
   // Core operational roles + delegated VAR roles (Appendix A). VAR roles are
@@ -147,6 +200,28 @@ export async function requireAuth(): Promise<AuthContext | null> {
   return { supabase, authUser: session.user, profile: profile as AuthProfile, effectiveRole, tenantId: (profile as AuthProfile).tenant_id ?? null }
 }
 
+/**
+ * The standard deny response for a null requireAuth().
+ *
+ * Stays 401 for a genuine "not signed in", but answers 403 with a machine
+ * readable code when the block was an unmet MFA policy — the client treats 401
+ * as "session gone" and redirects to /login, which would bounce the user away
+ * from /profile where they enrol. Signature is unchanged and it stays
+ * synchronous, so all 154 call sites (10 of which use it inside synchronous
+ * guard helpers) keep working untouched.
+ */
 export function unauthorized(message = 'Unauthorized') {
+  let reason: DenyReason = 'unauthenticated'
+  try {
+    reason = requestDenyState().reason
+  } catch {
+    // cache() outside a request scope — fall back to the plain 401.
+  }
+  if (reason === 'mfa_required') {
+    return NextResponse.json(
+      { error: 'Two-factor authentication is required by your organization.', code: 'mfa_required' },
+      { status: 403 },
+    )
+  }
   return NextResponse.json({ error: message }, { status: 401 })
 }
