@@ -102,6 +102,17 @@ function VarApiKeysPageImpl() {
         <p className="mt-1 text-sm text-muted-foreground">Programmatic access for your tenant. Keep keys secret — they are shown only once.</p>
       </div>
 
+      {/* The key store, hashing and revocation are real; what does not exist yet
+          is a public API for a key to call — requireApiKey() currently guards no
+          routes. Saying so is the difference between "not built yet" and an
+          integrator burning a day wondering why their key 404s everything. */}
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+        <span className="font-medium">No public API endpoints are available yet.</span>{' '}
+        You can create, view and revoke keys here, and they are stored securely — but there is
+        currently nothing for a key to call. We&apos;ll publish the API surface and its
+        documentation before keys become usable.
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Plus className="h-4 w-4" /> Create a key</CardTitle>

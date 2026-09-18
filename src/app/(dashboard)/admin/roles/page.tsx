@@ -118,7 +118,20 @@ function RolesPageImpl() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Roles</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Roles</CardTitle>
+          {/* Assigning a user to a role above IS enforced. The permission grid
+              below is not: requirePermission() guards a single route and the
+              permissions / role_permissions tables are read by nothing, so the
+              matrix documents the intended model rather than describing what
+              the app currently checks. Presenting it as live access control
+              would mislead an admin auditing who can do what. */}
+          <CardDescription>
+            Reference model. Access is currently enforced by <span className="font-medium">role</span>,
+            not by individual permissions — this grid shows what each role is intended to cover,
+            and changing it does not alter what the application checks today.
+          </CardDescription>
+        </CardHeader>
         <CardContent>
           {loading ? (
             <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
