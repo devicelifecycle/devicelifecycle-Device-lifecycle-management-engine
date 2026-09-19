@@ -3,6 +3,8 @@ import {
   monthBounds,
   licenseTierLabel,
   buildLicenseTable,
+  totalStorageBytes,
+  formatBytes,
   splitCounts,
   buildOperationsSummary,
 } from '@/lib/operations-metrics'
@@ -46,15 +48,52 @@ describe('buildLicenseTable', () => {
       ],
       { t1: 12, t2: 340 },
     )
+    // No usage maps supplied → metering cells are null ("unavailable"), never 0.
     expect(rows).toEqual([
-      { tenantId: 't1', tenantName: 'Alpha VAR', tier: 'Unlimited (default)', customers: 12 },
-      { tenantId: 't2', tenantName: 'Zeta VAR', tier: 'customers: 1000 · users: 50', customers: 340 },
+      { tenantId: 't1', tenantName: 'Alpha VAR', tier: 'Unlimited (default)', customers: 12, storageBytes: null, apiCallsMtd: null, aiTokensMtd: null },
+      { tenantId: 't2', tenantName: 'Zeta VAR', tier: 'customers: 1000 · users: 50', customers: 340, storageBytes: null, apiCallsMtd: null, aiTokensMtd: null },
     ])
   })
 
   it('treats missing counts as zero rather than NaN', () => {
     const rows = buildLicenseTable([{ id: 't9', name: 'Solo VAR' }], {})
     expect(rows[0].customers).toBe(0)
+  })
+
+  it('fills metering cells from the usage maps; a tenant absent from a PRESENT map is a real zero', () => {
+    const rows = buildLicenseTable(
+      [{ id: 't1', name: 'A' }, { id: 't2', name: 'B' }],
+      {},
+      {
+        storage: new Map([['t1', { bytes: 42384 }]]),
+        month: new Map([['t2', { api_calls: 17, ai_tokens: 1200 }]]),
+      },
+    )
+    expect(rows[0]).toMatchObject({ tenantId: 't1', storageBytes: 42384, apiCallsMtd: 0, aiTokensMtd: 0 })
+    expect(rows[1]).toMatchObject({ tenantId: 't2', storageBytes: 0, apiCallsMtd: 17, aiTokensMtd: 1200 })
+  })
+
+  it('one failed source nulls only its own cells', () => {
+    const rows = buildLicenseTable([{ id: 't1', name: 'A' }], {}, { storage: null, month: new Map() })
+    expect(rows[0].storageBytes).toBeNull()
+    expect(rows[0].apiCallsMtd).toBe(0)
+  })
+})
+
+describe('totalStorageBytes + formatBytes', () => {
+  it('sums measured rows and refuses to total when any row is unavailable', () => {
+    const ok = buildLicenseTable([{ id: 'a' }, { id: 'b' }], {}, { storage: new Map([['a', { bytes: 1000 }], ['b', { bytes: 24 }]]), month: null })
+    expect(totalStorageBytes(ok)).toBe(1024)
+    const bad = buildLicenseTable([{ id: 'a' }], {}, { storage: null, month: null })
+    expect(totalStorageBytes(bad)).toBeNull()
+  })
+
+  it('formats bytes with a sensible unit', () => {
+    expect(formatBytes(0)).toBe('0 B')
+    expect(formatBytes(42384)).toBe('41.4 KB')
+    expect(formatBytes(30 * 1024 * 1024)).toBe('30.0 MB')
+    expect(formatBytes(150 * 1024 * 1024)).toBe('150 MB')
+    expect(formatBytes(3 * 1024 ** 3)).toBe('3.0 GB')
   })
 })
 

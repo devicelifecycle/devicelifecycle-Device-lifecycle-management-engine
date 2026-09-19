@@ -28,6 +28,9 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { featureGate } from '@/lib/supabase/require-feature'
 import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/rate-limit'
 import { isValidUUID } from '@/lib/utils'
+import { tenantLimits } from '@/lib/tenant-limits'
+import { quotaBlockMessage } from '@/lib/quota'
+import { monthUsage, recordUsage } from '@/lib/usage-metering'
 
 export const API_VERSION = 'v1' as const
 
@@ -85,7 +88,27 @@ export async function authorizeV1(
     }
   }
 
-  return { ctx: { key, tenantId: key.tenantId, supabase: createServiceRoleClient() } }
+  // Monthly API-call quota (license.apiCallsPerMonth, -1 = unlimited). The
+  // count is month-to-date across every key in the tenant. Checked AFTER the
+  // gates above so a blocked request is never also a metered one, and metered
+  // only once it is definitely going to be served.
+  const supabase = createServiceRoleClient()
+  try {
+    const { data: tenant, error } = await supabase
+      .from('tenants').select('settings').eq('id', key.tenantId).maybeSingle()
+    if (error) throw error
+    const { license } = tenantLimits(tenant?.settings)
+    const used = (await monthUsage(key.tenantId)).api_calls
+    const blocked = quotaBlockMessage(license.apiCallsPerMonth, used, 1, 'Monthly API call')
+    if (blocked) return { error: apiError(429, blocked, 'quota_exceeded') }
+  } catch (err) {
+    // Fail closed, same as featureGate: a quota we cannot verify is not a quota.
+    console.error('v1: quota check failed', err)
+    return { error: apiError(503, 'Could not verify API quota. Try again shortly.', 'quota_unavailable') }
+  }
+  recordUsage(key.tenantId, { apiCalls: 1 })
+
+  return { ctx: { key, tenantId: key.tenantId, supabase } }
 }
 
 /** Parse ?limit= & ?offset= with the documented defaults and ceilings. */

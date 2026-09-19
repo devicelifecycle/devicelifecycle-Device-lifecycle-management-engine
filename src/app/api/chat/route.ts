@@ -11,6 +11,7 @@ import { getSystemPrompt, getActivePersonaLabel, type ChatContext } from '@/lib/
 import { getServerTenant } from '@/lib/tenant-context'
 import { getToolsForRole, executeTool } from '@/lib/chat/tools'
 import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/rate-limit'
+import { recordUsage } from '@/lib/usage-metering'
 import type { UserRole } from '@/types'
 export const dynamic = 'force-dynamic'
 
@@ -88,6 +89,10 @@ export async function POST(request: NextRequest) {
     ]
 
     // Tool-use loop: let the model call tools up to MAX_TOOL_ROUNDS times
+    // AI-token metering: Groq reports usage per completion; every completion
+    // in this request (each tool round + the final one) is accumulated and
+    // charged to the user's tenant — the org that pays for the assistant.
+    let totalTokens = 0
     let toolRound = 0
     while (toolRound < MAX_TOOL_ROUNDS) {
       const response = await groq.chat.completions.create({
@@ -98,6 +103,7 @@ export async function POST(request: NextRequest) {
         temperature: 0.3,
         max_tokens: 1024,
       })
+      totalTokens += response.usage?.total_tokens ?? 0
 
       const choice = response.choices[0]
       if (!choice) break
@@ -107,6 +113,7 @@ export async function POST(request: NextRequest) {
       // If no tool calls, we have the final response
       if (!message.tool_calls || message.tool_calls.length === 0) {
         const content = message.content || 'I couldn\'t generate a response. Please try again.'
+        recordUsage(profile.tenant_id, { aiTokens: totalTokens })
         return new Response(
           JSON.stringify({ role: 'assistant', content, persona }),
           { headers: { 'Content-Type': 'application/json' } }
@@ -149,6 +156,7 @@ export async function POST(request: NextRequest) {
     })
 
     const content = finalResponse.choices[0]?.message?.content || 'I processed your request but couldn\'t generate a summary. Please try again.'
+    recordUsage(profile.tenant_id, { aiTokens: totalTokens + (finalResponse.usage?.total_tokens ?? 0) })
 
     return new Response(
       JSON.stringify({ role: 'assistant', content, persona }),

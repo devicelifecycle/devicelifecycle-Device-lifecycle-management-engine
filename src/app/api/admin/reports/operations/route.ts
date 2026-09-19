@@ -2,8 +2,8 @@
 // ADMIN OPERATIONS REPORT API — usage, licenses, active/inactive, security
 // ============================================================================
 // Companion to the platform (revenue) report. Every metric comes from real
-// rows; there are no fabricated zeros — storage and API-call metering have no
-// runtime source yet and are surfaced as "Not yet metered" in the UI.
+// rows; there are no fabricated zeros — storage (measured from storage.objects)
+// and API/AI usage (metered counters) report null → "unavailable" on failure.
 //
 // Security note: failed logins are NOT auditable today because authentication
 // happens client-side against Supabase Auth directly (src/hooks/useAuth.ts
@@ -20,6 +20,7 @@ import {
   buildOperationsSummary,
   type NotificationBreakdown,
 } from '@/lib/operations-metrics'
+import { storageByTenant, monthUsageByTenant } from '@/lib/usage-metering'
 import { buildTradeInKpiSummary, type TriageRow } from '@/lib/trade-in-kpis'
 export const dynamic = 'force-dynamic'
 
@@ -138,6 +139,16 @@ export async function GET() {
 
   const tradeInKpis = buildTradeInKpiSummary(tradeInOrdersRes.data ?? [], shapedTriageRows)
 
+  // Usage metering. Each source is independent; one failing must not blank
+  // the other, and a failure is reported as null (→ "unavailable"), not 0.
+  const [storageRes, monthRes] = await Promise.allSettled([storageByTenant(), monthUsageByTenant()])
+  if (storageRes.status === 'rejected') console.error('operations: storage metering failed', storageRes.reason)
+  if (monthRes.status === 'rejected') console.error('operations: month usage failed', monthRes.reason)
+  const usage = {
+    storage: storageRes.status === 'fulfilled' ? storageRes.value : null,
+    month: monthRes.status === 'fulfilled' ? monthRes.value : null,
+  }
+
   const summary = buildOperationsSummary({
     ordersThisMonth: ordersThisMonth.count ?? 0,
     ordersLastMonth: ordersLastMonth.count ?? 0,
@@ -146,7 +157,11 @@ export async function GET() {
     notifications,
     users: splitCounts(usersTotal.count ?? 0, usersActive.count ?? 0),
     customersSplit: splitCounts(custTotal.count ?? 0, custActive.count ?? 0),
-    licenses: buildLicenseTable(vars as Array<{ id: string; name?: string | null; settings?: unknown }>, customersByTenant),
+    licenses: buildLicenseTable(
+      vars as Array<{ id: string; name?: string | null; settings?: unknown }>,
+      customersByTenant,
+      usage,
+    ),
   })
 
   return NextResponse.json({ data: { ...summary, tradeInKpis } })

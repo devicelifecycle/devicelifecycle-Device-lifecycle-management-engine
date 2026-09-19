@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { formatCurrency } from '@/lib/utils'
 import type { PlatformSummary } from '@/lib/platform-metrics'
 import type { OperationsSummary } from '@/lib/operations-metrics'
+import { totalStorageBytes, formatBytes } from '@/lib/operations-metrics'
 import type { TradeInKpiSummary } from '@/lib/trade-in-kpis'
 
 type OperationsSummaryWithKpis = OperationsSummary & { tradeInKpis: TradeInKpiSummary }
@@ -68,7 +69,12 @@ export default function PlatformReportPageImpl() {
             />
             <Metric icon={<Building2 className="h-4 w-4" />} label="Active VARs" value={String(ops.activeVars)} />
             <Metric icon={<Users className="h-4 w-4" />} label="Users" value={String(ops.users.total)} sub={`${ops.users.active} active · ${ops.users.inactive} inactive`} />
-            <Metric icon={<Database className="h-4 w-4" />} label="Storage" value="Not yet metered" sub="No runtime storage source exists yet" />
+            <Metric
+              icon={<Database className="h-4 w-4" />}
+              label="Storage"
+              value={totalStorageBytes(ops.licenses) === null ? 'Unavailable' : formatBytes(totalStorageBytes(ops.licenses) ?? 0)}
+              sub={totalStorageBytes(ops.licenses) === null ? 'Storage measurement failed - see server log' : 'Uploads bucket, measured live across all VARs'}
+            />
           </div>
 
           <Card>
@@ -114,7 +120,10 @@ export default function PlatformReportPageImpl() {
                     <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="pb-2 pr-4 font-medium">VAR</th>
                       <th className="pb-2 pr-4 font-medium">License tier</th>
-                      <th className="pb-2 font-medium text-right">Customers</th>
+                      <th className="pb-2 pr-4 font-medium text-right">Customers</th>
+                      <th className="pb-2 pr-4 font-medium text-right">Storage</th>
+                      <th className="pb-2 pr-4 font-medium text-right">API calls (MTD)</th>
+                      <th className="pb-2 font-medium text-right">AI tokens (MTD)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -122,7 +131,10 @@ export default function PlatformReportPageImpl() {
                       <tr key={l.tenantId} className="border-b last:border-0">
                         <td className="py-2 pr-4 font-medium">{l.tenantName}</td>
                         <td className="py-2 pr-4 text-xs text-muted-foreground">{l.tier}</td>
-                        <td className="py-2 text-right tabular-nums">{l.customers.toLocaleString()}</td>
+                        <td className="py-2 pr-4 text-right tabular-nums">{l.customers.toLocaleString()}</td>
+                        <td className="py-2 pr-4 text-right tabular-nums">{l.storageBytes === null ? <span className="text-muted-foreground">unavailable</span> : formatBytes(l.storageBytes)}</td>
+                        <td className="py-2 pr-4 text-right tabular-nums">{l.apiCallsMtd === null ? <span className="text-muted-foreground">unavailable</span> : l.apiCallsMtd.toLocaleString()}</td>
+                        <td className="py-2 text-right tabular-nums">{l.aiTokensMtd === null ? <span className="text-muted-foreground">unavailable</span> : l.aiTokensMtd.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -164,7 +176,12 @@ export default function PlatformReportPageImpl() {
                 <CardTitle className="flex items-center gap-2 text-base"><Plug className="h-4 w-4" /> API usage</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">Not yet metered. Per-VAR API-call metering has no runtime source yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  Metered per VAR since 2026-09-19: every authenticated <code>/api/v1</code> call and every AI-assistant
+                  token is counted month-to-date - see the API calls and AI tokens columns in the license table above.
+                  The <code>apiCallsPerMonth</code> and <code>storageMb</code> limits on each VAR&apos;s plan are enforced
+                  against these numbers.
+                </p>
               </CardContent>
             </Card>
           </div>

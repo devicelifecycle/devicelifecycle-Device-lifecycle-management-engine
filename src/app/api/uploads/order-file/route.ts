@@ -9,6 +9,10 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { canAccessOrderFile } from '@/lib/order-file-access'
 import { isValidUUID } from '@/lib/utils'
+import { tenantLimits } from '@/lib/tenant-limits'
+import { UNLIMITED } from '@/lib/licensing'
+import { quotaBlockMessage } from '@/lib/quota'
+import { storageUsage, BYTES_PER_MB } from '@/lib/usage-metering'
 export const dynamic = 'force-dynamic'
 
 const BUCKET = 'uploads'
@@ -51,6 +55,29 @@ export async function POST(request: NextRequest) {
 
     if (!canAccessOrderFile(order, profile, effectiveRole, tenantId)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Storage quota (license.storageMb, -1 = unlimited) for the ORDER's tenant
+    // — the org whose plan the bytes count against. Measured, not counted:
+    // current bytes come from storage.objects, so an upsert that replaces a
+    // file is judged on the real total, never double-charged. Fails closed.
+    const orderTenant = (order as { tenant_id?: string | null }).tenant_id ?? null
+    if (orderTenant) {
+      try {
+        const { data: tenant, error } = await svc.from('tenants').select('settings').eq('id', orderTenant).maybeSingle()
+        if (error) throw error
+        const { license } = tenantLimits(tenant?.settings)
+        if (license.storageMb !== UNLIMITED) {
+          const { bytes } = await storageUsage(orderTenant)
+          const usedMb = bytes / BYTES_PER_MB
+          const addMb = file.size / BYTES_PER_MB
+          const blocked = quotaBlockMessage(license.storageMb, Math.ceil(usedMb), Math.ceil(addMb), 'Storage (MB)')
+          if (blocked) return NextResponse.json({ error: blocked }, { status: 413 })
+        }
+      } catch (err) {
+        console.error('[order-file upload] storage quota check failed', err)
+        return NextResponse.json({ error: 'Could not verify storage quota. Try again shortly.' }, { status: 503 })
+      }
     }
 
     // Sanitize filename — keep extension, strip path traversal
