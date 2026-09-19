@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { orderCreationGate } from '@/lib/order-creation-gate'
+import { nonPlatformTenantId } from '@/lib/tenant-resolve'
 import type { AuthContext } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { OrderService } from '@/services/order.service'
@@ -582,6 +584,18 @@ export async function POST(request: NextRequest) {
     const totalQuantity = normalizedRows.reduce((sum, row) => sum + row.quantity, 0)
 
     // Create order with retry on duplicate order_number (race-condition guard)
+    // Same module + monthly-transaction gate as POST /api/orders. This path had
+    // none, so a VAR with the module off or its cap reached could still create
+    // orders by uploading a file.
+    const gate = await orderCreationGate(serviceRole, auth.tenantId, effectiveOrderType === 'cpo' ? 'cpo' : 'trade_in')
+    if (gate) return gate
+
+    // Stamp the creator's tenant on the order (a VAR's upload belongs to the
+    // VAR). Omitted for the platform tenant so the column keeps its DB default,
+    // exactly as OrderService.createOrder does. Child rows (items, timeline,
+    // shipments, …) inherit it from the order by DB trigger.
+    const orderTenantId = nonPlatformTenantId(auth.tenantId)
+
     // Use service role for all write operations so customer-role RLS doesn't block inserts.
     const MAX_ATTEMPTS = 5
     let order: Record<string, unknown> | null = null
@@ -608,6 +622,7 @@ export async function POST(request: NextRequest) {
           created_by_id: authUser.id,
           total_quantity: totalQuantity,
           total_amount: 0,
+          ...(orderTenantId ? { tenant_id: orderTenantId } : {}),
         })
         .select()
         .single()

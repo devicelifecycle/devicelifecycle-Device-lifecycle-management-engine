@@ -12,8 +12,7 @@ import { NotificationService } from '@/services/notification.service'
 import { sanitizeOrdersForVendor } from '@/lib/order-visibility'
 import { orderSchema, orderFiltersSchema } from '@/lib/validations'
 import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
-import { tenantLimits } from '@/lib/tenant-limits'
-import { featureBlockMessage, quotaBlockMessage } from '@/lib/quota'
+import { orderCreationGate } from '@/lib/order-creation-gate'
 import { nonPlatformTenantId } from '@/lib/tenant-resolve'
 export const dynamic = 'force-dynamic'
 
@@ -138,33 +137,9 @@ export async function POST(request: NextRequest) {
       orgId = profile.organization_id ?? customer.organization_id ?? ''
     }
 
-    // Per-tenant module + monthly-transaction gating. No-op for the platform
-    // tenant (core modules on, transactions unlimited by default). Fails CLOSED
-    // on a lookup error — a quota check we can't complete must never silently
-    // let the request through, or the limit can be bypassed just by making the
-    // lookup fail (network blip, DB timeout, etc).
-    if (auth.tenantId) {
-      try {
-        const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
-        const { license, features } = tenantLimits(tenant?.settings)
-        const isCpo = orderData.type === 'cpo'
-        const fBlock = featureBlockMessage(features, isCpo ? 'cpo' : 'trade_in', isCpo ? 'CPO' : 'Trade-In')
-        if (fBlock) return NextResponse.json({ error: fBlock }, { status: 403 })
-        if (license.transactionsPerMonth >= 0) {
-          const monthStart = new Date()
-          monthStart.setUTCDate(1)
-          monthStart.setUTCHours(0, 0, 0, 0)
-          const { count } = await supabase
-            .from('orders').select('id', { count: 'exact', head: true })
-            .eq('tenant_id', auth.tenantId).gte('created_at', monthStart.toISOString())
-          const qBlock = quotaBlockMessage(license.transactionsPerMonth, count ?? 0, 1, 'Transactions this month')
-          if (qBlock) return NextResponse.json({ error: qBlock }, { status: 403 })
-        }
-      } catch (err) {
-        console.error('Quota check failed — blocking order creation to avoid a limit bypass:', err)
-        return NextResponse.json({ error: 'Could not verify plan limits. Please try again in a moment.' }, { status: 503 })
-      }
-    }
+    // Per-tenant module + monthly-transaction gating (shared with the CSV path).
+    const gate = await orderCreationGate(supabase, auth.tenantId, orderData.type === 'cpo' ? 'cpo' : 'trade_in')
+    if (gate) return gate
 
     let order = await OrderService.createOrder(
       orderData as Parameters<typeof OrderService.createOrder>[0],
