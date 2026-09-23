@@ -38,13 +38,15 @@ export async function GET(request: NextRequest) {
     const prevPeriodOrders = summary.prev_period_orders as number
     const periodRevenue = Number(summary.period_revenue)
     const prevPeriodRevenue = Number(summary.prev_period_revenue)
-    const completed = summary.completed as number
+    const completed = summary.completed as number // RPC-computed, not an order_status
     const cancelled = summary.cancelled as number
     const byStatus = summary.by_status as Record<string, number>
     const daily = summary.daily as Array<{ date: string; count: number; revenue: number }>
     // 'completed' isn't a real order_status enum value (same as the RPC's own
     // active/completed filters) — kept here only because terminal_total is a
     // separate response field never covered by the RPC's own `completed`.
+    // JS-side sum over the RPC's by_status map — safe to include the RPC's own
+    // synthetic 'completed' key, which is NOT an order_status enum value.
     const TERMINAL = ['completed', 'closed', 'delivered', 'cancelled', 'rejected']
 
     // ── Top devices + coverage counts — all independent, run in parallel ────

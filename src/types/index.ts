@@ -40,6 +40,10 @@ export type OrderType = 'cpo' | 'trade_in';
 
 export type OrderDirection = 'inbound' | 'outbound';
 
+// Mirrors the live `order_status` enum exactly (re-verified 2026-09-22).
+// NOTE: there is no 'completed' — it was in this union for a long time without
+// existing in the database, and every query that filtered on it failed with
+// 22P02 rather than returning nothing.
 export type OrderStatus =
   | 'draft'
   | 'submitted'

@@ -7,6 +7,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveBranding } from '@/lib/branding'
 import { commissionConfigFromSettings } from '@/lib/commission'
+import { resolveBillingMode } from '@/lib/customer-billing'
 export const dynamic = 'force-dynamic'
 
 const PLATFORM_TENANT_ID = 'a0000000-0000-4000-a000-0000000000bb'
@@ -59,6 +60,7 @@ export async function GET() {
       tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug, type: tenant.type, is_active: tenant.is_active, custom_domain: tenant.custom_domain },
       branding: resolveBranding(tenant.branding),
       commission,
+      billingMode: resolveBillingMode(tenant.settings),
       invoices: invoices ?? [],
     },
   })

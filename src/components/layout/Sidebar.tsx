@@ -114,6 +114,7 @@ const navSections: NavSection[] = [
       { title: 'Features', href: '/var/features', icon: SlidersHorizontal, roles: ['var_entity_admin', 'admin'] },
       { title: 'Customers', href: '/var/customers', icon: Users, roles: ['var_entity_admin', 'admin'], tourId: 'nav-var-customers' },
       { title: 'API Keys', href: '/var/api-keys', icon: Key, roles: ['var_entity_admin', 'admin'] },
+      { title: 'Customer Invoices', href: '/var/customer-invoices', icon: FileText, roles: ['var_entity_admin', 'admin'] },
       { title: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen, roles: ['admin', 'var_entity_admin'] },
       { title: 'Communications', href: '/var/communications', icon: Mail, roles: ['var_entity_admin', 'admin'] },
       { title: 'Pricing', href: '/admin/pricing', icon: DollarSign, roles: ['admin'] },

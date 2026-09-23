@@ -46,7 +46,13 @@ export async function GET() {
           final_price
         )
       `)
-      .eq('status', 'completed')
+      // 'completed' is not an order_status the database has ever had (verified
+      // live 2026-09-22: the enum is draft…closed). Sending it made PostgREST
+      // reject the whole query with 22P02, and because the error is discarded
+      // this route always answered "No completed orders" — pricing accuracy
+      // has therefore never evaluated anything. These are the real terminal
+      // states in which an order has a settled final price.
+      .in('status', ['closed', 'delivered', 'payment_sent'])
       .not('final_amount', 'is', null)
       .gt('final_amount', 0)
       .order('created_at', { ascending: false })

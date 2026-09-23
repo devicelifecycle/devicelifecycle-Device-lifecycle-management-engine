@@ -27,7 +27,10 @@ findings change scope enough to flag before more Month 3/4 work starts:
    intentionally expose that information."* **This is the single biggest
    white-label gap found — bigger than anything previously tracked.** New line
    item added to Month 1 below.
-2. **Billing "Option A vs B" — the client's answer doesn't resolve it.** The
+2. **~~Billing "Option A vs B"~~ — RESOLVED 2026-09-22: BOTH, chosen per VAR.** (Original finding kept below for context.)
+   **Built:** `settings.billingMode` on each tenant — `external` (Option A, the DEFAULT so nothing changes for anyone) or `in_platform` (Option B). Option B adds `customer_invoices` / `_line_items` / `_payments` with per-tenant, per-year atomic numbering, `GET/POST /api/var/customer-invoices` + `[id]` (send / void / record payment / record refund), a `/var/customer-invoices` page, and a billing-mode selector on the VAR console. Tax comes from the CUSTOMER's billing address through the same engine the order PDFs use, so an invoice can't disagree with the order documents. **Payment collection is deliberately absent** — the gateway decision is still deferred, so payments are recorded by hand, exactly like the BB→VAR invoices; an invoice states what is owed without implying we can charge a card. Separate tables from `invoices` on purpose: that one means "BB billing the VAR its commission", and merging the two is how a VAR's own commission bill would surface in their customer-billing screen. **Verified live (10/10, `tests/e2e/customer-invoicing.spec.ts`):** Option A refuses with 409 (not 403 — nothing is forbidden, the mode is just off); switching to B turns it on; two closed orders → subtotal 750.50, 13% HST (ON) 97.57, total 848.07; re-billing the same orders refused (unique index on tenant+order); payment above balance refused; refund with nothing paid refused (the exact unbounded-refund bug the BB billing shipped with); part payment → 448.07 outstanding; settled → paid; another tenant cannot read the invoice.
+
+   *Original finding:* **Billing "Option A vs B" — the client's answer doesn't resolve it.** The
    outline (VAR Billing) frames Option A as *"VAR processes final bill or pays
    customer externally using their proprietary billing system"* — i.e. the VAR
    already bills the customer directly under Option A too, just outside our
@@ -239,7 +242,7 @@ above with no new finding. ✅ built · ◐ partial · ☐ not built · ❓ need
 
 **VAR User Management** (create customer users/admins, disable, reset passwords, force MFA, assign permissions, add/disable reps) — this **is** M2.3, shipped. The "force MFA" piece is ✅ as of 2026-09-18, at tenant granularity: an operator sets `requireMfa` on the tenant and `requireAuth()` blocks every single-factor session in it. Per-*user* forcing (require MFA of one rep but not another) is not built and is not in the outline.
 
-**VAR Billing** — see Critical finding #2 (Option A/B ambiguity, needs one clarifying question).
+**VAR Billing** — ✅ both options shipped 2026-09-22, chosen per VAR (`settings.billingMode`): Option A (bill outside the platform, the default) and Option B (in-platform customer invoices with regional tax, manual payment recording, outstanding-balance tracking). Card collection awaits the payment-gateway decision.
 
 **VAR Reporting** (roll-up of all reps, view by rep/region, manage commissions) — this **is** M2.3b, next after M2.3.
 
@@ -285,7 +288,7 @@ above with no new finding. ✅ built · ◐ partial · ☐ not built · ❓ need
 ## Open decisions (need product input)
 - ~~Vendor auction in-platform?~~ **Answered 2026-08-17: not initially — revisit complexity for a future phase.** See Month 4 note for the complexity read.
 - Custom domains vs subdomains per VAR — pros/cons written up and sent to client 2026-08-17 (Telus example); awaiting their choice per-VAR (can be mixed — doesn't need to be all-or-nothing).
-- **Billing Option A vs B — client's answer doesn't fully resolve this (see Critical finding #2).** Exact clarifying question to send: *"Do you want resellers billing their customers entirely outside our platform using their own system (Option A — little new billing UI needed), or do you want Byte-Back to build them in-platform invoicing tools — invoices, payment collection, coupons, tax, outstanding-balance tracking — to bill their own customers (Option B — a real new subsystem)?"*
+- ~~**Billing Option A vs B**~~ **Answered 2026-09-22: BOTH, selectable per VAR.** Option A stays the default; Option B is built and live-tested (see Critical finding #2). Payment collection within Option B still waits on the gateway decision below.
 - Tax model confirmation (province table shipped) — outstanding.
 - Payment gateway choice — **client deferred to the face-to-face (Weeks 9–12 discussion).**
 - **NEW: SMTP/SMS/payment-gateway configuration — who configures it?** Outline places this under BB Admin, not VAR settings, suggesting Byte-Back staff sets a VAR's sender identity from an admin panel rather than the VAR self-configuring provider credentials. Confirm with client — changes whether Month 4's "Integrations: SMS/SMTP config UIs" needs a VAR-facing UI at all, or only a BB-admin one.

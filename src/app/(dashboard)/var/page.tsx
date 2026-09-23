@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
 import { hasPermission } from '@/lib/permissions'
+import { BILLING_MODE_LABELS, type BillingMode } from '@/lib/customer-billing'
 import { useCan } from '@/hooks/useCan'
 import type { TenantBranding } from '@/lib/branding'
 import type { CommissionConfig, MarginSpec } from '@/lib/commission'
@@ -31,6 +32,7 @@ interface Overview {
     productMarginPct: number | null
     holdbackPct: number | null
   }
+  billingMode: BillingMode
   invoices: Array<{ id: string; invoice_number: string | null; period_start: string; period_end: string; status: string; total: number; currency: string }>
 }
 
@@ -127,6 +129,9 @@ export default function VarConsolePageImpl() {
             <Row label="Your corp margin" value={margin(commission.corpMargin)} />
             <Row label="Your rep margin" value={margin(commission.repMargin)} />
             {canEditMargins && !data.isPlatform && (
+              <BillingModeEditor mode={data.billingMode} onSaved={load} />
+            )}
+            {canEditMargins && !data.isPlatform && (
               <MarginEditor
                 corp={commission.corpMargin}
                 rep={commission.repMargin}
@@ -175,6 +180,61 @@ export default function VarConsolePageImpl() {
           )}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+/**
+ * Which billing model this VAR uses with its own customers. Option A (the
+ * default) means they invoice outside the platform and nothing here changes;
+ * Option B turns on the in-platform Customer Invoices page. Both are
+ * supported per the client's 2026-09-22 answer, chosen per VAR.
+ */
+function BillingModeEditor({ mode, onSaved }: { mode: BillingMode; onSaved: () => Promise<void> }) {
+  const [draft, setDraft] = useState<BillingMode>(mode)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setDraft(mode) }, [mode])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/var/margins', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billingMode: draft }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to save billing mode')
+      toast.success(draft === 'in_platform' ? 'Customer invoicing is on — see Customer Invoices in the sidebar' : 'Switched to billing customers outside the platform')
+      await onSaved()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save billing mode')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3 border-t pt-3">
+      <div className="space-y-1.5">
+        <Label className="text-xs">How you bill your customers</Label>
+        <Select value={draft} onValueChange={(v) => setDraft(v as BillingMode)}>
+          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="external">{BILLING_MODE_LABELS.external}</SelectItem>
+            <SelectItem value="in_platform">{BILLING_MODE_LABELS.in_platform}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {draft === 'in_platform'
+            ? 'Raise invoices from completed orders, apply your customer’s regional tax, and track what is outstanding. Card collection is not included yet — payments are recorded by hand.'
+            : 'Nothing changes here: you bill your customers in your own system. Byte-Back still invoices you for commission separately.'}
+        </p>
+      </div>
+      <Button size="sm" onClick={save} disabled={saving || draft === mode}>
+        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+        Save billing mode
+      </Button>
     </div>
   )
 }

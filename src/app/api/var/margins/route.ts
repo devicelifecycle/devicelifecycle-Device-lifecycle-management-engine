@@ -10,6 +10,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { hasPermission, type PermissionKey } from '@/lib/permissions'
 import { commissionConfigFromSettings } from '@/lib/commission'
+import { BILLING_MODES, resolveBillingMode } from '@/lib/customer-billing'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,8 @@ const marginSchema = z.object({
 const patchSchema = z.object({
   corpMargin: marginSchema.optional(),
   repMargin: marginSchema.optional(),
+  // Billing Option A (external) vs B (in_platform) — see customer-billing.ts.
+  billingMode: z.enum(BILLING_MODES).optional(),
 })
 
 export async function PATCH(request: NextRequest) {
@@ -43,7 +46,7 @@ export async function PATCH(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
   }
-  if (!parsed.data.corpMargin && !parsed.data.repMargin) {
+  if (!parsed.data.corpMargin && !parsed.data.repMargin && !parsed.data.billingMode) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
@@ -57,6 +60,7 @@ export async function PATCH(request: NextRequest) {
   if (parsed.data.corpMargin) commission.corpMargin = parsed.data.corpMargin
   if (parsed.data.repMargin) commission.repMargin = parsed.data.repMargin
   settings.commission = commission
+  if (parsed.data.billingMode) settings.billingMode = parsed.data.billingMode
 
   const { error } = await supabase.from('tenants').update({ settings }).eq('id', tenantId)
   if (error) {
@@ -64,5 +68,5 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update margins' }, { status: 500 })
   }
   // Return the resolved config so BB commission fields are visibly preserved.
-  return NextResponse.json({ data: commissionConfigFromSettings(settings) })
+  return NextResponse.json({ data: commissionConfigFromSettings(settings), billingMode: resolveBillingMode(settings) })
 }
