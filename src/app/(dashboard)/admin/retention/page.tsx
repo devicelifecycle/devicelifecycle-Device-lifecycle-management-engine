@@ -1,17 +1,18 @@
 'use client'
 
 // ============================================================================
-// ADMIN — DATA RETENTION (dry run)
+// ADMIN — DATA RETENTION
 // ============================================================================
-// Shows, per VAR and per data class, how many rows a retention run WOULD
-// remove. Nothing on this page deletes anything and there is no API that
-// does; the point is to let an operator set a policy on the VAR's page, watch
-// these numbers, and only then decide whether execution should be built.
+// Shows, per VAR and per data class, how many rows a retention run would
+// remove right now; runs one on demand; and lists the audited history of past
+// runs. Deletion is live (nightly cron + the Run now control here), so the
+// safety rails are in the copy as much as the code: a VAR with no policy keeps
+// everything, and the manual run requires typing DELETE.
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Archive, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
+import { Archive, Loader2, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,6 +30,18 @@ interface Line {
   would_remove: number | null
 }
 
+interface RunRow {
+  id: string
+  tenant_id: string | null
+  data_class: string
+  cutoff: string
+  days_kept: number
+  rows_deleted: number
+  triggered_by: string
+  error: string | null
+  started_at: string
+}
+
 interface Report {
   dry_run: boolean
   generated_at: string
@@ -36,12 +49,15 @@ interface Report {
   targets: { key: string; label: string; description: string }[]
   lines: Line[]
   failures: string[]
+  history: RunRow[]
 }
 
 export default function RetentionPage() {
   const [report, setReport] = useState<Report | null>(null)
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState('')
+  const [confirmText, setConfirmText] = useState('')
+  const [running, setRunning] = useState(false)
 
   const load = useCallback(async (override?: string) => {
     setLoading(true)
@@ -70,6 +86,29 @@ export default function RetentionPage() {
     void load(days || undefined)
   }
 
+  const runNow = async () => {
+    setRunning(true)
+    try {
+      const res = await fetch('/api/admin/retention', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Retention run failed')
+      const failed = (j.lines ?? []).filter((l: { error?: string }) => l.error).length
+      toast.success(
+        `Retention run complete — ${Number(j.totalDeleted ?? 0).toLocaleString()} rows removed${failed ? `, ${failed} class(es) failed` : ''}`,
+        { duration: 10000 },
+      )
+      setConfirmText('')
+      await load(days || undefined)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Retention run failed')
+    } finally {
+      setRunning(false)
+    }
+  }
+
   // Group lines by tenant for display.
   const byTenant = new Map<string, { name: string; lines: Line[] }>()
   for (const l of report?.lines ?? []) {
@@ -90,11 +129,13 @@ export default function RetentionPage() {
         </p>
       </div>
 
-      <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+      <div className="flex items-start gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
-          <span className="font-medium">Dry run only.</span> Nothing is deleted by this page or by any
-          scheduled job. Counts show what <em>would</em> be removed if a run executed the current policy.
+          <span className="font-medium">Live deletion.</span> A nightly job (03:00 UTC) permanently
+          removes rows older than each VAR&apos;s policy, and <em>Run now</em> below does it immediately.
+          A VAR with no policy set keeps everything — that is the default. The counts below are what a
+          run would remove right now; every run is recorded in the history at the bottom of this page.
         </p>
       </div>
 
@@ -183,6 +224,64 @@ export default function RetentionPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card className="border-red-300 dark:border-red-900/40">
+        <CardHeader>
+          <CardTitle className="text-base">Run now</CardTitle>
+          <CardDescription>
+            Applies every VAR&apos;s policy immediately and permanently, exactly as the nightly job does.
+            Type <span className="font-mono font-medium">DELETE</span> to enable the button.
+            {totalWouldRemove > 0 && <> About <span className="font-medium">{totalWouldRemove.toLocaleString()}</span> rows would be removed.</>}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Type DELETE to confirm</Label>
+              <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="DELETE" className="w-40 font-mono" />
+            </div>
+            <Button variant="destructive" disabled={confirmText !== 'DELETE' || running} onClick={runNow}>
+              {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Run retention now
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {report && report.history.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Run history</CardTitle>
+            <CardDescription>Last {report.history.length} recorded runs, newest first. Every run is audited, including ones that removed nothing.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="pb-2 pr-4 font-medium">When</th>
+                  <th className="pb-2 pr-4 font-medium">Data class</th>
+                  <th className="pb-2 pr-4 font-medium">Kept</th>
+                  <th className="pb-2 pr-4 font-medium">Trigger</th>
+                  <th className="pb-2 font-medium text-right">Removed</th>
+                </tr></thead>
+                <tbody>
+                  {report.history.map((r) => (
+                    <tr key={r.id} className="border-b last:border-0">
+                      <td className="py-2 pr-4 text-muted-foreground">{formatDateTime(r.started_at)}</td>
+                      <td className="py-2 pr-4">{r.data_class}</td>
+                      <td className="py-2 pr-4 tabular-nums">{r.days_kept} days</td>
+                      <td className="py-2 pr-4 text-xs text-muted-foreground">{r.triggered_by === 'cron' ? 'scheduled' : 'manual'}</td>
+                      <td className="py-2 text-right tabular-nums">
+                        {r.error ? <span className="text-destructive" title={r.error}>failed</span> : r.rows_deleted.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {report && (
         <Card>

@@ -19,6 +19,7 @@ import {
   RETENTION_TARGETS, RETENTION_MIN_DAYS, RETENTION_MAX_DAYS,
   resolveRetentionPolicy, retentionCutoff, effectiveDays, type RetentionPlanLine,
 } from '@/lib/retention'
+import { executeRetention } from '@/lib/retention-execute'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,12 +81,51 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const { data: history } = await supabase
+    .from('retention_runs')
+    .select('id, tenant_id, data_class, cutoff, days_kept, rows_deleted, triggered_by, error, started_at')
+    .order('started_at', { ascending: false })
+    .limit(50)
+
   return NextResponse.json({
     dry_run: true,
     generated_at: now.toISOString(),
+    history: history ?? [],
     override_days: overrideDays,
     targets: RETENTION_TARGETS.map((t) => ({ key: t.key, label: t.label, description: t.description })),
     lines,
     failures,
   })
+}
+
+/**
+ * POST /api/admin/retention — run retention NOW, for real.
+ *
+ * The body must carry { confirm: 'DELETE' }. A run removes rows permanently,
+ * so a mis-click, a double-submit or a replayed request must not be enough to
+ * trigger one. GET remains the safe way to see what this would do.
+ *
+ * Tenants with no policy are skipped entirely — "keep forever" is the default,
+ * so this is inert until an operator sets a number on a VAR's page.
+ */
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth()
+  if (!auth) return unauthorized()
+  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = (await req.json().catch(() => null)) as { confirm?: unknown } | null
+  if (body?.confirm !== 'DELETE') {
+    return NextResponse.json(
+      { error: 'This permanently deletes data. Send { "confirm": "DELETE" } to proceed.' },
+      { status: 400 },
+    )
+  }
+
+  try {
+    const result = await executeRetention(createServiceRoleClient(), auth.profile.id)
+    return NextResponse.json(result)
+  } catch (err) {
+    console.error('retention: manual run failed', err)
+    return NextResponse.json({ error: 'Retention run failed' }, { status: 500 })
+  }
 }

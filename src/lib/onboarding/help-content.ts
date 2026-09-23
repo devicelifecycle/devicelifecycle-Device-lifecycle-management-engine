@@ -106,7 +106,7 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
     },
     {
       question: 'What does the Data Retention page actually delete?',
-      answer: 'Nothing. It is a dry run: for each VAR it shows how many rows of each data class (audit log, notifications, delivery attempts, order timeline, SLA breaches, ended impersonation sessions) a retention run would remove under the policy set on that VAR’s page. Business records — orders, customers, invoices, devices — are never candidates. Set a policy, watch the numbers, and execution is a separate step that is not built yet.',
+      answer: 'Rows older than the policy you set on each VAR’s page — and nothing else. A nightly job at 03:00 UTC removes them permanently, and Run now on that page does it immediately (you must type DELETE to enable the button). Six classes only: audit log, notifications, delivery attempts, order timeline, SLA breaches and ended impersonation sessions. Orders, customers, invoices and devices are never touched, and a VAR with no policy set keeps everything — that is the default. Every run is recorded in the history on that page, including runs that removed nothing.',
     },
     {
       question: 'How does a VAR get API access?',
