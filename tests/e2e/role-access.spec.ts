@@ -20,9 +20,17 @@ async function gotoPath(page: Page, path: string) {
 
 function expectRedirectedAway(page: { url: () => string }, fromPath: string) {
   const pathname = new URL(page.url()).pathname
-  // Middleware redirects unauthorized to /; authenticated users may then client-redirect to /dashboard
+  // The proxy sends an unauthorized user to '/', and '/' then forwards an
+  // authenticated user to THEIR OWN landing page — /dashboard for most roles,
+  // /vendor/orders for a vendor (proxy.ts). This list previously omitted the
+  // vendor landing, so the vendor case failed even though the app had denied
+  // the route correctly and sent them home.
+  const LANDINGS = ['/', '', '/dashboard', '/vendor/orders', '/customer/orders']
   expect(pathname !== fromPath).toBeTruthy()
-  expect(['/', '/dashboard', ''].includes(pathname) || pathname.startsWith('/dashboard')).toBeTruthy()
+  expect(
+    LANDINGS.includes(pathname) || pathname.startsWith('/dashboard'),
+    `expected a landing page after being denied ${fromPath}, got ${pathname}`,
+  ).toBeTruthy()
 }
 
 test.describe('Role-based access', () => {

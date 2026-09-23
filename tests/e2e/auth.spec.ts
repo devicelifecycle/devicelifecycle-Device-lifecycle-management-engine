@@ -26,7 +26,12 @@ test.describe('Authentication', () => {
     await loginAs(page, 'admin')
     await expect(page).toHaveURL(/\/dashboard/)
 
-    await page.getByTitle('Sign out').click()
+    // The sidebar control was renamed from "Sign out" to "Log out" at some
+    // point; getByTitle('Sign out') then matched nothing, so this test was
+    // failing on a stale locator rather than on app behaviour. (Scoped to the
+    // sidebar because the avatar menu has a second "Log out" button, which
+    // makes an unscoped by-name locator ambiguous under strict mode.)
+    await page.getByTitle('Log out').click()
     await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible({ timeout: 15000 })
     await page.waitForURL(/\/login/, { timeout: 15000, waitUntil: 'domcontentloaded' })
 
