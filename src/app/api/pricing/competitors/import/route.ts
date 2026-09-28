@@ -109,9 +109,12 @@ export async function POST(request: NextRequest) {
     const uniqueDeviceNames = Array.from(new Set(rows.map(r => r.device_name.toLowerCase())))
 
     // Fetch all matching devices from catalog
+    // device_catalog has make + model, never a `name` column — this select
+    // made PostgREST reject the query, so every competitor-price import
+    // failed with "Failed to query device catalog".
     const { data: catalogDevices, error: catalogError } = await supabase
       .from('device_catalog')
-      .select('id, name')
+      .select('id, make, model')
 
     if (catalogError) {
       return NextResponse.json({ error: 'Failed to query device catalog' }, { status: 500 })
@@ -120,7 +123,14 @@ export async function POST(request: NextRequest) {
     // Build case-insensitive lookup map
     const deviceNameToId = new Map<string, string>()
     for (const device of (catalogDevices || [])) {
-      deviceNameToId.set((device.name || '').toLowerCase(), device.id)
+      // Match on "make model" — the shape the CSV's device_name carries — and
+      // on the model alone, so "iPhone 15" resolves as well as
+      // "Apple iPhone 15".
+      const make = (device.make || '').trim()
+      const model = (device.model || '').trim()
+      const full = `${make} ${model}`.trim().toLowerCase()
+      if (full) deviceNameToId.set(full, device.id)
+      if (model) deviceNameToId.set(model.toLowerCase(), device.id)
     }
 
     // Resolve rows

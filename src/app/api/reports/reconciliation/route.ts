@@ -29,22 +29,30 @@ export async function GET(request: NextRequest) {
     // ── Fetch triage results with order + item + device context ─────────────
     const { data: triageRows, error: triageErr } = await supabase
       .from('triage_results')
+      // triage_results has no order_item_id, claimed_condition or
+      // actual_condition, and no FK to order_items — this select named four
+      // things that do not exist, so PostgREST rejected the whole query and
+      // this report answered 500 every time it was opened. It links to the
+      // device through imei_record_id; the claimed condition lives on
+      // imei_records and the triage outcome is final_condition. Same shape
+      // exception.service.ts already uses (verified live).
       .select(`
         id,
         order_id,
-        order_item_id,
-        claimed_condition,
-        actual_condition,
         price_adjustment,
         mismatch_severity,
         approval_status,
         created_at,
-        order_items!inner(
-          quantity,
-          storage,
-          unit_price,
-          guaranteed_buyback_price,
-          device_catalog!inner(make, model)
+        imei_record:imei_records(
+          order_item_id,
+          claimed_condition,
+          order_item:order_items(
+            quantity,
+            storage,
+            unit_price,
+            guaranteed_buyback_price,
+            device:device_catalog(make, model)
+          )
         ),
         orders!inner(
           order_number,
@@ -63,23 +71,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to load reconciliation data' }, { status: 500 })
     }
 
+    type OrderItemRow = {
+      quantity: number | null
+      storage: string | null
+      unit_price: number | null
+      guaranteed_buyback_price: number | null
+      device: { make: string; model: string } | { make: string; model: string }[] | null
+    }
     type TriageRow = {
       id: string
       order_id: string
-      order_item_id: string
-      claimed_condition: string | null
-      actual_condition: string | null
+      final_condition: string | null
       price_adjustment: number | null
       mismatch_severity: string | null
       approval_status: string | null
       created_at: string
-      order_items: {
-        quantity: number | null
-        storage: string | null
-        unit_price: number | null
-        guaranteed_buyback_price: number | null
-        device_catalog: { make: string; model: string } | null
-      } | null
+      imei_record: {
+        order_item_id: string | null
+        claimed_condition: string | null
+        order_item: OrderItemRow | OrderItemRow[] | null
+      } | {
+        order_item_id: string | null
+        claimed_condition: string | null
+        order_item: OrderItemRow | OrderItemRow[] | null
+      }[] | null
       orders: {
         order_number: string | null
         type: string | null
@@ -99,10 +114,18 @@ export async function GET(request: NextRequest) {
     })
 
     // ── Build line items ─────────────────────────────────────────────────────
+    // PostgREST returns a to-one embed as an object, but the generated types
+    // widen it to a possible array; unwrap once rather than at each use.
+    const one = <T,>(v: T | T[] | null | undefined): T | null =>
+      (Array.isArray(v) ? v[0] ?? null : v ?? null)
+
     const items = filtered.map(r => {
       const order = r.orders
-      const item = r.order_items
-      const device = item?.device_catalog
+      const rec = one(r.imei_record)
+      const item = one(rec?.order_item)
+      const device = one(item?.device)
+      const claimedCondition = rec?.claimed_condition ?? null
+      const actualCondition = r.final_condition ?? null
       const isCpo = order?.type === 'cpo'
 
       const claimedValue = isCpo
@@ -123,9 +146,12 @@ export async function GET(request: NextRequest) {
         device: device ? `${device.make} ${device.model}`.trim() : '—',
         storage: item?.storage ?? '—',
         quantity: item?.quantity ?? 1,
-        claimed_condition: r.claimed_condition ?? '—',
-        actual_condition: r.actual_condition ?? '—',
-        condition_changed: r.claimed_condition !== r.actual_condition,
+        claimed_condition: claimedCondition ?? '—',
+        actual_condition: actualCondition ?? '—',
+        // Only a difference between two KNOWN conditions is a change; an
+        // unknown on either side is not evidence of one.
+        condition_changed: claimedCondition !== null && actualCondition !== null
+          && claimedCondition !== actualCondition,
         claimed_value: claimedValue,
         coe_value: coeValue,
         price_adjustment: adjustment,

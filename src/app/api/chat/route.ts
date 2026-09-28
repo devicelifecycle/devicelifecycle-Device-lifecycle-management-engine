@@ -17,7 +17,11 @@ export const dynamic = 'force-dynamic'
 
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY
-const MODEL = 'llama-3.3-70b-versatile'
+// Groq retires models, and when one goes the assistant returns 500 on every
+// message with "model_not_found" — which is exactly what it was doing until
+// 2026-09-28 (llama-3.3-70b-versatile is no longer available on this account).
+// Env-overridable so the next retirement is a config change, not a deploy.
+const MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b'
 const MAX_TOOL_ROUNDS = 3
 
 export async function POST(request: NextRequest) {

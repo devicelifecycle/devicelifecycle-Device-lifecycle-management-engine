@@ -242,7 +242,7 @@ async function getOrderDetails(args: Record<string, unknown>, ctx: ToolContext):
     .from('orders')
     .select(`
       id, order_number, type, status, total_amount, created_at, updated_at,
-      customer_id, vendor_id, customer_notes, internal_notes,
+      customer_id, vendor_id, notes, internal_notes,
       customer:customers(company_name, contact_email),
       vendor:vendors(company_name),
       items:order_items(device_id, quantity, storage, claimed_condition, unit_price,
@@ -293,8 +293,12 @@ async function getOrderDetails(args: Record<string, unknown>, ctx: ToolContext):
     created: new Date(order.created_at as string).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }),
     updated: new Date(order.updated_at as string).toLocaleDateString('en-US', { timeZone: 'America/Toronto' }),
     items,
-    notes: ctx.role !== 'customer' ? order.internal_notes : undefined,
-    customer_notes: order.customer_notes,
+    // `orders.notes` is the customer-visible note; `internal_notes` is staff
+    // only and withheld from a customer. There is no `customer_notes` column —
+    // selecting it made PostgREST reject the query, so this tool answered
+    // "Order not found." for every order the assistant was ever asked about.
+    internal_notes: ctx.role !== 'customer' ? order.internal_notes : undefined,
+    notes: order.notes,
   })
 }
 

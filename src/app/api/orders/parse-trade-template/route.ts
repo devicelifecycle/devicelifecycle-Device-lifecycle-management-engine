@@ -607,7 +607,8 @@ Rules:
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        // Same retired model as the chat route — see the note there.
+        model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 500,
         temperature: 0,
