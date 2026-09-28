@@ -36,11 +36,13 @@ const patchSchema = z.discriminatedUnion('action', [
   }),
 ])
 
-async function load(id: string) {
+async function load(id: string, permission: PermissionKey = 'billing.view') {
   const auth = await requireAuth()
   if (!auth) return { error: unauthorized() }
-  const allowed = auth.effectiveRole === 'admin'
-    || hasPermission(auth.effectiveRole, 'billing.view' as PermissionKey)
+  // Reading an invoice needs billing.view; sending, voiding or recording money
+  // against it needs billing.manage. Both were gated on view, which gave
+  // invoice write access to every role that can merely look at billing.
+  const allowed = auth.effectiveRole === 'admin' || hasPermission(auth.effectiveRole, permission)
   if (!allowed) return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   if (!auth.tenantId) return { error: NextResponse.json({ error: 'No tenant in scope' }, { status: 400 }) }
   if (!isValidUUID(id)) return { error: NextResponse.json({ error: 'Invalid invoice id' }, { status: 400 }) }
@@ -93,7 +95,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await load((await params).id)
+  const g = await load((await params).id, 'billing.manage')
   if (g.error) return g.error
   const { auth, supabase, invoice, tenantId } = g
 
@@ -124,60 +126,50 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   // ── Payments / refunds ────────────────────────────────────────────────────
-  if (status === 'void') {
-    return NextResponse.json({ error: 'This invoice is void — it cannot take payments.' }, { status: 400 })
-  }
-  const existing = await paymentsFor(supabase, invoice.id as string)
-  const rows = existing.map((p) => ({ kind: p.kind as 'payment' | 'refund', amount: p.amount }))
-  const total = Number(invoice.total)
-
-  if (body.action === 'record_refund') {
-    // Cap at what has actually been paid. The BB→VAR billing shipped without
-    // this and unbounded refunds drove net-paid negative; same bug must not
-    // reappear on the customer-facing side.
-    const cap = maxRefundable(rows)
-    if (body.amount > cap) {
-      return NextResponse.json(
-        { error: `Refund exceeds what has been paid on this invoice (max ${cap.toFixed(2)}).` },
-        { status: 400 },
-      )
-    }
-  } else {
-    const { balance } = invoiceBalance(total, rows)
-    if (body.amount > balance) {
-      return NextResponse.json(
-        { error: `Payment exceeds the outstanding balance (${balance.toFixed(2)}).` },
-        { status: 400 },
-      )
-    }
-  }
-
-  const { error: pErr } = await supabase.from('customer_invoice_payments').insert({
-    invoice_id: invoice.id,
-    tenant_id: tenantId,
-    kind: body.action === 'record_refund' ? 'refund' : 'payment',
-    amount: body.amount,
-    method: body.method ?? null,
-    reference: body.reference ?? null,
-    note: body.note ?? null,
-    created_by: auth.profile.id,
+  // Through record_customer_invoice_payment, which takes a row lock on the
+  // invoice and does the cap check, the insert and the status move in one
+  // statement. The previous version read the balance, checked it, then
+  // inserted: two payments issued at the same moment both read the same
+  // balance, both passed, and both landed — over-paying the invoice with
+  // nothing to stop it. Exactly the bug already fixed for BB→VAR invoices.
+  //
+  // The status move lives in the RPC too, so it can only ever apply a legal
+  // transition (sent→paid on settlement, paid→sent when a refund re-opens it).
+  // The JS version could write draft→paid, which canTransitionInvoice forbids.
+  const { data: result, error: rpcErr } = await supabase.rpc('record_customer_invoice_payment', {
+    p_invoice_id: invoice.id,
+    p_tenant_id: tenantId,
+    p_kind: body.action === 'record_refund' ? 'refund' : 'payment',
+    p_amount: body.amount,
+    p_method: body.method ?? null,
+    p_reference: body.reference ?? null,
+    p_note: body.note ?? null,
+    p_created_by: auth.profile.id,
   })
-  if (pErr) {
-    console.error('customer-invoice payment insert failed', pErr)
+  if (rpcErr) {
+    console.error('customer-invoice payment failed', rpcErr)
     return NextResponse.json({ error: 'Failed to record payment' }, { status: 500 })
   }
 
-  // Settle or re-open the invoice to match the new balance.
-  const after = invoiceBalance(total, [
-    ...rows,
-    { kind: body.action === 'record_refund' ? 'refund' : 'payment', amount: body.amount },
-  ])
-  const shouldBe: InvoiceStatus = after.settled ? 'paid' : (status === 'paid' ? 'sent' : status)
-  if (shouldBe !== status) {
-    await supabase.from('customer_invoices')
-      .update({ status: shouldBe, updated_at: new Date().toISOString() })
-      .eq('id', invoice.id).eq('tenant_id', tenantId)
+  const r = result as { ok: boolean; error?: string; max?: number; status?: string; total?: number; net_paid?: number; balance?: number } | null
+  if (!r?.ok) {
+    const messages: Record<string, string> = {
+      void: 'This invoice is void — it cannot take payments.',
+      not_found: 'Invoice not found.',
+      invalid_amount: 'Enter a positive amount.',
+      invalid_kind: 'Unknown payment type.',
+      exceeds_net: `Refund exceeds what has been paid on this invoice (max ${Number(r?.max ?? 0).toFixed(2)}).`,
+      exceeds_balance: `Payment exceeds the outstanding balance (${Number(r?.max ?? 0).toFixed(2)}).`,
+    }
+    const msg = messages[r?.error ?? ''] ?? 'Could not record the payment.'
+    return NextResponse.json({ error: msg }, { status: r?.error === 'not_found' ? 404 : 400 })
   }
 
-  return NextResponse.json({ data: { id: invoice.id, status: shouldBe, balance: after } })
+  return NextResponse.json({
+    data: {
+      id: invoice.id,
+      status: r.status,
+      balance: invoiceBalance(Number(r.total ?? 0), [{ kind: 'payment', amount: Number(r.net_paid ?? 0) }]),
+    },
+  })
 }

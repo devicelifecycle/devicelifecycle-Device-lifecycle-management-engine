@@ -11,7 +11,6 @@ import { canAccessOrderFile } from '@/lib/order-file-access'
 import { isValidUUID } from '@/lib/utils'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { UNLIMITED } from '@/lib/licensing'
-import { quotaBlockMessage } from '@/lib/quota'
 import { storageUsage, BYTES_PER_MB } from '@/lib/usage-metering'
 export const dynamic = 'force-dynamic'
 
@@ -68,11 +67,18 @@ export async function POST(request: NextRequest) {
         if (error) throw error
         const { license } = tenantLimits(tenant?.settings)
         if (license.storageMb !== UNLIMITED) {
+          // Compared in BYTES then converted once. Rounding the used total and
+          // the new file up to whole megabytes separately charged a 1 KB
+          // upload a full megabyte and could refuse a file that fits.
           const { bytes } = await storageUsage(orderTenant)
-          const usedMb = bytes / BYTES_PER_MB
-          const addMb = file.size / BYTES_PER_MB
-          const blocked = quotaBlockMessage(license.storageMb, Math.ceil(usedMb), Math.ceil(addMb), 'Storage (MB)')
-          if (blocked) return NextResponse.json({ error: blocked }, { status: 413 })
+          const limitBytes = license.storageMb * BYTES_PER_MB
+          if (bytes + file.size > limitBytes) {
+            const usedMb = (bytes / BYTES_PER_MB).toFixed(1)
+            return NextResponse.json(
+              { error: `Storage limit reached (${usedMb} MB of ${license.storageMb} MB used). Upgrade the plan to add more.` },
+              { status: 413 },
+            )
+          }
         }
       } catch (err) {
         console.error('[order-file upload] storage quota check failed', err)
@@ -82,7 +88,20 @@ export async function POST(request: NextRequest) {
 
     // Sanitize filename — keep extension, strip path traversal
     const rawName = file.name.replace(/[/\\]/g, '_').replace(/\s+/g, '_')
-    const orgId = (order.customers as unknown as { organization_id: string } | null)?.organization_id ?? 'unknown'
+    // Storage usage is measured by joining the path's organization id back to
+    // organizations.tenant_id, so a file filed under 'unknown' belongs to no
+    // tenant and its bytes are charged to nobody — a quota bypass that also
+    // makes the platform storage figure understate reality. An order whose
+    // customer has no organization is a data problem to surface, not to file
+    // away in an unattributable folder.
+    const orgId = (order.customers as unknown as { organization_id: string } | null)?.organization_id
+    if (!orgId) {
+      console.error('[order-file upload] order has no customer organization; refusing unattributable upload', { orderId })
+      return NextResponse.json(
+        { error: 'This order’s customer is not linked to an organization, so the file cannot be filed against it. Set the customer’s organization and try again.' },
+        { status: 409 },
+      )
+    }
     const storagePath = `customer-orders/${orgId}/${orderId}_${rawName}`
 
     const arrayBuffer = await file.arrayBuffer()

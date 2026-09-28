@@ -72,17 +72,29 @@ test.describe('VAR customer invoicing (Billing Option A/B)', () => {
     })
     customerId = customer.id
 
+    // CPO orders: the customer BUYS, so they can be invoiced. A trade-in pays
+    // the customer, and the API must refuse to bill one — asserted below.
     for (const [suffix, amount] of [['A', 500], ['B', 250.5]] as const) {
       const [order] = await dbJson<{ id: string }>('orders', {
         method: 'POST',
         body: JSON.stringify({
           tenant_id: tenantId, customer_id: customerId, order_number: `ZZ-E2E-${Date.now()}-${suffix}`,
-          type: 'trade_in', status: 'closed', created_by_id: adminId,
+          type: 'cpo', status: 'closed', created_by_id: adminId, currency: 'CAD',
           total_quantity: 1, total_amount: amount, final_amount: amount,
         }),
       })
       orderIds.push(order.id)
     }
+    // One trade-in for the same customer — must never appear on an invoice.
+    const [tradeIn] = await dbJson<{ id: string }>('orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        tenant_id: tenantId, customer_id: customerId, order_number: `ZZ-E2E-${Date.now()}-TI`,
+        type: 'trade_in', status: 'closed', created_by_id: adminId, currency: 'CAD',
+        total_quantity: 1, total_amount: 900, final_amount: 900,
+      }),
+    })
+    orderIds.push(tradeIn.id)
   })
 
   test.afterAll(async () => {
@@ -113,7 +125,7 @@ test.describe('VAR customer invoicing (Billing Option A/B)', () => {
     expect((await res.json()).billingMode).toBe('in_platform')
   })
 
-  test('creates an invoice from the closed orders, with the customer regional tax', async () => {
+  test('creates an invoice from the CPO orders only, with the customer regional tax', async () => {
     const res = await api.post('/api/var/customer-invoices', { data: { customer_id: customerId, due_days: 30 } })
     expect(res.status(), await res.text()).toBe(201)
     const { data } = await res.json()
@@ -125,6 +137,16 @@ test.describe('VAR customer invoicing (Billing Option A/B)', () => {
     expect(Number(data.total)).toBe(848.07)
     expect(data.tax_label).toMatch(/HST \(ON\)/)
     expect(data.invoice_number).toMatch(/^INV-\d{4}-\d{4}$/)
+    // The 900 trade-in must be skipped, not billed and not taxed.
+    expect(data.skipped).toContainEqual(expect.objectContaining({ reason: 'not_cpo' }))
+  })
+
+  test('a trade-in is never billed to the customer', async () => {
+    const res = await api.get(`/api/var/customer-invoices/${invoiceId}`)
+    const { data } = await res.json()
+    const billedOrders: string[] = data.lines.map((l: { order_id: string }) => l.order_id)
+    expect(billedOrders).toHaveLength(2)
+    expect(billedOrders).not.toContain(orderIds[2]) // the trade-in
   })
 
   test('the same orders cannot be billed twice', async () => {

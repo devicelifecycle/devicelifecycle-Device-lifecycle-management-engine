@@ -34,11 +34,13 @@ const createSchema = z.object({
 // status, and querying one 400s the whole request.
 const BILLABLE_STATUSES = ['closed', 'payment_sent', 'delivered']
 
-async function guard() {
+async function guard(permission: PermissionKey = 'billing.view') {
   const auth = await requireAuth()
   if (!auth) return { error: unauthorized() }
-  const allowed = auth.effectiveRole === 'admin'
-    || hasPermission(auth.effectiveRole, 'billing.view' as PermissionKey)
+  // Reads need billing.view; raising or changing an invoice needs
+  // billing.manage. They were both gated on view, which handed invoice
+  // creation to every role that can merely look at billing (coe_manager).
+  const allowed = auth.effectiveRole === 'admin' || hasPermission(auth.effectiveRole, permission)
   if (!allowed) return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   if (!auth.tenantId) return { error: NextResponse.json({ error: 'No tenant in scope' }, { status: 400 }) }
 
@@ -71,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   let q = supabase
     .from('customer_invoices')
-    .select('id, customer_id, invoice_number, status, issue_date, due_date, subtotal, tax_amount, tax_label, total, currency, sent_at, created_at, customer:customers(company_name)')
+    .select('id, customer_id, invoice_number, status, issue_date, due_date, subtotal, tax_amount, tax_label, total, currency, sent_at, created_at, customer:customers!inner(company_name, region, assigned_rep_id)')
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
     .limit(200)
@@ -81,14 +83,14 @@ export async function GET(req: NextRequest) {
   // same filter the customer lists use, including its safer fallback (a
   // regional manager with no region set is narrowed to their own customers
   // rather than widened to the tenant).
+  //
+  // Filtered through an inner join rather than by fetching the scoped customer
+  // ids first: that fetch had no limit, so a manager with more customers than
+  // the row cap silently lost invoices from their own list.
   const scope = customerScopeFilter({
     role: auth.effectiveRole, userId: auth.profile.id, region: auth.profile.region,
   })
-  if (scope) {
-    const { data: scoped } = await supabase
-      .from('customers').select('id').eq('tenant_id', tenantId).eq(scope.column, scope.value)
-    q = q.in('customer_id', (scoped ?? []).map((c) => c.id as string))
-  }
+  if (scope) q = q.eq(`customer.${scope.column}`, scope.value)
 
   const { data, error } = await q
   if (error) {
@@ -117,7 +119,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const g = await guard()
+  const g = await guard('billing.manage')
   if (g.error) return g.error
   const { supabase, tenantId, auth } = g
 
@@ -155,12 +157,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not load orders' }, { status: 500 })
   }
 
-  // Exclude orders already on an invoice for this tenant. The unique index
-  // enforces this too; checking here produces a useful message instead of a
-  // constraint violation.
-  const { data: already } = await supabase
-    .from('customer_invoice_line_items').select('order_id').eq('tenant_id', tenantId).not('order_id', 'is', null)
-  const invoiced = new Set((already ?? []).map((l) => l.order_id as string))
+  // Exclude orders already on a LIVE invoice. Asked only about the candidate
+  // orders — the previous version fetched every line item the tenant had ever
+  // had, unfiltered and unlimited, so past PostgREST's default row cap it
+  // would start missing rows, let a duplicate through, and then fail on the
+  // DB guard after having already burned an invoice number.
+  const candidateIds = (orders ?? []).map((o) => o.id as string)
+  const invoiced = new Set<string>()
+  if (candidateIds.length > 0) {
+    const { data: already, error: aErr } = await supabase
+      .from('customer_invoice_line_items')
+      .select('order_id, invoice:customer_invoices!inner(status)')
+      .eq('tenant_id', tenantId)
+      .in('order_id', candidateIds)
+      .neq('invoice.status', 'void')
+    if (aErr) {
+      console.error('customer-invoices: duplicate check failed', aErr)
+      return NextResponse.json({ error: 'Could not verify which orders are already invoiced' }, { status: 503 })
+    }
+    for (const l of already ?? []) invoiced.add(l.order_id as string)
+  }
   const candidates = (orders ?? []).filter((o) => !invoiced.has(o.id as string)) as BillableOrder[]
 
   const draft = buildInvoiceDraft({
@@ -170,10 +186,13 @@ export async function POST(req: NextRequest) {
     taxable,
   })
   if (draft.lines.length === 0) {
-    return NextResponse.json(
-      { error: 'Nothing to invoice — these orders are already invoiced, unfinished, or carry no amount.' },
-      { status: 400 },
-    )
+    const tradeIns = draft.skipped.filter((s) => s.reason === 'not_cpo').length
+    return NextResponse.json({
+      error: tradeIns > 0
+        ? `Nothing to invoice. ${tradeIns} trade-in order(s) were skipped: a trade-in pays the customer, so it is never billed to them.`
+        : 'Nothing to invoice — these orders are already invoiced, unfinished, or carry no amount.',
+      skipped: draft.skipped,
+    }, { status: 400 })
   }
 
   const year = new Date().getUTCFullYear()
@@ -225,5 +244,5 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  return NextResponse.json({ data: { ...invoice, lines: draft.lines } }, { status: 201 })
+  return NextResponse.json({ data: { ...invoice, lines: draft.lines, skipped: draft.skipped } }, { status: 201 })
 }

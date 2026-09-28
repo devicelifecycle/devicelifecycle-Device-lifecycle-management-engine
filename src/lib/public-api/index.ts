@@ -30,7 +30,7 @@ import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/rate-limit'
 import { isValidUUID } from '@/lib/utils'
 import { tenantLimits } from '@/lib/tenant-limits'
 import { quotaBlockMessage } from '@/lib/quota'
-import { monthUsage, recordUsage } from '@/lib/usage-metering'
+import { monthUsage, recordUsageNow } from '@/lib/usage-metering'
 
 export const API_VERSION = 'v1' as const
 
@@ -106,7 +106,16 @@ export async function authorizeV1(
     console.error('v1: quota check failed', err)
     return { error: apiError(503, 'Could not verify API quota. Try again shortly.', 'quota_unavailable') }
   }
-  recordUsage(key.tenantId, { apiCalls: 1 })
+  // Awaited, not fire-and-forget: this counter now GATES the quota checked
+  // just above. A dropped increment (serverless teardown after the response)
+  // would let a tenant drift past its limit and under-report usage on the
+  // bill. It is a single indexed upsert; a failure is logged and allowed
+  // through rather than failing a request the quota already approved.
+  try {
+    await recordUsageNow(key.tenantId, { apiCalls: 1 })
+  } catch (err) {
+    console.warn('v1: usage increment failed', err)
+  }
 
   return { ctx: { key, tenantId: key.tenantId, supabase } }
 }

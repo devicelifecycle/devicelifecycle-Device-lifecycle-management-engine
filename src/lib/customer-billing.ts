@@ -61,6 +61,8 @@ export interface DraftLine {
 
 export interface InvoiceDraft {
   lines: DraftLine[]
+  /** Orders that were passed in but could not be billed, with the reason. */
+  skipped: { order_id: string; reason: 'not_cpo' | 'no_amount' | 'currency_mismatch' }[]
   subtotal: number
   taxRate: number
   taxLabel: string | null
@@ -70,6 +72,24 @@ export interface InvoiceDraft {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+/**
+ * Only a CPO order can be invoiced to a customer.
+ *
+ * In a trade-in the money flows the OTHER WAY: the customer sells devices and
+ * the platform pays them ("Payment Sent — your payment has been sent",
+ * constants.ts). Billing a trade-in as a charge would invoice a customer for
+ * money they are owed, and — because tax.ts only taxes CPO — would also have
+ * added sales tax to a payout. Both were true of the first cut of this module
+ * and are the reason this guard exists rather than a filter at the call site.
+ *
+ * If netting trade-in credits against CPO charges is wanted later, that is a
+ * deliberate feature (a negative line, and a decision about tax on the net),
+ * not something to fall out of a missing check.
+ */
+export function isInvoiceable(order: BillableOrder): boolean {
+  return order.type === 'cpo'
+}
 
 /**
  * The amount a customer is billed for an order: the final settled amount when
@@ -98,12 +118,27 @@ export function buildInvoiceDraft(params: {
   taxable?: boolean
 }): InvoiceDraft {
   const lines: DraftLine[] = []
+  const skipped: InvoiceDraft['skipped'] = []
+
+  // One invoice carries one currency: its subtotal, tax and total are single
+  // numbers with a single currency code. Summing a CAD order and a USD order
+  // into one figure produces a total that is simply wrong in both. The first
+  // billable order fixes the currency; anything else is skipped and reported
+  // so the operator can raise a second invoice for it.
+  const invoiceCurrency = (params.currency
+    || params.orders.find((o) => isInvoiceable(o) && billableAmount(o) !== null)?.currency
+    || 'CAD').toUpperCase()
+
   for (const o of params.orders) {
+    if (!isInvoiceable(o)) { skipped.push({ order_id: o.id, reason: 'not_cpo' }); continue }
     const amount = billableAmount(o)
-    if (amount === null) continue
+    if (amount === null) { skipped.push({ order_id: o.id, reason: 'no_amount' }); continue }
+    if ((o.currency || 'CAD').toUpperCase() !== invoiceCurrency) {
+      skipped.push({ order_id: o.id, reason: 'currency_mismatch' }); continue
+    }
     lines.push({
       order_id: o.id,
-      description: `${(o.type === 'cpo' ? 'CPO' : 'Trade-in')} order ${o.order_number}`,
+      description: `CPO order ${o.order_number}`,
       quantity: 1,
       unit_amount: amount,
       amount,
@@ -122,12 +157,13 @@ export function buildInvoiceDraft(params: {
 
   return {
     lines,
+    skipped,
     subtotal,
     taxRate: tax.rate,
     taxLabel: tax.rate > 0 ? tax.label : null,
     taxAmount,
     total: round2(subtotal + taxAmount),
-    currency: params.currency || 'CAD',
+    currency: invoiceCurrency,
   }
 }
 

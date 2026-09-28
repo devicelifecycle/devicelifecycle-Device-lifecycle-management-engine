@@ -14,6 +14,10 @@ import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
 import { executeRetention } from '@/lib/retention-execute'
 
 export const dynamic = 'force-dynamic'
+// Deleting across every tenant and six classes can take a while; without this
+// the default timeout kills the run partway, logs a failure, and silently
+// skips whatever classes hadn't been reached. Same budget as price-scraper.
+export const maxDuration = 300
 const CRON_NAME = 'retention'
 
 function safeCompare(a: string, b: string): boolean {

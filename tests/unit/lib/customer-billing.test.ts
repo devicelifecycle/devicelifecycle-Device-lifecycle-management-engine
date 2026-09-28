@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  resolveBillingMode, DEFAULT_BILLING_MODE, billableAmount, buildInvoiceDraft,
+  resolveBillingMode, DEFAULT_BILLING_MODE, billableAmount, buildInvoiceDraft, isInvoiceable,
   invoiceBalance, maxRefundable, formatCustomerInvoiceNumber,
 } from '@/lib/customer-billing'
 
@@ -32,13 +32,21 @@ describe('billableAmount', () => {
   })
 })
 
+describe('isInvoiceable', () => {
+  it('bills CPO only — a trade-in pays the customer, so it is never a charge', () => {
+    expect(isInvoiceable({ id: 'o', order_number: '1', type: 'cpo' })).toBe(true)
+    expect(isInvoiceable({ id: 'o', order_number: '1', type: 'trade_in' })).toBe(false)
+    expect(isInvoiceable({ id: 'o', order_number: '1' })).toBe(false)
+  })
+})
+
 describe('buildInvoiceDraft', () => {
   const orders = [
-    { id: 'o1', order_number: 'TI-1001', type: 'trade_in', final_amount: 500 },
-    { id: 'o2', order_number: 'CPO-2002', type: 'cpo', quoted_amount: 250.5 },
+    { id: 'o1', order_number: 'CPO-1001', type: 'cpo', final_amount: 500, currency: 'CAD' },
+    { id: 'o2', order_number: 'CPO-2002', type: 'cpo', quoted_amount: 250.5, currency: 'CAD' },
   ]
 
-  it('sums billable orders and applies the customer regional tax', () => {
+  it('sums billable CPO orders and applies the customer regional tax', () => {
     const d = buildInvoiceDraft({ orders, billingAddress: { state: 'ON', country: 'Canada' } })
     expect(d.lines).toHaveLength(2)
     expect(d.subtotal).toBe(750.5)
@@ -46,6 +54,38 @@ describe('buildInvoiceDraft', () => {
     expect(d.taxLabel).toMatch(/HST \(ON\)/)
     expect(d.taxAmount).toBe(97.57)
     expect(d.total).toBe(848.07)
+    expect(d.skipped).toEqual([])
+  })
+
+  it('NEVER bills a trade-in — the money flows the other way', () => {
+    const d = buildInvoiceDraft({
+      orders: [...orders, { id: 'o3', order_number: 'TI-3', type: 'trade_in', final_amount: 900, currency: 'CAD' }],
+      billingAddress: { state: 'ON' },
+    })
+    expect(d.lines.map((l) => l.order_id)).toEqual(['o1', 'o2'])
+    expect(d.skipped).toContainEqual({ order_id: 'o3', reason: 'not_cpo' })
+    // The trade-in's 900 must not reach the subtotal, and must not be taxed.
+    expect(d.subtotal).toBe(750.5)
+  })
+
+  it('refuses to mix currencies into one total', () => {
+    const d = buildInvoiceDraft({
+      orders: [...orders, { id: 'o4', order_number: 'CPO-4', type: 'cpo', final_amount: 100, currency: 'USD' }],
+      billingAddress: null,
+    })
+    expect(d.currency).toBe('CAD')
+    expect(d.lines.map((l) => l.order_id)).toEqual(['o1', 'o2'])
+    expect(d.skipped).toContainEqual({ order_id: 'o4', reason: 'currency_mismatch' })
+    expect(d.subtotal).toBe(750.5)
+  })
+
+  it('takes its currency from the first billable order when none is given', () => {
+    const d = buildInvoiceDraft({
+      orders: [{ id: 'x', order_number: 'CPO-X', type: 'cpo', final_amount: 10, currency: 'usd' }],
+      billingAddress: null,
+    })
+    expect(d.currency).toBe('USD')
+    expect(d.lines).toHaveLength(1)
   })
 
   it('omits tax when the jurisdiction cannot be resolved, rather than guessing', () => {
@@ -62,9 +102,10 @@ describe('buildInvoiceDraft', () => {
     expect(d.total).toBe(750.5)
   })
 
-  it('drops orders with no billable amount instead of adding zero lines', () => {
-    const d = buildInvoiceDraft({ orders: [...orders, { id: 'o3', order_number: 'TI-3', final_amount: 0 }], billingAddress: null })
+  it('reports orders with no billable amount instead of adding zero lines', () => {
+    const d = buildInvoiceDraft({ orders: [...orders, { id: 'o5', order_number: 'CPO-5', type: 'cpo', final_amount: 0 }], billingAddress: null })
     expect(d.lines.map((l) => l.order_id)).toEqual(['o1', 'o2'])
+    expect(d.skipped).toContainEqual({ order_id: 'o5', reason: 'no_amount' })
   })
 
   it('produces an empty, zero draft when nothing is billable', () => {
