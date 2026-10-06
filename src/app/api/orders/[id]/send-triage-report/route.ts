@@ -83,7 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const anyAdjustment = triageResults.some(r => r.condition_changed || (r.price_adjustment && r.price_adjustment !== 0))
 
     const html = `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
+<div style="font-family:'PT Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
   <h2 style="color:#111">Inspection Report — Order ${safeOrderNumHtml}</h2>
   <p>Hi ${customerName},</p>
   <p>We've completed inspecting the devices for order <strong>${safeOrderNumHtml}</strong>. Here's what our team found compared to what was originally reported:</p>

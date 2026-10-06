@@ -1520,10 +1520,15 @@ textarea {
 }
 
 .editorial-title {
-  font-family: var(--font-instrument-serif), var(--font-syne), serif;
-  font-style: italic;
-  letter-spacing: -0.03em;
-  line-height: 0.92;
+  /* Was an italic serif display face (Instrument Serif). The platform is now
+     single-font PT Sans, so this keeps its role as the large display style
+     through weight and tracking rather than a second family. The italic is
+     dropped: a whole page heading set in italic sans reads as emphasis, not
+     as a title. */
+  font-family: var(--font-pt-sans), 'PT Sans', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
 }
 
 .eyebrow-label {
@@ -1558,6 +1563,17 @@ textarea {
 .sidebar-surface {
   background: hsl(var(--sidebar-bg));
   border-right: 1px solid hsl(var(--border) / 0.6);
+
+  /* This surface is DARK in both themes (--sidebar-bg is 13% lightness in
+     light mode, 5% in dark). Anything inside it using the page-level
+     `--foreground` token therefore painted near-black text on navy — on the
+     login page's branding panel that made the whole headline and the stat
+     numbers effectively invisible in light mode. The design system already
+     carries light-on-dark tokens for this surface; point the generic ones at
+     them so `text-foreground` / `text-muted-foreground` mean the right thing
+     for any descendant. Children that set their own colour are unaffected. */
+  --foreground: var(--sidebar-foreground);
+  --muted-foreground: var(--sidebar-muted);
 }
 .dark .sidebar-surface {
   background: rgba(8, 8, 10, 0.96);

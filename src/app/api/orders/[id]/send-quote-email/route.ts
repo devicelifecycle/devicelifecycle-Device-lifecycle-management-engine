@@ -285,7 +285,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       : ''
 
     const html = `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
+<div style="font-family:'PT Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a">
   <h2 style="color:#111">Your ${docType} — Order ${safeOrderNumHtml}</h2>
   <p>Hi ${customerName},</p>
   <p>${customIntroHtml || `Please find your <strong>${docType.toLowerCase()}</strong> for order <strong>${safeOrderNumHtml}</strong> attached as a PDF and Excel file.`}</p>

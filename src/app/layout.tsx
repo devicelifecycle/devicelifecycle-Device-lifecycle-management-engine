@@ -5,7 +5,7 @@
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
-import { Outfit, Syne, Instrument_Serif, Barlow, Poppins, Source_Serif_4 } from 'next/font/google'
+import { PT_Sans } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from '@/components/ui/toaster'
@@ -15,29 +15,23 @@ import { getServerTenant } from '@/lib/tenant-context'
 import { tenantBrandingStyle } from '@/lib/branding'
 import type { User } from '@/types'
 
-const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
-const syne = Syne({ subsets: ['latin'], variable: '--font-syne' })
-const instrumentSerif = Instrument_Serif({
+// PT Sans across the whole platform, matching gorecell.ca — their theme CSS
+// (dstheme/assets/styles.min.css + new.css) uses `PT Sans` in ~200 of its
+// font-family declarations and loads it from Google Fonts at 400/700 with
+// italics. This replaces the six-family stack that was here before (Outfit,
+// Syne, Instrument Serif, Barlow, Poppins, Source Serif 4).
+//
+// PT Sans ships only 400 and 700. Tailwind's font-medium (500) and
+// font-semibold (600) therefore resolve by CSS font matching to 400 and 700
+// respectively — no synthetic weights, and the same two-weight rhythm the
+// reference site has. Every family below points at the one face so nothing
+// can silently fall back to a system font.
+const ptSans = PT_Sans({
   subsets: ['latin'],
-  weight: '400',
+  weight: ['400', '700'],
   style: ['normal', 'italic'],
-  variable: '--font-instrument-serif',
-})
-const barlow = Barlow({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  variable: '--font-barlow',
-})
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-poppins',
-})
-const sourceSerif = Source_Serif_4({
-  subsets: ['latin'],
-  weight: ['400'],
-  style: ['normal', 'italic'],
-  variable: '--font-source-serif',
+  display: 'swap',
+  variable: '--font-pt-sans',
 })
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -95,7 +89,7 @@ export default async function RootLayout({
   const brandStyle = tenantBrandingStyle(tenant.branding)
 
   return (
-    <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${syne.variable} ${instrumentSerif.variable} ${barlow.variable} ${poppins.variable} ${sourceSerif.variable}`}>
+    <html lang="en" suppressHydrationWarning className={ptSans.variable}>
       <head>
         {/* Preconnect to Supabase so auth + DB calls skip the TLS handshake on first use */}
         {(() => {

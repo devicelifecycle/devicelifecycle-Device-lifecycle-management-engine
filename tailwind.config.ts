@@ -10,12 +10,16 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // One face platform-wide (PT Sans, per gorecell.ca). The named families
+      // are kept so the ~50 existing `font-body` / `font-heading` class uses
+      // keep working and keep meaning something — they all resolve to the same
+      // family now, which is the point of a single-font platform.
       fontFamily: {
-        sans: ['var(--font-outfit)', 'system-ui', 'sans-serif'],
-        heading: ['var(--font-instrument-serif)', 'var(--font-syne)', 'serif'],
-        body: ['var(--font-barlow)', 'var(--font-outfit)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-poppins)', 'system-ui', 'sans-serif'],
-        serif: ['var(--font-source-serif)', 'Georgia', 'serif'],
+        sans: ['var(--font-pt-sans)', 'PT Sans', 'system-ui', 'sans-serif'],
+        heading: ['var(--font-pt-sans)', 'PT Sans', 'system-ui', 'sans-serif'],
+        body: ['var(--font-pt-sans)', 'PT Sans', 'system-ui', 'sans-serif'],
+        display: ['var(--font-pt-sans)', 'PT Sans', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-pt-sans)', 'PT Sans', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: 'hsl(var(--border))',
