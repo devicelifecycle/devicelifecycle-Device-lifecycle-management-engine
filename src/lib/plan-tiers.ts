@@ -192,6 +192,15 @@ export function tierToPlanRow(tier: PlanTier) {
   }
 }
 
+/**
+ * The tier directly above `slug`, or undefined at the top of the ladder.
+ * Used to tell a customer who has hit a capacity limit which tier raises it.
+ */
+export function nextTierAbove(slug: string): PlanTier | undefined {
+  const i = PLAN_TIERS.findIndex((t) => t.slug === slug)
+  return i >= 0 ? PLAN_TIERS[i + 1] : undefined
+}
+
 /** True once the client has signed off and a real price exists. */
 export function isPriced(tier: PlanTier): boolean {
   return typeof tier.monthlyPrice === 'number' && tier.monthlyPrice > 0

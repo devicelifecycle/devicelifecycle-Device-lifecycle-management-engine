@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     // limit).
     if (auth.tenantId) {
       try {
-        const { data: tenant } = await auth.supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
+        const { data: tenant } = await auth.supabase.from('tenants').select('settings, plan').eq('id', auth.tenantId).maybeSingle()
         let license = tenantLimits(tenant?.settings).license
 
         // D1b per-customer plan override: a CUSTOMER-role user counts against
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
         }
         if (license.users >= 0) {
           const { count } = await auth.supabase.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', auth.tenantId)
-          const blocked = quotaBlockMessage(license.users, count ?? 0, 1, 'Users')
+          const blocked = quotaBlockMessage(license.users, count ?? 0, 1, 'Users', tenant?.plan as string | null)
           if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
         }
       } catch (err) {

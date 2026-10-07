@@ -12,6 +12,20 @@
 //
 // Pure by design: every date and money calculation here is unit-testable
 // without a database or a network.
+//
+// ⚠ NO RUNTIME CALLERS YET — deliberately, and this note is here so that fact
+// is a stated decision rather than something to discover later. This codebase
+// has a documented history of libraries nothing consumes (requireApiKey
+// guarding no routes, an RBAC catalog read by nothing, a settings.integrations
+// block consumed by nobody), so an unused module is a smell worth explaining.
+//
+// It stays unwired until payments exist (Phase 2 of
+// docs/DLM_COMMERCIAL_PLAN.md). Enforcing trials and lapses BEFORE there is a
+// way to pay would restrict a customer with no route to convert — the trial
+// would expire and they could do nothing about it. The rules are built and
+// tested first precisely because they must be right whichever gateway
+// collects, and because getting period maths wrong is the kind of bug that is
+// only discovered through a customer's invoice.
 
 export const SUBSCRIPTION_STATUSES = [
   'trialing',   // in a free trial; full access

@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   PLAN_TIERS, TIER_SLUGS, tierBySlug, incrementalFeatures, tierIncludes,
-  lowestTierWith, tierToPlanRow, isPriced,
+  lowestTierWith, tierToPlanRow, isPriced, nextTierAbove,
 } from '@/lib/plan-tiers'
-import { FEATURE_KEYS, type FeatureKey } from '@/lib/features'
+import { featureBlockMessage, quotaBlockMessage } from '@/lib/quota'
+import { FEATURE_KEYS, DEFAULT_FEATURES, type FeatureKey } from '@/lib/features'
 import { LIMIT_KEYS, UNLIMITED } from '@/lib/licensing'
 
 describe('the tier ladder', () => {
@@ -138,5 +139,40 @@ describe('tierToPlanRow', () => {
     expect(row.features).toMatchObject({ rve: true, reporting: true, trade_in: true })
     expect(row.features).not.toHaveProperty('api_access')
     expect(row.limits.customers).toBe(500)
+  })
+})
+
+describe('upgrade messaging — the runtime connection', () => {
+  it('nextTierAbove walks the ladder and stops at the top', () => {
+    expect(nextTierAbove('essentials')?.slug).toBe('professional')
+    expect(nextTierAbove('professional')?.slug).toBe('enterprise')
+    expect(nextTierAbove('enterprise')).toBeUndefined()
+    expect(nextTierAbove('nonsense')).toBeUndefined()
+  })
+
+  it('a blocked feature names the tier that unlocks it', () => {
+    const features = { ...DEFAULT_FEATURES, rve: false }
+    const msg = featureBlockMessage(features, 'rve', 'Residual Value Estimator')
+    expect(msg).toMatch(/not included in your plan/i)
+    expect(msg).toMatch(/Professional/)
+  })
+
+  it('falls back to generic wording for a feature no tier sells', () => {
+    const features = { ...DEFAULT_FEATURES, vendor_auction: false }
+    const msg = featureBlockMessage(features, 'vendor_auction', 'Vendor auction')
+    expect(msg).toMatch(/not enabled on this plan/i)
+    expect(msg).not.toMatch(/available on/i)
+  })
+
+  it('a hit limit names the tier that raises it, and says nothing misleading at the top', () => {
+    const mid = quotaBlockMessage(50, 50, 1, 'Customers', 'essentials')
+    expect(mid).toMatch(/Professional raises this limit/)
+    const top = quotaBlockMessage(50, 50, 1, 'Customers', 'enterprise')
+    expect(top).toMatch(/Upgrade the plan/)
+    expect(top).not.toMatch(/raises this limit/)
+  })
+
+  it('still works when the tier is unknown (platform tenant has no plan)', () => {
+    expect(quotaBlockMessage(5, 5, 1, 'Users', null)).toMatch(/Upgrade the plan/)
   })
 })

@@ -33,7 +33,11 @@ describe('orderCreationGate', () => {
   it('blocks when the module is switched off', async () => {
     const res = await orderCreationGate(fakeSupabase({ settings: { features: { trade_in: false } } }), 't1', 'trade_in')
     expect(res?.status).toBe(403)
-    expect((await res!.json()).error).toMatch(/Trade-In is not enabled/)
+    // The refusal must name the tier that unlocks the feature — "upgrade your
+    // plan" leaves the customer to work out which one.
+    const msg = (await res!.json()).error as string
+    expect(msg).toMatch(/Trade-In is not included in your plan/i)
+    expect(msg).toMatch(/Essentials/)
   })
 
   it('blocks at the monthly transaction cap and passes below it', async () => {

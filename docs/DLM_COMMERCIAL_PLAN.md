@@ -4,8 +4,13 @@
 product a VAR can buy: see pricing, sign up, pay, and keep paying — with
 payments running through whichever gateway the business wants.
 
-**Status of this document:** development plan. Nothing in Phase 1+ is built
-yet. Written 2026-10-06 against the live system, not against assumptions.
+**Status of this document:** development plan, updated 2026-10-07. The
+subscription engine and the three-tier model are now built (see each phase for
+what is and is not done). Written against the live system, not assumptions.
+
+**Companion:** `docs/CLIENT_APPROVAL_SUBSCRIPTION_MODEL.md` is the
+client-facing version — the tiers, the behaviour, and the decisions they need
+to sign off.
 
 ---
 
@@ -15,9 +20,9 @@ Verified against the live database and code, not assumed:
 
 | Piece | State |
 |---|---|
-| **Plans** | `subscription_plans` table, live rows: **Starter $99 / Growth $299 / Enterprise $999 CAD**, each with `limits` + `features` JSON. Admin CRUD at `/admin/plans` (edit / retire / delete, slug immutable). |
+| **Plans** | `subscription_plans`, now holding the three-tier model: **Essentials / Professional / Enterprise**, each with real `features` + `limits`. **Prices are NULL — pending client approval**, and render as "Price to be confirmed" rather than $0. The previous seeds (Starter/Growth/Enterprise at $99/$299/$999) had EMPTY features and limits, so all three granted the same thing — tiering existed in name only. Source of truth: `src/lib/plan-tiers.ts`. |
 | **Plan → tenant** | `tenants.plan` (slug). Selector on the VAR page. |
-| **Entitlement enforcement** | Real and fail-closed: `customers`, `users`, `storageMb`, `apiCallsPerMonth`, `transactionsPerMonth` all enforced on their create paths. Feature flags gate 5 modules. |
+| **Entitlement enforcement** | Real and fail-closed: `customers`, `users`, `storageMb`, `apiCallsPerMonth`, `transactionsPerMonth` all enforced on their create paths; feature flags gate the sellable modules. Refusals now **name the tier that unlocks the feature or raises the limit** (`lowestTierWith` / `nextTierAbove`), so a blocked customer is told what to do, not only what they can't. |
 | **Usage metering** | `tenant_usage_daily` (API calls, AI tokens) + storage measured from `storage.objects`. Already drives quota refusals. |
 | **Invoices (BB → VAR)** | `invoices` + line items + atomic numbering + `invoice_payments`, reconciliation by period, subscription-fee line supported. |
 | **Invoices (VAR → their customer)** | `customer_invoices` (Option B), with tax, balances, atomic payment RPC. |
@@ -39,8 +44,10 @@ connect it to *money actually moving* and to *self-serve*.
    (`/admin/tenants` + the new "VAR administrators" card).
 4. **No payment capture.** Every payment in the system is *recorded by hand*.
    Nothing charges anyone.
-5. **No subscription lifecycle.** `tenants.plan` is a label. There is no
-   trial, no renewal date, no past-due state, no cancellation, no dunning.
+5. **No subscription lifecycle *in the database*.** The rules are built and
+   tested (`src/lib/subscription.ts`), but `tenants.plan` is still just a
+   label: there is no `subscriptions` row, no renewal date, no past-due state.
+   Wiring lands with Phase 2 — see the note under Phase 1.
 6. **No billing portal for the VAR.** They can see invoices from us; they
    cannot change plan, update a card, or cancel.
 
@@ -100,6 +107,12 @@ cost visible first.
 ## 4. Development plan
 
 ### Phase 1 — Subscription engine (no money yet) · ~1 week
+**Status: the pure engine is BUILT and tested** (`src/lib/subscription.ts`, 22
+tests). It has **no runtime callers yet, on purpose** — enforcing trials and
+lapses before there is any way to pay would strand a customer whose trial
+expires with no route to convert. The table, the cron and the entitlement
+wiring land with Phase 2.
+
 The state machine, independent of any gateway. Verifiable immediately.
 
 - `subscriptions` table: tenant, plan, status (`trialing` / `active` /

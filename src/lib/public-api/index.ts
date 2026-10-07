@@ -95,11 +95,11 @@ export async function authorizeV1(
   const supabase = createServiceRoleClient()
   try {
     const { data: tenant, error } = await supabase
-      .from('tenants').select('settings').eq('id', key.tenantId).maybeSingle()
+      .from('tenants').select('settings, plan').eq('id', key.tenantId).maybeSingle()
     if (error) throw error
     const { license } = tenantLimits(tenant?.settings)
     const used = (await monthUsage(key.tenantId)).api_calls
-    const blocked = quotaBlockMessage(license.apiCallsPerMonth, used, 1, 'Monthly API call')
+    const blocked = quotaBlockMessage(license.apiCallsPerMonth, used, 1, 'Monthly API call', (tenant as { plan?: string | null } | null)?.plan ?? null)
     if (blocked) return { error: apiError(429, blocked, 'quota_exceeded') }
   } catch (err) {
     // Fail closed, same as featureGate: a quota we cannot verify is not a quota.

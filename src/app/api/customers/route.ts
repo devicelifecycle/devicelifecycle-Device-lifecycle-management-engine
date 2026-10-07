@@ -148,11 +148,11 @@ export async function POST(request: NextRequest) {
     // Fails CLOSED — a failed lookup must block the create, not silently allow it.
     if (!existingCustomerId && auth.tenantId) {
       try {
-        const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()
+        const { data: tenant } = await supabase.from('tenants').select('settings, plan').eq('id', auth.tenantId).maybeSingle()
         const { license } = tenantLimits(tenant?.settings)
         if (license.customers >= 0) {
           const { count } = await supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', auth.tenantId).eq('is_active', true)
-          const blocked = quotaBlockMessage(license.customers, count ?? 0, 1, 'Customers')
+          const blocked = quotaBlockMessage(license.customers, count ?? 0, 1, 'Customers', tenant?.plan as string | null)
           if (blocked) return NextResponse.json({ error: blocked }, { status: 403 })
         }
       } catch (err) {

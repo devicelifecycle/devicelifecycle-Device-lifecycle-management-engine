@@ -37,7 +37,7 @@ export async function orderCreationGate(
 ): Promise<NextResponse | null> {
   if (!tenantId) return null
   try {
-    const { data: tenant, error } = await supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle()
+    const { data: tenant, error } = await supabase.from('tenants').select('settings, plan').eq('id', tenantId).maybeSingle()
     if (error) throw error
     const { license, features } = tenantLimits(tenant?.settings)
     const isCpo = orderType === 'cpo'
@@ -48,7 +48,7 @@ export async function orderCreationGate(
         .from('orders').select('id', { count: 'exact', head: true })
         .eq('tenant_id', tenantId).gte('created_at', monthStartUtc())
       if (cErr) throw cErr
-      const qBlock = quotaBlockMessage(license.transactionsPerMonth, used ?? 0, count, 'Transactions this month')
+      const qBlock = quotaBlockMessage(license.transactionsPerMonth, used ?? 0, count, 'Transactions this month', (tenant as { plan?: string | null } | null)?.plan ?? null)
       if (qBlock) return NextResponse.json({ error: qBlock }, { status: 403 })
     }
     return null
