@@ -20,7 +20,8 @@ interface Plan {
   id: string
   name: string
   slug: string
-  monthlyPrice: number
+  /** null = price not yet set (pending client approval of the tier model). */
+  monthlyPrice: number | null
   currency: string
   isActive: boolean
   limits: Record<string, number>
@@ -159,8 +160,20 @@ export default function PlansPageImpl() {
               <CardDescription className="font-mono text-xs">{p.slug}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <p className="text-2xl font-bold text-[#0f1e3d] dark:text-white">{formatCurrency(p.monthlyPrice, p.currency)}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
-              <p className="text-xs text-muted-foreground">{formatCurrency(annualize(p.monthlyPrice), p.currency)} / yr</p>
+              {/* A null price means "not decided yet", which is NOT the same as
+                  free. Rendering it through formatCurrency would print $0.00 and
+                  read as a deliberate decision nobody made. */}
+              {p.monthlyPrice === null ? (
+                <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
+                  Price to be confirmed
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">pending approval</span>
+                </p>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-[#0f1e3d] dark:text-white">{formatCurrency(p.monthlyPrice, p.currency)}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+                  <p className="text-xs text-muted-foreground">{formatCurrency(annualize(p.monthlyPrice), p.currency)} / yr</p>
+                </>
+              )}
               <div className="border-t pt-2 text-xs text-muted-foreground">
                 <p>Customers: {cap(p.limits.customers)} · Users: {cap(p.limits.users)}</p>
               </div>
@@ -195,7 +208,8 @@ export default function PlansPageImpl() {
 
 function EditPlanDialog({ plan, onClose, onSaved }: { plan: Plan; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(plan.name)
-  const [price, setPrice] = useState(String(plan.monthlyPrice))
+  // Empty rather than the string "null" when no price is set yet.
+  const [price, setPrice] = useState(plan.monthlyPrice === null ? '' : String(plan.monthlyPrice))
   const [customers, setCustomers] = useState(String(plan.limits.customers))
   const [users, setUsers] = useState(String(plan.limits.users))
   const [saving, setSaving] = useState(false)
