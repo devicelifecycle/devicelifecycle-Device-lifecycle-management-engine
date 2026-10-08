@@ -11,7 +11,7 @@
 // attempt, so this report deliberately omits a failed-login number.
 
 import { NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import {
   monthBounds,
@@ -30,9 +30,8 @@ const KPI_WINDOW_DAYS = 90
 const KPI_ROW_CAP = 5000
 
 export async function GET() {
-  const auth = await requireAuth()
-  if (!auth) return unauthorized()
-  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requirePermission('reports.view')
+  if ('error' in guard) return guard.error
 
   const supabase = createServiceRoleClient()
   const { thisMonthStart, lastMonthStart } = monthBounds(new Date())

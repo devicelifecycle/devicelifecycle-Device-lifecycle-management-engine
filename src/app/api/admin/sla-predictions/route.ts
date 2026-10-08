@@ -3,18 +3,15 @@
 // ============================================================================
 
 import { NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { getEarlyWarnings } from '@/services/sla-prediction.service'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const auth = await requireAuth()
-    if (!auth) return unauthorized()
-    if (!['admin', 'coe_manager'].includes(auth.profile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const guard = await requirePermission('reports.view')
+    if ('error' in guard) return guard.error
 
     const result = await getEarlyWarnings()
     return NextResponse.json(result)

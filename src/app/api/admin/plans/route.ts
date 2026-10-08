@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { normalizePlan } from '@/lib/plans'
 import { z } from 'zod'
@@ -18,16 +18,9 @@ const createSchema = z.object({
   features: z.record(z.boolean()).optional(),
 })
 
-async function adminOnly() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
-
 export async function GET() {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('licensing.manage')
+  if ('error' in guard) return guard.error
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase
     .from('subscription_plans')
@@ -38,8 +31,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('licensing.manage')
+  if ('error' in guard) return guard.error
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })

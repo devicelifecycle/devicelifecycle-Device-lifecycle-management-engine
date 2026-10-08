@@ -3,14 +3,13 @@
 // ============================================================================
 
 import { NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const auth = await requireAuth()
-  if (!auth) return unauthorized()
-  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requirePermission('platform.manage')
+  if ('error' in guard) return guard.error
 
   const supabase = createServiceRoleClient()
   const { data: roles, error } = await supabase

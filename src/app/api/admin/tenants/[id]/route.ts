@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveBranding } from '@/lib/branding'
 import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
@@ -107,16 +107,9 @@ const patchSchema = z.object({
   // emailFromAddress / smsSenderId, consumed in email.service.ts).
 })
 
-async function guard() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
-
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await guard()
-  if (g.error) return g.error
+  const g = await requirePermission('tenant.view')
+  if ('error' in g) return g.error
   const { id } = await params
 
   const supabase = createServiceRoleClient()
@@ -141,8 +134,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await guard()
-  if (g.error) return g.error
+  const g = await requirePermission('tenant.manage')
+  if ('error' in g) return g.error
   const { id } = await params
 
   const parsed = patchSchema.safeParse(await request.json().catch(() => null))

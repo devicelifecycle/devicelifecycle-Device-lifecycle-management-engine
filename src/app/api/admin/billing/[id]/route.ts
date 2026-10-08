@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { canTransitionInvoice, type InvoiceStatus } from '@/lib/billing'
 import { z } from 'zod'
@@ -16,16 +16,9 @@ const patchSchema = z.object({
   credit: z.number().min(0).max(1_000_000).optional(),
 })
 
-async function adminOnly() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
-
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('billing.manage')
+  if ('error' in guard) return guard.error
   const { id } = await params
 
   const parsed = patchSchema.safeParse(await request.json().catch(() => null))

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { SLAService } from '@/services/sla.service'
 import { createSLARuleSchema } from '@/lib/validations'
 export const dynamic = 'force-dynamic'
@@ -11,9 +11,8 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth()
-    if (!auth) return unauthorized()
-    if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const guard = await requirePermission('platform.manage')
+    if ('error' in guard) return guard.error
 
     const rules = await SLAService.getSLARules()
     return NextResponse.json({ data: rules })
@@ -28,9 +27,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth()
-    if (!auth) return unauthorized()
-    if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const guard = await requirePermission('platform.manage')
+    if ('error' in guard) return guard.error
 
     const body = await request.json()
     const validationResult = createSLARuleSchema.safeParse(body)

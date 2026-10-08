@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 export const dynamic = 'force-dynamic'
 
@@ -24,13 +24,6 @@ const ALLOWED_MIME: Record<string, string> = {
 }
 const MAX_RAW_BYTES = 512 * 1024      // raw upload cap
 const MAX_DATA_URL_BYTES = 200 * 1024 // encoded data-URL cap (fallback mode)
-
-async function adminOnly() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
 
 // Load the current branding JSONB for read-modify-write merges.
 async function loadBranding(supabase: SupabaseClient, id: string): Promise<{
@@ -46,8 +39,8 @@ async function loadBranding(supabase: SupabaseClient, id: string): Promise<{
 
 // POST — upload a logo: multipart formData "file", png/jpeg/webp/svg, <=512KB.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('tenant.manage')
+  if ('error' in guard) return guard.error
   const { id } = await params
 
   const form = await request.formData().catch(() => null)
@@ -88,8 +81,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
 // DELETE — remove the logo (drop the logoUrl key), keeping all other keys.
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('tenant.manage')
+  if ('error' in guard) return guard.error
   const { id } = await params
 
   const supabase = createServiceRoleClient()

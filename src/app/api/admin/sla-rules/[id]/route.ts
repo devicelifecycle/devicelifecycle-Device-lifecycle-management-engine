@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { SLAService } from '@/services/sla.service'
 import { updateSLARuleSchema } from '@/lib/validations'
 import type { SLARule } from '@/types'
@@ -15,9 +15,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAuth()
-    if (!auth) return unauthorized()
-    if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const guard = await requirePermission('platform.manage')
+    if ('error' in guard) return guard.error
 
     const body = await request.json()
     const validationResult = updateSLARuleSchema.safeParse(body)
@@ -46,9 +45,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAuth()
-    if (!auth) return unauthorized()
-    if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const guard = await requirePermission('platform.manage')
+    if ('error' in guard) return guard.error
 
     await SLAService.deleteSLARule((await params).id)
     return NextResponse.json({ success: true })

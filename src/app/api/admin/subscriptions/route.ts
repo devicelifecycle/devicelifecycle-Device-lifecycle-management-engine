@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import {
   listAllSubscriptions, createTrialSubscription, createPaidSubscription,
@@ -19,16 +19,9 @@ const createSchema = z.object({
   billing_interval: z.enum(['month', 'year']).optional(),
 })
 
-async function adminOnly() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
-
 export async function GET(request: NextRequest) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('billing.view')
+  if ('error' in guard) return guard.error
 
   const url = new URL(request.url)
   const status = url.searchParams.get('status') as 'trialing' | 'active' | 'past_due' | 'cancelled' | 'expired' | null
@@ -50,8 +43,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('billing.manage')
+  if ('error' in guard) return guard.error
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {

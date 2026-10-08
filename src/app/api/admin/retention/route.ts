@@ -13,7 +13,7 @@
 // an execution report.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import {
   RETENTION_TARGETS, RETENTION_MIN_DAYS, RETENTION_MAX_DAYS,
@@ -24,9 +24,8 @@ import { executeRetention } from '@/lib/retention-execute'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth) return unauthorized()
-  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requirePermission('platform.manage')
+  if ('error' in guard) return guard.error
 
   // Optional what-if override. Absent → each tenant's own policy.
   const rawDays = req.nextUrl.searchParams.get('days')
@@ -109,9 +108,8 @@ export async function GET(req: NextRequest) {
  * so this is inert until an operator sets a number on a VAR's page.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth) return unauthorized()
-  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requirePermission('platform.manage')
+  if ('error' in guard) return guard.error
 
   const body = (await req.json().catch(() => null)) as { confirm?: unknown } | null
   if (body?.confirm !== 'DELETE') {
@@ -122,7 +120,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await executeRetention(createServiceRoleClient(), auth.profile.id)
+    const result = await executeRetention(createServiceRoleClient(), guard.auth.profile.id)
     return NextResponse.json(result)
   } catch (err) {
     console.error('retention: manual run failed', err)

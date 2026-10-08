@@ -4,7 +4,7 @@
 // Recording a payment that clears the balance auto-marks a "sent" invoice paid.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { summarizePayments, type PaymentRecord } from '@/lib/payments'
 import { canTransitionInvoice, type InvoiceStatus } from '@/lib/billing'
@@ -17,21 +17,14 @@ const createSchema = z.object({
   note: z.string().max(500).optional(),
 })
 
-async function adminOnly() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
-
 async function loadInvoice(supabase: ReturnType<typeof createServiceRoleClient>, id: string) {
   const { data } = await supabase.from('invoices').select('id, total, status').eq('id', id).maybeSingle()
   return data
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('billing.view')
+  if ('error' in guard) return guard.error
   const { id } = await params
   const supabase = createServiceRoleClient()
 
@@ -45,8 +38,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('billing.manage')
+  if ('error' in guard) return guard.error
   const { id } = await params
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
@@ -64,7 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     p_kind: parsed.data.kind,
     p_amount: parsed.data.amount,
     p_note: parsed.data.note ?? null,
-    p_created_by: g.auth.profile.id,
+    p_created_by: guard.auth.profile.id,
   })
   if (error) {
     console.error('Failed to record payment:', error)

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { parsePaging } from '@/lib/paging'
 import { z } from 'zod'
@@ -20,9 +20,8 @@ function slugify(name: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth) return unauthorized()
-  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requirePermission('tenant.view')
+  if ('error' in guard) return guard.error
 
   const { page, limit, from, to } = parsePaging(request)
   const typeFilter = new URL(request.url).searchParams.get('type') // 'platform' | 'var' | null
@@ -41,9 +40,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth) return unauthorized()
-  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requirePermission('tenant.manage')
+  if ('error' in guard) return guard.error
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {

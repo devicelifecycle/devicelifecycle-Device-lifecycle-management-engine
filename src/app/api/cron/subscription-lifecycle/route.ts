@@ -16,6 +16,8 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { readServerEnv } from '@/lib/server-env'
 import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
 import { DUNNING_GRACE_DAYS } from '@/lib/subscription'
+import { EmailService } from '@/services/email.service'
+import { getAppPath } from '@/lib/app-url'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -42,19 +44,40 @@ export async function GET(request: NextRequest) {
     const supabase = createServiceRoleClient()
     const now = new Date().toISOString()
     const graceCutoff = new Date(Date.now() - DUNNING_GRACE_DAYS * 86_400_000).toISOString()
+    const billingUrl = getAppPath('/var/billing')
+
+    async function notifyTenantAdmins(
+      tenantId: string,
+      planSlug: string,
+      sendFn: (to: string, name: string, plan: string, tenantId: string) => Promise<boolean>,
+    ) {
+      const { data: admins } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .eq('tenant_id', tenantId)
+        .eq('role', 'var_entity_admin')
+        .eq('is_active', true)
+        .limit(10)
+      for (const admin of admins ?? []) {
+        if (admin.email && !admin.email.endsWith('@login.local')) {
+          await sendFn(admin.email, admin.full_name ?? 'Admin', planSlug, tenantId)
+        }
+      }
+    }
 
     const result = {
       trialsExpired: 0,
       cancelledExpired: 0,
       markedPastDue: 0,
       pastDueExpired: 0,
+      emailsSent: 0,
       errors: [] as string[],
     }
 
     // 1. Expire trials whose period has ended
     const { data: expiredTrials } = await supabase
       .from('subscriptions')
-      .select('id, tenant_id')
+      .select('id, tenant_id, plan_slug')
       .eq('status', 'trialing')
       .lte('current_period_end', now)
       .limit(500)
@@ -76,13 +99,18 @@ export async function GET(request: NextRequest) {
           to_status: 'expired',
           metadata: { cron: true },
         })
+        await notifyTenantAdmins(sub.tenant_id, sub.plan_slug, async (to, name, plan, tid) => {
+          const sent = await EmailService.sendSubscriptionExpiredEmail({ to, recipientName: name, planName: plan, reason: 'Trial period ended without a payment method', tenantId: tid })
+          if (sent) result.emailsSent++
+          return sent
+        })
       }
     }
 
     // 2. Expire cancelled subscriptions past their period end
     const { data: cancelledDue } = await supabase
       .from('subscriptions')
-      .select('id, tenant_id')
+      .select('id, tenant_id, plan_slug')
       .eq('status', 'cancelled')
       .eq('cancel_at_period_end', true)
       .lte('current_period_end', now)
@@ -112,7 +140,7 @@ export async function GET(request: NextRequest) {
     //    (if they haven't been renewed by a charge)
     const { data: activeDue } = await supabase
       .from('subscriptions')
-      .select('id, tenant_id')
+      .select('id, tenant_id, plan_slug')
       .eq('status', 'active')
       .eq('cancel_at_period_end', false)
       .lte('current_period_end', now)
@@ -135,13 +163,18 @@ export async function GET(request: NextRequest) {
           to_status: 'past_due',
           metadata: { cron: true },
         })
+        await notifyTenantAdmins(sub.tenant_id, sub.plan_slug, async (to, name, plan, tid) => {
+          const sent = await EmailService.sendSubscriptionPastDueEmail({ to, recipientName: name, planName: plan, graceDays: DUNNING_GRACE_DAYS, billingUrl, tenantId: tid })
+          if (sent) result.emailsSent++
+          return sent
+        })
       }
     }
 
     // 4. Expire past_due subscriptions whose grace period has elapsed
     const { data: pastDueExpired } = await supabase
       .from('subscriptions')
-      .select('id, tenant_id')
+      .select('id, tenant_id, plan_slug')
       .eq('status', 'past_due')
       .lte('past_due_since', graceCutoff)
       .limit(500)
@@ -162,6 +195,11 @@ export async function GET(request: NextRequest) {
           from_status: 'past_due',
           to_status: 'expired',
           metadata: { cron: true, graceDays: DUNNING_GRACE_DAYS },
+        })
+        await notifyTenantAdmins(sub.tenant_id, sub.plan_slug, async (to, name, plan, tid) => {
+          const sent = await EmailService.sendSubscriptionExpiredEmail({ to, recipientName: name, planName: plan, reason: `Payment overdue for ${DUNNING_GRACE_DAYS} days — dunning grace exhausted`, tenantId: tid })
+          if (sent) result.emailsSent++
+          return sent
         })
       }
     }

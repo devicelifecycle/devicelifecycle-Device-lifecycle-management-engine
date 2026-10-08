@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { AuditService } from '@/services/audit.service'
 import type { AuditAction } from '@/types'
 
@@ -11,13 +11,8 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth()
-    if (!auth) return unauthorized()
-    const { profile } = auth
-
-    if (profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const guard = await requirePermission('audit.view')
+    if ('error' in guard) return guard.error
 
     const searchParams = request.nextUrl.searchParams
     const format = searchParams.get('format')

@@ -8,7 +8,7 @@
 // all editable; retiring (is_active=false) keeps existing assignments working.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { normalizePlan } from '@/lib/plans'
 import { isValidUUID } from '@/lib/utils'
@@ -26,13 +26,6 @@ const patchSchema = z.object({
 
 const PLAN_COLUMNS = 'id, name, slug, monthly_price, currency, limits, features, is_active, created_at'
 
-async function adminOnly() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
-
 /** How many tenants are currently assigned this plan slug. */
 async function tenantsOnPlan(
   supabase: ReturnType<typeof createServiceRoleClient>,
@@ -45,8 +38,8 @@ async function tenantsOnPlan(
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('licensing.manage')
+  if ('error' in guard) return guard.error
   const { id } = await params
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid plan id' }, { status: 400 })
 
@@ -84,8 +77,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('licensing.manage')
+  if ('error' in guard) return guard.error
   const { id } = await params
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid plan id' }, { status: 400 })
 

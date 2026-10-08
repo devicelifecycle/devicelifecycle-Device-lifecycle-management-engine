@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
 import { isValidUUID } from '@/lib/utils'
@@ -31,18 +31,11 @@ const createSchema = z.object({
   phone: z.string().max(40).optional(),
 })
 
-async function guard(id: string) {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  if (!isValidUUID(id)) return { error: NextResponse.json({ error: 'Invalid tenant id' }, { status: 400 }) }
-  return { auth }
-}
-
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const g = await requirePermission('tenant.view')
+  if ('error' in g) return g.error
   const { id } = await params
-  const g = await guard(id)
-  if (g.error) return g.error
+  if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid tenant id' }, { status: 400 })
 
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase
@@ -59,9 +52,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const g = await requirePermission('tenant.manage')
+  if ('error' in g) return g.error
   const { id } = await params
-  const g = await guard(id)
-  if (g.error) return g.error
+  if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid tenant id' }, { status: 400 })
 
   const rl = await checkRateLimitAsync(`tenant-admin-create:${getClientIp(req)}`, RATE_LIMITS.api)
   if (!rl.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })

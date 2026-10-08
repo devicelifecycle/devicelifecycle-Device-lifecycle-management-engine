@@ -6,7 +6,7 @@
 // attached to a user in another tenant.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
@@ -17,13 +17,6 @@ const bodySchema = z.object({
   email: z.string().email(),
   role_key: z.string().min(2).max(60),
 })
-
-async function adminOnly() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
 
 async function resolve(body: unknown) {
   const parsed = bodySchema.safeParse(body)
@@ -46,8 +39,8 @@ async function resolve(body: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('user.update')
+  if ('error' in guard) return guard.error
   const r = await resolve(await request.json().catch(() => null))
   if (r.error) return r.error
 
@@ -60,8 +53,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('user.update')
+  if ('error' in guard) return guard.error
   const r = await resolve(await request.json().catch(() => null))
   if (r.error) return r.error
 

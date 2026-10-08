@@ -802,4 +802,90 @@ export class EmailService {
 
     return this.sendEmail(to, 'Time for your next trade-in batch', html, brand)
   }
+
+  static async sendSubscriptionPastDueEmail(params: {
+    to: string
+    recipientName: string
+    planName: string
+    graceDays: number
+    billingUrl: string
+    tenantId?: string | null
+  }): Promise<boolean> {
+    const { to, planName, graceDays, billingUrl } = params
+    const recipientName = escapeHtml(params.recipientName)
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
+
+    const html = emailShell(`
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Your subscription to the <strong>${escapeHtml(planName)}</strong> plan is past due. We were unable to process your payment.</p>
+              <p style="margin:0 0 24px;color:#ef4444;font-size:14px;font-weight:500;">You have ${graceDays} days to resolve this before your account access is restricted.</p>
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background:#1d4ed8;border-radius:8px;">
+                    <a href="${billingUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">View Billing</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">If you believe this is an error, please contact support.</p>
+`, 'full', brand)
+
+    return this.sendEmail(to, `Action required: payment overdue — ${brand.name}`, html, brand)
+  }
+
+  static async sendSubscriptionExpiredEmail(params: {
+    to: string
+    recipientName: string
+    planName: string
+    reason: string
+    tenantId?: string | null
+  }): Promise<boolean> {
+    const { to, planName, reason } = params
+    const recipientName = escapeHtml(params.recipientName)
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
+
+    const html = emailShell(`
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Your <strong>${escapeHtml(planName)}</strong> subscription has expired.</p>
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#fef2f2;border-radius:8px;width:100%;border:1px solid #fecaca;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 4px;color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Reason</p>
+                    <p style="margin:0;color:#dc2626;font-size:15px;font-weight:600;">${escapeHtml(reason)}</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 8px;color:#3f3f46;font-size:15px;">Your account access has been restricted. To restore full access, please contact your ${brand.name} account representative.</p>
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">Your data is preserved and will be available when your subscription is reactivated.</p>
+`, 'full', brand)
+
+    return this.sendEmail(to, `Subscription expired — ${brand.name}`, html, brand)
+  }
+
+  static async sendTrialExpiringEmail(params: {
+    to: string
+    recipientName: string
+    planName: string
+    daysLeft: number
+    billingUrl: string
+    tenantId?: string | null
+  }): Promise<boolean> {
+    const { to, planName, daysLeft, billingUrl } = params
+    const recipientName = escapeHtml(params.recipientName)
+    const brand = await resolveTenantBrandLabel(params.tenantId, createServiceRoleClient())
+
+    const html = emailShell(`
+              <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your free trial of the <strong>${escapeHtml(planName)}</strong> plan ends in <strong>${daysLeft} day${daysLeft === 1 ? '' : 's'}</strong>. Add a payment method to continue using the platform without interruption.</p>
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background:#1d4ed8;border-radius:8px;">
+                    <a href="${billingUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;">Set Up Billing</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;color:#a1a1aa;font-size:13px;">Questions about pricing? Contact your ${brand.name} account representative.</p>
+`, 'full', brand)
+
+    return this.sendEmail(to, `Trial ending soon — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`, html, brand)
+  }
 }

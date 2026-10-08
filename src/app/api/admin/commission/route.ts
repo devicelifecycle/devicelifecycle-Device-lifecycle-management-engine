@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { commissionConfigFromSettings } from '@/lib/commission'
 import { z } from 'zod'
@@ -30,9 +31,9 @@ const configSchema = z.object({
 })
 
 export async function GET() {
-  const auth = await requireAuth()
-  if (!auth) return unauthorized()
-  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requirePermission('commission.view')
+  if ('error' in guard) return guard.error
+  const { auth } = guard
 
   const tenantId = auth.tenantId ?? PLATFORM_TENANT_ID
   const supabase = createServiceRoleClient()
@@ -41,9 +42,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireAuth()
-  if (!auth) return unauthorized()
-  if (auth.effectiveRole !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requirePermission('commission.manage')
+  if ('error' in guard) return guard.error
+  const { auth } = guard
 
   const parsed = configSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {

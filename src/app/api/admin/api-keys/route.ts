@@ -5,7 +5,7 @@
 // creation, and cannot be retrieved again.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { generateApiKey } from '@/lib/api-keys'
 import { z } from 'zod'
@@ -17,18 +17,11 @@ const createSchema = z.object({
 })
 const revokeSchema = z.object({ id: z.string().uuid() })
 
-async function adminOnly() {
-  const auth = await requireAuth()
-  if (!auth) return { error: unauthorized() as NextResponse }
-  if (auth.effectiveRole !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { auth }
-}
-
 const PLATFORM_TENANT_ID = 'a0000000-0000-4000-a000-0000000000bb'
 
 export async function GET() {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('platform.manage')
+  if ('error' in guard) return guard.error
   const supabase = createServiceRoleClient()
   // Note: key_hash is deliberately never selected.
   const { data, error } = await supabase
@@ -40,19 +33,19 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('platform.manage')
+  if ('error' in guard) return guard.error
   const parsed = createSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
 
   const key = generateApiKey()
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase.from('api_keys').insert({
-    tenant_id: parsed.data.tenant_id ?? g.auth.tenantId ?? PLATFORM_TENANT_ID,
+    tenant_id: parsed.data.tenant_id ?? guard.auth.tenantId ?? PLATFORM_TENANT_ID,
     name: parsed.data.name,
     key_prefix: key.prefix,
     key_hash: key.hash,
-    created_by: g.auth.profile.id,
+    created_by: guard.auth.profile.id,
   }).select('id, name, key_prefix, created_at').single()
   if (error) {
     console.error('Failed to create API key:', error)
@@ -63,8 +56,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const g = await adminOnly()
-  if (g.error) return g.error
+  const guard = await requirePermission('platform.manage')
+  if ('error' in guard) return guard.error
   const parsed = revokeSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
 

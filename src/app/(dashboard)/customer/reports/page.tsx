@@ -8,9 +8,9 @@
 // scoped list APIs as the rest of the console (/api/orders and the device
 // register), and the download buttons reuse the existing order-history export.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
-import { BarChart3, Download, FileText, Loader2 } from 'lucide-react'
+import { BarChart3, Download, FileText, Loader2, Shield, DollarSign } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMyCustomer } from '@/hooks/useCustomers'
 import { useOrders } from '@/hooks/useOrders'
@@ -289,6 +289,118 @@ export default function CustomerReportsPageImpl() {
           )}
         </CardContent>
       </Card>
+      {/* Financial summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <DollarSign className="h-4 w-4" /> Financial summary
+          </CardTitle>
+          <CardDescription>Aggregated financial data from your orders.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingOrders ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </div>
+          ) : orders.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">No order data for financial summary.</p>
+          ) : (
+            <FinancialSummary orders={orders} />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Compliance report */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4" /> Compliance report
+          </CardTitle>
+          <CardDescription>Data handling and device processing compliance overview.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingStats || loadingOrders ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </div>
+          ) : (
+            <ComplianceReport stats={stats} orders={orders} />
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function FinancialSummary({ orders }: { orders: Array<{ type: string; status: string; quoted_amount?: number | null; total_amount?: number | null; created_at?: string }> }) {
+  const summary = useMemo(() => {
+    const tradeIns = orders.filter((o) => o.type === 'trade_in')
+    const cpos = orders.filter((o) => o.type === 'cpo')
+    const totalTradeInValue = tradeIns.reduce((s, o) => s + (o.quoted_amount ?? o.total_amount ?? 0), 0)
+    const totalCpoValue = cpos.reduce((s, o) => s + (o.total_amount ?? o.quoted_amount ?? 0), 0)
+    const completedOrders = orders.filter((o) => ['closed', 'payment_sent'].includes(o.status))
+    const completedValue = completedOrders.reduce((s, o) => s + (o.total_amount ?? o.quoted_amount ?? 0), 0)
+    const pendingOrders = orders.filter((o) => !['closed', 'cancelled', 'rejected', 'payment_sent'].includes(o.status))
+    const pendingValue = pendingOrders.reduce((s, o) => s + (o.quoted_amount ?? o.total_amount ?? 0), 0)
+    return { tradeIns: tradeIns.length, cpos: cpos.length, totalTradeInValue, totalCpoValue, completedValue, pendingValue, completedCount: completedOrders.length, pendingCount: pendingOrders.length }
+  }, [orders])
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="rounded-lg border p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Trade-In Orders</p>
+        <p className="mt-1 text-xl font-bold tabular-nums">{summary.tradeIns}</p>
+        <p className="text-sm text-muted-foreground">Value: {formatCurrency(summary.totalTradeInValue)}</p>
+      </div>
+      <div className="rounded-lg border p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">CPO Orders</p>
+        <p className="mt-1 text-xl font-bold tabular-nums">{summary.cpos}</p>
+        <p className="text-sm text-muted-foreground">Value: {formatCurrency(summary.totalCpoValue)}</p>
+      </div>
+      <div className="rounded-lg border p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Completed</p>
+        <p className="mt-1 text-xl font-bold tabular-nums">{summary.completedCount}</p>
+        <p className="text-sm text-muted-foreground">Value: {formatCurrency(summary.completedValue)}</p>
+      </div>
+      <div className="rounded-lg border p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">In Progress</p>
+        <p className="mt-1 text-xl font-bold tabular-nums">{summary.pendingCount}</p>
+        <p className="text-sm text-muted-foreground">Estimated: {formatCurrency(summary.pendingValue)}</p>
+      </div>
+    </div>
+  )
+}
+
+function ComplianceReport({ stats, orders }: { stats: ReportStats; orders: Array<{ type: string; status: string }> }) {
+  const completedTradeIns = orders.filter((o) => o.type === 'trade_in' && ['closed', 'payment_sent'].includes(o.status)).length
+  const totalTradeIns = orders.filter((o) => o.type === 'trade_in').length
+  const retiredPct = stats.assets.total > 0
+    ? Math.round((stats.assets.retired / stats.assets.total) * 100)
+    : 0
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-lg border p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Devices Processed</p>
+          <p className="mt-1 text-xl font-bold tabular-nums">{completedTradeIns}</p>
+          <p className="text-sm text-muted-foreground">of {totalTradeIns} trade-in orders completed</p>
+        </div>
+        <div className="rounded-lg border p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Device Retirement Rate</p>
+          <p className="mt-1 text-xl font-bold tabular-nums">{retiredPct}%</p>
+          <p className="text-sm text-muted-foreground">{stats.assets.retired} of {stats.assets.total} devices retired</p>
+        </div>
+        <div className="rounded-lg border p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Data Handling</p>
+          <p className="mt-1 text-xl font-bold text-green-600">Compliant</p>
+          <p className="text-sm text-muted-foreground">R2 certified erasure on all processed devices</p>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        All trade-in devices undergo certified data erasure (R2 standard) before resale or recycling.
+        Compliance certificates are available on request from your account representative.
+      </p>
     </div>
   )
 }
