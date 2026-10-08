@@ -4,9 +4,10 @@
 product a VAR can buy: see pricing, sign up, pay, and keep paying — with
 payments running through whichever gateway the business wants.
 
-**Status of this document:** development plan, updated 2026-10-07. The
-subscription engine and the three-tier model are now built (see each phase for
-what is and is not done). Written against the live system, not assumptions.
+**Status of this document:** development plan, updated 2026-10-07. Phases 1–3
+are **COMPLETE** — the subscription engine, Stripe payment integration, public
+pricing page, self-serve signup, and full CTA update are built, typechecked,
+and tested. Only Phases 4–5 remain.
 
 **Companion:** `docs/CLIENT_APPROVAL_SUBSCRIPTION_MODEL.md` is the
 client-facing version — the tiers, the behaviour, and the decisions they need
@@ -106,43 +107,48 @@ cost visible first.
 
 ## 4. Development plan
 
-### Phase 1 — Subscription engine (no money yet) · ~1 week
-**Status: the pure engine is BUILT and tested** (`src/lib/subscription.ts`, 22
-tests). It has **no runtime callers yet, on purpose** — enforcing trials and
-lapses before there is any way to pay would strand a customer whose trial
-expires with no route to convert. The table, the cron and the entitlement
-wiring land with Phase 2.
+### Phase 1 — Subscription engine (no money yet) · COMPLETE
+**Status: BUILT.** Pure engine (`src/lib/subscription.ts`, 22 tests) + DB
+layer (`subscription-service.ts`, `20261008000000_subscriptions.sql`).
 
-The state machine, independent of any gateway. Verifiable immediately.
+Built and deployed:
+- `subscriptions` table with RLS, auto-updated_at trigger, unique active-per-tenant index.
+- `subscription_events` audit trail for every lifecycle transition.
+- `subscription-service.ts` — DB CRUD bridging pure engine to Postgres.
+- Nightly cron (`/api/cron/subscription-lifecycle`) — expires trials, expires
+  cancelled-past-period, marks past-due, expires dunning-elapsed.
+- Admin APIs: `GET/POST /api/admin/subscriptions`, `GET/PATCH /api/admin/subscriptions/[id]`.
+- `require-subscription.ts` — access guard: read-only on expired/past-due, never lockout.
+- **Deliverable:** a VAR on a 14-day trial that genuinely expires → read-only.
 
-- `subscriptions` table: tenant, plan, status (`trialing` / `active` /
-  `past_due` / `cancelled` / `expired`), `current_period_start/end`,
-  `trial_ends_at`, `cancel_at_period_end`.
-- Pure `src/lib/subscription.ts`: period maths, proration on plan change,
-  trial expiry, what a `past_due` tenant may still do.
-- Entitlements read the **subscription**, not `tenants.plan` — so a lapsed
-  subscription actually restricts the product. (Today `tenants.plan` is a
-  label with no lifecycle.)
-- Nightly cron: advance periods, expire trials, mark past-due.
-- **Deliverable:** a VAR can be put on a 14-day trial that genuinely expires.
+### Phase 2 — Payment abstraction + Stripe · COMPLETE
+**Status: BUILT.** Interface, Stripe adapter, webhooks, VAR payment APIs.
 
-### Phase 2 — Payment abstraction + Stripe · ~1 week
-- `PaymentProvider` interface + registry (above), `provider` column on the
-  payment method so multiple can coexist.
-- `payment_methods` table — token + brand + last4 + expiry only, never a PAN.
-- Stripe adapter: hosted fields, charge, refund, webhook verification.
-- Webhook endpoint with signature verification + idempotency (replayed
-  webhooks are normal, not exceptional).
-- **Deliverable:** a real card charged in Stripe test mode, end to end.
+Built and deployed:
+- `payment_methods` table + `payment_charges` table + `webhook_events` dedup table
+  (`20261008000001_payment_methods.sql`).
+- `PaymentProvider` interface + registry (`payment-provider.ts`).
+- Stripe adapter (`payment-providers/stripe.ts`) — hosted fields, charge via
+  PaymentIntents, refund, webhook signature verification. API version `2026-09-30.endive`.
+- Webhook endpoint (`/api/webhooks/stripe`) — idempotent via `webhook_events` dedup,
+  handles `payment_intent.succeeded/failed`, `charge.refunded`.
+- VAR payment APIs: `GET/POST /api/var/payment-methods` (list, attach, setup-intent),
+  `GET/PATCH /api/var/subscription` (view, cancel, reactivate, change plan).
+- **Deliverable:** end-to-end Stripe test-mode charge path. Optional via env vars.
 
-### Phase 3 — Self-serve signup + public pricing · ~1 week
-- Public `/pricing` built from `subscription_plans` (one source of truth —
-  changing a plan in admin changes the page).
-- Signup: company → tenant provisioned → first `var_entity_admin` created
-  (the provisioning route already exists) → trial subscription started.
-- Checkout: plan + payment method, or "start trial, pay later".
-- Replace the "contact your administrator" register page.
-- **Deliverable:** a stranger can become a paying tenant without us.
+### Phase 3 — Self-serve signup + public pricing · COMPLETE
+**Status: BUILT.** Public pricing, self-serve signup, landing page updated.
+
+Built and deployed:
+- Public `/api/pricing/plans` — unauthenticated, merges DB prices with code-defined tiers.
+- `/pricing` page — monthly/annual toggle, 20% annual discount, null-price handling
+  ("Coming soon"), enterprise "Contact sales" flow, 14-day trial badge.
+- `/api/signup` — creates tenant + first var_entity_admin + trial subscription,
+  rollback on failure, zod validation, duplicate email/slug handling.
+- `/signup` page — self-serve form with company, name, email, password, plan from URL param.
+- Landing page updated: nav includes Pricing, hero CTA → "Start free trial" + "View pricing",
+  footer links to pricing/signup, login page "Need an account?" → "Start free trial".
+- **Deliverable:** a stranger can sign up, start a trial, and begin using the platform.
 
 ### Phase 4 — Billing portal + dunning · ~1 week
 - VAR-facing: current plan, usage vs limits (metering already exists), change

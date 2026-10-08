@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 const NAV = [
   ["How it works", "#how"],
+  ["Pricing", "/pricing"],
   ["Principles", "#principles"],
   ["Launch", "#launch"],
 ] as const;
@@ -160,9 +161,9 @@ export default function LandingPage() {
                 Sign In
               </Button>
             </Link>
-            <Link href="/register">
+            <Link href="/signup">
               <Button size="sm" className="h-9 px-4 shadow-sm shadow-blue-600/20">
-                Request Access
+                Start Free Trial
               </Button>
             </Link>
           </div>
@@ -213,15 +214,15 @@ export default function LandingPage() {
                 transition={{ delay: 0.18 }}
                 className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center"
               >
-                <Link href="/login" className="w-full sm:w-auto">
+                <Link href="/signup" className="w-full sm:w-auto">
                   <Button size="lg" className="w-full shadow-lg shadow-blue-600/25 sm:w-auto">
-                    Enter the platform
+                    Start free trial
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
-                <Link href="#how" className="w-full sm:w-auto">
+                <Link href="/pricing" className="w-full sm:w-auto">
                   <Button size="lg" variant="outline" className="w-full border-slate-200 text-[#0f1e3d] hover:bg-slate-50 sm:w-auto">
-                    See how it works
+                    View pricing
                   </Button>
                 </Link>
               </motion.div>
@@ -233,7 +234,7 @@ export default function LandingPage() {
                 className="mt-4 flex items-center gap-2 text-sm text-slate-500"
               >
                 <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                Role-based access · No credit card to explore
+                14-day free trial · No credit card required
               </motion.p>
 
               <motion.div
@@ -394,15 +395,15 @@ export default function LandingPage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row lg:flex-shrink-0">
-                <Link href="/login" className="w-full sm:w-auto">
+                <Link href="/signup" className="w-full sm:w-auto">
                   <Button size="lg" className="w-full bg-white text-[#0f1e3d] shadow-lg hover:bg-blue-50 sm:w-auto">
-                    Open the platform
+                    Start free trial
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
-                <Link href="/register" className="w-full sm:w-auto">
+                <Link href="/pricing" className="w-full sm:w-auto">
                   <Button size="lg" variant="outline" className="w-full border-white/25 bg-white/10 text-white hover:bg-white/20 sm:w-auto">
-                    Request access
+                    View pricing
                   </Button>
                 </Link>
               </div>
@@ -421,7 +422,8 @@ export default function LandingPage() {
             </div>
             <div className="flex items-center gap-6">
               <Link href="/login" className="transition-colors hover:text-[#0f1e3d]">Sign in</Link>
-              <Link href="/register" className="transition-colors hover:text-[#0f1e3d]">Request access</Link>
+              <Link href="/pricing" className="transition-colors hover:text-[#0f1e3d]">Pricing</Link>
+              <Link href="/signup" className="transition-colors hover:text-[#0f1e3d]">Start free trial</Link>
               <span>© {new Date().getFullYear()}</span>
             </div>
           </footer>

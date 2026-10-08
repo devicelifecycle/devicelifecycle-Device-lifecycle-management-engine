@@ -200,6 +200,43 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 
 ---
 
+## Commercial Phases (Subscription + Payments + Self-Serve) — integrated from `docs/DLM_COMMERCIAL_PLAN.md`
+*Turn the platform from admin-provisioned into a product anyone can buy.*
+*Full detail: `docs/DLM_COMMERCIAL_PLAN.md`.*
+
+### Commercial Phase 1 — Subscription engine ☑ (2026-10-07)
+- `subscriptions` table + `subscription_events` audit trail (`20261008000000_subscriptions.sql`)
+- `subscription-service.ts` — DB CRUD bridging the pure engine to Postgres
+- Nightly cron `/api/cron/subscription-lifecycle` — expires trials, marks past-due, expires dunning-elapsed
+- Admin APIs: `GET/POST /api/admin/subscriptions`, `GET/PATCH /api/admin/subscriptions/[id]`
+- `require-subscription.ts` — read-only on expired/past-due, never lockout, additive (no row = allowed)
+
+### Commercial Phase 2 — Payment abstraction + Stripe ☑ (2026-10-07)
+- `payment_methods` + `payment_charges` + `webhook_events` tables (`20261008000001_payment_methods.sql`)
+- `PaymentProvider` interface + registry (`payment-provider.ts`) — one interface, many adapters
+- Stripe adapter (`payment-providers/stripe.ts`) — hosted fields, PaymentIntents, refund, webhook sig verification
+- Webhook endpoint `/api/webhooks/stripe` — idempotent via `webhook_events` dedup
+- VAR APIs: `GET/POST /api/var/payment-methods`, `GET/PATCH /api/var/subscription`
+
+### Commercial Phase 3 — Self-serve signup + public pricing ☑ (2026-10-07)
+- Public `/api/pricing/plans` — merges DB prices with code-defined tiers, unauthenticated
+- `/pricing` page — monthly/annual toggle, 20% annual discount, null prices → "Coming soon"
+- `/api/signup` — creates tenant → first var_entity_admin → trial subscription, with rollback
+- `/signup` page — self-serve form, plan pre-selected from URL param
+- Landing page updated: nav → Pricing, hero CTA → "Start free trial" + "View pricing"
+- Login page: "Need an account?" → "Start free trial" linking to `/signup`
+
+### Commercial Phase 4 — Billing portal + dunning ☐ (next)
+- VAR billing portal: current plan, usage vs limits, change plan, update card, cancel, invoice PDF
+- Recurring charge cron (charge due subscriptions through their provider)
+- Dunning: retry schedule, email sequence, grace → restrict
+- Tax on subscriptions (reuse existing Canadian tax engine)
+
+### Commercial Phase 5 — Additional gateways ☐ (on demand)
+- Moneris, Square, PayPal/Braintree, Bambora — one adapter each, only when a customer requests
+
+---
+
 ## Full source-outline audit (every section, 2026-08-17)
 Every section of `BB VAR Outline structure revised 2.0.docx`, checked against
 the live codebase line by line. Anything not called out here matches the plan
@@ -297,7 +334,7 @@ above with no new finding. ✅ built · ◐ partial · ☐ not built · ❓ need
 - Custom domains vs subdomains per VAR — pros/cons written up and sent to client 2026-08-17 (Telus example); awaiting their choice per-VAR (can be mixed — doesn't need to be all-or-nothing).
 - ~~**Billing Option A vs B**~~ **Answered 2026-09-22: BOTH, selectable per VAR.** Option A stays the default; Option B is built and live-tested (see Critical finding #2). Payment collection within Option B still waits on the gateway decision below.
 - Tax model confirmation (province table shipped) — outstanding.
-- Payment gateway choice — **client deferred to the face-to-face (Weeks 9–12 discussion).**
+- ~~Payment gateway choice~~ — **Stripe built and integrated (2026-10-07).** `PaymentProvider` interface allows additional gateways on demand. See Commercial Phase 2 + Phase 5.
 - **NEW: SMTP/SMS/payment-gateway configuration — who configures it?** Outline places this under BB Admin, not VAR settings, suggesting Byte-Back staff sets a VAR's sender identity from an admin panel rather than the VAR self-configuring provider credentials. Confirm with client — changes whether Month 4's "Integrations: SMS/SMTP config UIs" needs a VAR-facing UI at all, or only a BB-admin one.
 - ~~**NEW: "live chat" — human support chat, or is the existing AI ChatAssistant sufficient?**~~ **Answered 2026-09-18: the AI assistant is sufficient.** No human-staffed live-chat widget will be built. "Chat" under VAR Support and Customer Support is satisfied by the shipped `ChatAssistant`; escalation from chat to a ticket remains the path to a human.
 - **NEW: "Archive customers" as a distinct state from "Suspend customers"** — confirm if this needs its own status or is just alternate wording (Month 2 finding). Resolved 2026-08-23: alternate wording — suspend already covers list-hiding, order-blocking, login-blocking, and restore; see Month 2 bullet for evidence.

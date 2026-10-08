@@ -409,10 +409,10 @@ function LoginPageInner() {
                   <p className="pt-2 text-center font-body text-xs text-muted-foreground">
                     Need an account?{' '}
                     <Link
-                      href="/register"
+                      href="/signup"
                       className="text-foreground underline-offset-4 transition-colors hover:underline"
                     >
-                      Request access
+                      Start free trial
                     </Link>
                   </p>
 
