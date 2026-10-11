@@ -126,10 +126,13 @@ const stripeProvider: PaymentProvider = {
 
   async refund({ providerChargeId, amountCents }): Promise<RefundResult> {
     const stripe = getStripe()
-    const refund = await stripe.refunds.create({
-      payment_intent: providerChargeId,
-      ...(amountCents !== undefined ? { amount: amountCents } : {}),
-    })
+    const refund = await stripe.refunds.create(
+      {
+        payment_intent: providerChargeId,
+        ...(amountCents !== undefined ? { amount: amountCents } : {}),
+      },
+      { idempotencyKey: `refund_${providerChargeId}_${amountCents ?? 'full'}` },
+    )
     return {
       providerRefundId: refund.id,
       status: refund.status === 'succeeded' ? 'succeeded' : 'pending',

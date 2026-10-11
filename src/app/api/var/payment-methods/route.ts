@@ -63,6 +63,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
     }
 
+    // Verify the Stripe customer belongs to this tenant — prevents IDOR
+    const supabaseCheck = createServiceRoleClient()
+    const { data: owned } = await supabaseCheck
+      .from('payment_methods')
+      .select('id')
+      .eq('tenant_id', auth.tenantId)
+      .eq('provider_customer_id', parsed.data.provider_customer_id)
+      .limit(1)
+      .maybeSingle()
+
+    if (!owned) {
+      return NextResponse.json({ error: 'Invalid customer reference' }, { status: 403 })
+    }
+
     try {
       const provider = getProvider('stripe')
       const result = await provider.createSetupIntent({

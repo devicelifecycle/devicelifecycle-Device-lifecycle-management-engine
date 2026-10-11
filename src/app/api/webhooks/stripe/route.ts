@@ -140,16 +140,19 @@ async function handleEvent(supabase: ReturnType<typeof createServiceRoleClient>,
       const tenantId = charge.metadata?.tenant_id
       if (!tenantId) break
 
-      await supabase.from('payment_charges').insert({
+      // Idempotency key uses the Stripe event ID — each refund webhook is a
+      // distinct event, so replays dedup correctly and separate partial refunds
+      // each get their own row.
+      await supabase.from('payment_charges').upsert({
         tenant_id: tenantId,
         provider: 'stripe',
         provider_charge_id: charge.id,
         amount_cents: -(charge.amount_refunded ?? 0),
         currency: charge.currency.toUpperCase(),
         status: 'refunded',
-        idempotency_key: `stripe_refund_${charge.id}_${Date.now()}`,
+        idempotency_key: `stripe_refund_${event.id}`,
         metadata: { stripe_event_id: event.id },
-      })
+      }, { onConflict: 'idempotency_key' })
       break
     }
   }
