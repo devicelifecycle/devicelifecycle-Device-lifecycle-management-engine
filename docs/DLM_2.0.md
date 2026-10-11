@@ -200,40 +200,47 @@ verified, and on `main` (frontend currently behind *Coming Soon*):
 
 ---
 
-## Commercial Phases (Subscription + Payments + Self-Serve) — integrated from `docs/DLM_COMMERCIAL_PLAN.md`
+## Month 5 — Commercial: Subscriptions, Payments, Self-Serve (merged from `docs/DLM_COMMERCIAL_PLAN.md`)
 *Turn the platform from admin-provisioned into a product anyone can buy.*
-*Full detail: `docs/DLM_COMMERCIAL_PLAN.md`.*
 
-### Commercial Phase 1 — Subscription engine ☑ (2026-10-07)
-- `subscriptions` table + `subscription_events` audit trail (`20261008000000_subscriptions.sql`)
-- `subscription-service.ts` — DB CRUD bridging the pure engine to Postgres
-- Nightly cron `/api/cron/subscription-lifecycle` — expires trials, marks past-due, expires dunning-elapsed
-- Admin APIs: `GET/POST /api/admin/subscriptions`, `GET/PATCH /api/admin/subscriptions/[id]`
-- `require-subscription.ts` — read-only on expired/past-due, never lockout, additive (no row = allowed)
+### 5.1 Subscription engine ☑ (2026-10-07)
+- `subscriptions` + `subscription_events` tables with RLS, auto-updated_at, unique active-per-tenant (`20261008000000_subscriptions.sql`) — **applied to prod**
+- `subscription-service.ts` — DB CRUD bridging the pure engine (`subscription.ts`, 22 tests) to Postgres
+- Nightly lifecycle cron `/api/cron/subscription-lifecycle` — expires trials, marks past-due, expires dunning-elapsed (500-row cap per category)
+- Admin APIs: `GET/POST /api/admin/subscriptions` (list + create), `GET/PATCH /api/admin/subscriptions/[id]` (view + transition/cancel/reactivate/renew/change_plan)
+- `require-subscription.ts` — subscription access guard: read-only on expired/past-due/trial-expired, never lockout, additive (no row = allowed so existing tenants aren't disrupted)
 
-### Commercial Phase 2 — Payment abstraction + Stripe ☑ (2026-10-07)
-- `payment_methods` + `payment_charges` + `webhook_events` tables (`20261008000001_payment_methods.sql`)
-- `PaymentProvider` interface + registry (`payment-provider.ts`) — one interface, many adapters
-- Stripe adapter (`payment-providers/stripe.ts`) — hosted fields, PaymentIntents, refund, webhook sig verification
-- Webhook endpoint `/api/webhooks/stripe` — idempotent via `webhook_events` dedup
-- VAR APIs: `GET/POST /api/var/payment-methods`, `GET/PATCH /api/var/subscription`
+### 5.2 Payment abstraction + Stripe ☑ (2026-10-07)
+- `payment_methods` + `payment_charges` + `webhook_events` tables with RLS (`20261008000001_payment_methods.sql`) — **applied to prod**
+- `PaymentProvider` interface + registry (`payment-provider.ts`) — one interface, many adapters; recurring is **platform-managed** (our cron charges, not the gateway's subscription engine)
+- Stripe adapter (`payment-providers/stripe.ts`) — hosted fields (SAQ-A), charge via PaymentIntents, refund, webhook sig verification; API `2026-09-30.endive`; **optional via env vars** — no `STRIPE_SECRET_KEY` = manual-only mode
+- Webhook endpoint `/api/webhooks/stripe` — idempotent via `webhook_events` dedup, handles `payment_intent.succeeded/failed`, `charge.refunded`
+- VAR APIs: `GET/POST /api/var/payment-methods` (list, attach, setup-intent), `GET/PATCH /api/var/subscription` (view, cancel, reactivate, change_plan)
 
-### Commercial Phase 3 — Self-serve signup + public pricing ☑ (2026-10-07)
-- Public `/api/pricing/plans` — merges DB prices with code-defined tiers, unauthenticated
-- `/pricing` page — monthly/annual toggle, 20% annual discount, null prices → "Coming soon"
-- `/api/signup` — creates tenant → first var_entity_admin → trial subscription, with rollback
-- `/signup` page — self-serve form, plan pre-selected from URL param
-- Landing page updated: nav → Pricing, hero CTA → "Start free trial" + "View pricing"
+### 5.3 Self-serve signup + public pricing ☑ (2026-10-07)
+- Public `/api/pricing/plans` — unauthenticated, merges DB prices with code-defined `PLAN_TIERS`
+- `/pricing` page — monthly/annual toggle (20% annual discount), null prices → "Coming soon", enterprise → "Contact sales", 14-day trial badge
+- `/api/signup` — creates tenant → first `var_entity_admin` → trial subscription, with rollback on partial failure, zod validation, duplicate email/slug handling
+- `/signup` page — self-serve form with company name, admin name, email, password, plan pre-selected from `?plan=` URL param
+- Landing page: nav now includes Pricing, hero CTA → "Start free trial" + "View pricing", footer links to pricing/signup
 - Login page: "Need an account?" → "Start free trial" linking to `/signup`
+- **Deliverable:** a stranger can sign up, start a 14-day trial, and begin using the platform without admin intervention.
 
-### Commercial Phase 4 — Billing portal + dunning ☐ (next)
-- VAR billing portal: current plan, usage vs limits, change plan, update card, cancel, invoice PDF
-- Recurring charge cron (charge due subscriptions through their provider)
-- Dunning: retry schedule, email sequence, grace → restrict
-- Tax on subscriptions (reuse existing Canadian tax engine)
+### 5.4 Billing portal + dunning ◐ (2026-10-08 partial, ~3–4 d remaining)
+- ☑ VAR-facing billing portal page + API (`/var/billing`): summary cards (outstanding, total paid, invoice count), subscription status with past-due warning banner, invoices table, payment history — shipped 2026-10-08
+- ☑ Dunning email notifications: `sendSubscriptionPastDueEmail` (grace-period countdown), `sendSubscriptionExpiredEmail` (reason: trial ended / dunning exhausted), `sendTrialExpiringEmail` — wired into the subscription-lifecycle cron at each status transition; emails sent to all active `var_entity_admin` users of the tenant — shipped 2026-10-08
+- ☑ RBAC: all 25 admin routes converted from `role === 'admin'` to granular `requirePermission()` guards — shipped 2026-10-08
+- ☑ Customer dashboard + API keys + extended reports — shipped 2026-10-08
+- ☑ **Payment gateway security hardened 2026-10-11:** (1) refund webhook idempotency key used `Date.now()` — replays created duplicate refund records; now keyed on Stripe event ID + upsert; (2) Stripe adapter `refund()` had no idempotency key — network retries could create duplicate refunds at Stripe; now keyed on charge ID + amount; (3) setup-intent IDOR — `provider_customer_id` accepted from request body with no ownership check, letting a VAR admin create a setup intent for another tenant's Stripe customer; now verified against the tenant's own `payment_methods` before forwarding
+- ☐ Recurring charge cron: iterate due subscriptions, call `provider.charge()`, renew on success, mark past-due on failure
+- ☐ Dunning retry schedule (day 1, 3, 7, 14) with email per retry
+- ☐ Tax on subscription invoices (reuse the existing Canadian tax engine from customer invoices)
+- ☐ Invoice PDF download
+- **Deliverable:** the business collects recurring revenue without manual intervention.
 
-### Commercial Phase 5 — Additional gateways ☐ (on demand)
-- Moneris, Square, PayPal/Braintree, Bambora — one adapter each, only when a customer requests
+### 5.5 Additional gateways ☐ (on demand, ~3–5 d each)
+- Moneris, Square, PayPal/Braintree, Bambora — one adapter per `PaymentProvider` interface, only when a real customer requests it
+- The interface, webhooks, recurring engine and portal are already built — each gateway is just an adapter
 
 ---
 
