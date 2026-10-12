@@ -117,9 +117,8 @@ export async function GET(
   // Line items from invoice_line_items (if they exist)
   const { data: lineItems } = await supabase
     .from('invoice_line_items')
-    .select('description, quantity, unit_amount, amount')
+    .select('description, gross_amount, commission_amount')
     .eq('invoice_id', id)
-    .order('created_at', { ascending: true })
     .limit(500)
 
   const currency = (invoice.currency as string) ?? 'CAD'
@@ -127,24 +126,22 @@ export async function GET(
   if (lineItems && lineItems.length > 0) {
     const tableBody = lineItems.map((li) => [
       String(li.description ?? ''),
-      String(li.quantity ?? 1),
-      fmtMoney(Number(li.unit_amount ?? 0), currency),
-      fmtMoney(Number(li.amount ?? 0), currency),
+      fmtMoney(Number(li.gross_amount ?? 0), currency),
+      fmtMoney(Number(li.commission_amount ?? 0), currency),
     ])
 
     autoTable(doc, {
       startY: y,
-      head: [['Description', 'Qty', 'Unit Price', 'Amount']],
+      head: [['Description', 'Gross Amount', 'Platform Fee']],
       body: tableBody,
       theme: 'grid',
       headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255], fontSize: 9, fontStyle: 'bold' },
       bodyStyles: { fontSize: 9, textColor: [63, 63, 70] },
       alternateRowStyles: { fillColor: [250, 250, 250] },
       columnStyles: {
-        0: { cellWidth: 80 },
-        1: { halign: 'center', cellWidth: 20 },
-        2: { halign: 'right', cellWidth: 30 },
-        3: { halign: 'right', cellWidth: 30 },
+        0: { cellWidth: 90 },
+        1: { halign: 'right', cellWidth: 35 },
+        2: { halign: 'right', cellWidth: 35 },
       },
       margin: { left: 14, right: 14 },
     })
