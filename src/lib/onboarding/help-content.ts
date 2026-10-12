@@ -128,6 +128,18 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'Where can I see who has been logging in?',
       answer: 'Login History (under Admin) shows every sign-in and sign-out event across the platform, with timestamps, IP addresses, and user agents. You can filter by event type and search by user, and export the results as CSV. Every login and logout is recorded automatically.',
     },
+    {
+      question: 'How do I run a cron job manually?',
+      answer: 'Service Controls (under Admin) lets you pick any scheduled job from the dropdown and run it immediately. The result appears in the Recent Results panel on the same page. This is useful for testing after a config change or for running a job outside its normal schedule — it executes exactly the same code as the automatic run.',
+    },
+    {
+      question: 'What does "Flush Cache" do on the Service Controls page?',
+      answer: 'It clears the Next.js ISR cache so every page regenerates on the next visit instead of serving a stale version. Use it after a database migration or a bulk data change that the normal revalidation did not pick up. It does not clear browser caches — users may need to hard-refresh.',
+    },
+    {
+      question: 'What does the Encryption page show?',
+      answer: 'It is a read-only dashboard of the platform\'s encryption posture: database encryption (AES-256), TLS version, password hashing method, API key hashing, JWT signing, and how environment secrets are stored. Nothing on that page is editable — encryption keys are managed automatically by Supabase and Vercel.',
+    },
   ],
 }
 
