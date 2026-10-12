@@ -112,6 +112,18 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'How does a VAR get API access?',
       answer: 'VARs → open the VAR → Features → turn on API access. That one switch lets them create keys on their API Keys page and makes those keys work against the read-only /api/v1 endpoints (orders, customers, devices). Turn it off and every key in that VAR stops working immediately.',
     },
+    {
+      question: 'How does automatic subscription billing work?',
+      answer: 'A daily cron job checks every active subscription whose billing period has ended. It computes the charge from the plan tier, applies any credit balance first (a subscription fully covered by credit renews without touching the payment provider), then charges the remainder via Stripe. On success the subscription period advances automatically. On failure the subscription-lifecycle cron marks it past-due on its next run.',
+    },
+    {
+      question: 'How does the dunning retry schedule work?',
+      answer: 'When a subscription goes past-due, the platform retries the charge on days 1, 3, 7, and 14 after the due date — deliberately sparse to avoid issuer declines from hammering. Each retry is idempotent (it won\'t double-charge on the same day). On success the subscription reactivates immediately. On failure an escalating email goes to the VAR\'s entity admins showing how many grace days remain. After day 14 the subscription expires if still unpaid.',
+    },
+    {
+      question: 'How do I customize a VAR\'s login page?',
+      answer: 'VARs → open the VAR → Branding → Login Page section. You can set a custom headline, description, up to three feature stats, and a footer label. Those values replace the platform defaults on the login screen for that VAR\'s users. Leave any field blank to keep the default.',
+    },
   ],
 }
 
@@ -154,6 +166,18 @@ const FAQ_BY_VAR_ROLE: Record<DelegatedRole, FaqEntry[]> = {
     {
       question: 'How do I change the sender name on emails my customers receive?',
       answer: 'Communications → set the From name, From address and SMS sender ID. Emails and texts to your customers then go out under that identity instead of the platform’s.',
+    },
+    {
+      question: 'Where do I see my invoices and subscription status?',
+      answer: 'Billing shows everything in one place: your current plan and billing period at the top, then every invoice issued to your organization with status badges (draft, sent, paid, void), plus a payment history table at the bottom. The three summary cards at the top give you outstanding balance, total paid, and invoice count at a glance.',
+    },
+    {
+      question: 'How do I download an invoice as a PDF?',
+      answer: 'On the Billing page, each invoice row has a download icon on the right. Click it to open a PDF in a new tab — it includes your invoice number, line items with gross amounts and platform fees, totals, and payment history. You can save or print it from there.',
+    },
+    {
+      question: 'How do I customize my organization\’s login page?',
+      answer: 'Ask your platform admin to configure it under VARs → your organization → Branding. They can set a custom headline, description, feature stats, and footer label that your users see on the login screen instead of the platform defaults.',
     },
   ],
   var_regional_manager: [
