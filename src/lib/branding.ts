@@ -45,6 +45,13 @@ export interface TenantBranding {
     requireNumber?: boolean | null
     requireSymbol?: boolean | null
   } | null
+  /** Per-VAR login page customization — replaces the Byte-Back defaults. */
+  loginPage?: {
+    headline?: string | null
+    description?: string | null
+    stats?: { value: string; label: string }[] | null
+    footerLabel?: string | null
+  } | null
 }
 
 /** Darkened primary-blue variant used when a tenant sets no secondary color. */
@@ -145,6 +152,24 @@ export function resolveBranding(raw: unknown): TenantBranding {
               requireUppercase: !!p.requireUppercase,
               requireNumber: !!p.requireNumber,
               requireSymbol: !!p.requireSymbol,
+            }
+          })()
+        : null,
+    loginPage:
+      b.loginPage && typeof b.loginPage === 'object'
+        ? (() => {
+            const lp = b.loginPage as Record<string, unknown>
+            const rawStats = Array.isArray(lp.stats) ? lp.stats : null
+            return {
+              headline: cleanStr(lp.headline, 200),
+              description: cleanStr(lp.description, 500),
+              stats: rawStats
+                ? rawStats
+                    .filter((s): s is { value: string; label: string } =>
+                      !!s && typeof s === 'object' && typeof (s as Record<string, unknown>).value === 'string' && typeof (s as Record<string, unknown>).label === 'string')
+                    .slice(0, 6)
+                : null,
+              footerLabel: cleanStr(lp.footerLabel, 120),
             }
           })()
         : null,

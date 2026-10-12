@@ -5,12 +5,13 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react'
-import { CreditCard, FileText, Loader2, Receipt, AlertTriangle } from 'lucide-react'
+import { CreditCard, Download, FileText, Loader2, Receipt, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { useCan } from '@/hooks/useCan'
 
 interface Invoice {
@@ -213,6 +214,7 @@ export default function VarBillingPage() {
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Issued</TableHead>
                     <TableHead>Paid</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -237,6 +239,17 @@ export default function VarBillingPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {inv.paid_at ? formatDate(inv.paid_at) : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => window.open(`/api/var/billing/${inv.id}/pdf`, '_blank')}
+                          title="Download PDF"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}

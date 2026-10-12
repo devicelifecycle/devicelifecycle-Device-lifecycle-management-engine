@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { featureGate } from '@/lib/supabase/require-feature'
 import { hasPermission, type PermissionKey } from '@/lib/permissions'
 import { canTransitionInvoice, type InvoiceStatus } from '@/lib/billing'
 import { resolveBillingMode, invoiceBalance, maxRefundable } from '@/lib/customer-billing'
@@ -46,6 +47,9 @@ async function load(id: string, permission: PermissionKey = 'billing.view') {
   if (!allowed) return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   if (!auth.tenantId) return { error: NextResponse.json({ error: 'No tenant in scope' }, { status: 400 }) }
   if (!isValidUUID(id)) return { error: NextResponse.json({ error: 'Invalid invoice id' }, { status: 400 }) }
+
+  const gated = await featureGate(auth.tenantId, 'billing', 'Billing')
+  if (gated) return { error: gated }
 
   const supabase = createServiceRoleClient()
   const { data: tenant } = await supabase.from('tenants').select('settings').eq('id', auth.tenantId).maybeSingle()

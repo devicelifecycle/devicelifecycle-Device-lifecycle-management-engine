@@ -18,11 +18,15 @@ import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/input'
 
-const STATS = [
+const DEFAULT_STATS = [
   { value: '608+', label: 'Device SKUs priced' },
   { value: '6', label: 'Role-based workflows' },
   { value: '100%', label: 'Lifecycle coverage' },
 ]
+
+const DEFAULT_HEADLINE = 'Operational\nCommand\nfor Device\nLifecycle'
+const DEFAULT_DESCRIPTION = 'End-to-end trade-in processing, AI-powered pricing, COE operations, and device lifecycle tracking — all in one platform.'
+const DEFAULT_FOOTER_LABEL = 'ITAD · COE · Trade-In · Pricing'
 
 function BrandedLogo({ className = 'h-8 w-8' }: { className?: string }) {
   const branding = useAuthBranding()
@@ -197,10 +201,12 @@ function LoginPageInner() {
                   style={{ '--fade-from-y': '24px', animationDuration: '0.6s', animationDelay: '0.1s' } as React.CSSProperties}
                 >
                   <h1 className="editorial-title text-5xl text-foreground xl:text-6xl">
-                    Operational<br />
-                    Command<br />
-                    <span className="text-primary/80">for Device</span><br />
-                    Lifecycle
+                    {(branding.loginPage?.headline ?? DEFAULT_HEADLINE).split('\n').map((line, i, arr) => (
+                      <span key={i}>
+                        {i === Math.max(0, arr.length - 2) ? <span className="text-primary/80">{line}</span> : line}
+                        {i < arr.length - 1 && <br />}
+                      </span>
+                    ))}
                   </h1>
                 </div>
 
@@ -208,32 +214,39 @@ function LoginPageInner() {
                   className="animate-login-fade-up font-body text-sm font-light leading-relaxed text-muted-foreground"
                   style={{ animationDelay: '0.25s' } as React.CSSProperties}
                 >
-                  End-to-end trade-in processing, AI-powered pricing, COE operations,
-                  and device lifecycle tracking — all in one platform.
+                  {branding.loginPage?.description ?? DEFAULT_DESCRIPTION}
                 </p>
 
                 {/* Stat cards */}
-                <div
-                  className="animate-login-fade-up grid grid-cols-3 gap-3"
-                  style={{ '--fade-from-y': '12px', animationDelay: '0.35s' } as React.CSSProperties}
-                >
-                  {STATS.map((stat) => (
+                {(() => {
+                  const stats = branding.loginPage?.stats ?? DEFAULT_STATS
+                  return stats.length > 0 ? (
                     <div
-                      key={stat.label}
-                      className="liquid-glass rounded-2xl px-3 py-4"
+                      className="animate-login-fade-up grid gap-3"
+                      style={{
+                        gridTemplateColumns: `repeat(${Math.min(stats.length, 3)}, 1fr)`,
+                        '--fade-from-y': '12px', animationDelay: '0.35s',
+                      } as React.CSSProperties}
                     >
-                      <p className="font-heading text-2xl font-semibold text-foreground">{stat.value}</p>
-                      <p className="mt-1 font-body text-[10px] leading-tight text-muted-foreground">
-                        {stat.label}
-                      </p>
+                      {stats.map((stat) => (
+                        <div
+                          key={stat.label}
+                          className="liquid-glass rounded-2xl px-3 py-4"
+                        >
+                          <p className="font-heading text-2xl font-semibold text-foreground">{stat.value}</p>
+                          <p className="mt-1 font-body text-[10px] leading-tight text-muted-foreground">
+                            {stat.label}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  ) : null
+                })()}
 
                 {/* Divider */}
                 <div className="copper-line h-px w-full opacity-50" />
                 <p className="font-body text-[11px] uppercase tracking-[0.18em] text-muted-foreground/50">
-                  ITAD · COE · Trade-In · Pricing
+                  {branding.loginPage?.footerLabel ?? DEFAULT_FOOTER_LABEL}
                 </p>
               </div>
             </div>

@@ -67,6 +67,15 @@ const brandingSchema = z.object({
   emailFromName: z.string().max(120).nullable().optional(),
   emailFromAddress: z.string().email().max(255).nullable().optional().or(z.literal('')),
   smsSenderId: z.string().max(40).nullable().optional(),
+  loginPage: z.object({
+    headline: z.string().max(200).nullable().optional(),
+    description: z.string().max(500).nullable().optional(),
+    stats: z.array(z.object({
+      value: z.string().max(20),
+      label: z.string().max(60),
+    })).max(6).nullable().optional(),
+    footerLabel: z.string().max(120).nullable().optional(),
+  }).nullable().optional(),
 })
 
 const patchSchema = z.object({

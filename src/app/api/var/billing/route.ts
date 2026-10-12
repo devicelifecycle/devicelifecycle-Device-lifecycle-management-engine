@@ -5,12 +5,16 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { featureGate } from '@/lib/supabase/require-feature'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
   if (!auth.tenantId) return NextResponse.json({ error: 'No tenant context' }, { status: 400 })
+
+  const gated = await featureGate(auth.tenantId, 'billing', 'Billing')
+  if (gated) return gated
 
   const supabase = createServiceRoleClient()
 
