@@ -25,8 +25,10 @@ export interface AuditLogInput {
 export interface AuditLogFilters {
   user_id?: string
   action?: AuditAction
+  actions?: AuditAction[]
   entity_type?: string
   entity_id?: string
+  search?: string
   start_date?: Date
   end_date?: Date
   page?: number
@@ -222,12 +224,17 @@ export class AuditService {
     }
     if (filters.action) {
       query = query.eq('action', filters.action)
+    } else if (filters.actions && filters.actions.length > 0) {
+      query = query.in('action', filters.actions)
     }
     if (filters.entity_type) {
       query = query.eq('entity_type', filters.entity_type)
     }
     if (filters.entity_id) {
       query = query.eq('entity_id', filters.entity_id)
+    }
+    if (filters.search) {
+      query = query.or(`entity_id.ilike.%${filters.search}%,ip_address.ilike.%${filters.search}%`)
     }
     if (filters.start_date) {
       query = query.gte('timestamp', filters.start_date.toISOString())

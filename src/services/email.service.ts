@@ -277,7 +277,7 @@ export class EmailService {
     const gmail = getGmailTransporter()
     if (gmail) {
       try {
-        const fromEmail = process.env.GMAIL_FROM_EMAIL || `${APP_NAME} <${process.env.GMAIL_USER}>`
+        const fromEmail = `${brand?.emailFromName || brand?.name || APP_NAME} <${process.env.GMAIL_USER}>`
         await gmail.sendMail({
           from: fromEmail,
           to: toList,
@@ -557,7 +557,7 @@ export class EmailService {
 
     const html = emailShell(`
               <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;">Hi ${recipientName},</p>
-              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your ${brand.name} administrator at ${brand.supportEmail || 'support@byte-back.ca'} immediately.</p>
+              <p style="margin:0 0 24px;color:#3f3f46;font-size:15px;">Your password was successfully changed. If you did not make this change, please contact your ${brand.name} administrator at ${brand.supportEmail || process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@byte-back.ca'} immediately.</p>
 `, 'short', brand)
 
     return this.sendEmail(to, `Password updated — ${brand.name}`, html, brand)

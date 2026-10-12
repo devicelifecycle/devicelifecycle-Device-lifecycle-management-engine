@@ -33,6 +33,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { useOrderShipments } from '@/hooks/useShipments'
 import { DiscrepancyDetail } from '@/components/orders/DiscrepancyDetail'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
@@ -161,15 +162,15 @@ function getVendorTransitionLabel(status: OrderStatus): string {
 export default function OrderDetailClient() {
   const params = useParams()
   const { user } = useAuth()
-  const isCustomer = user?.role === 'customer'
-  const isVendor = user?.role === 'vendor'
-  const canSetPricingByRole = user?.role === 'admin' || user?.role === 'coe_manager' || user?.role === 'sales'
-  const canEditItems = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role ?? '')
+  const { can, role } = useCan()
+  const isCustomer = role === 'customer'
+  const isVendor = role === 'vendor'
+  const canEditItems = can('order.view') && !isCustomer && !isVendor
   const { order, isLoading, transition, isTransitioning, refetch } = useOrder(params.id as string)
   const isCpoOrder = order?.type === 'cpo'
-  const canSetPricing = isCpoOrder ? user?.role === 'admin' : canSetPricingByRole
-  const canSendQuote = !isCustomer && !isVendor && ['admin', 'coe_manager', 'sales'].includes(user?.role ?? '')
-  const canSendTriageReport = !isCustomer && !isVendor && ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role ?? '')
+  const canSetPricing = isCpoOrder ? role === 'admin' : can('pricing.view')
+  const canSendQuote = can('pricing.view') && !isCustomer && !isVendor
+  const canSendTriageReport = can('order.view') && !isCustomer && !isVendor
   const { shipments: orderShipments, refetch: refetchShipments } = useOrderShipments(params.id as string)
   const branding = useBranding()
   const [pricingDialogOpen, setPricingDialogOpen] = useState(false)
@@ -2252,7 +2253,7 @@ export default function OrderDetailClient() {
               </div>
 
               {/* Post-triage quote generation — for walk-in/unquoted trade-ins */}
-              {canSetPricingByRole && order.type === 'trade_in' &&
+              {can('pricing.view') && order.type === 'trade_in' &&
                 ['received', 'in_triage', 'qc_complete'].includes(order.status) &&
                 !(order.quoted_amount && order.quoted_amount > 0) && (
                 <div className="mt-4 flex items-center gap-3 rounded-lg border border-dashed bg-muted/30 px-4 py-3">
@@ -2873,7 +2874,7 @@ export default function OrderDetailClient() {
                               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusBadgeClass}`}>
                                 {bid.status}
                               </span>
-                              {isPending && canSetPricingByRole && (
+                              {isPending && can('pricing.view') && (
                                 <>
                                   <Button
                                     size="sm"
@@ -3572,7 +3573,7 @@ export default function OrderDetailClient() {
               )}
 
               {/* Assign Vendor — admin/coe_manager on CPO orders in submitted or sourcing */}
-              {canSetPricingByRole && isCpoOrder && ['submitted', 'sourcing', 'accepted'].includes(order.status) && (
+              {can('pricing.view') && isCpoOrder && ['submitted', 'sourcing', 'accepted'].includes(order.status) && (
                 <>
                   <Separator className="my-2" />
                   <Button

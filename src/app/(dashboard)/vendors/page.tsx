@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Download, Plus, Search, Store, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useVendors } from '@/hooks/useVendors'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,9 +23,9 @@ import type { Vendor } from '@/types'
 
 export default function VendorsPage() {
   const router = useRouter()
-  const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
-  const canCreate = user?.role === 'admin' || user?.role === 'coe_manager'
+  const { can } = useCan()
+  const isAdmin = can('vendor.manage')
+  const canCreate = can('vendor.manage')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const debouncedSearch = useDebounce(search)

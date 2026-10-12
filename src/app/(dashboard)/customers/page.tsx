@@ -7,7 +7,7 @@ import { Download, MoreHorizontal, Pencil, Plus, Search, Trash2, Users } from 'l
 import { toast } from 'sonner'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useDebounce } from '@/hooks/useDebounce'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -58,7 +58,7 @@ const emptyEditForm = (): EditForm => ({
 })
 
 export default function CustomersPage() {
-  const { user } = useAuth()
+  const { can } = useCan()
   const searchParams = useSearchParams()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -75,9 +75,9 @@ export default function CustomersPage() {
     organization_id: organizationId,
   })
 
-  const canDelete = user?.role === 'admin' || user?.role === 'coe_manager'
-  const canCreate = user?.role === 'admin' || user?.role === 'coe_manager'
-  const canEdit = user?.role === 'admin' || user?.role === 'coe_manager' || user?.role === 'sales'
+  const canDelete = can('customer.delete')
+  const canCreate = can('customer.create')
+  const canEdit = can('customer.update')
   const stats = useMemo(() => {
     const active = customers.filter((customer) => customer.is_active).length
     const withPhone = customers.filter((customer) => customer.contact_phone).length
@@ -186,7 +186,7 @@ export default function CustomersPage() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-muted-foreground">Scope active.</span>
             <span>Showing customers for one organization.</span>
-            {user?.role === 'admin' && (
+            {can('tenant.view') && (
               <Link href="/admin/organizations" className="text-primary hover:text-primary/70">
                 View organizations
               </Link>

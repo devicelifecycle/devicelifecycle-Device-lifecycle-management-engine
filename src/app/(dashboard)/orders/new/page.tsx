@@ -12,7 +12,7 @@ import { Plus, X, Upload, FileSpreadsheet, Download, Loader2, CheckCircle2, File
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers, useMyCustomer } from '@/hooks/useCustomers'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -216,15 +216,15 @@ function getStorageOptionsForDevice(device?: Device): string[] {
 
 export default function NewOrderPage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { can, role } = useCan()
   const { create, isCreating } = useOrders()
   const { customers } = useCustomers({ limit: 500 })
   const { customer: myCustomer, isLoading: myCustomerLoading, error: myCustomerError } = useMyCustomer()
-  const isCustomer = user?.role === 'customer'
-  const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
+  const isCustomer = role === 'customer'
+  const isInternal = can('pricing.view')
   // Customers can now self-create CPO (Certified Pre-Owned purchase) orders too —
   // internal staff and customers both get the CPO order type option.
-  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech', 'customer'].includes(user?.role || '')
+  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech', 'customer'].includes(role || '')
   const cpoCreationBlockedMessage = 'Only admin, COE, or the customer portal can create CPO orders.'
 
   const [devices, setDevices] = useState<Device[]>([])
@@ -962,7 +962,7 @@ export default function NewOrderPage() {
               ? 'Create trade-in or CPO orders — or both at once'
               : 'Create trade-in orders for customer intake'}
           </p>
-          {user?.role === 'sales' && (
+          {role === 'sales' && (
             <p className="text-sm text-amber-600 mt-1">
               Sales can only create trade-in orders. CPO orders must be placed by admin, COE, or through the customer portal.
             </p>
@@ -1199,7 +1199,7 @@ export default function NewOrderPage() {
                                     : q ? devices.filter(fuzzyMatch) : devices
                                   ).slice(0, 50)
                                   const content = filtered.length === 0 ? (() => {
-                                    const canQuickAdd = ['admin', 'coe_manager'].includes(user?.role || '')
+                                    const canQuickAdd = ['admin', 'coe_manager'].includes(role || '')
                                     return (
                                       <div>
                                         <p className="px-3 py-2 text-sm text-muted-foreground">No devices found</p>

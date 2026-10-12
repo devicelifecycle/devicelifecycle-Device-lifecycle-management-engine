@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, RotateCcw, Search, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCustomers } from '@/hooks/useCustomers'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,13 +16,13 @@ import { Pagination } from '@/components/ui/pagination'
 import { PageHero } from '@/components/ui/page-hero'
 
 export default function DeletedCustomersPage() {
-  const { user } = useAuth()
+  const { can } = useCan()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const debouncedSearch = useDebounce(search)
 
-  const canRestore = user?.role === 'admin' || user?.role === 'coe_manager'
+  const canRestore = can('customer.update')
 
   const { customers, total, isLoading, totalPages, error, update, refetch } = useCustomers({
     search: debouncedSearch,

@@ -124,6 +124,10 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'How do I customize a VAR\'s login page?',
       answer: 'VARs → open the VAR → Branding → Login Page section. You can set a custom headline, description, up to three feature stats, and a footer label. Those values replace the platform defaults on the login screen for that VAR\'s users. Leave any field blank to keep the default.',
     },
+    {
+      question: 'Where can I see who has been logging in?',
+      answer: 'Login History (under Admin) shows every sign-in and sign-out event across the platform, with timestamps, IP addresses, and user agents. You can filter by event type and search by user, and export the results as CSV. Every login and logout is recorded automatically.',
+    },
   ],
 }
 

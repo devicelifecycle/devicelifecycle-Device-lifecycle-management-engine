@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { Bell, CheckCircle2, Clock, Lock, Mail, Save, Shield, Smartphone, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { useBranding } from '@/lib/branding-context'
 import { validatePassword } from '@/lib/password-policy'
@@ -385,6 +386,7 @@ function NotificationPreferencesCard({ user, onSaved }: { user: { id: string; no
 
 export default function ProfilePage() {
   const { user, refetch } = useAuth()
+  const { can } = useCan()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [fullName, setFullName] = useState(user?.full_name || '')
@@ -549,8 +551,8 @@ export default function ProfilePage() {
       {/* Change Password */}
       <ChangePasswordCard authEmail={user.email!} />
 
-      {/* Two-Factor Authentication — admin and COE managers only */}
-      {(user.role === 'admin' || user.role === 'coe_manager') && (
+      {/* Two-Factor Authentication — privileged roles only */}
+      {can('audit.view') && (
         <MfaCard />
       )}
 

@@ -32,10 +32,12 @@ import { USER_ROLE_CONFIG } from '@/lib/constants'
 import { formatDateTime } from '@/lib/utils'
 import type { User, UserRole } from '@/types'
 import { setImpersonation } from '@/lib/impersonation'
+import { useCan } from '@/hooks/useCan'
 
 const roles: UserRole[] = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor']
 
 export default function AdminUsersPage() {
+  const { can } = useCan()
   const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -250,7 +252,7 @@ export default function AdminUsersPage() {
           <h1 className="text-2xl font-bold">User Management</h1>
           <p className="text-muted-foreground">Manage user accounts and roles</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        {can('user.create') && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button variant="success"><Plus className="mr-2 h-4 w-4" />Add User</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -335,7 +337,7 @@ export default function AdminUsersPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </div>
 
       <Card>
@@ -426,14 +428,14 @@ export default function AdminUsersPage() {
                     <TableCell className="text-muted-foreground">{u.last_login_at ? formatDateTime(u.last_login_at) : 'Never'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
+                        {can('user.update') && <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleOpenEdit(u)}
                           title="Edit user"
                         >
                           <Pencil className="h-4 w-4" />
-                        </Button>
+                        </Button>}
                         {u.onboarding_completed_at && (
                           <Button
                             variant="ghost"
@@ -453,7 +455,7 @@ export default function AdminUsersPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button
+                        {can('user.delete') && <Button
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -462,7 +464,7 @@ export default function AdminUsersPage() {
                           disabled={u.role === 'admin'}
                         >
                           <Trash2 className="h-4 w-4" />
-                        </Button>
+                        </Button>}
                       </div>
                     </TableCell>
                   </TableRow>

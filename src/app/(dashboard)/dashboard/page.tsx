@@ -28,6 +28,7 @@ const OrderMomentumChart = dynamic(() => import('./_charts').then(m => m.OrderMo
 const PipelineWeightChart = dynamic(() => import('./_charts').then(m => m.PipelineWeightChart), { ssr: false, loading: () => chartSkeleton })
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomerDashboard } from '@/hooks/useCustomerDashboard'
 import { useDashboardCounts } from '@/hooks/useDashboardCounts'
@@ -809,9 +810,10 @@ function VendorDashboard({ user }: { user: NonNullable<ReturnType<typeof useAuth
 export default function DashboardPage() {
   const router = useRouter()
   const { user, isInitializing } = useAuth()
-  const isInternal = user ? ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user.role) : false
-  const isCustomer = user?.role === 'customer'
-  const isVendor = user?.role === 'vendor'
+  const { role } = useCan()
+  const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(role || '')
+  const isCustomer = role === 'customer'
+  const isVendor = role === 'vendor'
   const targetPath = getDefaultAppPathForRole(user?.role)
 
   useEffect(() => {

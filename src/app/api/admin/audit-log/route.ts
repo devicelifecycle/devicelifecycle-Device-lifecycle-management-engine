@@ -17,9 +17,12 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const format = searchParams.get('format')
 
+    const actions = searchParams.getAll('action').filter(Boolean) as AuditAction[]
     const filters = {
-      action: (searchParams.get('action') || undefined) as AuditAction | undefined,
+      action: actions.length === 1 ? actions[0] : undefined,
+      actions: actions.length > 1 ? actions : undefined,
       entity_type: searchParams.get('entity_type') || undefined,
+      search: searchParams.get('search') || undefined,
       page: Math.min(Math.max(parseInt(searchParams.get('page') || '1'), 1), 10000),
       limit: Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100),
     }

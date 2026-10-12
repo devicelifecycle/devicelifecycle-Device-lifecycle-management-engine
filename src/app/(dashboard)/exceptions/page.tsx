@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { formatDateTime } from '@/lib/utils'
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -44,9 +44,9 @@ interface Exception {
 }
 
 export default function ExceptionsDashboard() {
-  const { user } = useAuth()
-  const isCOE = user?.role === 'coe_manager' || user?.role === 'coe_tech'
-  const isAdmin = user?.role === 'admin'
+  const { can } = useCan()
+  const isCOE = can('order.transition') && !can('platform.manage')
+  const isAdmin = can('platform.manage')
   const [severityFilter, setSeverityFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('pending')
 

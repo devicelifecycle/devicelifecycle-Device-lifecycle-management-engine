@@ -128,6 +128,7 @@ const navSections: NavSection[] = [
       { title: 'Users', href: '/admin/users', icon: Shield, roles: ['admin'], tourId: 'nav-users' },
       { title: 'Roles & Access', href: '/admin/roles', icon: Shield, roles: ['admin'] },
       { title: 'Audit Log', href: '/admin/audit-log', icon: FileText, roles: ['admin'] },
+      { title: 'Login History', href: '/admin/login-history', icon: Key, roles: ['admin'] },
       { title: 'Data Retention', href: '/admin/retention', icon: Archive, roles: ['admin'] },
     ],
   },

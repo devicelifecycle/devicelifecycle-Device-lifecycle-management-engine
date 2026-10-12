@@ -12,7 +12,7 @@ import { ArrowLeft, Plus, X, Upload, FileSpreadsheet, Download, Loader2, Chevron
 import { toast } from 'sonner'
 import { useOrders } from '@/hooks/useOrders'
 import { useCustomers } from '@/hooks/useCustomers'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -99,11 +99,11 @@ function getStorageOptionsForDevice(device?: Device): string[] {
 
 export default function NewTradeInPage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { can, role } = useCan()
   const { create, isCreating } = useOrders()
   const { customers } = useCustomers()
-  const isCustomer = user?.role === 'customer'
-  const isInternal = ['admin', 'coe_manager', 'coe_tech', 'sales'].includes(user?.role || '')
+  const isCustomer = role === 'customer'
+  const isInternal = can('pricing.view')
   const [devices, setDevices] = useState<Device[]>([])
   const [customerId, setCustomerId] = useState('')
   const [items, setItems] = useState<LineItem[]>([])

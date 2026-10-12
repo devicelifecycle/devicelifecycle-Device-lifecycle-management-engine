@@ -20,14 +20,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { DEVICE_BRANDS } from '@/lib/constants'
 import { useDebounce } from '@/hooks/useDebounce'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { Pagination } from '@/components/ui/pagination'
 import { parseTabularUpload } from '@/lib/csv-templates'
 import type { Device } from '@/types'
 
 export default function DevicesPage() {
-  const { user } = useAuth()
-  const canCreate = user?.role === 'admin' || user?.role === 'coe_manager'
+  const { can } = useCan()
+  const canCreate = can('vendor.manage')
   const [devices, setDevices] = useState<Device[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)

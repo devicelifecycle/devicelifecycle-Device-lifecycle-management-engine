@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, RotateCcw, Search, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import { useVendors } from '@/hooks/useVendors'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,13 +16,13 @@ import { Pagination } from '@/components/ui/pagination'
 import { PageHero } from '@/components/ui/page-hero'
 
 export default function DeletedVendorsPage() {
-  const { user } = useAuth()
+  const { can } = useCan()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const debouncedSearch = useDebounce(search)
 
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = can('vendor.manage')
 
   const { vendors, total, isLoading, totalPages, error, update, refetch } = useVendors({
     search: debouncedSearch,

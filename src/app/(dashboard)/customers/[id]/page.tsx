@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { ArrowLeft, Pencil, X, Save, Trash2, ShoppingCart, MapPin, Building2, Bell, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCustomer } from '@/hooks/useCustomers'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,14 +37,14 @@ import type { Order } from '@/types'
 export default function CustomerDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { user } = useAuth()
+  const { can } = useCan()
   const { customer, isLoading, update, isUpdating, remove, isDeleting } = useCustomer(params.id as string)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Record<string, string>>({})
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
-  const canDelete = user?.role === 'admin' || user?.role === 'coe_manager'
+  const canDelete = can('customer.delete')
 
   useEffect(() => {
     if (!params.id) return
@@ -137,7 +137,7 @@ export default function CustomerDetailPage() {
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><Building2 className="h-4 w-4" />Organization</CardTitle></CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">This customer is linked to organization</p>
-            {user?.role === 'admin' ? (
+            {can('tenant.view') ? (
               <Link href="/admin/organizations" className="font-medium text-primary hover:underline">
                 {(customer as { organization?: { name: string } }).organization?.name}
               </Link>

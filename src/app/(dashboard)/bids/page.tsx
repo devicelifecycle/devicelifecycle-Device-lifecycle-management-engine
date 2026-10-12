@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Gavel, CheckCircle, XCircle, X, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { useBids, type BidWithContext } from '@/hooks/useBids'
-import { useAuth } from '@/hooks/useAuth'
+import { useCan } from '@/hooks/useCan'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -40,8 +40,8 @@ function formatCurrency(v: number | null | undefined) {
 }
 
 export default function BidsPage() {
-  const { user } = useAuth()
-  const canAct = user?.role === 'admin' || user?.role === 'coe_manager'
+  const { can } = useCan()
+  const canAct = can('vendor.manage')
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)

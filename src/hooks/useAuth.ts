@@ -377,6 +377,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
       // for every one of the 23 live users (verified 2026-09-18).
       supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userId)
         .then(({ error }: { error: unknown }) => { if (error) console.warn('last_login_at update failed', error) })
+      fetch('/api/auth/audit-login', { method: 'POST' }).catch(() => {})
 
       // ── Fast path 1: localStorage cache matches the authenticated user ──
       // Most common case for returning users — navigate immediately with no DB call.
@@ -468,7 +469,8 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
     clearRoutingCookies()
     setState({ user: null, isLoading: false, isInitializing: false, isAuthenticated: false, activeRole: null })
     router.replace('/login')
-    // Fire-and-forget: revoke JWT after UI is already gone
+    // Fire-and-forget: audit then revoke JWT after UI is already gone
+    fetch('/api/auth/audit-logout', { method: 'POST' }).catch(() => {})
     void supabase.auth.signOut().catch(() => {})
   }, [router])
 
