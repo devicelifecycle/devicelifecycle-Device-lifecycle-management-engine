@@ -160,6 +160,10 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'How do I edit what each role can do?',
       answer: 'Roles & Access (under Admin) shows a live permission matrix. Each checkbox maps a permission to a role — toggle it and hit Save on that column. Changes are written to the RBAC database tables immediately. System roles (admin, coe_manager, etc.) and delegated VAR roles are all editable. The matrix reflects the database, not a hardcoded config file.',
     },
+    {
+      question: 'How do I set up a custom domain for a VAR?',
+      answer: 'Open the VAR under VARs and enter their domain (e.g. portal.acme.com) in the Custom Domain field. The VAR must point a CNAME record for that domain to the platform host. Once DNS resolves and the domain is saved here, the platform serves that VAR\'s white-label branding on their custom domain automatically — no code deploy required.',
+    },
   ],
 }
 

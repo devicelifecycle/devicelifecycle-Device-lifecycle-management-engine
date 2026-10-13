@@ -267,7 +267,7 @@ export default function TenantDetailPageImpl() {
               <Field label="Support email">
                 <Input value={branding.supportEmail ?? ''} disabled={isPlatform} onChange={(e) => set('supportEmail', e.target.value || null)} placeholder="support@acme.com" />
               </Field>
-              <Field label="Custom domain">
+              <Field label="Custom domain" description="The VAR's own domain for white-label access (e.g. portal.acme.com). Point a CNAME to the platform host, then enter the domain here.">
                 <Input value={customDomain} onChange={(e) => setCustomDomain(e.target.value)} placeholder="portal.acme.com" />
               </Field>
               <Field label="Support phone">
@@ -731,10 +731,11 @@ function VarAdministrators({ tenantId, tenantActive }: { tenantId: string; tenan
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
+      {description && <p className="text-[11px] text-muted-foreground leading-tight">{description}</p>}
       {children}
     </div>
   )
