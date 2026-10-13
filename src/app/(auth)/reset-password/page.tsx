@@ -165,13 +165,20 @@ export default function ResetPasswordPage() {
     setIsLoading(true)
 
     try {
-      const supabase = getSupabase()
-      const { error: updateError } = await supabase.auth.updateUser({ password })
-      if (updateError) throw updateError
+      const res = await fetch('/api/auth/update-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Failed to reset password' }))
+        throw new Error(body.error ?? 'Failed to reset password')
+      }
 
       // Fire-and-forget confirmation email
       fetch('/api/users/password-change-confirmation', { method: 'POST' }).catch(() => {})
 
+      const supabase = getSupabase()
       await supabase.auth.signOut()
       setSuccess(true)
       setTimeout(() => router.push('/login'), 3000)

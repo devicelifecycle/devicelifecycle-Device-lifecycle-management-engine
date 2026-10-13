@@ -55,8 +55,15 @@ function ChangePasswordCard({ authEmail }: { authEmail: string }) {
         toast.error('Current password is incorrect')
         return
       }
-      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
-      if (updateError) throw updateError
+      const res = await fetch('/api/auth/update-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Failed to update password' }))
+        throw new Error(body.error ?? 'Failed to update password')
+      }
       // Send confirmation email (fire-and-forget; only sent for real emails, not @login.local)
       fetch('/api/users/password-change-confirmation', { method: 'POST' }).catch(() => {})
       toast.success('Password changed successfully')
