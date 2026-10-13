@@ -38,6 +38,46 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'How do I get API access to my data?',
       answer: 'If you are your organization\'s admin and API access is enabled on your plan, go to API Keys in the sidebar. Create a key with a name, then copy it immediately — it is shown only once. Use the key as a bearer token against the read-only /api/v1 endpoints (orders, customers, devices). Revoke a key any time from the same page.',
     },
+    {
+      question: 'What do the cards on my dashboard mean?',
+      answer: 'Your dashboard shows your current plan, team member count, and storage usage alongside your order and asset metrics. The plan card names your tier and its limits. The storage card shows how much document and evidence file storage your organization is using.',
+    },
+    {
+      question: 'How do I view my registered devices?',
+      answer: 'Device Register (in the sidebar) is your asset inventory — every device your organization has submitted, traded in, or is tracking. You can search by IMEI, model, or status. Each device links to its order history and inspection results.',
+    },
+    {
+      question: 'How do I update my company profile?',
+      answer: 'Company Profile (in the sidebar) holds your organization\'s name, address, locations, departments, contacts, and business hours. If you are an org admin, you can edit these directly. Your billing address here determines the tax rate on any invoices.',
+    },
+    {
+      question: 'How do I manage my team\'s access?',
+      answer: 'Team (in the sidebar) lists everyone in your organization who can log in. If you are an org admin, you can invite new members, deactivate accounts, and toggle org-admin status. Non-admin team members see the same data but cannot manage the team or company profile.',
+    },
+    {
+      question: 'Where do I find reports on my orders and devices?',
+      answer: 'Reports (in the sidebar) summarizes your order history, device counts, trade-in values, and includes financial summary and compliance report sections. Filter by date range and export as CSV or PDF.',
+    },
+    {
+      question: 'How do I manage my notifications?',
+      answer: 'Notifications (bell icon in the sidebar) shows every alert the platform has sent you — quote updates, order status changes, and announcements. Click any notification to jump to the relevant page. Notifications are marked read automatically when you view them.',
+    },
+    {
+      question: 'How do I contact support?',
+      answer: 'Support (in the sidebar) lets you open a ticket describing your issue. You can attach files and track the conversation. Your support team is notified immediately. Check back on the same page for replies and resolution updates.',
+    },
+    {
+      question: 'Where do I find help articles and guides?',
+      answer: 'Knowledge Base (in the sidebar) contains articles covering common workflows, policies, and troubleshooting steps. Browse by category or search by keyword.',
+    },
+    {
+      question: 'What is the AI assistant and how do I use it?',
+      answer: 'The chat icon in the bottom corner opens a conversational assistant that can answer questions about the platform, look up your orders or devices, and guide you through common tasks. It sees the same data you do — scoped to your role and organization.',
+    },
+    {
+      question: 'How do I set up two-factor authentication?',
+      answer: 'Go to Profile and click "Enable MFA". Scan the QR code with an authenticator app (Google Authenticator, Authy, etc.) and enter the six-digit code to confirm. From then on, every login requires both your password and a code from the app.',
+    },
   ],
   vendor: [
     {
@@ -55,6 +95,18 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
     {
       question: 'When do I get paid for a fulfilled order?',
       answer: 'Payout status for your fulfilled orders is tracked on the Performance page once an order is marked delivered/closed.',
+    },
+    {
+      question: 'How do I manage my vendor team?',
+      answer: 'Team (in the sidebar) shows everyone in your vendor organization. If you are the org admin, you can invite teammates, set their roles, and deactivate accounts. Each team member can view and bid on orders independently, but only the org admin can manage the team roster.',
+    },
+    {
+      question: 'Where do I find help articles and guides?',
+      answer: 'Knowledge Base (in the sidebar) contains articles covering common workflows, policies, and troubleshooting steps. Browse by category or search by keyword.',
+    },
+    {
+      question: 'How do I set up two-factor authentication?',
+      answer: 'Go to Profile and click "Enable MFA". Scan the QR code with an authenticator app and enter the six-digit code to confirm. From then on, every login requires both your password and a code from the app.',
     },
   ],
   sales: [
@@ -172,6 +224,42 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'How do I notify VARs about a pricing change?',
       answer: 'On the Pricing page, click "Broadcast Pricing Change to VARs". Enter a subject and message describing what changed. The broadcast sends an in-app notification and email to every active VAR entity admin across all VARs. It is deduped per day per tenant, so resending the same day won\'t create duplicates.',
     },
+    {
+      question: 'How do I create, edit, or suspend a VAR?',
+      answer: 'Open VARs in the sidebar. "Add VAR" creates a new reseller with their company details, plan, and branding defaults. To edit, click into any VAR row. To suspend, toggle the Active switch off — this immediately locks out all of that VAR\'s users and hides their data from the customer portal, but preserves everything for reactivation.',
+    },
+    {
+      question: 'How do I manage device pricing tables and RVE depreciation?',
+      answer: 'Pricing (under Admin) holds the master price tables that drive every quote. Each row maps a device model, storage, and condition grade to a base price. The RVE depreciation curve applies an automatic monthly markdown so prices stay current without manual edits. Changes here affect new quotes only — already-issued quotes keep the price they were quoted at.',
+    },
+    {
+      question: 'How do I configure the platform commission engine?',
+      answer: 'Commission (under Admin) sets the platform\'s take on each deal. You can define a percentage commission, a fixed fee, or both. These apply globally before VAR-level margins are calculated. Changes take effect on new invoices — existing invoices are not retroactively adjusted.',
+    },
+    {
+      question: 'How do I impersonate a user to troubleshoot their view?',
+      answer: 'On the Users page, click Impersonate on any user\'s row. You will see the platform exactly as they do — same role, same tenant scope, same data. A banner at the top reminds you that you are impersonating. Click "End Session" in that banner to return to your admin view. Every impersonation is logged in the audit trail.',
+    },
+    {
+      question: 'Where is the platform-wide audit log?',
+      answer: 'Audit Log (under Admin) records every significant action across all tenants — user logins, data changes, status transitions, and admin operations. You can filter by action type, entity, and date range, and export results as CSV. This is the global view; each VAR also has their own scoped audit log showing only their tenant\'s activity.',
+    },
+    {
+      question: 'How do I restrict access by IP address?',
+      answer: 'On any VAR\'s detail page, the IP Allowlist section lets you define CIDR ranges or individual IPs that are permitted to access the platform for that tenant. When enabled, any request from an IP outside the list is blocked at the API layer. IPs are format-validated on save so a typo cannot lock a tenant out.',
+    },
+    {
+      question: 'Where do I find platform-wide analytics and reports?',
+      answer: 'Reports (under Admin) aggregates order volume, revenue, device mix, and processing times across all tenants. Platform Analytics shows MRR, ARR, active/inactive breakdowns, and per-VAR license usage. Use the date range and tenant filters to drill down. You can export any report view as CSV.',
+    },
+    {
+      question: 'How do I create and manage knowledge base articles?',
+      answer: 'Knowledge Base (under Admin) is the article editor. Create categories, then add articles with a rich-text editor. Published articles appear in the Knowledge Base that all users can browse from their sidebar. Draft articles are visible only to admins until published.',
+    },
+    {
+      question: 'How do I configure SLA rules and thresholds?',
+      answer: 'SLA Rules (under Admin) defines warning and breach thresholds in hours for each order type and status. When an order\'s time-in-stage crosses the warning threshold, it appears in dashboard alerts. Crossing the breach threshold triggers a notification to the assigned team.',
+    },
   ],
 }
 
@@ -238,6 +326,22 @@ const FAQ_BY_VAR_ROLE: Record<DelegatedRole, FaqEntry[]> = {
     {
       question: 'Where do I see my organization\'s activity history?',
       answer: 'Audit Log (in the sidebar) shows every action taken by users in your organization — logins, data changes, status transitions. You can filter by action type and entity, search by ID, and export the results as CSV. The log only shows your own tenant\'s activity, never another VAR\'s.',
+    },
+    {
+      question: 'What does my VAR Console dashboard show?',
+      answer: 'The VAR Console is your home page. It shows order volume, revenue, active customers, and margin performance at a glance. The cards update from live data. Use it to spot trends and jump into the areas that need attention — each card links to the relevant detail page.',
+    },
+    {
+      question: 'How do I customize my organization\'s branding?',
+      answer: 'Your branding is managed by the platform admin under VARs. They can upload your logo, set your brand colours, configure your email sender identity, and customise your login page. Your customers see your brand everywhere — login page, emails, PDF invoices, and the portal itself.',
+    },
+    {
+      question: 'How do I manage my customers?',
+      answer: 'Customers (in the sidebar) lists every customer organization in your tenant. You can add new customers, edit their details, assign them to a sales rep and region, and set or override their plan. Each customer row links to their orders, devices, and team.',
+    },
+    {
+      question: 'Where do I find my organization\'s reports?',
+      answer: 'Reports (in the sidebar) shows order volume, revenue, and device breakdown for your organization. Filter by date range, customer, or sales rep. Regional managers see only their region; entity admins see the full picture. Export any view as CSV.',
     },
   ],
   var_regional_manager: [

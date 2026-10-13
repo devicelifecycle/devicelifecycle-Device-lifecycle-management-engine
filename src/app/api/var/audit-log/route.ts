@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { sanitizeSearchInput } from '@/lib/utils'
 import type { AuditAction } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -60,7 +61,10 @@ export async function GET(request: NextRequest) {
   if (actions.length === 1) query = query.eq('action', actions[0])
   else if (actions.length > 1) query = query.in('action', actions)
   if (entityType) query = query.eq('entity_type', entityType)
-  if (search) query = query.or(`entity_id.ilike.%${search}%,ip_address.ilike.%${search}%`)
+  if (search) {
+    const s = sanitizeSearchInput(search)
+    query = query.or(`entity_id.ilike.%${s}%,ip_address.ilike.%${s}%`)
+  }
 
   // CSV export — unbounded (up to 10k rows)
   if (format === 'csv') {

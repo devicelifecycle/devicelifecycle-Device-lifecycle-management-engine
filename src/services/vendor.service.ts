@@ -5,6 +5,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeSearchInput } from '@/lib/utils'
+import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 import { OrderSplitService } from './order-split.service'
 import { NotificationService } from './notification.service'
 import { EmailService } from './email.service'
@@ -293,9 +294,10 @@ export class VendorService {
       const srClient = createServiceRoleClient()
       const [{ data: vendor }, { data: orderRecord }] = await Promise.all([
         srClient.from('vendors').select('contact_email, contact_name, contact_phone, organization_id').eq('id', vendorId).single(),
-        srClient.from('orders').select('order_number').eq('id', orderId).single(),
+        srClient.from('orders').select('order_number, tenant_id').eq('id', orderId).single(),
       ])
       const orderLabel = orderRecord?.order_number || orderId
+      const brand = await resolveTenantBrandLabel(orderRecord?.tenant_id, srClient)
 
       // In-app notification to all active users in vendor's organization
       if (vendor?.organization_id) {
@@ -321,7 +323,7 @@ export class VendorService {
         ? undefined
         : vendor?.contact_email
       if (effectiveEmail) {
-        const subject = `New Order Assignment — Order #${orderLabel}`
+        const subject = `[${brand.name}] New Order Assignment — Order #${orderLabel}`
         const html = `<p>Hi ${vendor?.contact_name || 'Vendor'},</p>
 <p>You have been assigned to fulfil an order.</p>
 <ul>
@@ -332,7 +334,7 @@ export class VendorService {
   <li><strong>Lead Time:</strong> ${leadTimeDays} day${leadTimeDays !== 1 ? 's' : ''}</li>
 </ul>
 <p>Please log in to the platform to review and confirm the order details.</p>`
-        await EmailService.sendEmail(effectiveEmail, subject, html)
+        await EmailService.sendEmail(effectiveEmail, subject, html, brand)
       }
     } catch (notifyErr) {
       // Non-fatal: bid was already created successfully

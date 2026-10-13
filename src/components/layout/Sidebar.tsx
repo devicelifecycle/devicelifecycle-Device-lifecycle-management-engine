@@ -215,7 +215,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   pathname === item.href ||
                   (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
                 return (
-                  <Link key={item.title} href={item.href} onClick={onNavigate} prefetch={false} onMouseEnter={() => router.prefetch(item.href)}>
+                  <Link key={item.href} href={item.href} onClick={onNavigate} prefetch={false} onMouseEnter={() => router.prefetch(item.href)}>
                     <div
                       data-tour={item.tourId}
                       className={cn(

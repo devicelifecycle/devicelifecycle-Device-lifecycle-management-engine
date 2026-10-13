@@ -67,7 +67,7 @@ export default function VarAuditLogPage() {
         setTotal(data.total || 0)
       }
     } catch {
-      // silent
+      toast.error('Failed to load audit log')
     } finally {
       setIsLoading(false)
     }
@@ -115,7 +115,7 @@ export default function VarAuditLogPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-end gap-4">
+          <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-2 flex-1">
               <Label>Search</Label>
               <div className="relative">
