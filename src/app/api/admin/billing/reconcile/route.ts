@@ -13,6 +13,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { commissionConfigFromSettings } from '@/lib/commission'
 import { reconcilePeriod, type PeriodOrder, BILLABLE_ORDER_STATUSES } from '@/lib/billing-reconcile'
 import { formatInvoiceNumber } from '@/lib/billing'
+import { resolveTaxRate } from '@/lib/tax'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -75,8 +76,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // The VAR commission model + its money-moved orders in the window.
-  const [{ data: tenant }, { data: rows }] = await Promise.all([
+  // The VAR commission model + its money-moved orders in the window + billing address for tax.
+  const [{ data: tenant }, { data: rows }, { data: org }] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenant_id).maybeSingle(),
     supabase.from('orders')
       .select('order_number, type, final_amount, quoted_amount, total_amount')
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
       .in('status', BILLABLE_ORDER_STATUSES)
       .gte('created_at', period_start)
       .lte('created_at', `${period_end}T23:59:59`),
+    supabase.from('organizations').select('address').eq('tenant_id', tenant_id).limit(1).maybeSingle(),
   ])
 
   const config = commissionConfigFromSettings(tenant?.settings)
@@ -93,7 +95,15 @@ export async function POST(request: NextRequest) {
     amount: (o.final_amount as number) ?? (o.quoted_amount as number) ?? (o.total_amount as number) ?? 0,
   }))
 
-  const { lineItems, totals } = reconcilePeriod(orders, config, subscription_fee ?? 0)
+  // Resolve tax from the VAR's organization billing address
+  const addr = org?.address as Record<string, unknown> | null
+  const billingProvince = (tenant?.settings as Record<string, unknown>)?.billingProvince as string
+    ?? addr?.state ?? addr?.province ?? ''
+  const billingCountry = addr?.country as string ?? ''
+  const taxResult = resolveTaxRate(billingProvince as string, billingCountry)
+  const tax = taxResult.rate > 0 ? { rate: taxResult.rate, label: taxResult.label } : undefined
+
+  const { lineItems, totals } = reconcilePeriod(orders, config, subscription_fee ?? 0, tax)
 
   // Atomic, concurrency-safe numbering -- same scheme as manual draft creation.
   const year = Number(period_start.slice(0, 4))
@@ -115,6 +125,9 @@ export async function POST(request: NextRequest) {
       gross_subtotal: totals.grossSubtotal,
       commission_total: totals.commissionTotal,
       subscription_fee: totals.subscriptionFee,
+      tax_rate: totals.taxRate,
+      tax_label: totals.taxLabel || null,
+      tax_amount: totals.taxAmount,
       total: totals.total,
       notes: `Reconciled ${orders.length} order(s) for ${period_start} .. ${period_end}`,
     })

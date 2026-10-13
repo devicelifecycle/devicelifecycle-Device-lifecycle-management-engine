@@ -154,6 +154,26 @@ export async function GET(
   doc.setDrawColor(228, 228, 231)
   doc.line(totalsX, y, pageWidth - 14, y)
   y += 7
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(63, 63, 70)
+
+  const subtotalBeforeTax = Number(invoice.commission_total ?? 0) + Number(invoice.subscription_fee ?? 0)
+  doc.text('Subtotal:', totalsX, y)
+  doc.text(fmtMoney(subtotalBeforeTax, currency), pageWidth - 14, y, { align: 'right' })
+  y += 6
+
+  const taxAmount = Number(invoice.tax_amount ?? 0)
+  if (taxAmount > 0) {
+    const taxLabel = (invoice.tax_label as string) || 'Tax'
+    doc.text(`${taxLabel}:`, totalsX, y)
+    doc.text(fmtMoney(taxAmount, currency), pageWidth - 14, y, { align: 'right' })
+    y += 6
+  }
+
+  doc.setDrawColor(228, 228, 231)
+  doc.line(totalsX, y, pageWidth - 14, y)
+  y += 7
   doc.setFontSize(12)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(24, 24, 27)

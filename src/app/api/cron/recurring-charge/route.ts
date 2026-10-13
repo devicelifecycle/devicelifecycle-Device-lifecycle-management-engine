@@ -21,6 +21,7 @@ import { hasProvider, getProvider } from '@/lib/payment-provider'
 import { initStripeProvider } from '@/lib/payment-providers/stripe'
 import { renewSubscription } from '@/lib/subscription-service'
 import { tierBySlug } from '@/lib/plan-tiers'
+import { resolveTaxRate, computeTax } from '@/lib/tax'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -83,9 +84,22 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      const grossCents = Math.round(
-        tier.monthlyPrice * 100 * (sub.billing_interval === 'year' ? 12 : 1),
-      )
+      const grossDollars = tier.monthlyPrice * (sub.billing_interval === 'year' ? 12 : 1)
+
+      // Resolve tax from the tenant's organization address
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('address')
+        .eq('tenant_id', sub.tenant_id)
+        .limit(1)
+        .maybeSingle()
+      const addr = org?.address as Record<string, unknown> | null
+      const province = (addr?.state ?? addr?.province ?? '') as string
+      const country = (addr?.country ?? '') as string
+      const taxResult = resolveTaxRate(province, country)
+      const taxDollars = taxResult.rate > 0 ? computeTax(grossDollars, taxResult.rate) : 0
+      const totalDollars = grossDollars + taxDollars
+      const grossCents = Math.round(totalDollars * 100)
 
       // Apply credit balance
       const creditCents = sub.credit_balance_cents ?? 0
@@ -106,7 +120,7 @@ export async function GET(request: NextRequest) {
           event_type: 'charge_covered_by_credit',
           from_status: 'active',
           to_status: 'active',
-          metadata: { grossCents, creditUsed, netChargeCents: 0 },
+          metadata: { grossCents, creditUsed, netChargeCents: 0, taxDollars, taxLabel: taxResult.label },
         })
         result.coveredByCredit++
         result.renewed++

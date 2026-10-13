@@ -10,6 +10,7 @@ import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { commissionConfigFromSettings } from '@/lib/commission'
 import { reconcilePeriod, type PeriodOrder, BILLABLE_ORDER_STATUSES } from '@/lib/billing-reconcile'
+import { resolveTaxRate } from '@/lib/tax'
 export const dynamic = 'force-dynamic'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -26,8 +27,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Only draft invoices can be reconciled' }, { status: 400 })
   }
 
-  // The VAR's commission model + the period's billable orders on that tenant.
-  const [{ data: tenant }, { data: rows }] = await Promise.all([
+  // The VAR's commission model + the period's billable orders + billing address for tax.
+  const [{ data: tenant }, { data: rows }, { data: org }] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', invoice.tenant_id).maybeSingle(),
     supabase.from('orders')
       .select('order_number, type, status, quoted_amount, total_amount, final_amount')
@@ -35,6 +36,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       .gte('created_at', invoice.period_start)
       .lte('created_at', `${invoice.period_end}T23:59:59`)
       .in('status', BILLABLE_ORDER_STATUSES),
+    supabase.from('organizations').select('address').eq('tenant_id', invoice.tenant_id).limit(1).maybeSingle(),
   ])
 
   const config = commissionConfigFromSettings(tenant?.settings)
@@ -44,7 +46,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     amount: (o.final_amount as number) ?? (o.quoted_amount as number) ?? (o.total_amount as number) ?? 0,
   }))
 
-  const { lineItems, totals } = reconcilePeriod(orders, config, invoice.subscription_fee ?? 0)
+  const addr = org?.address as Record<string, unknown> | null
+  const province = (addr?.state ?? addr?.province ?? '') as string
+  const country = (addr?.country ?? '') as string
+  const taxResult = resolveTaxRate(province, country)
+  const tax = taxResult.rate > 0 ? { rate: taxResult.rate, label: taxResult.label } : undefined
+
+  const { lineItems, totals } = reconcilePeriod(orders, config, invoice.subscription_fee ?? 0, tax)
 
   // Replace the invoice's deal lines, then update its totals.
   await supabase.from('invoice_line_items').delete().eq('invoice_id', id)
@@ -56,6 +64,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { error: upErr } = await supabase.from('invoices').update({
     gross_subtotal: totals.grossSubtotal,
     commission_total: totals.commissionTotal,
+    tax_rate: totals.taxRate,
+    tax_label: totals.taxLabel || null,
+    tax_amount: totals.taxAmount,
     total: totals.total,
     updated_at: new Date().toISOString(),
   }).eq('id', id)

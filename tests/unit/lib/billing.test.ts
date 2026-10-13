@@ -17,6 +17,8 @@ describe('billing totals', () => {
     expect(t.grossSubtotal).toBe(1520)
     expect(t.commissionTotal).toBe(76)
     expect(t.subscriptionFee).toBe(0)
+    expect(t.taxRate).toBe(0)
+    expect(t.taxAmount).toBe(0)
     expect(t.total).toBe(76)
   })
 
@@ -24,18 +26,35 @@ describe('billing totals', () => {
     const t = computeInvoiceTotals(lines, 199)
     expect(t.commissionTotal).toBe(76)
     expect(t.subscriptionFee).toBe(199)
+    expect(t.subtotalBeforeTax).toBe(275)
     expect(t.total).toBe(275)
   })
 
   it('handles an empty period', () => {
     const t = computeInvoiceTotals([], 0)
-    expect(t).toEqual({ grossSubtotal: 0, commissionTotal: 0, subscriptionFee: 0, total: 0 })
+    expect(t.grossSubtotal).toBe(0)
+    expect(t.commissionTotal).toBe(0)
+    expect(t.subscriptionFee).toBe(0)
+    expect(t.taxRate).toBe(0)
+    expect(t.taxAmount).toBe(0)
+    expect(t.total).toBe(0)
   })
 
   it('rounds to cents', () => {
     const t = computeInvoiceTotals([{ description: 'x', grossAmount: 10.005, commissionAmount: 0.1 }], 0.005)
     expect(t.commissionTotal).toBe(0.1)
     expect(t.total).toBe(0.11)
+  })
+
+  it('applies tax to the subtotal', () => {
+    const t = computeInvoiceTotals(lines, 100, { rate: 0.13, label: 'HST (ON)' })
+    expect(t.commissionTotal).toBe(76)
+    expect(t.subscriptionFee).toBe(100)
+    expect(t.subtotalBeforeTax).toBe(176)
+    expect(t.taxRate).toBe(0.13)
+    expect(t.taxLabel).toBe('HST (ON)')
+    expect(t.taxAmount).toBe(22.88)
+    expect(t.total).toBe(198.88)
   })
 })
 

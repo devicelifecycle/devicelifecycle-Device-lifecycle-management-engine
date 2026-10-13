@@ -25,23 +25,45 @@ export interface InvoiceTotals {
   commissionTotal: number
   /** Flat platform/subscription fee for the period. */
   subscriptionFee: number
-  /** What the VAR actually owes: commissionTotal + subscriptionFee. */
+  /** Subtotal before tax: commissionTotal + subscriptionFee. */
+  subtotalBeforeTax: number
+  /** Tax rate as a fraction (e.g. 0.13 for 13%). 0 when no tax. */
+  taxRate: number
+  /** Human label for the tax line (e.g. "HST (ON)"). Empty when no tax. */
+  taxLabel: string
+  /** Computed tax amount. */
+  taxAmount: number
+  /** What the VAR actually owes: subtotalBeforeTax + taxAmount. */
   total: number
 }
 
-/** Roll a set of line items (plus an optional flat fee) into invoice totals. */
+export interface InvoiceTaxInput {
+  rate: number
+  label: string
+}
+
+/** Roll a set of line items (plus an optional flat fee and tax) into invoice totals. */
 export function computeInvoiceTotals(
   lineItems: InvoiceLineItem[],
   subscriptionFee = 0,
+  tax?: InvoiceTaxInput,
 ): InvoiceTotals {
   const grossSubtotal = round2(lineItems.reduce((s, l) => s + l.grossAmount, 0))
   const commissionTotal = round2(lineItems.reduce((s, l) => s + l.commissionAmount, 0))
   const fee = round2(subscriptionFee)
+  const subtotalBeforeTax = round2(commissionTotal + fee)
+  const taxRate = tax?.rate ?? 0
+  const taxLabel = tax?.label ?? ''
+  const taxAmount = taxRate > 0 ? round2(subtotalBeforeTax * taxRate) : 0
   return {
     grossSubtotal,
     commissionTotal,
     subscriptionFee: fee,
-    total: round2(commissionTotal + fee),
+    subtotalBeforeTax,
+    taxRate,
+    taxLabel,
+    taxAmount,
+    total: round2(subtotalBeforeTax + taxAmount),
   }
 }
 

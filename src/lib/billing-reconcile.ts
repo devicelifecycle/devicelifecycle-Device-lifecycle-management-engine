@@ -6,7 +6,7 @@
 // engine. Pure — the API layer supplies the orders and persists the result.
 
 import { computeDealPricing, type CommissionConfig } from './commission'
-import { computeInvoiceTotals, type InvoiceLineItem, type InvoiceTotals } from './billing'
+import { computeInvoiceTotals, type InvoiceLineItem, type InvoiceTotals, type InvoiceTaxInput } from './billing'
 
 /**
  * Order statuses where money has actually moved (payment sent or the order
@@ -39,6 +39,7 @@ export function reconcilePeriod(
   orders: PeriodOrder[],
   config: CommissionConfig,
   subscriptionFee = 0,
+  tax?: InvoiceTaxInput,
 ): ReconcileResult {
   const lineItems: InvoiceLineItem[] = orders.map((o) => {
     const orderType = o.type === 'cpo' ? 'cpo' : 'trade_in'
@@ -49,5 +50,5 @@ export function reconcilePeriod(
       commissionAmount: bbTake,
     }
   })
-  return { lineItems, totals: computeInvoiceTotals(lineItems, subscriptionFee) }
+  return { lineItems, totals: computeInvoiceTotals(lineItems, subscriptionFee, tax) }
 }

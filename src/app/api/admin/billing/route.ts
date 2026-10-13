@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { computeInvoiceTotals, formatInvoiceNumber } from '@/lib/billing'
+import { resolveTaxRate } from '@/lib/tax'
 import { parsePaging } from '@/lib/paging'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
@@ -43,9 +44,20 @@ export async function POST(request: NextRequest) {
   }
   const supabase = createServiceRoleClient()
 
-  // A draft starts with no deal lines; commission is populated when a period is
-  // reconciled against orders (reporting phase). Subscription fee applies now.
-  const totals = computeInvoiceTotals([], parsed.data.subscription_fee ?? 0)
+  // Resolve tax from the tenant's organization billing address
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('address')
+    .eq('tenant_id', parsed.data.tenant_id)
+    .limit(1)
+    .maybeSingle()
+  const addr = org?.address as Record<string, unknown> | null
+  const province = (addr?.state ?? addr?.province ?? '') as string
+  const country = (addr?.country ?? '') as string
+  const taxResult = resolveTaxRate(province, country)
+  const tax = taxResult.rate > 0 ? { rate: taxResult.rate, label: taxResult.label } : undefined
+
+  const totals = computeInvoiceTotals([], parsed.data.subscription_fee ?? 0, tax)
 
   const year = Number(parsed.data.period_start.slice(0, 4))
   // Atomic, concurrency-safe sequence (see next_invoice_seq in the migration).
@@ -67,6 +79,9 @@ export async function POST(request: NextRequest) {
       gross_subtotal: totals.grossSubtotal,
       commission_total: totals.commissionTotal,
       subscription_fee: totals.subscriptionFee,
+      tax_rate: totals.taxRate,
+      tax_label: totals.taxLabel || null,
+      tax_amount: totals.taxAmount,
       total: totals.total,
       notes: parsed.data.notes ?? null,
     })
