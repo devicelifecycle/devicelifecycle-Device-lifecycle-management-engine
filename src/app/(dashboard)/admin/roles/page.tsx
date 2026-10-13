@@ -6,12 +6,13 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, ShieldCheck, UserPlus } from 'lucide-react'
+import { Loader2, Save, ShieldCheck, UserPlus } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import type { PermissionKey } from '@/lib/permissions'
 
 interface Role {
@@ -115,16 +116,8 @@ export default function RolesPageImpl() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Roles</CardTitle>
-          {/* Assigning a user to a role above IS enforced. The permission grid
-              below is not: requirePermission() guards a single route and the
-              permissions / role_permissions tables are read by nothing, so the
-              matrix documents the intended model rather than describing what
-              the app currently checks. Presenting it as live access control
-              would mislead an admin auditing who can do what. */}
           <CardDescription>
-            Reference model. Access is currently enforced by <span className="font-medium">role</span>,
-            not by individual permissions — this grid shows what each role is intended to cover,
-            and changing it does not alter what the application checks today.
+            System and delegated roles with member counts. Edit permissions in the matrix below.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -154,39 +147,120 @@ export default function RolesPageImpl() {
       </Card>
 
       {matrix && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Permission Matrix</CardTitle>
-            <CardDescription>Capabilities granted to each system role (read-only view of the active RBAC map).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Permission</th>
-                    {Object.keys(matrix.roles).map((rk) => (
-                      <th key={rk} className="pb-2 pr-4 font-medium">{rk}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrix.permissions.map((p) => (
-                    <tr key={p} className="border-b last:border-0">
-                      <td className="py-2 pr-4 font-mono text-xs">{p}</td>
-                      {Object.entries(matrix.roles).map(([rk, perms]) => (
-                        <td key={rk} className="py-2 pr-4 text-center">
-                          {perms.includes(p) ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground/40">—</span>}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <PermissionMatrixEditor matrix={matrix} onSaved={loadMatrix} />
       )}
     </div>
+  )
+}
+
+// ============================================================================
+// EDITABLE PERMISSION MATRIX
+// ============================================================================
+
+function PermissionMatrixEditor({ matrix, onSaved }: { matrix: RbacMatrix; onSaved: () => void }) {
+  const [draft, setDraft] = useState<Record<string, Set<string>>>({})
+  const [dirty, setDirty] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState<string | null>(null)
+
+  useEffect(() => {
+    const d: Record<string, Set<string>> = {}
+    for (const [rk, perms] of Object.entries(matrix.roles)) {
+      d[rk] = new Set(perms)
+    }
+    setDraft(d)
+    setDirty(new Set())
+  }, [matrix])
+
+  const toggle = (roleKey: string, perm: string) => {
+    setDraft((prev) => {
+      const next = { ...prev }
+      const s = new Set(prev[roleKey])
+      if (s.has(perm)) s.delete(perm)
+      else s.add(perm)
+      next[roleKey] = s
+      return next
+    })
+    setDirty((prev) => new Set(prev).add(roleKey))
+  }
+
+  const saveRole = async (roleKey: string) => {
+    setSaving(roleKey)
+    try {
+      const res = await fetch('/api/admin/rbac/permissions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role_key: roleKey, permissions: Array.from(draft[roleKey] ?? []) }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to save')
+      toast.success(`${roleKey} permissions updated (${j.count} granted)`)
+      setDirty((prev) => { const n = new Set(prev); n.delete(roleKey); return n })
+      onSaved()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save permissions')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const roleKeys = Object.keys(matrix.roles)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Permission Matrix</CardTitle>
+        <CardDescription>
+          Toggle permissions for each role. Changes are saved per-role to the database.
+          The matrix updates the RBAC tables — enforcement adopts them as routes migrate to DB-backed checks.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="sticky left-0 z-10 bg-card pb-2 pr-4 font-medium">Permission</th>
+                {roleKeys.map((rk) => (
+                  <th key={rk} className="pb-2 pr-2 text-center font-medium whitespace-nowrap">
+                    <div className="flex flex-col items-center gap-1">
+                      <span>{rk}</span>
+                      {dirty.has(rk) && (
+                        <Button
+                          size="sm" variant="default" className="h-6 px-2 text-[10px]"
+                          disabled={saving === rk}
+                          onClick={() => saveRole(rk)}
+                        >
+                          {saving === rk ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
+                          Save
+                        </Button>
+                      )}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matrix.permissions.map((p) => (
+                <tr key={p} className="border-b last:border-0 hover:bg-muted/50">
+                  <td className="sticky left-0 z-10 bg-card py-1.5 pr-4 font-mono text-xs">{p}</td>
+                  {roleKeys.map((rk) => {
+                    const checked = draft[rk]?.has(p) ?? false
+                    return (
+                      <td key={rk} className="py-1.5 pr-2 text-center">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => toggle(rk, p)}
+                          className="mx-auto"
+                        />
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

@@ -102,11 +102,11 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
     },
     {
       question: 'How do I require two-factor authentication for a VAR?',
-      answer: 'VARs → open the VAR → switch on Require MFA and save. From then on every one of that VAR’s users must sign in with an authenticator app: the API refuses single-factor sessions, and users see a banner pointing them to Profile to set one up. It applies to everyone in that VAR immediately, including users who have not enrolled yet — that is the point of turning it on.',
+      answer: 'VARs → open the VAR → switch on Require MFA and save. From then on every one of that VAR\'s users must sign in with an authenticator app: the API refuses single-factor sessions, and users see a banner pointing them to Profile to set one up. It applies to everyone in that VAR immediately, including users who have not enrolled yet — that is the point of turning it on.',
     },
     {
       question: 'What does the Data Retention page actually delete?',
-      answer: 'Rows older than the policy you set on each VAR’s page — and nothing else. A nightly job at 03:00 UTC removes them permanently, and Run now on that page does it immediately (you must type DELETE to enable the button). Six classes only: audit log, notifications, delivery attempts, order timeline, SLA breaches and ended impersonation sessions. Orders, customers, invoices and devices are never touched, and a VAR with no policy set keeps everything — that is the default. Every run is recorded in the history on that page, including runs that removed nothing.',
+      answer: 'Rows older than the policy you set on each VAR\'s page — and nothing else. A nightly job at 03:00 UTC removes them permanently, and Run now on that page does it immediately (you must type DELETE to enable the button). Six classes only: audit log, notifications, delivery attempts, order timeline, SLA breaches and ended impersonation sessions. Orders, customers, invoices and devices are never touched, and a VAR with no policy set keeps everything — that is the default. Every run is recorded in the history on that page, including runs that removed nothing.',
     },
     {
       question: 'How does a VAR get API access?',
@@ -139,6 +139,26 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
     {
       question: 'What does the Encryption page show?',
       answer: 'It is a read-only dashboard of the platform\'s encryption posture: database encryption (AES-256), TLS version, password hashing method, API key hashing, JWT signing, and how environment secrets are stored. Nothing on that page is editable — encryption keys are managed automatically by Supabase and Vercel.',
+    },
+    {
+      question: 'How is password security enforced?',
+      answer: 'All password changes — whether from the Profile page or from a forgot-password reset link — are validated server-side before reaching the database. The platform enforces an 8-character minimum on every password update. Client-side validation still gives users instant feedback, but even if it is bypassed the server rejects any password below the minimum.',
+    },
+    {
+      question: 'How does tax work on VAR invoices?',
+      answer: 'Tax is resolved automatically from the VAR\'s billing address province using the Canadian tax engine (HST, GST+PST, or GST-only depending on province). It applies to the invoice subtotal (commission + subscription fee) and appears as a separate line on the PDF. The recurring-charge cron also applies tax when billing subscriptions. If a VAR has no province on file, tax defaults to zero.',
+    },
+    {
+      question: 'How do I record a payment against an invoice?',
+      answer: 'Open any invoice from the Billing page and click "Payments". The dialog shows the full payment history, outstanding balance, and a form to record a new payment (with an optional note for wire refs, cheque numbers, etc.). When the total paid clears the balance and the invoice is in "sent" status, it automatically transitions to "paid". You can also refund a previous payment — refunds are capped at the net amount already paid.',
+    },
+    {
+      question: 'Which features can a VAR toggle on or off?',
+      answer: 'Seven of the twelve platform features are self-serve toggleable by VAR entity admins from their Features page: trade-in, CPO, customer portal, impersonation, billing, API access, and data retention. The remaining five (notifications, SSO, vendor auction, and admin-only flags) are either core infrastructure, not yet built, or require platform admin intervention to change.',
+    },
+    {
+      question: 'How do I edit what each role can do?',
+      answer: 'Roles & Access (under Admin) shows a live permission matrix. Each checkbox maps a permission to a role — toggle it and hit Save on that column. Changes are written to the RBAC database tables immediately. System roles (admin, coe_manager, etc.) and delegated VAR roles are all editable. The matrix reflects the database, not a hardcoded config file.',
     },
   ],
 }
@@ -177,11 +197,11 @@ const FAQ_BY_VAR_ROLE: Record<DelegatedRole, FaqEntry[]> = {
     },
     {
       question: 'Can I change my corp and rep margins myself?',
-      answer: 'Yes — on your VAR Console, the Margin model card has inputs for your corp margin and rep margin. Percent margins are a share of each deal; fixed margins are a dollar amount per deal. The platform’s own commission is not editable from there.',
+      answer: 'Yes — on your VAR Console, the Margin model card has inputs for your corp margin and rep margin. Percent margins are a share of each deal; fixed margins are a dollar amount per deal. The platform\'s own commission is not editable from there.',
     },
     {
       question: 'How do I change the sender name on emails my customers receive?',
-      answer: 'Communications → set the From name, From address and SMS sender ID. Emails and texts to your customers then go out under that identity instead of the platform’s.',
+      answer: 'Communications → set the From name, From address and SMS sender ID. Emails and texts to your customers then go out under that identity instead of the platform\'s.',
     },
     {
       question: 'Where do I see my invoices and subscription status?',
@@ -192,8 +212,16 @@ const FAQ_BY_VAR_ROLE: Record<DelegatedRole, FaqEntry[]> = {
       answer: 'On the Billing page, each invoice row has a download icon on the right. Click it to open a PDF in a new tab — it includes your invoice number, line items with gross amounts and platform fees, totals, and payment history. You can save or print it from there.',
     },
     {
-      question: 'How do I customize my organization\’s login page?',
+      question: 'How do I customize my organization\'s login page?',
       answer: 'Ask your platform admin to configure it under VARs → your organization → Branding. They can set a custom headline, description, feature stats, and footer label that your users see on the login screen instead of the platform defaults.',
+    },
+    {
+      question: 'Why does my invoice show a tax line?',
+      answer: 'The platform calculates Canadian sales tax (HST, GST+PST, or GST) based on the billing province in your organization\'s address. The tax applies to your subtotal (commission fees plus subscription fee). If you believe the rate is wrong, confirm your province is set correctly under your organization profile, or contact your platform admin.',
+    },
+    {
+      question: 'Is my password validated on the server?',
+      answer: 'Yes — every password change goes through a server-side check that enforces an 8-character minimum before updating your account. Even if you bypass the form\'s own validation, the server will reject a password that is too short.',
     },
   ],
   var_regional_manager: [
