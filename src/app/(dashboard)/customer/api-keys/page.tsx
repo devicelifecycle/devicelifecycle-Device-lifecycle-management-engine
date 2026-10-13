@@ -34,7 +34,8 @@ export default function CustomerApiKeysPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/customers/me/api-keys')
+      const res = await fetch('/api/customer/api-keys')
+      if (res.status === 403) { toast.error('API access is not enabled on your plan'); return }
       if (!res.ok) throw new Error()
       const json = await res.json()
       setKeys(json.data ?? [])
@@ -51,7 +52,7 @@ export default function CustomerApiKeysPage() {
     if (!name.trim()) return
     setCreating(true)
     try {
-      const res = await fetch('/api/customers/me/api-keys', {
+      const res = await fetch('/api/customer/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), scopes: ['read'] }),
@@ -71,10 +72,8 @@ export default function CustomerApiKeysPage() {
 
   async function revoke(id: string) {
     try {
-      const res = await fetch('/api/customers/me/api-keys', {
+      const res = await fetch(`/api/customer/api-keys/${id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
       })
       if (!res.ok) throw new Error()
       toast.success('Key revoked')

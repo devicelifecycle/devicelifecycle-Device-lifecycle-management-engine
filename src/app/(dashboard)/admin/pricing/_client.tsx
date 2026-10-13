@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useOnDbChange } from '@/hooks/useOnDbChange'
-import { Search, Plus, Trash2, TrendingUp, Calculator, Settings, RefreshCw, FileDown, Activity, DollarSign, LayoutGrid, ChevronDown, ChevronRight, ShoppingBag, ArrowDownRight, Globe, Database, Upload, Zap, Loader2 } from 'lucide-react'
+import { Search, Plus, Trash2, TrendingUp, Calculator, Settings, RefreshCw, FileDown, Activity, DollarSign, LayoutGrid, ChevronDown, ChevronRight, ShoppingBag, ArrowDownRight, Globe, Database, Upload, Zap, Loader2, Megaphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +22,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { PageHero } from '@/components/ui/page-hero'
 import { CONDITION_CONFIG, STORAGE_OPTIONS, MARGIN_TIER_CONFIG, COMPETITORS as COMPETITOR_LIST, COMPETITOR_DISPLAY_NAMES } from '@/lib/constants'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
@@ -339,6 +340,33 @@ export default function AdminPricingClient() {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [showQuoteRefreshBanner, setShowQuoteRefreshBanner] = useState(false)
   const [sendingQuoteUpdate, setSendingQuoteUpdate] = useState(false)
+
+  // Pricing broadcast
+  const [broadcastOpen, setBroadcastOpen] = useState(false)
+  const [broadcastSubject, setBroadcastSubject] = useState('Pricing table updated')
+  const [broadcastMessage, setBroadcastMessage] = useState('')
+  const [broadcastSending, setBroadcastSending] = useState(false)
+
+  async function handleBroadcast() {
+    if (!broadcastSubject.trim() || !broadcastMessage.trim()) return
+    setBroadcastSending(true)
+    try {
+      const res = await fetch('/api/admin/pricing/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: broadcastSubject.trim(), message: broadcastMessage.trim() }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to send')
+      toast.success(`Broadcast sent to ${j.notified} VAR admin(s) across ${j.tenants} VAR(s)`)
+      setBroadcastOpen(false)
+      setBroadcastMessage('')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send broadcast')
+    } finally {
+      setBroadcastSending(false)
+    }
+  }
 
   // Depreciation preview
   const [depreciationInput, setDepreciationInput] = useState('')
@@ -1545,6 +1573,12 @@ export default function AdminPricingClient() {
           { label: 'Scraper status', value: cpScraping ? 'Running' : 'Ready' },
         ]}
       />
+
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={() => setBroadcastOpen(true)}>
+          <Megaphone className="mr-2 h-4 w-4" />Broadcast Pricing Change to VARs
+        </Button>
+      </div>
 
       {showQuoteRefreshBanner && (
         <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
@@ -3800,6 +3834,34 @@ export default function AdminPricingClient() {
             <Button variant="outline" onClick={() => setBenchmarkPreviewOpen(false)}>Cancel</Button>
             <Button onClick={handleApplyBenchmark} disabled={benchmarkApplying}>
               {benchmarkApplying ? 'Applying...' : `Apply ${benchmarkPreview.length} Prices`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pricing Broadcast Dialog */}
+      <Dialog open={broadcastOpen} onOpenChange={setBroadcastOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Broadcast Pricing Change</DialogTitle>
+            <DialogDescription>
+              Notify all VAR administrators about a pricing table update via email and in-app notification.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input value={broadcastSubject} onChange={(e) => setBroadcastSubject(e.target.value)} placeholder="Pricing table updated" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Message</Label>
+              <Textarea value={broadcastMessage} onChange={(e) => setBroadcastMessage(e.target.value)} placeholder="Describe what changed and any actions VARs should take..." rows={4} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBroadcastOpen(false)}>Cancel</Button>
+            <Button onClick={handleBroadcast} disabled={broadcastSending || !broadcastSubject.trim() || !broadcastMessage.trim()}>
+              {broadcastSending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</> : <><Megaphone className="mr-2 h-4 w-4" />Send Broadcast</>}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -7,8 +7,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  ArrowRight, Box, ClipboardList, FileText, HardDrive, Loader2,
-  Package, ShoppingCart, TrendingUp,
+  ArrowRight, Box, ClipboardList, Database, FileText, HardDrive, Loader2,
+  Package, ShoppingCart, TrendingUp, Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -22,6 +22,8 @@ interface DashboardData {
   orders: { total: number; active: number }
   tradeInValue: number
   assets: { total: number; registered: number; assigned: number; retired: number }
+  plan: { name: string; limits: Record<string, unknown> } | null
+  usage: { users: number; storage_bytes: number | null } | null
 }
 
 interface RecentOrder {
@@ -37,6 +39,15 @@ const EMPTY: DashboardData = {
   orders: { total: 0, active: 0 },
   tradeInValue: 0,
   assets: { total: 0, registered: 0, assigned: 0, retired: 0 },
+  plan: null,
+  usage: null,
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 export default function CustomerDashboardPage() {
@@ -179,6 +190,59 @@ export default function CustomerDashboardPage() {
           </Card>
         </Link>
       </div>
+
+      {/* Plan & Usage */}
+      {(stats.plan || stats.usage) && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {stats.plan && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Current Plan</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{stats.plan.name}</p>
+                {stats.plan.limits && typeof stats.plan.limits === 'object' && (
+                  <p className="text-xs text-muted-foreground">
+                    {(stats.plan.limits as Record<string, unknown>).maxUsers != null
+                      ? `${(stats.plan.limits as Record<string, unknown>).maxUsers} users`
+                      : 'Unlimited users'}
+                    {(stats.plan.limits as Record<string, unknown>).storageMb != null
+                      ? ` · ${(stats.plan.limits as Record<string, unknown>).storageMb} MB storage`
+                      : ''}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          {stats.usage && (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{stats.usage.users}</p>
+                  <p className="text-xs text-muted-foreground">Active users in your organization</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
+                  <Database className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">
+                    {stats.usage.storage_bytes != null ? formatBytes(stats.usage.storage_bytes) : 'N/A'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Files and attachments</p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Recent orders */}
       <Card>

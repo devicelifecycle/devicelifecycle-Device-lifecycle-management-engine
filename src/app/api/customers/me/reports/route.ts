@@ -78,14 +78,68 @@ export async function GET() {
       0
     )
 
+    // Resolve customer's plan/license limits
+    const { data: org } = await serviceRole
+      .from('organizations')
+      .select('id, tenant_id')
+      .eq('id', profile.organization_id)
+      .maybeSingle()
+
+    let plan: { name: string; limits: Record<string, unknown> } | null = null
+    let usage: { users: number; storage_bytes: number | null } | null = null
+
+    if (org) {
+      // Check for per-customer plan override
+      const { data: custRow } = await serviceRole
+        .from('customers')
+        .select('plan_id, plan:subscription_plans(name, limits)')
+        .eq('id', customer.id)
+        .maybeSingle()
+
+      if (custRow?.plan) {
+        plan = custRow.plan as unknown as { name: string; limits: Record<string, unknown> }
+      } else if (org.tenant_id) {
+        const { data: tenant } = await serviceRole
+          .from('tenants')
+          .select('plan')
+          .eq('id', org.tenant_id)
+          .maybeSingle()
+        if (tenant?.plan) {
+          const { data: tenantPlan } = await serviceRole
+            .from('subscription_plans')
+            .select('name, limits')
+            .eq('slug', tenant.plan)
+            .maybeSingle()
+          if (tenantPlan) plan = tenantPlan as { name: string; limits: Record<string, unknown> }
+        }
+      }
+
+      // User count for this org
+      const { count: userCount } = await serviceRole
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', profile.organization_id)
+        .eq('is_active', true)
+
+      // Storage usage from objects (if tenant has storage tracking)
+      let storageBytes: number | null = null
+      if (org.tenant_id) {
+        const { data: usageRow } = await serviceRole
+          .rpc('measure_tenant_storage', { p_tenant_id: org.tenant_id })
+        if (usageRow != null) {
+          storageBytes = typeof usageRow === 'number' ? usageRow : (usageRow as { total_bytes?: number })?.total_bytes ?? null
+        }
+      }
+
+      usage = { users: userCount ?? 0, storage_bytes: storageBytes }
+    }
+
     return NextResponse.json({
       data: {
         orders: {
           total: orderTotalRes.count ?? rows.length,
           active: orderActiveRes.count ?? rows.filter((o) => !TERMINAL_STATUSES.includes(o.status)).length,
         },
-        // Summed over the most recent MAX_ORDERS orders only (see above) — the
-        // counts are exact, this money figure is windowed.
         tradeInValue,
         assets: {
           total: totalRes.count ?? 0,
@@ -93,6 +147,8 @@ export async function GET() {
           assigned: assignedRes.count ?? 0,
           retired: retiredRes.count ?? 0,
         },
+        plan: plan ? { name: plan.name, limits: plan.limits } : null,
+        usage,
       },
     })
   } catch (error) {

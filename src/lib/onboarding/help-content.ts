@@ -34,6 +34,10 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'Can I set up recurring trade-ins for my organization?',
       answer: 'Yes — if you\'re your organization\'s admin, go to Team and turn on Recurring Trade-In Reminders. We\'ll nudge you on whatever cadence you pick; you still submit each batch yourself when it arrives.',
     },
+    {
+      question: 'How do I get API access to my data?',
+      answer: 'If you are your organization\'s admin and API access is enabled on your plan, go to API Keys in the sidebar. Create a key with a name, then copy it immediately — it is shown only once. Use the key as a bearer token against the read-only /api/v1 endpoints (orders, customers, devices). Revoke a key any time from the same page.',
+    },
   ],
   vendor: [
     {
@@ -164,6 +168,10 @@ const FAQ_BY_ROLE: Record<UserRole, FaqEntry[]> = {
       question: 'How do I set up a custom domain for a VAR?',
       answer: 'Open the VAR under VARs and enter their domain (e.g. portal.acme.com) in the Custom Domain field. The VAR must point a CNAME record for that domain to the platform host. Once DNS resolves and the domain is saved here, the platform serves that VAR\'s white-label branding on their custom domain automatically — no code deploy required.',
     },
+    {
+      question: 'How do I notify VARs about a pricing change?',
+      answer: 'On the Pricing page, click "Broadcast Pricing Change to VARs". Enter a subject and message describing what changed. The broadcast sends an in-app notification and email to every active VAR entity admin across all VARs. It is deduped per day per tenant, so resending the same day won\'t create duplicates.',
+    },
   ],
 }
 
@@ -226,6 +234,10 @@ const FAQ_BY_VAR_ROLE: Record<DelegatedRole, FaqEntry[]> = {
     {
       question: 'Is my password validated on the server?',
       answer: 'Yes — every password change goes through a server-side check that enforces an 8-character minimum before updating your account. Even if you bypass the form\'s own validation, the server will reject a password that is too short.',
+    },
+    {
+      question: 'Where do I see my organization\'s activity history?',
+      answer: 'Audit Log (in the sidebar) shows every action taken by users in your organization — logins, data changes, status transitions. You can filter by action type and entity, search by ID, and export the results as CSV. The log only shows your own tenant\'s activity, never another VAR\'s.',
     },
   ],
   var_regional_manager: [
