@@ -156,8 +156,7 @@ export default function VarCustomerInvoicesPage() {
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><FileText className="h-6 w-6 text-primary" /> Customer Invoices</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Invoices you issue to your own customers, built from their completed orders. Payments are
-          recorded by hand — card collection isn&apos;t part of the platform yet.
+          Bill your customers directly through the platform. Create an invoice from a customer&apos;s completed orders, and the system calculates subtotals plus regional tax automatically. Send invoices, record payments when received, issue refunds, or void a draft. Each customer can only be billed once per order. This feature is only available when your billing mode is set to &quot;In Platform&quot; on the VAR console.
         </p>
       </div>
 

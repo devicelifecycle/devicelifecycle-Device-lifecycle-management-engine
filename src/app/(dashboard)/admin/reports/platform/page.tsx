@@ -45,7 +45,7 @@ export default function PlatformReportPageImpl() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <Activity className="h-6 w-6 text-primary" /> Platform Analytics
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Global recurring revenue, recognized revenue, and platform-wide counts.</p>
+        <p className="mt-1 text-sm text-muted-foreground">A bird&apos;s eye view of the entire platform: monthly and annual recurring revenue (MRR/ARR), total paid and outstanding revenue, active VARs and customers, order volume, and per-VAR license usage. Storage consumption, API call counts, and AI token usage are metered in real time.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

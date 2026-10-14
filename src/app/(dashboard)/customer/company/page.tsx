@@ -68,7 +68,7 @@ export default function CustomerCompanyProfilePageImpl() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><Building2 className="h-6 w-6 text-primary" /> Company Profile</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{customer?.company_name || 'Your organization'} — website, hours, locations, departments, and contacts.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Manage your company&apos;s profile on the platform. Update your website, business hours, office locations, internal departments, and key contacts. This information is used on your orders and helps your VAR serve you better.</p>
         </div>
         <Button type="button" onClick={save} disabled={saving}>
           {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}

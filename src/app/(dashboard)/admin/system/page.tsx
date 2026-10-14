@@ -107,7 +107,7 @@ export default function SystemControlsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Service Controls</h1>
         <p className="text-sm text-muted-foreground">
-          Run cron jobs on demand, flush caches, and trigger redeployments
+          Operational controls for the platform. Run any scheduled job immediately (subscription lifecycle, data retention, SLA checks, and more) without waiting for its nightly schedule. Flush the page cache to force fresh data, or trigger a full redeployment to push the latest code live.
         </p>
       </div>
 

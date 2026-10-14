@@ -243,7 +243,7 @@ export function TeamManagement({ role }: { role: 'customer' | 'vendor' }) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Team</h1>
-          <p className="text-muted-foreground">Invite and manage your organization&apos;s {role} logins</p>
+          <p className="text-muted-foreground">Invite team members, deactivate accounts, reset passwords, and designate organization admins. Each team member gets their own login to access your {role} portal. Organization admins can manage the team, API keys, and company settings.</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button variant="success"><Plus className="mr-2 h-4 w-4" />Invite Teammate</Button></DialogTrigger>

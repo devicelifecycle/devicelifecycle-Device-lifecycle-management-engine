@@ -135,7 +135,7 @@ export default function CustomerAssetsPageImpl() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><Boxes className="h-6 w-6 text-primary" /> Device Register</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Your organization&apos;s own device list — register, assign, move, and retire devices as needed.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Your organization&apos;s internal device inventory. Register individual devices or bulk import from CSV. Assign devices to team members, move them between departments, retire devices no longer in use, or restore retired ones. Click History on any device to see its full audit trail of changes.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" onClick={() => setImportOpen(true)} disabled={!customer?.id}>

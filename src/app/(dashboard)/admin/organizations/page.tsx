@@ -251,7 +251,7 @@ export default function AdminOrganizationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Organization Management</h1>
-          <p className="text-muted-foreground">Manage companies and organizations</p>
+          <p className="text-muted-foreground">Register and manage the companies (customers and vendors) that use the platform. Each organization groups its users and orders together. Add customer or vendor roles directly from here to give a company access to their respective portal.</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
           <DialogTrigger asChild>

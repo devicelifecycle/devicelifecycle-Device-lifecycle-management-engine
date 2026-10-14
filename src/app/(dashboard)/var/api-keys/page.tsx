@@ -94,7 +94,7 @@ export default function VarApiKeysPageImpl() {
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><Key className="h-6 w-6 text-primary" /> API Keys</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Programmatic access for your tenant. Keep keys secret — they are shown only once.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Generate API keys to integrate your own systems with the platform. Keys provide read only access to your orders, customers, and devices through the public API (v1). Each key is shown only once when created, so copy it immediately. Revoke a key anytime to cut off access. All API calls are rate limited and metered against your plan&apos;s quota.</p>
       </div>
 
       {/* Keep this list in step with src/app/api/v1 — it is the only in-product

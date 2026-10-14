@@ -144,7 +144,7 @@ export default function VarCustomersPageImpl() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><Users className="h-6 w-6 text-primary" /> Customers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Companies under your organization — assign plans, suspend or reactivate accounts.</p>
+          <p className="mt-1 text-sm text-muted-foreground">All customer companies under your organization. Search, filter by status or plan, and take action: suspend accounts to block new orders and logins, reactivate them, assign subscription plans to individual customers, move customers between regions, or bulk import from a CSV file. Export filtered lists for offline analysis.</p>
         </div>
         <div className="flex gap-2">
           {/* The export route takes search only; it always lists active rows. */}

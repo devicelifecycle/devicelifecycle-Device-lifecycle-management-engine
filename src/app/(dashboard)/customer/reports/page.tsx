@@ -125,7 +125,7 @@ export default function CustomerReportsPageImpl() {
             <BarChart3 className="h-6 w-6 text-primary" /> Reports
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your order totals, device register roll-up, and downloadable exports.
+            A summary of your company&apos;s activity: total orders by status, financial summary, registered devices by status, and recent activity. Export your order history or device register to CSV or PDF for internal reporting or compliance.
           </p>
         </div>
         <div className="flex gap-2">

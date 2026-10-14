@@ -101,7 +101,7 @@ export default function AdminAuditLogPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Audit Log</h1>
-          <p className="text-muted-foreground">View system activity and change history</p>
+          <p className="text-muted-foreground">A tamper-proof record of every significant action across the platform: user logins, order status changes, device updates, price changes, and admin operations. Filter by action type, entity, or keyword. Export to CSV for compliance reporting or incident investigation.</p>
         </div>
         <Button variant="outline" onClick={handleExportCSV}>
           <Download className="mr-2 h-4 w-4" />Export CSV

@@ -132,8 +132,8 @@ export default function CustomerNotificationsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
           <p className="text-muted-foreground mt-1">
             {unreadCount > 0
-              ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`
-              : "You're all caught up!"}
+              ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}. You are automatically notified when your order status changes, a triage exception is raised or resolved, or a condition mismatch is detected.`
+              : "You're all caught up! You are automatically notified when your order status changes, a triage exception is raised or resolved, or a condition mismatch is detected."}
           </p>
         </div>
         {unreadCount > 0 && (

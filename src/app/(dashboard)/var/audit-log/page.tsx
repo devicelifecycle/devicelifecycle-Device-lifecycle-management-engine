@@ -106,7 +106,7 @@ export default function VarAuditLogPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Audit Log</h1>
-          <p className="text-muted-foreground">Activity history for your organization</p>
+          <p className="text-muted-foreground">Every action taken by users in your organization: logins, order changes, customer updates, device modifications, price adjustments, and team management events. Filter by action type, entity type, or search by entity ID or IP address. Export to CSV for compliance or internal review.</p>
         </div>
         <Button variant="outline" onClick={handleExportCSV}>
           <Download className="mr-2 h-4 w-4" />Export CSV

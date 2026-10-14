@@ -126,7 +126,7 @@ export default function VarTeamPageImpl() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><UserCog className="h-6 w-6 text-primary" /> Team</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isEntityAdmin ? 'Regional managers and sales reps in your organization.' : 'Sales reps in your region.'}
+            {isEntityAdmin ? 'Add, disable, or manage regional managers and sales reps across your entire organization. Reset passwords, reassign regions, and control who has access. Each rep only sees their own assigned customers.' : 'Manage the sales reps in your region. Add new reps, reset their passwords, or reassign them. You can only see and manage reps within your assigned region.'}
           </p>
         </div>
         <Button type="button" onClick={() => setFormOpen((v) => !v)}>

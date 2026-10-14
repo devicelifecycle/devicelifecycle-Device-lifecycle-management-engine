@@ -99,7 +99,7 @@ export default function VarFeaturesPageImpl() {
           <SlidersHorizontal className="h-6 w-6 text-primary" /> Features
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Turn platform modules on or off for your organization — within what your plan includes.
+          Turn platform modules on or off for your organization. Your subscription plan sets the ceiling for what&apos;s available. Toggle features like trade in processing, CPO management, billing, RVE quotes, and more. Disabled features are hidden from your team and customers immediately.
         </p>
       </div>
 

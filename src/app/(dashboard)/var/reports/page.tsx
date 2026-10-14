@@ -83,7 +83,7 @@ export default function VarReportsPageImpl() {
             <BarChart3 className="h-6 w-6 text-primary" /> Reports
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Customer and order roll-ups across your reps, by rep or by region.
+            See how your organization is performing at a glance. View customer counts, order volumes, and revenue summaries broken down by sales rep or by region. Entity admins see the entire organization; regional managers see only their region. Filter by region or rep to drill down into specific performance.
           </p>
         </div>
         <div className="flex gap-3">

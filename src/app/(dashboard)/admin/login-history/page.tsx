@@ -87,7 +87,7 @@ export default function LoginHistoryPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Login History</h1>
           <p className="text-sm text-muted-foreground">
-            Track user sign-ins and sign-outs across the platform
+            Track every sign in and sign out across the platform. See which user logged in, when, from which IP address and browser. Use this to detect unauthorized access, verify user activity, or troubleshoot login issues. Export to CSV for security audits.
           </p>
         </div>
         <Button variant="outline" onClick={handleExportCSV}>

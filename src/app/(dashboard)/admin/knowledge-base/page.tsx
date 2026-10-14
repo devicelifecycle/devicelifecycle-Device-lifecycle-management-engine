@@ -82,7 +82,7 @@ export default function AdminKnowledgeBasePageImpl() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><BookOpen className="h-6 w-6 text-primary" /> Knowledge Base</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Create and manage help articles for your tenant.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Write and publish help articles that appear in the Knowledge Base reader for all users. Organize articles by category, toggle published status, and edit content anytime. VARs and customers see only published articles relevant to their role.</p>
         </div>
         <Button variant="success" onClick={openCreate}><Plus className="mr-2 h-4 w-4" />New article</Button>
       </div>

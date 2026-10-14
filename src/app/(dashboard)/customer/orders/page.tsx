@@ -154,7 +154,7 @@ export default function CustomerOrdersPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">My Orders</h1>
-          <p className="text-muted-foreground mt-1">Track quotes and order updates.</p>
+          <p className="text-muted-foreground mt-1">Track every order your company has placed. View current status, quoted prices, and order details. Search by order number or notes. Download order PDFs, approve or decline quotes, and follow the lifecycle from submission through triage to completion.</p>
         </div>
         <div className="flex gap-2">
           <Button

@@ -113,7 +113,7 @@ export default function VarBillingPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Billing</h1>
         <p className="text-sm text-muted-foreground">
-          View your invoices, subscription status, and payment history.
+          Your billing relationship with the platform. See outstanding and paid invoice totals, your current subscription status (active, trial, or past due), and a full history of payments. Download invoice PDFs for your records. If your subscription is past due, a warning shows how many grace days remain before read only mode kicks in.
         </p>
       </div>
 

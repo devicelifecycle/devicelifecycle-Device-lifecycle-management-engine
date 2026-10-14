@@ -383,7 +383,7 @@ export default function CustomerRequestsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Submit a Request</h1>
-        <p className="text-muted-foreground mt-1">Upload your device list to receive a quote within 24 hours.</p>
+        <p className="text-muted-foreground mt-1">Start a new trade in or CPO request by uploading a CSV or Excel file with your device list. Choose your order type, upload your file, review the parsed devices, then submit. You will receive a quote within 24 hours. Download a template to see the expected format.</p>
       </div>
 
       {/* ── How it works ─────────────────────────────────────────────────── */}

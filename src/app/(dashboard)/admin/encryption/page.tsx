@@ -75,7 +75,7 @@ export default function EncryptionStatusPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Encryption & Key Management</h1>
         <p className="text-sm text-muted-foreground">
-          Read-only overview of the platform&apos;s encryption posture and key management
+          Read only overview of how the platform protects data at rest and in transit. Database encryption (AES 256), transport security (TLS 1.3), password hashing (bcrypt), API key hashing (SHA 256), and JWT signing (RS256) are all managed automatically by the infrastructure. No manual key rotation is needed.
         </p>
       </div>
 

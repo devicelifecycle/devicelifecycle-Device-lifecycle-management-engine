@@ -125,7 +125,7 @@ export default function RetentionPage() {
           <Archive className="h-6 w-6 text-primary" /> Data Retention
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          What a retention run would remove, per VAR and data class. Policies are set on each VAR&apos;s page.
+          Automated data cleanup based on each VAR&apos;s retention policy. Policies (set on the VAR&apos;s tenant page) define how many days to keep notifications, audit logs, tickets, shipments, triage results, and SLA records before they are permanently deleted. A nightly job runs at 03:00 UTC. Use the dry run report below to preview what would be removed, or run a live deletion manually.
         </p>
       </div>
 

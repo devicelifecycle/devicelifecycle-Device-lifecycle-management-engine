@@ -131,7 +131,7 @@ export default function AdminSLARulesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">SLA Rules</h1>
-          <p className="text-muted-foreground">Configure warning and breach thresholds for order statuses</p>
+          <p className="text-muted-foreground">Define how long an order can remain in each status before triggering a warning or breach. For example, set a 24 hour warning and 48 hour breach for &quot;Pending Triage&quot; so the team gets alerted before deadlines are missed. SLA timers start automatically when an order enters the status.</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>

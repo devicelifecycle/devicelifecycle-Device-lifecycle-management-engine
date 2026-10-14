@@ -67,7 +67,7 @@ export default function VarCommunicationsPageImpl() {
     <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><Mail className="h-6 w-6 text-primary" /> Communications</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Control how your tenant appears on outbound email and SMS. Leave blank to use the platform default.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Customize how your organization appears on outbound emails and SMS messages sent to your customers. Set your sender name, email address, and SMS sender ID. Leave any field blank to fall back to the platform default. The email domain must be verified with the email provider before it will work.</p>
       </div>
 
       <Card>

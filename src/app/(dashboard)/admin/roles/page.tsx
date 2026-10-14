@@ -90,7 +90,7 @@ export default function RolesPageImpl() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <ShieldCheck className="h-6 w-6 text-primary" /> Roles &amp; Access
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">System roles plus delegated VAR roles (Entity Admin / Regional Manager / Sales Rep). Assign a user to a delegated role below.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Control exactly what each role can do on the platform. Toggle individual permissions (like &quot;orders.create&quot; or &quot;audit.view&quot;) per role using the grid below. Changes take effect immediately for all users with that role. VAR delegated roles (Entity Admin, Regional Manager, Sales Rep) have their own scoped permissions that limit visibility to their assigned region or customers.</p>
       </div>
 
       <Card>

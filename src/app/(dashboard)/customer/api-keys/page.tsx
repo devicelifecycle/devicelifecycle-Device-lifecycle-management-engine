@@ -99,7 +99,7 @@ export default function CustomerApiKeysPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">API Keys</h1>
         <p className="text-sm text-muted-foreground">
-          Create and manage API keys for programmatic access to your data.
+          Generate API keys so your internal systems can pull order, customer, and device data from the platform automatically. Keys provide read only access scoped to your organization. Each key is shown only once at creation time. Revoke a key anytime to immediately cut off its access.
         </p>
       </div>
 

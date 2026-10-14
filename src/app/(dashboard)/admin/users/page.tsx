@@ -250,7 +250,7 @@ export default function AdminUsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">Manage user accounts and roles</p>
+          <p className="text-muted-foreground">Create, edit, and deactivate platform user accounts. Assign roles (admin, sales, COE manager, COE tech, customer, vendor) to control what each user can access. Reset passwords, lock accounts, and manage secondary roles for users who need access to multiple dashboards.</p>
         </div>
         {can('user.create') && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button variant="success"><Plus className="mr-2 h-4 w-4" />Add User</Button></DialogTrigger>
