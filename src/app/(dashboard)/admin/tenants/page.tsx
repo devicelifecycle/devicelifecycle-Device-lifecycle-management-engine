@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Building2, Loader2, Plus, ShieldCheck } from 'lucide-react'
+import { Building2, Loader2, Plus, ShieldCheck, UserPlus } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,6 +33,8 @@ export default function TenantsPageImpl() {
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
+  const [adminName, setAdminName] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
   const [creating, setCreating] = useState(false)
 
   const load = useCallback(async () => {
@@ -53,17 +55,33 @@ export default function TenantsPageImpl() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault()
     if (name.trim().length < 2) { toast.error('Name must be at least 2 characters'); return }
+    if (adminEmail.trim() && adminName.trim().length < 2) { toast.error('Admin name must be at least 2 characters'); return }
+    if (adminName.trim() && !adminEmail.trim()) { toast.error('Enter an email for the first administrator'); return }
     setCreating(true)
     try {
       const res = await fetch('/api/admin/tenants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), slug: slug.trim() || undefined }),
+        body: JSON.stringify({
+          name: name.trim(),
+          slug: slug.trim() || undefined,
+          admin_name: adminName.trim() || undefined,
+          admin_email: adminEmail.trim() || undefined,
+        }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(j?.error || 'Failed to create VAR')
-      toast.success(`VAR "${j.data.name}" created`)
-      setName(''); setSlug('')
+
+      if (j.adminError) {
+        toast.error(`VAR created but admin failed: ${j.adminError}`, { duration: 10000 })
+      } else if (j.admin?.emailSent) {
+        toast.success(`VAR "${j.data.name}" created — login details emailed to ${j.admin.emailSentTo}`)
+      } else if (j.admin?.tempPassword) {
+        toast.success(`VAR "${j.data.name}" created — temp password: ${j.admin.tempPassword}`, { duration: Infinity })
+      } else {
+        toast.success(`VAR "${j.data.name}" created`)
+      }
+      setName(''); setSlug(''); setAdminName(''); setAdminEmail('')
       await load()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create VAR')
@@ -87,19 +105,39 @@ export default function TenantsPageImpl() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Plus className="h-4 w-4" /> Create a VAR</CardTitle>
-          <CardDescription>Provisions a new reseller tenant. The slug becomes its identifier (auto-generated if left blank).</CardDescription>
+          <CardDescription>Provisions a new reseller tenant with its first administrator. The admin gets a welcome email with login credentials.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={create} className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-1.5">
-              <Label htmlFor="var-name">Name</Label>
-              <Input id="var-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Wireless" maxLength={255} />
+          <form onSubmit={create} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="var-name">VAR name</Label>
+                <Input id="var-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Wireless" maxLength={255} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="var-slug">Slug <span className="text-muted-foreground">(optional)</span></Label>
+                <Input id="var-slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} placeholder="acme-wireless" maxLength={100} />
+              </div>
             </div>
-            <div className="flex-1 space-y-1.5">
-              <Label htmlFor="var-slug">Slug <span className="text-muted-foreground">(optional)</span></Label>
-              <Input id="var-slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} placeholder="acme-wireless" maxLength={100} />
+            <div className="border-t pt-4">
+              <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <UserPlus className="h-3.5 w-3.5" /> First administrator
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-name">Admin name</Label>
+                  <Input id="admin-name" value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Jordan Lee" maxLength={120} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-email">Admin email</Label>
+                  <Input id="admin-email" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="jordan@acme.com" maxLength={200} />
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                A welcome email with a temporary password will be sent to this address. You can also add more administrators later from the VAR detail page.
+              </p>
             </div>
-            <Button type="submit" disabled={creating} className="sm:w-auto">
+            <Button type="submit" disabled={creating} className="w-full sm:w-auto">
               {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
               Create VAR
             </Button>
