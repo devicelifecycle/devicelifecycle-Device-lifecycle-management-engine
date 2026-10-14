@@ -108,9 +108,9 @@ const navSections: NavSection[] = [
   {
     title: 'Control',
     items: [
+      { title: 'VARs', href: '/admin/tenants', icon: Network, roles: ['admin'] },
       { title: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'coe_manager'] },
       { title: 'Organizations', href: '/admin/organizations', icon: Building2, roles: ['admin'] },
-      { title: 'VARs', href: '/admin/tenants', icon: Network, roles: ['admin'] },
       { title: 'VAR Console', href: '/var', icon: Store, roles: ['admin', 'var_entity_admin', 'var_regional_manager', 'var_sales_rep'] },
       { title: 'Features', href: '/var/features', icon: SlidersHorizontal, roles: ['var_entity_admin', 'admin'] },
       { title: 'Customers', href: '/var/customers', icon: Users, roles: ['var_entity_admin', 'admin'], tourId: 'nav-var-customers' },

@@ -211,3 +211,43 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   return NextResponse.json({ data: { ...data, branding: resolveBranding(data.branding) } })
 }
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const g = await requirePermission('tenant.manage')
+  if ('error' in g) return g.error
+  const { id } = await params
+
+  if (id === PLATFORM_TENANT_ID) {
+    return NextResponse.json({ error: 'The platform tenant cannot be deleted' }, { status: 400 })
+  }
+
+  const supabase = createServiceRoleClient()
+
+  const { data: tenant, error: fetchErr } = await supabase
+    .from('tenants').select('id, name, type').eq('id', id).maybeSingle()
+  if (fetchErr) return NextResponse.json({ error: 'Failed to load tenant' }, { status: 500 })
+  if (!tenant) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const { count: userCount } = await supabase
+    .from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', id)
+  if (userCount && userCount > 0) {
+    return NextResponse.json(
+      { error: `Cannot delete "${tenant.name}" — it still has ${userCount} user(s). Remove or reassign them first, or deactivate the VAR instead.` },
+      { status: 409 },
+    )
+  }
+
+  const { error: delErr } = await supabase.from('tenants').delete().eq('id', id)
+  if (delErr) {
+    if (delErr.code === '23503') {
+      return NextResponse.json(
+        { error: `Cannot delete "${tenant.name}" — it has related records. Deactivate it instead.` },
+        { status: 409 },
+      )
+    }
+    console.error('Failed to delete tenant:', delErr)
+    return NextResponse.json({ error: 'Failed to delete tenant' }, { status: 500 })
+  }
+
+  return NextResponse.json({ deleted: true, name: tenant.name })
+}

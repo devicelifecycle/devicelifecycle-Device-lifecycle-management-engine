@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, Save, Trash2, Upload, UserPlus } from 'lucide-react'
+import { ArrowLeft, Loader2, Save, Trash2, Upload, UserPlus, AlertTriangle } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -81,6 +81,7 @@ export default function TenantDetailPageImpl() {
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoBusy, setLogoBusy] = useState<'upload' | 'remove' | null>(null)
 
@@ -198,6 +199,22 @@ export default function TenantDetailPageImpl() {
       toast.error(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const deleteTenant = async () => {
+    if (!window.confirm(`Permanently delete "${tenant?.name}"? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/tenants/${id}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to delete')
+      toast.success(`"${j.name}" deleted`)
+      router.push('/admin/tenants')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -537,6 +554,24 @@ export default function TenantDetailPageImpl() {
       </Card>
 
       {!isPlatform && <VarAdministrators tenantId={id} tenantActive={isActive} />}
+
+      {!isPlatform && (
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-destructive"><AlertTriangle className="h-4 w-4" /> Danger zone</CardTitle>
+            <CardDescription>
+              Permanently delete this VAR. This is irreversible and only works if all users have been removed first.
+              If the VAR has historical data, deactivate it instead.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="destructive" disabled={deleting} onClick={deleteTenant}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Delete this VAR
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
