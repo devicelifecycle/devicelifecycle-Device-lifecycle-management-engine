@@ -15,7 +15,7 @@ const roleRoutes: [string, string[]][] = [
   ['/admin', ['admin']],
   // VAR console: the platform admin plus the VAR's own delegated roles.
   ['/var', ['admin', 'var_entity_admin', 'var_regional_manager', 'var_sales_rep']],
-  ['/coe', ['admin', 'coe_manager', 'coe_tech']],
+  ['/coe', ['admin', 'coe_manager', 'coe_tech', 'var_entity_admin']],
   ['/customers/new', ['admin', 'coe_manager']],
   ['/vendors/new', ['admin', 'coe_manager']],
   // Both portals are open to customer+vendor roles — data-level access is enforced
@@ -25,13 +25,13 @@ const roleRoutes: [string, string[]][] = [
   ['/customers', ['admin', 'coe_manager', 'sales']],
   ['/vendors', ['admin', 'coe_manager', 'sales']],
   // CPO: internal only; trade-in: internal + customer
-  ['/orders/new/cpo', ['admin', 'coe_manager', 'coe_tech']],
-  ['/orders/new', ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer']],
+  ['/orders/new/cpo', ['admin', 'coe_manager', 'coe_tech', 'var_entity_admin']],
+  ['/orders/new', ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'var_entity_admin']],
   // Order detail and nested order routes are shared across internal, customer,
   // and vendor roles. The page/API layer still enforces record-level access.
-  ['/orders/', ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor']],
-  ['/orders', ['admin', 'coe_manager', 'coe_tech', 'sales']],
-  ['/devices', ['admin', 'coe_manager']],
+  ['/orders/', ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor', 'var_entity_admin']],
+  ['/orders', ['admin', 'coe_manager', 'coe_tech', 'sales', 'var_entity_admin']],
+  ['/devices', ['admin', 'coe_manager', 'var_entity_admin']],
   ['/reports', ['admin', 'coe_manager']],
 ]
 

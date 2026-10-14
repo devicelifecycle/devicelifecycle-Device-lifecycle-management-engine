@@ -74,7 +74,7 @@ const navSections: NavSection[] = [
   {
     title: 'Workflow',
     items: [
-      { title: 'Orders', href: '/orders', icon: ShoppingCart, roles: ['admin', 'coe_manager', 'coe_tech', 'sales'], countKey: 'actionableOrders', tourId: 'nav-orders' },
+      { title: 'Orders', href: '/orders', icon: ShoppingCart, roles: ['admin', 'coe_manager', 'coe_tech', 'sales', 'var_entity_admin'], countKey: 'actionableOrders', tourId: 'nav-orders' },
       { title: 'My Orders', href: '/customer/orders', icon: ShoppingCart, roles: ['customer'], tourId: 'nav-my-orders' },
       { title: 'Requests', href: '/customer/requests', icon: FilePlus2, roles: ['customer'] },
       { title: 'Device Register', href: '/customer/assets', icon: Boxes, roles: ['customer'] },
@@ -92,17 +92,17 @@ const navSections: NavSection[] = [
       { title: 'Customers', href: '/customers', icon: Users, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Vendors', href: '/vendors', icon: Building2, roles: ['admin', 'coe_manager', 'sales'] },
       { title: 'Bids', href: '/bids', icon: Gavel, roles: ['admin', 'coe_manager', 'sales'], countKey: 'pendingBids' },
-      { title: 'Devices', href: '/devices', icon: Package, roles: ['admin', 'coe_manager'] },
+      { title: 'Devices', href: '/devices', icon: Package, roles: ['admin', 'coe_manager', 'var_entity_admin'] },
     ],
   },
   {
     title: 'Operations',
     items: [
-      { title: 'Receiving', href: '/coe/receiving', icon: Truck, roles: ['admin', 'coe_manager', 'coe_tech'] },
-      { title: 'Triage', href: '/coe/triage', icon: ClipboardCheck, roles: ['admin', 'coe_manager', 'coe_tech'], tourId: 'nav-triage' },
-      { title: 'Exceptions', href: '/coe/exceptions', icon: AlertTriangle, roles: ['admin', 'coe_manager'] },
-      { title: 'Shipping', href: '/coe/shipping', icon: Truck, roles: ['admin', 'coe_manager', 'coe_tech'] },
-      { title: 'CPO IMEI Intake', href: '/coe/imei', icon: Package, roles: ['admin', 'coe_manager', 'coe_tech'] },
+      { title: 'Receiving', href: '/coe/receiving', icon: Truck, roles: ['admin', 'coe_manager', 'coe_tech', 'var_entity_admin'] },
+      { title: 'Triage', href: '/coe/triage', icon: ClipboardCheck, roles: ['admin', 'coe_manager', 'coe_tech', 'var_entity_admin'], tourId: 'nav-triage' },
+      { title: 'Exceptions', href: '/coe/exceptions', icon: AlertTriangle, roles: ['admin', 'coe_manager', 'var_entity_admin'] },
+      { title: 'Shipping', href: '/coe/shipping', icon: Truck, roles: ['admin', 'coe_manager', 'coe_tech', 'var_entity_admin'] },
+      { title: 'CPO IMEI Intake', href: '/coe/imei', icon: Package, roles: ['admin', 'coe_manager', 'coe_tech', 'var_entity_admin'] },
     ],
   },
   {
