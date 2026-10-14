@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Building2, Loader2, Plus, ShieldCheck, UserPlus } from 'lucide-react'
+import { Building2, Loader2, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,6 +36,7 @@ export default function TenantsPageImpl() {
   const [adminName, setAdminName] = useState('')
   const [adminEmail, setAdminEmail] = useState('')
   const [creating, setCreating] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +88,22 @@ export default function TenantsPageImpl() {
       toast.error(err instanceof Error ? err.message : 'Failed to create VAR')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const deleteTenant = async (t: Tenant) => {
+    if (!confirm(`Delete "${t.name}"? This cannot be undone.`)) return
+    setDeletingId(t.id)
+    try {
+      const res = await fetch(`/api/admin/tenants/${t.id}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j?.error || 'Failed to delete')
+      toast.success(`"${t.name}" deleted`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -171,7 +188,8 @@ export default function TenantsPageImpl() {
                     <th className="pb-2 pr-4 font-medium">Slug</th>
                     <th className="pb-2 pr-4 font-medium">Type</th>
                     <th className="pb-2 pr-4 font-medium">Status</th>
-                    <th className="pb-2 font-medium">Created</th>
+                    <th className="pb-2 pr-4 font-medium">Created</th>
+                    <th className="pb-2 font-medium sr-only">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -197,7 +215,20 @@ export default function TenantsPageImpl() {
                           {t.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="py-3 text-xs text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</td>
+                      <td className="py-3 pr-4 text-xs text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</td>
+                      <td className="py-3">
+                        {t.type !== 'platform' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            disabled={deletingId === t.id}
+                            onClick={() => deleteTenant(t)}
+                          >
+                            {deletingId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
