@@ -18,6 +18,7 @@ export const dynamic = 'force-dynamic'
 const patchSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   monthly_price: z.number().min(0).max(1_000_000).optional(),
+  price_per_seat: z.number().min(0).max(1_000_000).optional(),
   currency: z.enum(['CAD', 'USD']).optional(),
   limits: z.record(z.number().int().min(-1)).optional(),
   features: z.record(z.boolean()).optional(),
@@ -59,9 +60,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   // No updated_at column on subscription_plans (see 20260805000000) — don't
   // invent one in the payload or the update fails outright.
+  const { price_per_seat, ...rest } = parsed.data
+  const updatePayload = { ...rest }
+  if (price_per_seat !== undefined) (updatePayload as Record<string, unknown>).monthly_price = price_per_seat
+
   const { data, error } = await supabase
     .from('subscription_plans')
-    .update(parsed.data)
+    .update(updatePayload)
     .eq('id', id)
     .select(PLAN_COLUMNS)
     .single()

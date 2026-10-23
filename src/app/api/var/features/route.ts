@@ -33,6 +33,7 @@ const FEATURE_META: Record<FeatureKey, { label: string; description: string }> =
   knowledge_base: { label: 'Knowledge Base', description: 'Self-serve help articles.' },
   chat: { label: 'Chat Assistant', description: 'In-app assistant over your data.' },
   impersonation: { label: 'Impersonation', description: 'Support login-as for your own users.' },
+  white_label: { label: 'White-Label Branding', description: 'Custom branding, logo, colors and domain on your portal.' },
 }
 
 interface FeatureRow {

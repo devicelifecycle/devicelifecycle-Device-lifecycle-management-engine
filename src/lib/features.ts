@@ -10,6 +10,7 @@ export const FEATURE_KEYS = [
   'billing', 'reporting', 'notifications',
   'api_access', 'sso', 'vendor_auction',
   'knowledge_base', 'chat', 'impersonation',
+  'white_label',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -46,6 +47,7 @@ export const DEFAULT_FEATURES: FeatureFlags = {
   // client deferred ("not initially"). Byte-Back's own single-tenant vendor
   // bidding is a different, already-live thing and is not gated by this.
   vendor_auction: false,
+  white_label: false,
 }
 
 function pickBooleans(raw: unknown): Partial<FeatureFlags> {

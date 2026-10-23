@@ -99,7 +99,7 @@ export async function DELETE(
     if (!auth) return unauthorized()
     const { profile } = auth
 
-    if (!['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
+    if (!['admin', 'coe_manager', 'coe_tech', 'var_entity_admin'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

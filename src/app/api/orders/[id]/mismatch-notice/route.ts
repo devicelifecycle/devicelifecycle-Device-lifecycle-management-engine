@@ -13,7 +13,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     if (!auth) return unauthorized()
     const { supabase, authUser, profile, effectiveRole } = auth
 
-    if (!['admin', 'coe_manager', 'coe_tech'].includes(profile.role)) {
+    if (!['admin', 'coe_manager', 'coe_tech', 'var_entity_admin'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden — COE or admin role required' }, { status: 403 })
     }
 

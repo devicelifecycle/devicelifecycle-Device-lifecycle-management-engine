@@ -20,8 +20,7 @@ interface Plan {
   id: string
   name: string
   slug: string
-  /** null = price not yet set (pending client approval of the tier model). */
-  monthlyPrice: number | null
+  pricePerSeat: number | null
   currency: string
   isActive: boolean
   limits: Record<string, number>
@@ -126,7 +125,7 @@ export default function PlansPageImpl() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <Layers className="h-6 w-6 text-primary" /> Subscription Plans
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Plans bundle a monthly price, usage limits, and enabled features. Assign one to a VAR from its tenant page.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Plans bundle a per-seat monthly price, usage limits, and enabled features. Assign one to a VAR from its tenant page.</p>
       </div>
 
       <Card>
@@ -137,7 +136,7 @@ export default function PlansPageImpl() {
           <form onSubmit={create} className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4 lg:items-end">
             <div className="space-y-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Growth" /></div>
             <div className="space-y-1.5"><Label className="text-xs">Slug</Label><Input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} placeholder="growth" /></div>
-            <div className="space-y-1.5"><Label className="text-xs">Monthly price</Label><Input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="299" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Price per seat / mo</Label><Input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="299" /></div>
             <Button type="submit" disabled={creating}>
               {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}Create
             </Button>
@@ -163,15 +162,15 @@ export default function PlansPageImpl() {
               {/* A null price means "not decided yet", which is NOT the same as
                   free. Rendering it through formatCurrency would print $0.00 and
                   read as a deliberate decision nobody made. */}
-              {p.monthlyPrice === null ? (
+              {p.pricePerSeat === null ? (
                 <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
                   Price to be confirmed
                   <span className="ml-2 text-xs font-normal text-muted-foreground">pending approval</span>
                 </p>
               ) : (
                 <>
-                  <p className="text-2xl font-bold text-[#0f1e3d] dark:text-white">{formatCurrency(p.monthlyPrice, p.currency)}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(annualize(p.monthlyPrice), p.currency)} / yr</p>
+                  <p className="text-2xl font-bold text-[#0f1e3d] dark:text-white">{formatCurrency(p.pricePerSeat, p.currency)}<span className="text-sm font-normal text-muted-foreground">/seat/mo</span></p>
+                  <p className="text-xs text-muted-foreground">{formatCurrency(annualize(p.pricePerSeat), p.currency)} /seat/yr</p>
                 </>
               )}
               <div className="border-t pt-2 text-xs text-muted-foreground">
@@ -209,7 +208,7 @@ export default function PlansPageImpl() {
 function EditPlanDialog({ plan, onClose, onSaved }: { plan: Plan; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(plan.name)
   // Empty rather than the string "null" when no price is set yet.
-  const [price, setPrice] = useState(plan.monthlyPrice === null ? '' : String(plan.monthlyPrice))
+  const [price, setPrice] = useState(plan.pricePerSeat === null ? '' : String(plan.pricePerSeat))
   const [customers, setCustomers] = useState(String(plan.limits.customers))
   const [users, setUsers] = useState(String(plan.limits.users))
   const [saving, setSaving] = useState(false)
@@ -228,7 +227,7 @@ function EditPlanDialog({ plan, onClose, onSaved }: { plan: Plan; onClose: () =>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          monthly_price: monthly,
+          price_per_seat: monthly,
           limits: { ...plan.limits, customers: toLimit(customers), users: toLimit(users) },
         }),
       })

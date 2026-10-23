@@ -10,15 +10,14 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
 const PLAN_LABELS: Record<string, string> = {
-  essentials: 'Essentials',
-  professional: 'Professional',
+  individual: 'Individual',
   enterprise: 'Enterprise',
 }
 
 function SignupInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const planParam = searchParams.get('plan') ?? 'essentials'
+  const planParam = searchParams.get('plan') ?? 'individual'
   const planName = PLAN_LABELS[planParam] ?? planParam
 
   const [company, setCompany] = useState('')

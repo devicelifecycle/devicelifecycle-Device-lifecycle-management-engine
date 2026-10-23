@@ -21,7 +21,7 @@ interface PricingPlan {
   name: string
   tagline: string
   bestFor: string
-  monthlyPrice: number | null
+  pricePerSeat: number | null
   currency: string
   highlights: string[]
   inheritsFrom: string | null
@@ -120,7 +120,7 @@ export default function PricingPage() {
             </div>
           ) : plans.map((plan, i) => {
             const isPopular = i === 1
-            const price = plan.monthlyPrice
+            const price = plan.pricePerSeat
             const displayPrice = price !== null
               ? interval === 'year'
                 ? Math.round(price * annualDiscount * 100) / 100
@@ -154,7 +154,7 @@ export default function PricingPage() {
                         {formatCurrency(displayPrice, plan.currency)}
                       </span>
                       <span className="text-sm text-slate-500">
-                        /{interval === 'year' ? 'mo, billed annually' : 'mo'}
+                        /seat/{interval === 'year' ? 'mo, billed annually' : 'mo'}
                       </span>
                     </div>
                   ) : plan.contactSales ? (

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
-import type { User, UserRole } from '@/types'
+import type { User, UserRole, AppRole } from '@/types'
 
 interface AuthState {
   user: User | null
@@ -20,7 +20,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (emailOrId: string, password: string) => Promise<void>
   logout: () => void
-  hasRole: (role: UserRole | UserRole[]) => boolean
+  hasRole: (role: AppRole | AppRole[]) => boolean
   isCOEUser: () => boolean
   isAdmin: () => boolean
   refetch: () => Promise<void>
@@ -487,7 +487,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
   }, [state.user, router])
 
   // Check if user has a specific role — uses effectiveRole (activeRole overrides primary for dual-role users)
-  const hasRole = useCallback((role: UserRole | UserRole[]) => {
+  const hasRole = useCallback((role: AppRole | AppRole[]) => {
     if (!state.user) return false
     const roles = Array.isArray(role) ? role : [role]
     const effectiveRole = state.activeRole ?? state.user.role

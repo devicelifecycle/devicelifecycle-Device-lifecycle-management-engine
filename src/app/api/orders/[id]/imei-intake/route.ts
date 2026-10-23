@@ -11,7 +11,7 @@ import { dedupeImeiRows } from '@/lib/imei-intake'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
-const STAFF = ['admin', 'coe_manager', 'coe_tech']
+const STAFF = ['admin', 'coe_manager', 'coe_tech', 'var_entity_admin']
 
 const schema = z.object({
   vendor_id: z.string().uuid(),

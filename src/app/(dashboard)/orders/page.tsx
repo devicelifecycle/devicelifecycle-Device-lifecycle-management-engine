@@ -44,10 +44,10 @@ export default function OrdersPage() {
   const { hasRole } = useAuth()
 
   const isAdmin = hasRole(['admin'])
-  const isInternal = hasRole(['admin', 'coe_manager', 'coe_tech', 'sales'])
+  const isInternal = hasRole(['admin', 'coe_manager', 'coe_tech', 'sales', 'var_entity_admin'])
   const isCustomer = hasRole(['customer'])
   const canCreateTradeIn = isInternal || isCustomer
-  const canCreateCpo = hasRole(['admin', 'coe_manager', 'coe_tech'])
+  const canCreateCpo = hasRole(['admin', 'coe_manager', 'coe_tech', 'var_entity_admin'])
   const canBulkTransition = isInternal
   const canImport = isInternal
 

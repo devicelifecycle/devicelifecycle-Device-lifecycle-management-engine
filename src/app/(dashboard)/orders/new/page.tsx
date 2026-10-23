@@ -224,7 +224,7 @@ export default function NewOrderPage() {
   const isInternal = can('pricing.view')
   // Customers can now self-create CPO (Certified Pre-Owned purchase) orders too —
   // internal staff and customers both get the CPO order type option.
-  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech', 'customer'].includes(role || '')
+  const canCreateCpoOrder = ['admin', 'coe_manager', 'coe_tech', 'customer', 'var_entity_admin'].includes(role || '')
   const cpoCreationBlockedMessage = 'Only admin, COE, or the customer portal can create CPO orders.'
 
   const [devices, setDevices] = useState<Device[]>([])

@@ -109,13 +109,13 @@ export async function GET(request: NextRequest) {
       }
 
       const tier = tierBySlug(sub.plan_slug)
-      if (!tier?.monthlyPrice) {
+      if (!tier?.pricePerSeat) {
         result.skippedNoPrice++
         continue
       }
 
       const amountCents = Math.round(
-        tier.monthlyPrice * 100 * (sub.billing_interval === 'year' ? 12 : 1),
+        tier.pricePerSeat * 100 * (sub.billing_interval === 'year' ? 12 : 1),
       )
 
       // Look up provider customer ID

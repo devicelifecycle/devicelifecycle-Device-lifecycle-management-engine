@@ -79,12 +79,12 @@ export async function GET(request: NextRequest) {
       result.checked++
 
       const tier = tierBySlug(sub.plan_slug)
-      if (!tier?.monthlyPrice) {
+      if (!tier?.pricePerSeat) {
         result.skippedNoPrice++
         continue
       }
 
-      const grossDollars = tier.monthlyPrice * (sub.billing_interval === 'year' ? 12 : 1)
+      const grossDollars = tier.pricePerSeat * (sub.billing_interval === 'year' ? 12 : 1)
 
       // Resolve tax from the tenant's organization address
       const { data: org } = await supabase

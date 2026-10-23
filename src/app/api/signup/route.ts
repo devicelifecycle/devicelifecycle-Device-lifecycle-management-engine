@@ -18,7 +18,7 @@ const signupSchema = z.object({
   email: z.string().email().max(255).transform(s => s.toLowerCase().trim()),
   full_name: z.string().min(2).max(255).transform(s => s.trim()),
   password: z.string().min(8).max(128),
-  plan_slug: z.string().min(2).max(60).default('essentials'),
+  plan_slug: z.string().min(2).max(60).default('individual'),
 })
 
 function slugify(name: string): string {

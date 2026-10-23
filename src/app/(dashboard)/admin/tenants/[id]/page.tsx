@@ -53,6 +53,7 @@ const FEATURE_LABELS: Record<FeatureKey, string> = {
   billing: 'Billing', reporting: 'Reporting', notifications: 'Notifications',
   api_access: 'API access', sso: 'SSO', vendor_auction: 'Vendor auction',
   knowledge_base: 'Knowledge base', chat: 'Chat', impersonation: 'Impersonation',
+  white_label: 'White-label branding',
 }
 const LIMIT_LABELS: Record<LimitKey, string> = {
   customers: 'Customers', users: 'Users', storageMb: 'Storage (MB)',

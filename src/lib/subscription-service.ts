@@ -300,8 +300,8 @@ export async function changePlan(
   if (!newTier) throw new Error(`Unknown plan: ${newPlanSlug}`)
 
   const oldTier = tierBySlug(row.plan_slug)
-  const oldPrice = oldTier?.monthlyPrice ?? 0
-  const newPrice = newTier.monthlyPrice ?? 0
+  const oldPrice = oldTier?.pricePerSeat ?? 0
+  const newPrice = newTier.pricePerSeat ?? 0
 
   const sub = rowToSub(row)
   const now = new Date().toISOString()

@@ -12,7 +12,7 @@ export interface SubscriptionPlan {
   id: string
   name: string
   slug: string
-  monthlyPrice: number
+  pricePerSeat: number
   currency: string
   isActive: boolean
   limits: LicenseLimits
@@ -28,7 +28,7 @@ export function normalizePlan(raw: unknown): SubscriptionPlan {
     id: typeof p.id === 'string' ? p.id : '',
     name: typeof p.name === 'string' && p.name.trim() ? p.name.trim() : 'Unnamed plan',
     slug: typeof p.slug === 'string' ? p.slug : '',
-    monthlyPrice: typeof p.monthly_price === 'number' ? round2(Math.max(0, p.monthly_price)) : 0,
+    pricePerSeat: typeof p.price_per_seat === 'number' ? round2(Math.max(0, p.price_per_seat)) : (typeof p.monthly_price === 'number' ? round2(Math.max(0, p.monthly_price)) : 0),
     currency: typeof p.currency === 'string' && p.currency ? p.currency : 'CAD',
     isActive: p.is_active !== false,
     limits: resolveLicense(p.limits),
