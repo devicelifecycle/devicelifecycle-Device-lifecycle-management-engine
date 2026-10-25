@@ -37,7 +37,7 @@ describe('orderCreationGate', () => {
     // plan" leaves the customer to work out which one.
     const msg = (await res!.json()).error as string
     expect(msg).toMatch(/Trade-In is not included in your plan/i)
-    expect(msg).toMatch(/Essentials/)
+    expect(msg).toMatch(/Individual/)
   })
 
   it('blocks at the monthly transaction cap and passes below it', async () => {
