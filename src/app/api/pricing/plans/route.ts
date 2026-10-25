@@ -27,13 +27,13 @@ export async function GET() {
     const supabase = createServiceRoleClient()
     const { data: dbPlans } = await supabase
       .from('subscription_plans')
-      .select('slug, monthly_price, price_per_seat, is_active')
+      .select('slug, monthly_price, is_active')
       .eq('is_active', true)
-      .order('price_per_seat', { ascending: true, nullsFirst: true })
+      .order('monthly_price', { ascending: true, nullsFirst: true })
 
     const plans = PLAN_TIERS.map(tier => {
       const dbRow = dbPlans?.find(p => p.slug === tier.slug)
-      const effectivePrice = dbRow?.price_per_seat ?? dbRow?.monthly_price ?? tier.pricePerSeat
+      const effectivePrice = dbRow?.monthly_price ?? tier.pricePerSeat
       return publicShape({
         ...tier,
         pricePerSeat: effectivePrice,

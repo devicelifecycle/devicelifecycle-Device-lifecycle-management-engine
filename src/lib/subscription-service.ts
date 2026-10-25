@@ -300,8 +300,17 @@ export async function changePlan(
   if (!newTier) throw new Error(`Unknown plan: ${newPlanSlug}`)
 
   const oldTier = tierBySlug(row.plan_slug)
-  const oldPrice = oldTier?.pricePerSeat ?? 0
-  const newPrice = newTier.pricePerSeat ?? 0
+
+  // Count active seats to compute the full monthly cost, not just per-seat
+  const { count: seatCount } = await supabase
+    .from('users')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', row.tenant_id)
+    .eq('is_active', true)
+  const seats = Math.max(1, seatCount ?? 1)
+
+  const oldPrice = (oldTier?.pricePerSeat ?? 0) * seats
+  const newPrice = (newTier.pricePerSeat ?? 0) * seats
 
   const sub = rowToSub(row)
   const now = new Date().toISOString()

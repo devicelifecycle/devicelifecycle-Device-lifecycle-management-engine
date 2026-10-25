@@ -17,9 +17,7 @@ export async function GET() {
   // Bounded sets are fetched as rows; large tables use COUNT(head) only.
   const [plansRes, tenantsRes, invoicesRes, custTotal, custActive, orderCount, deviceCount] = await Promise.all([
     supabase.from('subscription_plans').select('slug, monthly_price'),
-    supabase.from('tenants').select('is_active, plan, type'),
-    // Ordered so a past-cap truncation is deterministic (most recent invoices
-    // kept) instead of an arbitrary, unordered subset of rows.
+    supabase.from('tenants').select('id, is_active, plan, type'),
     supabase.from('invoices').select('status, total').order('created_at', { ascending: false }).limit(5000),
     supabase.from('customers').select('id', { count: 'exact', head: true }),
     supabase.from('customers').select('id', { count: 'exact', head: true }).neq('is_active', false),
@@ -30,11 +28,23 @@ export async function GET() {
   const planPriceBySlug: Record<string, number> = {}
   for (const p of plansRes.data ?? []) planPriceBySlug[p.slug as string] = (p.monthly_price as number) ?? 0
 
+  // Fetch active user counts per tenant for per-seat MRR calculation
+  const tenantRows = tenantsRes.data ?? []
+  const tenantsWithSeats: Array<{ is_active?: boolean | null; plan?: string | null; type?: string | null; seat_count?: number | null }> = []
+  for (const t of tenantRows) {
+    const { count } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', t.id as string)
+      .eq('is_active', true)
+    tenantsWithSeats.push({ ...t, seat_count: count ?? 1 })
+  }
+
   const total = custTotal.count ?? 0
   const active = custActive.count ?? 0
 
   const summary = buildPlatformSummary({
-    tenants: tenantsRes.data ?? [],
+    tenants: tenantsWithSeats,
     planPriceBySlug,
     invoices: invoicesRes.data ?? [],
     customers: { total, active, inactive: Math.max(0, total - active) },

@@ -15,15 +15,16 @@ export function activeSplit(items: Array<{ is_active?: boolean | null }>): Activ
   return { total: items.length, active, inactive: items.length - active }
 }
 
-/** MRR = sum of active tenants' assigned plan monthly price. */
+/** MRR = sum of active tenants' (per-seat price × seat count). */
 export function computeMrr(
-  tenants: Array<{ is_active?: boolean | null; plan?: string | null }>,
+  tenants: Array<{ is_active?: boolean | null; plan?: string | null; seat_count?: number | null }>,
   planPriceBySlug: Record<string, number>,
 ): number {
   return round2(
     tenants.reduce((sum, t) => {
       if (t.is_active === false || !t.plan) return sum
-      return sum + Math.max(0, planPriceBySlug[t.plan] ?? 0)
+      const seats = Math.max(1, t.seat_count ?? 1)
+      return sum + Math.max(0, (planPriceBySlug[t.plan] ?? 0) * seats)
     }, 0),
   )
 }
@@ -51,7 +52,7 @@ export interface PlatformSummary {
 /** Assemble the full platform summary from fetched inputs. Customers come in as
  *  a precomputed split (COUNT queries) since that table can be very large. */
 export function buildPlatformSummary(input: {
-  tenants: Array<{ is_active?: boolean | null; plan?: string | null; type?: string | null }>
+  tenants: Array<{ is_active?: boolean | null; plan?: string | null; type?: string | null; seat_count?: number | null }>
   planPriceBySlug: Record<string, number>
   invoices: Array<{ status?: string | null; total?: number | null }>
   customers: ActiveSplit

@@ -114,8 +114,16 @@ export async function GET(request: NextRequest) {
         continue
       }
 
+      // Count active seats (named users) on this tenant
+      const { count: seatCount } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', sub.tenant_id)
+        .eq('is_active', true)
+      const seats = Math.max(1, seatCount ?? 1)
+
       const amountCents = Math.round(
-        tier.pricePerSeat * 100 * (sub.billing_interval === 'year' ? 12 : 1),
+        tier.pricePerSeat * seats * 100 * (sub.billing_interval === 'year' ? 12 : 1),
       )
 
       // Look up provider customer ID

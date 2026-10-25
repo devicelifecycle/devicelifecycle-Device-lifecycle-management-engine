@@ -84,7 +84,15 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      const grossDollars = tier.pricePerSeat * (sub.billing_interval === 'year' ? 12 : 1)
+      // Count active seats (named users) on this tenant
+      const { count: seatCount } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', sub.tenant_id)
+        .eq('is_active', true)
+      const seats = Math.max(1, seatCount ?? 1)
+
+      const grossDollars = tier.pricePerSeat * seats * (sub.billing_interval === 'year' ? 12 : 1)
 
       // Resolve tax from the tenant's organization address
       const { data: org } = await supabase

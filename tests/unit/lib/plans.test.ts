@@ -9,23 +9,28 @@ describe('subscription plans', () => {
       is_active: true, limits: { customers: 500 }, features: { sso: true },
     })
     expect(p.name).toBe('Growth')
-    expect(p.monthlyPrice).toBe(299)
+    expect(p.pricePerSeat).toBe(299)
     expect(p.limits.customers).toBe(500)
     expect(p.limits.users).toBe(UNLIMITED)
     expect(p.features.sso).toBe(true)
     expect(p.features.billing).toBe(true) // default preserved
   })
 
+  it('prefers price_per_seat over monthly_price when both are present', () => {
+    const p = normalizePlan({ price_per_seat: 70, monthly_price: 40 })
+    expect(p.pricePerSeat).toBe(70)
+  })
+
   it('defends against partial / junk rows', () => {
     const p = normalizePlan(null)
     expect(p.name).toBe('Unnamed plan')
-    expect(p.monthlyPrice).toBe(0)
+    expect(p.pricePerSeat).toBe(0)
     expect(p.currency).toBe('CAD')
     expect(p.isActive).toBe(true)
   })
 
   it('floors negative price to 0', () => {
-    expect(normalizePlan({ monthly_price: -50 }).monthlyPrice).toBe(0)
+    expect(normalizePlan({ monthly_price: -50 }).pricePerSeat).toBe(0)
   })
 
   it('annualizes monthly price', () => {
