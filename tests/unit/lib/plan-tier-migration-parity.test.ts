@@ -18,7 +18,7 @@ const MIGRATION = path.resolve(
 
 function seededTiers(sql: string) {
   // The migration uses multi-line VALUES blocks. Match each VALUES ( ... ) block.
-  const valuesRe = /VALUES\s*\(\s*'([^']+)',\s*'([a-z_]+)',\s*(\d+),\s*'([A-Z]{3})',\s*'(\{[^']*\})'::jsonb,\s*'(\{[^']*\})'::jsonb,\s*(true|false)\s*\)/gis
+  const valuesRe = /VALUES\s*\(\s*'([^']+)',\s*'([a-z_]+)',\s*(\d+),\s*'([A-Z]{3})',\s*'(\{[^']*\})'::jsonb,\s*'(\{[^']*\})'::jsonb,\s*(true|false)\s*\)/gi
   const out: Record<string, {
     name: string; price: number; currency: string
     features: Record<string, boolean>; limits: Record<string, number>; isActive: boolean
