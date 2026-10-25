@@ -101,6 +101,7 @@ export const DEFAULT_BRANDING: TenantBranding = {
   allowedIps: null,
   requireMfa: null,
   passwordPolicy: null,
+  loginPage: null,
 }
 
 /** HSL triplet like "221 83% 53%" (H 0-360, S/L 0-100%). */
