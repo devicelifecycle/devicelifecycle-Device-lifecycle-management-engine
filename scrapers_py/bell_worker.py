@@ -448,10 +448,39 @@ def main() -> int:
     try:
         request = _load_request()
         mode, devices = _validate_request(request)
-        # Bell's SBE GlobalCare APIs work via plain urllib — no browser needed.
-        # CorsProxyAuthenticate returns a session_id in ~0.3s, getCatalogProductsLite
-        # and getBuyBackProductsEstimate both work without any browser context.
-        return _run_scraping(None, mode, devices, start, use_browser=False)
+
+        # Try the fast urllib path first (no browser overhead)
+        result_code = _run_scraping(None, mode, devices, start, use_browser=False)
+        if result_code == 0:
+            return 0
+
+        # Bell started returning "NotAllowed" for plain HTTP requests (~Oct 2026).
+        # Retry with a real browser context so the session auth cookie is present.
+        print("  [bell] plain HTTP path failed, retrying with browser …", file=sys.stderr, flush=True)
+        start2 = time.time()
+        try:
+            from patchright.sync_api import sync_playwright  # type: ignore
+        except ImportError as exc:
+            duration_ms = int((time.time() - start) * 1000)
+            print(json.dumps(_result(success=False, error=f"patchright not available: {exc}", duration_ms=duration_ms)))
+            return 1
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+            )
+            pg = ctx.new_page()
+            pg.goto(BELL_TRADE_IN_URL, wait_until="domcontentloaded", timeout=60_000)
+            pg.wait_for_timeout(3_000)
+            result_code = _run_scraping(pg, mode, devices, start2, use_browser=True)
+            browser.close()
+            return result_code
+
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
         print(json.dumps(_result(success=False, error=str(exc), duration_ms=duration_ms)))
