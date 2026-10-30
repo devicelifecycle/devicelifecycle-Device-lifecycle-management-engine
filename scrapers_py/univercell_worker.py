@@ -476,9 +476,7 @@ def main() -> int:
                 page = StealthyFetcher.fetch(
                     ACTION_URL,
                     headless=True,
-                    solve_cloudflare=True,
                     network_idle=True,
-                    fake_human_interaction=True,
                     block_images=True,
                 )
                 browser_page = getattr(page, "_page", None) or getattr(page, "page", None)
