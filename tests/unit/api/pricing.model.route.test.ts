@@ -1,16 +1,18 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const createMockSupabase = (user: { id: string } | null, profile: { role?: string } | null) => ({
-  auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
-  from: vi.fn().mockReturnValue({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: { base_price: 500, wholesale_c_stock: 450 } }),
-  }),
-})
+const createMockSupabase = (user: { id: string } | null, profile: { role?: string } | null) => {
+  const session = user ? { user, access_token: 'mock-token' } : null
+  const chain: Record<string, unknown> = {}
+  const self = () => chain
+  for (const m of ['select', 'eq', 'is', 'neq', 'order', 'limit']) chain[m] = vi.fn(self)
+  chain.single = vi.fn().mockResolvedValue({ data: profile })
+  chain.maybeSingle = vi.fn().mockResolvedValue({ data: null })
+  return {
+    auth: { getSession: vi.fn().mockResolvedValue({ data: { session } }) },
+    from: vi.fn().mockReturnValue(chain),
+  }
+}
 
 const createServerSupabaseClientMock = vi.fn()
 

@@ -28,20 +28,26 @@ function makeSupabase({
   user: { id: string } | null
   profile: { role?: string; organization_id?: string } | null
 }) {
+  const session = user ? { user, access_token: 'mock-token' } : null
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
-      if (table !== 'users') {
+      const chain: Record<string, unknown> = {}
+      const self = () => chain
+      for (const m of ['select', 'eq', 'is', 'neq', 'order', 'limit']) chain[m] = vi.fn(self)
+      chain.maybeSingle = vi.fn().mockResolvedValue({ data: null })
+
+      if (table === 'users') {
+        chain.single = vi.fn().mockResolvedValue({ data: profile })
+      } else if (table === 'impersonation_log') {
+        chain.single = vi.fn().mockResolvedValue({ data: null })
+      } else {
         throw new Error(`Unexpected table: ${table}`)
       }
 
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: profile }),
-      }
+      return chain
     }),
   }
 }

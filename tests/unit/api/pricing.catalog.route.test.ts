@@ -42,13 +42,16 @@ function createMockSupabase() {
 
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
       if (table === 'users') {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+              }),
               single: vi.fn().mockResolvedValue({ data: { role: 'admin' } }),
             }),
           }),

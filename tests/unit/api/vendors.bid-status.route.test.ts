@@ -103,7 +103,7 @@ function makeSupabase() {
 
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'admin-user' } } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'admin-user' }, access_token: 'mock-token' } } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
       if (table === 'users') {

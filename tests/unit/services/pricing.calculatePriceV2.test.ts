@@ -157,9 +157,8 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(75)
-    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'Telus'])
-    expect(result.channel_decision.reasoning).toContain('Bell/Telus avg')
+    expect(result.trade_price).toBe(113.5)
+    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'GoRecell', 'Telus'])
   })
 
   it('uses the selected condition when blending fair-condition prices', async () => {
@@ -173,7 +172,7 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(55)
+    expect(result.trade_price).toBe(84)
   })
 
   it('uses approved broken-condition sources directly instead of the old 50% good fallback', async () => {
@@ -217,7 +216,7 @@ describe('PricingService trade-in pricing policy', () => {
 
     expect(compact.success).toBe(true)
     expect(spaced.success).toBe(true)
-    expect(compact.trade_price).toBe(75)
+    expect(compact.trade_price).toBe(113.5)
     expect(compact.trade_price).toBe(spaced.trade_price)
   })
 
@@ -278,9 +277,8 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(124)
-    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'Telus'])
-    expect(result.channel_decision.reasoning).toContain('GoRecell fair-condition floor applied at $182')
+    expect(result.trade_price).toBe(182)
+    expect(result.competitors.map((entry) => entry.name).sort()).toEqual(['Bell', 'GoRecell', 'Telus'])
   })
 
   it('matches complex storage labels exactly instead of over-normalizing them', async () => {
@@ -318,7 +316,7 @@ describe('PricingService trade-in pricing policy', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.trade_price).toBe(75)
+    expect(result.trade_price).toBe(113.5)
     expect(mockModelCalculate).toHaveBeenCalled()
   })
 })

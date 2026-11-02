@@ -16,7 +16,7 @@ vi.mock('@/services/email.service', () => ({
 function makeSupabase(user: { id: string } | null, role?: string | null) {
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: user ? { user, access_token: 'mock-token' } : null } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
       if (table !== 'users') {

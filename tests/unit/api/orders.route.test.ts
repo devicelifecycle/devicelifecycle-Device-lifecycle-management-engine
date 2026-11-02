@@ -23,22 +23,30 @@ const createMockSupabase = ({
 }: {
   user: { id: string } | null
   profile: Profile
-}) => ({
-  auth: {
-    getUser: vi.fn().mockResolvedValue({ data: { user } }),
-  },
-  from: vi.fn().mockImplementation((table: string) => {
-    if (table !== 'users') {
-      throw new Error(`Unexpected table: ${table}`)
-    }
+}) => {
+  const session = user ? { user, access_token: 'mock-token' } : null
+  return {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session } }),
+    },
+    from: vi.fn().mockImplementation((table: string) => {
+      const chain: Record<string, unknown> = {}
+      const self = () => chain
+      for (const m of ['select', 'eq', 'is', 'neq', 'order', 'limit']) chain[m] = vi.fn(self)
+      chain.maybeSingle = vi.fn().mockResolvedValue({ data: null })
 
-    return {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: profile }),
-    }
-  }),
-})
+      if (table === 'users') {
+        chain.single = vi.fn().mockResolvedValue({ data: profile })
+      } else if (table === 'impersonation_log') {
+        chain.single = vi.fn().mockResolvedValue({ data: null })
+      } else {
+        throw new Error(`Unexpected table: ${table}`)
+      }
+
+      return chain
+    }),
+  }
+}
 
 const createServerSupabaseClientMock = vi.fn()
 

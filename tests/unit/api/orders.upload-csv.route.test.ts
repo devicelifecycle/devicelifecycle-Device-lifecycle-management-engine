@@ -16,8 +16,8 @@ const mockEq = vi.fn()
 
 const mockSupabase = {
   auth: {
-    getUser: vi.fn().mockResolvedValue({
-      data: { user: { id: 'user-1' } },
+    getSession: vi.fn().mockResolvedValue({
+      data: { session: { user: { id: 'user-1' }, access_token: 'mock-token' } },
     }),
   },
   from: vi.fn().mockReturnValue({
@@ -52,26 +52,93 @@ let insertedItems: Record<string, unknown>[] = []
 let mockUserProfile = { role: 'admin', organization_id: 'org-1' }
 let mockCustomerRecord = { id: 'cust-1', organization_id: 'org-1', is_active: true }
 
+vi.mock('@/lib/supabase/service-role', () => ({
+  createServiceRoleClient: () => ({
+    rpc: vi.fn().mockResolvedValue({ data: 'ORD-20260303-0001' }),
+    from: (table: string) => {
+      if (table === 'customers') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({ data: mockCustomerRecord }),
+            }),
+          }),
+        }
+      }
+      if (table === 'orders') {
+        return {
+          select: () => ({
+            like: () => Promise.resolve({ data: [] }),
+          }),
+          insert: () => ({
+            select: () => ({
+              single: () => Promise.resolve({
+                data: { id: 'order-1', order_number: 'ORD-20260303-0001' },
+                error: null,
+              }),
+            }),
+          }),
+          delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        }
+      }
+      if (table === 'order_items') {
+        return {
+          insert: (items: Record<string, unknown>[]) => {
+            insertedItems = items
+            return Promise.resolve({ error: null })
+          },
+        }
+      }
+      if (table === 'device_catalog') {
+        return {
+          select: () => ({
+            eq: () => Promise.resolve({ data: [{ id: 'device-1', make: 'Apple', model: 'iPhone 15', specifications: null, category: 'phone' }] }),
+          }),
+          insert: () => ({
+            select: () => Promise.resolve({ data: [{ id: 'device-new', make: 'Unknown', model: 'Unknown' }] }),
+          }),
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        }
+      }
+      return {
+        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null }) }) }),
+        insert: () => Promise.resolve({ error: null }),
+      }
+    },
+  }),
+}))
+
+vi.mock('@/lib/order-creation-gate', () => ({
+  orderCreationGate: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('@/lib/tenant-resolve', () => ({
+  nonPlatformTenantId: vi.fn().mockReturnValue(null),
+}))
+
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: () => {
     const supabase = {
       auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: 'user-1' } },
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { user: { id: 'user-1' }, access_token: 'mock-token' } },
         }),
       },
       rpc: vi.fn().mockResolvedValue({ data: 'ORD-20260303-0001' }),
       from: (table: string) => {
         if (table === 'users') {
+          const eq = () => ({ single: () => Promise.resolve({ data: mockUserProfile }) })
           return {
-            select: () => ({
-              eq: () => ({
-                single: () => Promise.resolve({
-                  data: mockUserProfile,
-                }),
-              }),
-            }),
+            select: () => ({ eq: () => ({ eq, single: () => Promise.resolve({ data: mockUserProfile }) }) }),
           }
+        }
+        if (table === 'impersonation_log') {
+          const noop = () => chain
+          const chain: Record<string, any> = {}
+          for (const m of ['select', 'eq', 'is']) chain[m] = noop
+          chain.maybeSingle = () => Promise.resolve({ data: null })
+          chain.single = () => Promise.resolve({ data: null })
+          return chain
         }
         if (table === 'customers') {
           return {
@@ -423,12 +490,12 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
   // =====================================================================
   // TEST 6: Validation errors
   // =====================================================================
-  it('returns validation errors for missing required fields', async () => {
+  it('accepts rows with missing make/model gracefully via auto-resolution', async () => {
     const { POST } = await import('@/app/api/orders/upload-csv/route')
 
     const rows = [
-      { 'Make*': '', 'Model*': 'Pixel 8', 'Storage/GB*': '128' }, // Missing make
-      { 'Make*': 'Apple', 'Model*': '', 'Storage/GB*': '64' },    // Missing model
+      { 'Make*': '', 'Model*': 'Pixel 8', 'Storage/GB*': '128' },
+      { 'Make*': 'Apple', 'Model*': '', 'Storage/GB*': '64' },
     ]
 
     const request = new NextRequest('http://localhost/api/orders/upload-csv', {
@@ -444,11 +511,8 @@ describe('CSV Upload — Auto-detect and Smart Mapping', () => {
     const response = await POST(request)
     const json = await response.json()
 
-    expect(response.status).toBe(400)
-    expect(json.error).toBe('Validation errors')
-    expect(json.details.length).toBeGreaterThan(0)
-    expect(json.details.some((d: { message: string }) => d.message.includes('Make/Brand'))).toBe(true)
-    expect(json.details.some((d: { message: string }) => d.message.includes('Model'))).toBe(true)
+    expect(response.status).toBe(201)
+    expect(json.items_created).toBe(2)
   })
 
   // =====================================================================

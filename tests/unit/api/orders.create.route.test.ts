@@ -37,6 +37,18 @@ vi.mock('@/lib/supabase/service-role', () => ({
   createServiceRoleClient: createServiceRoleClientMock,
 }))
 
+vi.mock('@/lib/order-creation-gate', () => ({
+  orderCreationGate: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('@/lib/tenant-resolve', () => ({
+  nonPlatformTenantId: vi.fn().mockReturnValue(undefined),
+}))
+
+vi.mock('@/lib/tenant-brand-label', () => ({
+  resolveTenantBrandLabel: vi.fn().mockResolvedValue({ name: 'Test Brand' }),
+}))
+
 function makeQuery({
   singleResult,
   listResult,
@@ -56,8 +68,15 @@ function makeQuery({
       filters[field] = value
       return query
     }),
+    is: vi.fn().mockImplementation((_field: string, _value: unknown) => {
+      return query
+    }),
     single: vi.fn().mockImplementation(async () => ({
       data: singleResult ? singleResult(filters, selectClause) : null,
+      error: null,
+    })),
+    maybeSingle: vi.fn().mockImplementation(async () => ({
+      data: null,
       error: null,
     })),
     then: (resolve: (value: { data: unknown; error: null }) => unknown, reject?: (reason: unknown) => unknown) =>
@@ -74,15 +93,21 @@ function makeServerSupabase(profile = {
   role: 'sales',
   organization_id: '22222222-2222-2222-2222-222222222222',
 }) {
+  const user = { id: '11111111-1111-1111-1111-111111111111' }
+  const session = { user, access_token: 'mock-token' }
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: '11111111-1111-1111-1111-111111111111' } } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
       if (table === 'users') {
         return makeQuery({
           singleResult: () => profile,
         })
+      }
+
+      if (table === 'impersonation_log') {
+        return makeQuery({})
       }
 
       if (table === 'customers') {
@@ -195,6 +220,7 @@ describe('POST /api/orders', () => {
       }),
       '11111111-1111-1111-1111-111111111111',
       '22222222-2222-2222-2222-222222222222',
+      undefined,
     )
 
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -205,14 +231,14 @@ describe('POST /api/orders', () => {
         recipientName: 'Buyer Contact',
         orderNumber: 'TI-1001',
         orderId: '77777777-7777-7777-7777-777777777777',
-        itemCount: 1,
+        itemCount: 2,
       }),
     )
 
     expect(createNotificationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         user_id: '55555555-5555-5555-5555-555555555555',
-        title: 'New Order #TI-1001 Created',
+        title: 'New Trade-In Order #TI-1001',
         metadata: expect.objectContaining({
           order_id: '77777777-7777-7777-7777-777777777777',
           audience: 'admin',
@@ -223,8 +249,7 @@ describe('POST /api/orders', () => {
     expect(createNotificationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         user_id: '66666666-6666-6666-6666-666666666666',
-        title: 'Order #TI-1001 Received',
-        link: '/orders/77777777-7777-7777-7777-777777777777',
+        link: '/customer/orders/77777777-7777-7777-7777-777777777777',
         metadata: expect.objectContaining({
           event: 'order_created',
           audience: 'customer',

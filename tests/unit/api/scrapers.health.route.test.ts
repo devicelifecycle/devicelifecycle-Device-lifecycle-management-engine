@@ -13,7 +13,7 @@ describe('GET /api/health/scrapers', () => {
 
   it('returns 401 for unauthenticated user', async () => {
     createServerSupabaseClientMock.mockReturnValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+      auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }) },
     })
 
     const { GET } = await import('@/app/api/health/scrapers/route')
@@ -73,7 +73,7 @@ describe('GET /api/health/scrapers', () => {
     }
 
     createServerSupabaseClientMock.mockReturnValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+      auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
       from: vi.fn().mockImplementation((table: string) => {
         if (table === 'users') {
           return {

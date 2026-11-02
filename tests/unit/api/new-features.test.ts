@@ -27,7 +27,7 @@ describe('GET /api/pricing/brand-overrides', () => {
   it('returns 401 when unauthenticated', async () => {
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }) },
       }),
     }))
     const { GET } = await import('@/app/api/pricing/brand-overrides/route')
@@ -38,9 +38,9 @@ describe('GET /api/pricing/brand-overrides', () => {
   it('returns 403 for customer role', async () => {
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn(() => ({
-          select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'customer' }, error: null }) })) })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'customer' }, error: null }) })) })),
           order: vi.fn(() => ({ data: [], error: null })),
         })),
       }),
@@ -57,10 +57,10 @@ describe('GET /api/pricing/brand-overrides', () => {
     ]
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn((table: string) => {
           if (table === 'users') return {
-            select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
+            select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
           }
           return {
             select: vi.fn(() => ({ order: vi.fn().mockResolvedValue({ data: mockOverrides, error: null }) })),
@@ -84,9 +84,9 @@ describe('POST /api/pricing/brand-overrides', () => {
   it('returns 400 when make is missing', async () => {
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn(() => ({
-          select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
         })),
       }),
     }))
@@ -107,9 +107,9 @@ describe('POST /api/pricing/brand-overrides', () => {
   it('returns 400 when margin_percent is out of range', async () => {
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn(() => ({
-          select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
         })),
       }),
     }))
@@ -138,9 +138,9 @@ describe('POST /api/pricing/brand-overrides', () => {
     })
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn(() => ({
-          select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
         })),
       }),
     }))
@@ -169,9 +169,9 @@ describe('DELETE /api/pricing/brand-overrides', () => {
   it('returns 400 when make query param is missing', async () => {
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn(() => ({
-          select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
         })),
       }),
     }))
@@ -188,9 +188,9 @@ describe('DELETE /api/pricing/brand-overrides', () => {
     const deleteMock = vi.fn().mockReturnValue({ ilike: vi.fn().mockResolvedValue({ error: null }) })
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn(() => ({
-          select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
         })),
       }),
     }))
@@ -217,10 +217,10 @@ describe('PATCH /api/pricing/settings — demand_adjustment_enabled', () => {
     const upsertMock = vi.fn().mockResolvedValue({ error: null })
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn((table: string) => {
           if (table === 'users') return {
-            select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
+            select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
           }
           return { upsert: upsertMock }
         }),
@@ -244,10 +244,10 @@ describe('PATCH /api/pricing/settings — demand_adjustment_enabled', () => {
     const upsertMock = vi.fn().mockResolvedValue({ error: null })
     vi.doMock('@/lib/supabase/server', () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' }, access_token: 'mock-token' } } }) },
         from: vi.fn((table: string) => {
           if (table === 'users') return {
-            select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
+            select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) })), single: vi.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) })) })),
           }
           return { upsert: upsertMock }
         }),

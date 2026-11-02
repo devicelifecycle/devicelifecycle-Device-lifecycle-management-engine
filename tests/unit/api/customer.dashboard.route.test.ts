@@ -14,14 +14,16 @@ vi.mock('@/lib/supabase/service-role', () => ({
 function makeServerSupabase(profile: Record<string, unknown> | null) {
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'customer-user-1' } } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'customer-user-1' }, access_token: 'mock-token' } } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
       if (table !== 'users') throw new Error(`Unexpected table: ${table}`)
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: profile, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
       }
     }),
   }

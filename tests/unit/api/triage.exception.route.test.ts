@@ -26,16 +26,19 @@ function makeSupabase({
   user: { id: string } | null
   profile: { role?: string; organization_id?: string } | null
 }) {
+  const session = user ? { user, access_token: 'mock-token' } : null
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
       if (table === 'users') {
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({ data: profile }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
         }
       }
 

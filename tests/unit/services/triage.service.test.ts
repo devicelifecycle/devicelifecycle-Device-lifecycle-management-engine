@@ -306,14 +306,16 @@ describe('TriageService order lookups', () => {
             }),
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                select: vi.fn().mockReturnValue({
-                  single: vi.fn().mockResolvedValue({
-                    data: {
-                      id: 'triage-2',
-                      imei_record_id: 'imei-2',
-                      final_condition: 'fair',
-                    },
-                    error: null,
+                is: vi.fn().mockReturnValue({
+                  select: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: {
+                        id: 'triage-2',
+                        imei_record_id: 'imei-2',
+                        final_condition: 'fair',
+                      },
+                      error: null,
+                    }),
                   }),
                 }),
               }),

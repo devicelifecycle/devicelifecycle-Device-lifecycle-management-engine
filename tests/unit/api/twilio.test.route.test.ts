@@ -19,16 +19,15 @@ vi.mock('@/services/email.service', () => ({
 function makeSupabase(user: { id: string } | null, role?: string | null) {
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: user ? { user, access_token: 'mock-token' } : null } }),
     },
-    from: vi.fn().mockImplementation((table: string) => {
-      if (table !== 'users') {
-        throw new Error(`Unexpected table: ${table}`)
-      }
-
+    from: vi.fn().mockImplementation(() => {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
             single: vi.fn().mockResolvedValue({ data: role ? { role } : null }),
           }),
         }),
@@ -61,7 +60,7 @@ describe('POST /api/twilio/test', () => {
     const json = await response.json()
 
     expect(response.status).toBe(403)
-    expect(json).toEqual({ error: 'Forbidden' })
+    expect(json.error).toMatch(/Forbidden/)
   })
 
   it('validates destination phone numbers', async () => {

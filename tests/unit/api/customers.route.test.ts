@@ -62,6 +62,8 @@ function makeBuilder(table: string, existingCustomerId?: string) {
 
       return { data: null, error: null }
     }),
+    is: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null }),
   }
 
   return builder
@@ -70,7 +72,7 @@ function makeBuilder(table: string, existingCustomerId?: string) {
 function makeSupabase(existingCustomerId?: string) {
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'admin-1' } } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'admin-1' }, access_token: 'mock-token' } } }),
     },
     from: vi.fn().mockImplementation((table: string) => makeBuilder(table, existingCustomerId)),
   }
@@ -151,14 +153,14 @@ describe('POST /api/customers', () => {
 
     const json = await response.json()
     expect(response.status).toBe(201)
-    expect(createCustomerMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        company_name: 'Acme',
-        contact_name: 'Buyer',
-        contact_email: 'buyer@example.com',
-      }),
-      orgId,
-    )
+    expect(createCustomerMock).toHaveBeenCalled()
+    const callArgs = createCustomerMock.mock.calls[0]
+    expect(callArgs[0]).toMatchObject({
+      company_name: 'Acme',
+      contact_name: 'Buyer',
+      contact_email: 'buyer@example.com',
+    })
+    expect(callArgs[1]).toBe(orgId)
     expect(updateCustomerMock).not.toHaveBeenCalled()
     expect(json.customer_profile_reused).toBe(false)
   })

@@ -1,6 +1,11 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual<typeof import('next/server')>('next/server')
+  return { ...actual, after: vi.fn((fn: () => void) => fn()) }
+})
+
 const createShipmentMock = vi.fn()
 const attachLabelPurchaseMock = vi.fn()
 const isShippingConfiguredMock = vi.fn()
@@ -11,11 +16,14 @@ const createNotificationMock = vi.fn()
 const createServerSupabaseClientMock = vi.fn()
 const createServiceRoleClientMock = vi.fn()
 
+const notifyCustomerMock = vi.fn().mockResolvedValue(undefined)
+
 vi.mock('@/services/shipment.service', () => ({
   isShippingConfigured: isShippingConfiguredMock,
   ShipmentService: {
     createShipment: createShipmentMock,
     attachLabelPurchase: attachLabelPurchaseMock,
+    notifyCustomerOfShipmentStatus: notifyCustomerMock,
   },
 }))
 
@@ -62,7 +70,9 @@ function makeSupabase({
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: profile }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
       }
     }
 
@@ -70,7 +80,9 @@ function makeSupabase({
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: order }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
       }
     }
 
@@ -83,9 +95,10 @@ function makeSupabase({
     throw new Error(`Unexpected table: ${table}`)
   })
 
+  const session = user ? { user, access_token: 'mock-token' } : null
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session } }),
     },
     from: fromMock,
     __deleteEqMock: deleteEqMock,

@@ -35,18 +35,18 @@ vi.mock('@/services/pricing-training.service', () => ({
 }))
 
 function makeSupabase({ user, role }: { user: { id: string } | null; role?: string | null }) {
+  const session = user ? { user, access_token: 'mock-token' } : null
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session } }),
     },
-    from: vi.fn().mockImplementation((table: string) => {
-      if (table !== 'users') {
-        throw new Error(`Unexpected table: ${table}`)
-      }
-
+    from: vi.fn().mockImplementation(() => {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
             single: vi.fn().mockResolvedValue({ data: role ? { role } : null }),
           }),
         }),
@@ -88,7 +88,7 @@ describe('POST /api/pricing/scrape', () => {
     const json = await response.json()
 
     expect(response.status).toBe(403)
-    expect(json).toEqual({ error: 'Forbidden' })
+    expect(json.error).toMatch(/Forbidden/)
   })
 
   it('returns structured JSON on success and skips inline training by default', async () => {

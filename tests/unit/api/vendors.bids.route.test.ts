@@ -29,12 +29,23 @@ vi.mock('@/lib/supabase/service-role', () => ({
 function makeServerSupabase() {
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'vendor-user-1' } } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'vendor-user-1' }, access_token: 'mock-token' } } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
       if (table === 'users') {
         return {
           select: vi.fn().mockImplementation((columns: string) => {
+            // requireAuth profile lookup
+            if (columns.includes('is_active')) {
+              return {
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { role: 'vendor', organization_id: 'vendor-org-1' },
+                  }),
+                }),
+              }
+            }
+
             if (columns === 'role, organization_id') {
               return {
                 eq: vi.fn().mockReturnValue({
@@ -69,7 +80,16 @@ function makeServerSupabase() {
         }
       }
 
-      throw new Error(`Unexpected table: ${table}`)
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+            }),
+            single: vi.fn().mockResolvedValue({ data: null }),
+          }),
+        }),
+      }
     }),
   }
 }
@@ -219,7 +239,7 @@ describe('POST /api/vendors/bids', () => {
           id: '11111111-1111-1111-1111-111111111111',
           order_number: 'CPO-1001',
           type: 'cpo',
-          status: 'accepted',
+          status: 'sourcing',
           total_quantity: 10,
           vendor_id: null,
           parent_order_id: null,

@@ -39,20 +39,26 @@ function makeSupabase({
   user: { id: string } | null
   profile: { role?: string; organization_id?: string } | null
 }) {
+  const session = user ? { user, access_token: 'mock-token' } : null
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user } }),
+      getSession: vi.fn().mockResolvedValue({ data: { session } }),
     },
     from: vi.fn().mockImplementation((table: string) => {
-      if (table !== 'users') {
+      const chain: Record<string, unknown> = {}
+      const self = () => chain
+      for (const m of ['select', 'eq', 'is', 'neq', 'order', 'limit']) chain[m] = vi.fn(self)
+      chain.maybeSingle = vi.fn().mockResolvedValue({ data: null })
+
+      if (table === 'users') {
+        chain.single = vi.fn().mockResolvedValue({ data: profile })
+      } else if (table === 'impersonation_log') {
+        chain.single = vi.fn().mockResolvedValue({ data: null })
+      } else {
         throw new Error(`Unexpected table: ${table}`)
       }
 
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: profile }),
-      }
+      return chain
     }),
   }
 }
@@ -117,7 +123,8 @@ describe('POST /api/orders/[id]/transition', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(transitionOrderMock).toHaveBeenCalledWith('order-1', 'accepted', 'user-1', 'Looks good')
+    expect(transitionOrderMock).toHaveBeenCalled()
+    expect(transitionOrderMock.mock.calls[0].slice(0, 4)).toEqual(['order-1', 'accepted', 'user-1', 'Looks good'])
     expect(logStatusChangeMock).toHaveBeenCalledWith(
       'user-1',
       'order',
@@ -232,7 +239,8 @@ describe('POST /api/orders/[id]/transition', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(transitionOrderMock).toHaveBeenCalledWith('order-4', 'shipped_to_coe', 'admin-2', 'Customer shipped devices')
+    expect(transitionOrderMock).toHaveBeenCalled()
+    expect(transitionOrderMock.mock.calls[0].slice(0, 4)).toEqual(['order-4', 'shipped_to_coe', 'admin-2', 'Customer shipped devices'])
   })
 
   it('allows a vendor to progress their own assigned order from sourced to shipped', async () => {
@@ -268,7 +276,8 @@ describe('POST /api/orders/[id]/transition', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(transitionOrderMock).toHaveBeenCalledWith('order-5', 'shipped', 'vendor-user-1', 'Tracking uploaded')
+    expect(transitionOrderMock).toHaveBeenCalled()
+    expect(transitionOrderMock.mock.calls[0].slice(0, 4)).toEqual(['order-5', 'shipped', 'vendor-user-1', 'Tracking uploaded'])
   })
 
   it('allows sales to send a quote on a submitted order', async () => {
@@ -302,7 +311,8 @@ describe('POST /api/orders/[id]/transition', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(transitionOrderMock).toHaveBeenCalledWith('order-5b', 'quoted', 'sales-user-1', 'Quote sent to customer')
+    expect(transitionOrderMock).toHaveBeenCalled()
+    expect(transitionOrderMock.mock.calls[0].slice(0, 4)).toEqual(['order-5b', 'quoted', 'sales-user-1', 'Quote sent to customer'])
   })
 
   it('blocks COE techs from sending quotes', async () => {
@@ -386,7 +396,8 @@ describe('POST /api/orders/[id]/transition', () => {
       )
 
       expect(response.status).toBe(200)
-      expect(transitionOrderMock).toHaveBeenLastCalledWith('order-6', step.to, 'vendor-user-1', step.notes)
+      const lastCall = transitionOrderMock.mock.calls[transitionOrderMock.mock.calls.length - 1]
+      expect(lastCall.slice(0, 4)).toEqual(['order-6', step.to, 'vendor-user-1', step.notes])
     }
 
     expect(transitionOrderMock).toHaveBeenCalledTimes(steps.length)

@@ -26,16 +26,21 @@ vi.mock('jspdf-autotable', () => ({
   default: vi.fn(),
 }))
 
-const createMockSupabase = (user: { id: string } | null, profile: { role?: string } | null) => ({
-  auth: {
-    getUser: vi.fn().mockResolvedValue({ data: { user } }),
-  },
-  from: vi.fn().mockReturnValue({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: profile }),
-  }),
-})
+const createMockSupabase = (user: { id: string } | null, profile: { role?: string } | null) => {
+  const session = user ? { user, access_token: 'mock-token' } : null
+  return {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session } }),
+    },
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: profile }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+    }),
+  }
+}
 
 describe('GET /api/pricing/competitors/export', () => {
   beforeEach(() => {
