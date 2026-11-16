@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { VendorService } from '@/services/vendor.service'
+import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { submitVendorBidSchema } from '@/lib/validations'
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest) {
     const serviceRole = createServiceRoleClient()
     const { data: order, error: orderError } = await serviceRole
       .from('orders')
-      .select('id, order_number, type, status, total_quantity, vendor_id, parent_order_id, tenant_id')
+      .select('id, order_number, type, status, total_quantity, vendor_id, parent_order_id, tenant_id, customer_id, assigned_to_id, created_by_id')
       .eq('id', parsed.data.order_id)
       .single()
 
@@ -239,6 +240,31 @@ export async function POST(request: NextRequest) {
       warranty_days: parsed.data.warranty_days,
       notes: parsed.data.notes,
     })
+
+    // An auto-accepted bid must finish the same job as an admin accepting it
+    // (PATCH /api/vendors/bids/[id]): quote the customer. Without this the order
+    // kept its vendor and prices but sat in "submitted" with no quote sent, and
+    // the bid could no longer be accepted by hand ("already accepted").
+    if (bid.auto_accepted) {
+      try {
+        await OrderService.transitionOrder(order.id, 'quoted', authCtx.authUser.id, 'Vendor bid auto-accepted — quote generated for customer')
+        NotificationService.sendOrderTransitionNotifications(
+          {
+            id: order.id,
+            order_number: order.order_number,
+            type: order.type,
+            customer_id: order.customer_id,
+            vendor_id: vendor.id,
+            assigned_to_id: order.assigned_to_id,
+            created_by_id: order.created_by_id,
+          },
+          order.status,
+          'quoted',
+        ).catch((err) => console.error('Auto-accept quote notification error:', err))
+      } catch (err) {
+        console.error('Auto-accepted bid: failed to quote the order:', err)
+      }
+    }
 
     // Notify all active admins + confirm to vendor (fire-and-forget)
     const orderLabel = order.order_number || parsed.data.order_id.slice(0, 8)

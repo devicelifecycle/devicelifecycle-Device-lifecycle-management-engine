@@ -188,6 +188,11 @@ export async function POST(request: NextRequest) {
 
     const shipment = await ShipmentService.createShipment({
       ...body,
+      // NOT NULL columns. The COE Shipping page sends no addresses, so every
+      // outbound shipment created there failed with a 500; {} matches what the
+      // customer ship-in form already sends when it has no address.
+      from_address: body.from_address ?? {},
+      to_address: body.to_address ?? {},
       carrier: resolvedCarrier,
       tracking_number: normalizedTrackingNumber,
       created_by_id: authUser.id,

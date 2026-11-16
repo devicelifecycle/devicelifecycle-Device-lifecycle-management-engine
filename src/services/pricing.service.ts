@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { resolveComparablePricingDeviceId } from '@/lib/pricing-device-resolution'
 import { normalizeCompetitorName, sanitizeSearchInput } from '@/lib/utils'
 import { PricingModelRegistry } from '@/models/pricing'
+import { effectiveCpoMarkupPercent } from '@/lib/cpo-markup'
 import {
   CHANNEL_DECISION_THRESHOLDS,
   MARKETPLACE_FEE_PERCENT,
@@ -1448,7 +1449,7 @@ export class PricingService {
       // Step 9: Calculate margin vs expected resale (sell-side anchor)
       // anchorPrice = competitor trade-in avg, not a sell price — using it here would give ~0% margin.
       // Use competitor sell prices when available; otherwise estimate from the CPO markup setting.
-      const resaleSellMarkup = (settings.cpo_markup_percent > 0 ? settings.cpo_markup_percent : 18) / 100
+      const resaleSellMarkup = effectiveCpoMarkupPercent(settings.cpo_markup_percent) / 100
       const resaleAnchor = rawCompetitorSellPrices.length > 0
         ? Math.max(...rawCompetitorSellPrices)
         : tradePrice * (1 + resaleSellMarkup)
@@ -1542,7 +1543,7 @@ export class PricingService {
           ? settings.cpo_enterprise_markup_percent
           : settings.cpo_markup_percent
       // Enforce minimum 18% CPO markup in fallback path — prevents CPO ≈ trade price
-      const cpoMarkup = (rawCpoMarkup > 0 ? rawCpoMarkup : 18) / 100
+      const cpoMarkup = effectiveCpoMarkupPercent(rawCpoMarkup) / 100
       let cpoPrice: number
       if (rawCompetitorSellPrices.length > 0) {
         const highestCompetitorSell = Math.max(...rawCompetitorSellPrices)
@@ -2048,7 +2049,7 @@ export class PricingService {
         costsOrMarkup = totalCosts
         profitOrMargin = profitTarget
       } else {
-        const markupPercent = marginSettings.cpo_markup_percent
+        const markupPercent = effectiveCpoMarkupPercent(marginSettings.cpo_markup_percent)
         finalPrice = calculatedPrice * (1 + markupPercent / 100)
         costsOrMarkup = `${markupPercent}%`
         profitOrMargin = 'included in markup'

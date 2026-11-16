@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { sanitizeSearchInput } from '@/lib/utils'
 import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
+import { effectiveCpoMarkupPercent } from '@/lib/cpo-markup'
 import { OrderSplitService } from './order-split.service'
 import { NotificationService } from './notification.service'
 import { EmailService } from './email.service'
@@ -633,8 +634,7 @@ export class VendorService {
           .select('setting_value')
           .eq('setting_key', 'cpo_markup_percent')
           .single()
-        const parsed = parseFloat(String(settings?.setting_value ?? ''))
-        markup = Number.isFinite(parsed) && parsed >= 0 ? parsed : 18
+        markup = effectiveCpoMarkupPercent(settings?.setting_value)
       }
 
       // Calculate customer price with markup

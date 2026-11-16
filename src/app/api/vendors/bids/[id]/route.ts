@@ -258,6 +258,12 @@ export async function PATCH(
 
     return NextResponse.json({ data: updatedBid })
   } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    // State conflicts (bid already decided, order already taken) are the
+    // caller's to resolve, not server faults.
+    if (/^Bid is already |already assigned to another vendor/.test(message)) {
+      return NextResponse.json({ error: message }, { status: 409 })
+    }
     console.error('Error updating bid status:', error)
     return NextResponse.json(
       { error: safeErrorMessage(error, 'Failed to update bid status') },
