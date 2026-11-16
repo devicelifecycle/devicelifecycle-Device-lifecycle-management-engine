@@ -125,14 +125,9 @@ describe('POST /api/orders/[id]/transition', () => {
     expect(response.status).toBe(200)
     expect(transitionOrderMock).toHaveBeenCalled()
     expect(transitionOrderMock.mock.calls[0].slice(0, 4)).toEqual(['order-1', 'accepted', 'user-1', 'Looks good'])
-    expect(logStatusChangeMock).toHaveBeenCalledWith(
-      'user-1',
-      'order',
-      'order-1',
-      'quoted',
-      'accepted',
-      expect.objectContaining({ order_number: 'TI-2001', notes: 'Looks good' }),
-    )
+    // OrderService.transitionOrder writes the one audit row; a second from the
+    // route doubled every status change in the audit log.
+    expect(logStatusChangeMock).not.toHaveBeenCalled()
     expect(sendOrderTransitionNotificationsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'order-1',

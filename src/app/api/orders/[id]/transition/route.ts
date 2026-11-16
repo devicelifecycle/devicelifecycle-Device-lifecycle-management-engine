@@ -6,7 +6,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { OrderService } from '@/services/order.service'
-import { AuditService } from '@/services/audit.service'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { orderTransitionSchema } from '@/lib/validations'
@@ -234,16 +233,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       authUser.id,
       notes,
       validity_days
-    )
-
-    // Log audit
-    await AuditService.logStatusChange(
-      authUser.id,
-      'order',
-      (await params).id,
-      currentOrder.status,
-      newStatus,
-      { notes, order_number: currentOrder.order_number }
     )
 
     // Send email + in-app notifications (fire-and-forget, don't block response)

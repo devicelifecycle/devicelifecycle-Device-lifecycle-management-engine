@@ -21,7 +21,7 @@ export async function GET() {
   const [invoicesRes, subRes, paymentsRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, period_start, period_end, status, total, currency, sent_at, paid_at, created_at')
+      .select('id, invoice_number, period_start, period_end, status, total, currency, created_at, updated_at')
       .eq('tenant_id', auth.tenantId)
       .order('created_at', { ascending: false })
       .limit(200),

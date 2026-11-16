@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { OrderService } from '@/services/order.service'
-import { AuditService } from '@/services/audit.service'
 import { NotificationService } from '@/services/notification.service'
 import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { isValidUUID } from '@/lib/utils'
@@ -98,11 +97,6 @@ export async function POST(request: NextRequest) {
     const transitionResults = await Promise.allSettled(
       toTransition.map(async ({ orderId, currentOrder }) => {
         await OrderService.transitionOrder(orderId, to_status as OrderStatus, authUser.id, notes)
-        AuditService.logStatusChange(
-          authUser.id, 'order', orderId,
-          currentOrder.status, to_status,
-          { notes, order_number: currentOrder.order_number, bulk: true }
-        ).catch(() => {})
         NotificationService.sendOrderTransitionNotifications(
           {
             id: orderId,

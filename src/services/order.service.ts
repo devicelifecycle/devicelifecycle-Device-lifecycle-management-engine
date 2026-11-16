@@ -754,8 +754,12 @@ export class OrderService {
       userId
     )
 
-    // Log to audit
-    await this.logAudit(userId, 'status_change', 'order', id, order, updatedOrder)
+    // The single audit row for this transition — callers must not log their own.
+    await this.logAudit(
+      userId, 'status_change', 'order', id,
+      { status: order.status }, { status: toStatus },
+      { notes: notes ?? null, order_number: order.order_number },
+    )
 
     // Split order handling:
     // If cancelling a split parent → cascade cancel to all sub-orders
@@ -1012,7 +1016,8 @@ export class OrderService {
     entityType: string,
     entityId: string,
     oldValues: any,
-    newValues: any
+    newValues: any,
+    metadata?: Record<string, unknown>
   ) {
     const supabase = createServiceRoleClient()
 
@@ -1023,6 +1028,7 @@ export class OrderService {
       entity_id: entityId,
       old_values: oldValues,
       new_values: newValues,
+      ...(metadata ? { metadata } : {}),
     })
   }
 

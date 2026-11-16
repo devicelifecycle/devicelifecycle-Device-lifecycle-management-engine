@@ -22,9 +22,8 @@ interface Invoice {
   status: 'draft' | 'sent' | 'paid' | 'void'
   total: number
   currency: string
-  sent_at: string | null
-  paid_at: string | null
   created_at: string
+  updated_at: string
 }
 
 interface Subscription {
@@ -235,10 +234,10 @@ export default function VarBillingPage() {
                         {formatCurrency(inv.total)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {inv.sent_at ? formatDate(inv.sent_at) : '—'}
+                        {inv.status !== 'draft' ? formatDate(inv.created_at) : '—'}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {inv.paid_at ? formatDate(inv.paid_at) : '—'}
+                        {inv.status === 'paid' ? formatDate(inv.updated_at) : '—'}
                       </TableCell>
                       <TableCell>
                         <Button

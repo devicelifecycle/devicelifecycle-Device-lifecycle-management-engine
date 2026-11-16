@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server'
 import { cookies, headers } from 'next/headers'
 import { workUnitAsyncStorage } from 'next/dist/server/app-render/work-unit-async-storage.external'
 import { createServerSupabaseClient } from './server'
+import { createServiceRoleClient } from './service-role'
 import type { User } from '@supabase/supabase-js'
 import { getClientIp, ipInAllowlist } from '@/lib/network'
 
@@ -188,16 +189,22 @@ export async function requireAuth(): Promise<AuthContext | null> {
   // an admin whose role gets revoked mid-session immediately loses the swap on
   // their very next request — the historical fact that they started the
   // session as an admin isn't enough to keep honoring it.
+  //
+  // Both lookups use the service-role client: tenant-isolation RLS hides other
+  // tenants' rows from the platform admin's session, so reading a VAR user's
+  // row through `supabase` returned nothing and the swap silently never
+  // happened. The actor/admin checks below are the authorization boundary.
   const impersonationCookie = cookieStore.get('bb_impersonate_id')?.value
-  if (impersonationCookie) {
-    const { data: imp } = await supabase
+  if (impersonationCookie && effectiveRole === 'admin') {
+    const svc = createServiceRoleClient()
+    const { data: imp } = await svc
       .from('impersonation_log')
       .select('id, actor_id, target_user_id')
       .eq('id', impersonationCookie)
       .is('ended_at', null)
       .maybeSingle()
-    if (imp && imp.actor_id === profile.id && effectiveRole === 'admin') {
-      const { data: target } = await supabase
+    if (imp && imp.actor_id === profile.id) {
+      const { data: target } = await svc
         .from('users')
         .select('id, role, secondary_role, organization_id, tenant_id, region, is_active, is_org_admin')
         .eq('id', imp.target_user_id)
