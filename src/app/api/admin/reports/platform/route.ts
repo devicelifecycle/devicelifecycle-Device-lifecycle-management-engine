@@ -3,13 +3,13 @@
 // ============================================================================
 
 import { NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/supabase/require-permission'
+import { requirePlatformPermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { buildPlatformSummary } from '@/lib/platform-metrics'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const guard = await requirePermission('reports.view')
+  const guard = await requirePlatformPermission('reports.view')
   if ('error' in guard) return guard.error
 
   const supabase = createServiceRoleClient()

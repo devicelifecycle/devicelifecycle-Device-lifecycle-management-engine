@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/supabase/require-permission'
+import { requirePermission, requirePlatformPermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { computeInvoiceTotals, formatInvoiceNumber } from '@/lib/billing'
 import { resolveTaxRate } from '@/lib/tax'
@@ -20,7 +20,7 @@ const createSchema = z.object({
 })
 
 export async function GET(request: NextRequest) {
-  const guard = await requirePermission('billing.view')
+  const guard = await requirePlatformPermission('billing.view')
   if ('error' in guard) return guard.error
 
   const { page, limit, from, to } = parsePaging(request)

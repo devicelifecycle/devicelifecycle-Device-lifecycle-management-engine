@@ -7,6 +7,7 @@ import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
 import { parsePaging } from '@/lib/paging'
+import { delegationLevel } from '@/lib/delegation'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,11 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: true })
     .range(from, to)
   if (typeFilter === 'platform' || typeFilter === 'var') query = query.eq('type', typeFilter)
+  // VAR roles hold tenant.view for their own tenant only — never the whole list.
+  if (delegationLevel(guard.auth.effectiveRole) !== 'none') {
+    if (!guard.auth.tenantId) return NextResponse.json({ data: [], total: 0, page, limit })
+    query = query.eq('id', guard.auth.tenantId)
+  }
 
   const { data, error, count } = await query
   if (error) return NextResponse.json({ error: 'Failed to load tenants' }, { status: 500 })

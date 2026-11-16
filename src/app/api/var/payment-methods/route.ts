@@ -26,6 +26,9 @@ const setupIntentSchema = z.object({
 export async function GET() {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  if (!VAR_ADMIN_ROLES.includes(auth.effectiveRole)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   if (!auth.tenantId) return NextResponse.json({ error: 'No tenant context' }, { status: 400 })
 
   const supabase = createServiceRoleClient()

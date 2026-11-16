@@ -4,7 +4,7 @@
 // Recording a payment that clears the balance auto-marks a "sent" invoice paid.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/supabase/require-permission'
+import { requirePermission, requirePlatformPermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { summarizePayments, type PaymentRecord } from '@/lib/payments'
 import { canTransitionInvoice, type InvoiceStatus } from '@/lib/billing'
@@ -23,7 +23,7 @@ async function loadInvoice(supabase: ReturnType<typeof createServiceRoleClient>,
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requirePermission('billing.view')
+  const guard = await requirePlatformPermission('billing.view')
   if ('error' in guard) return guard.error
   const { id } = await params
   const supabase = createServiceRoleClient()

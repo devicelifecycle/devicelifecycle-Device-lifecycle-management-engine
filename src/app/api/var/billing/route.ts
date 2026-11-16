@@ -8,9 +8,16 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { featureGate } from '@/lib/supabase/require-feature'
 export const dynamic = 'force-dynamic'
 
+const VAR_CONSOLE_ROLES = new Set(['admin', 'var_entity_admin', 'var_regional_manager', 'var_sales_rep'])
+
 export async function GET() {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  // Same audience as the console overview's invoice list — never end
+  // customers or vendors, who also carry a tenant_id.
+  if (!VAR_CONSOLE_ROLES.has(auth.effectiveRole)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   if (!auth.tenantId) return NextResponse.json({ error: 'No tenant context' }, { status: 400 })
 
   const gated = await featureGate(auth.tenantId, 'billing', 'Billing')

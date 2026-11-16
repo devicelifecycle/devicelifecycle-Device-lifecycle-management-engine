@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from './require-auth'
 import { hasPermission, type PermissionKey } from '@/lib/permissions'
+import { delegationLevel } from '@/lib/delegation'
 
 export type PermissionGuard =
   | { error: NextResponse }
@@ -24,4 +25,19 @@ export async function requirePermission(permission: PermissionKey): Promise<Perm
   }
 
   return { auth }
+}
+
+/**
+ * requirePermission for platform-wide data (every tenant's invoices, BB revenue,
+ * platform KPIs). VAR roles share permission keys like reports.view/billing.view
+ * for their OWN data, served by /api/var/*; those keys must not unlock data
+ * that spans all tenants.
+ */
+export async function requirePlatformPermission(permission: PermissionKey): Promise<PermissionGuard> {
+  const guard = await requirePermission(permission)
+  if ('error' in guard) return guard
+  if (delegationLevel(guard.auth.effectiveRole) !== 'none') {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  }
+  return guard
 }

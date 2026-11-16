@@ -11,7 +11,7 @@
 // attempt, so this report deliberately omits a failed-login number.
 
 import { NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/supabase/require-permission'
+import { requirePlatformPermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import {
   monthBounds,
@@ -30,7 +30,7 @@ const KPI_WINDOW_DAYS = 90
 const KPI_ROW_CAP = 5000
 
 export async function GET() {
-  const guard = await requirePermission('reports.view')
+  const guard = await requirePlatformPermission('reports.view')
   if ('error' in guard) return guard.error
 
   const supabase = createServiceRoleClient()

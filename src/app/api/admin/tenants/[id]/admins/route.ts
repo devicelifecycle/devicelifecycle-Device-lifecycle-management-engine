@@ -18,6 +18,7 @@ import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { UserProvisioningService } from '@/services/user-provisioning.service'
 import { isValidUUID } from '@/lib/utils'
+import { canViewTenant } from '@/lib/delegation'
 import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
@@ -36,6 +37,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if ('error' in g) return g.error
   const { id } = await params
   if (!isValidUUID(id)) return NextResponse.json({ error: 'Invalid tenant id' }, { status: 400 })
+  if (!canViewTenant(g.auth.effectiveRole, g.auth.tenantId, id)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase

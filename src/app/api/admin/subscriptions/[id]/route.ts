@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/supabase/require-permission'
+import { requirePermission, requirePlatformPermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import {
   getSubscriptionById, transitionSubscription,
@@ -23,7 +23,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const guard = await requirePermission('billing.view')
+  const guard = await requirePlatformPermission('billing.view')
   if ('error' in guard) return guard.error
 
   const { id } = await params

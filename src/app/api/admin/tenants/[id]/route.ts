@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { resolveBranding } from '@/lib/branding'
+import { canViewTenant } from '@/lib/delegation'
 import { resolveFeatures, FEATURE_KEYS } from '@/lib/features'
 import { resolveLicense, LIMIT_KEYS } from '@/lib/licensing'
 import { resolveWhiteLabel } from '@/lib/templates'
@@ -120,6 +121,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const g = await requirePermission('tenant.view')
   if ('error' in g) return g.error
   const { id } = await params
+  if (!canViewTenant(g.auth.effectiveRole, g.auth.tenantId, id)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase

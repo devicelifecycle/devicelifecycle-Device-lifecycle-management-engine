@@ -22,6 +22,15 @@ export function delegationLevel(role: string | null | undefined): DelegationLeve
   }
 }
 
+/**
+ * May this actor read tenant `tenantId`'s record? VAR roles hold `tenant.view`
+ * for their OWN tenant only; platform roles may read any tenant.
+ */
+export function canViewTenant(role: string | null | undefined, ownTenantId: string | null, tenantId: string): boolean {
+  if (delegationLevel(role) === 'none') return true
+  return !!ownTenantId && ownTenantId === tenantId
+}
+
 export interface DelegationContext {
   role: string | null | undefined
   userId: string
