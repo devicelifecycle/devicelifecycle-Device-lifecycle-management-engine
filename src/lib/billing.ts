@@ -67,6 +67,18 @@ export function computeInvoiceTotals(
   }
 }
 
+/**
+ * Tax + total after a credit. A credit reduces the taxable amount (it is a
+ * discount, not a payment), so tax is recomputed on what remains.
+ */
+export function totalsAfterCredit(
+  commissionTotal: number, subscriptionFee: number, taxRate: number, credit: number,
+): { taxAmount: number; total: number } {
+  const taxable = Math.max(0, round2(round2(commissionTotal) + round2(subscriptionFee) - round2(credit)))
+  const taxAmount = taxRate > 0 ? round2(taxable * taxRate) : 0
+  return { taxAmount, total: round2(taxable + taxAmount) }
+}
+
 /** Invoice number like INV-2026-0007 (period year + zero-padded sequence). */
 export function formatInvoiceNumber(year: number, seq: number): string {
   return `INV-${year}-${String(seq).padStart(4, '0')}`

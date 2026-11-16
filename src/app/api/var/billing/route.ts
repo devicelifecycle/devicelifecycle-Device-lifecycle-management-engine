@@ -39,7 +39,7 @@ export async function GET() {
       .maybeSingle(),
     supabase
       .from('invoice_payments')
-      .select('id, invoice_id, amount, type, note, created_at')
+      .select('id, invoice_id, amount, type:kind, note, created_at')
       .in('invoice_id', (await supabase
         .from('invoices')
         .select('id')

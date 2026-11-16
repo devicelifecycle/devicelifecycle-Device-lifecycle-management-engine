@@ -10,6 +10,7 @@ import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { commissionConfigFromSettings } from '@/lib/commission'
 import { reconcilePeriod, type PeriodOrder, BILLABLE_ORDER_STATUSES } from '@/lib/billing-reconcile'
+import { totalsAfterCredit } from '@/lib/billing'
 import { resolveTaxRate } from '@/lib/tax'
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const supabase = createServiceRoleClient()
   const { data: invoice, error: invErr } = await supabase
-    .from('invoices').select('id, tenant_id, period_start, period_end, status, subscription_fee').eq('id', id).maybeSingle()
+    .from('invoices').select('id, tenant_id, period_start, period_end, status, subscription_fee, credit').eq('id', id).maybeSingle()
   if (invErr) return NextResponse.json({ error: 'Failed to load invoice' }, { status: 500 })
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (invoice.status !== 'draft') {
@@ -66,8 +67,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     commission_total: totals.commissionTotal,
     tax_rate: totals.taxRate,
     tax_label: totals.taxLabel || null,
-    tax_amount: totals.taxAmount,
-    total: totals.total,
+    // Keep any credit already applied — rebuilding lines used to discard it.
+    ...totalsAfterCredit(totals.commissionTotal, totals.subscriptionFee, totals.taxRate, Number(invoice.credit ?? 0)),
     updated_at: new Date().toISOString(),
   }).eq('id', id)
   if (upErr) return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 })

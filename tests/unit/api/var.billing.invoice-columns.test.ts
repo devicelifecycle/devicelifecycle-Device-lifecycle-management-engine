@@ -25,6 +25,22 @@ function invoiceColumns(): Set<string> {
   return cols
 }
 
+// invoice_payments has `kind`, never `type`. Selecting `type` failed the
+// query silently, so the VAR's payment history and the PDF were always empty.
+describe('VAR billing invoice_payments queries', () => {
+  const files = ['src/app/api/var/billing/route.ts', 'src/app/api/var/billing/[id]/pdf/route.ts']
+  for (const f of files) {
+    it(`${f} reads kind (aliased), never a bare type column`, () => {
+      const src = fs.readFileSync(path.join(root, f), 'utf8')
+      const m = src.match(/from\('invoice_payments'\)\s*\.select\('([^']+)'\)/)
+      expect(m).not.toBeNull()
+      const cols = m![1].split(',').map((c) => c.trim())
+      expect(cols).not.toContain('type')
+      expect(cols.some((c) => c === 'kind' || c.endsWith(':kind'))).toBe(true)
+    })
+  }
+})
+
 describe('VAR billing invoice query', () => {
   it('selects only columns that exist on invoices', () => {
     const cols = invoiceColumns()

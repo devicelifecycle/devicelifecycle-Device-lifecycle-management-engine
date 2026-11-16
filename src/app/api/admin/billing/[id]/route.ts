@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { canTransitionInvoice, type InvoiceStatus } from '@/lib/billing'
+import { canTransitionInvoice, totalsAfterCredit, type InvoiceStatus } from '@/lib/billing'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const supabase = createServiceRoleClient()
   const { data: inv, error: fetchErr } = await supabase
-    .from('invoices').select('id, status, commission_total, subscription_fee, credit').eq('id', id).maybeSingle()
+    .from('invoices').select('id, status, commission_total, subscription_fee, credit, tax_rate').eq('id', id).maybeSingle()
   if (fetchErr) return NextResponse.json({ error: 'Failed to load invoice' }, { status: 500 })
   if (!inv) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -46,14 +46,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   if (parsed.data.credit !== undefined) {
     update.credit = round2(parsed.data.credit)
-    // Total always reflects commission + subscription fee minus applied credit (floored at 0).
-    const gross = round2((inv.commission_total ?? 0) + (inv.subscription_fee ?? 0))
-    update.total = Math.max(0, round2(gross - round2(parsed.data.credit)))
+    // Previously total = commission + fee - credit, which dropped the tax.
+    const t = totalsAfterCredit(inv.commission_total ?? 0, inv.subscription_fee ?? 0, Number(inv.tax_rate ?? 0), parsed.data.credit)
+    update.tax_amount = t.taxAmount
+    update.total = t.total
   }
 
   const { data, error } = await supabase
     .from('invoices').update(update).eq('id', id)
-    .select('id, status, total, credit').single()
+    .select('id, status, total, credit, tax_amount').single()
   if (error) {
     console.error('Failed to update invoice:', error)
     return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 })

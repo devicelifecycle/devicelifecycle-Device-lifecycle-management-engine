@@ -61,7 +61,7 @@ export async function GET(
 
   const { data: payments } = await supabase
     .from('invoice_payments')
-    .select('id, amount, type, note, created_at')
+    .select('id, amount, type:kind, note, created_at')
     .eq('invoice_id', id)
     .order('created_at', { ascending: true })
     .limit(200)
