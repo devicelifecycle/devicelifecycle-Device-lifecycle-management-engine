@@ -10,7 +10,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { commissionConfigFromSettings } from '@/lib/commission'
+import { varCommissionConfig } from '@/lib/commission'
+import { PLATFORM_TENANT_ID } from '@/lib/tenant-resolve'
 import { reconcilePeriod, type PeriodOrder, BILLABLE_ORDER_STATUSES } from '@/lib/billing-reconcile'
 import { formatInvoiceNumber } from '@/lib/billing'
 import { resolveTaxRate } from '@/lib/tax'
@@ -77,8 +78,9 @@ export async function POST(request: NextRequest) {
   }
 
   // The VAR commission model + its money-moved orders in the window + billing address for tax.
-  const [{ data: tenant }, { data: rows }, { data: org }] = await Promise.all([
+  const [{ data: tenant }, { data: platformTenant }, { data: rows }, { data: org }] = await Promise.all([
     supabase.from('tenants').select('settings').eq('id', tenant_id).maybeSingle(),
+    supabase.from('tenants').select('settings').eq('id', PLATFORM_TENANT_ID).maybeSingle(),
     supabase.from('orders')
       .select('order_number, type, final_amount, quoted_amount, total_amount')
       .eq('tenant_id', tenant_id)
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
     supabase.from('organizations').select('address').eq('tenant_id', tenant_id).limit(1).maybeSingle(),
   ])
 
-  const config = commissionConfigFromSettings(tenant?.settings)
+  const config = varCommissionConfig(tenant?.settings, platformTenant?.settings)
   const orders: PeriodOrder[] = (rows ?? []).map((o) => ({
     order_number: (o.order_number as string) ?? '--',
     type: (o.type as string) ?? 'trade_in',

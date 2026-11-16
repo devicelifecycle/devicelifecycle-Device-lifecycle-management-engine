@@ -133,9 +133,13 @@ export function computeDealPricing(input: {
 
 /**
  * Read a CommissionConfig out of a tenant/settings JSON blob, falling back to
- * defaults. Tolerant of missing/partial config so pricing never crashes.
+ * `defaults` (DEFAULT_COMMISSION_CONFIG unless given). Tolerant of
+ * missing/partial config so pricing never crashes.
  */
-export function commissionConfigFromSettings(settings: unknown): CommissionConfig {
+export function commissionConfigFromSettings(
+  settings: unknown,
+  defaults: CommissionConfig = DEFAULT_COMMISSION_CONFIG,
+): CommissionConfig {
   const s = (settings ?? {}) as Record<string, unknown>
   const c = (s.commission ?? {}) as Record<string, unknown>
   const margin = (v: unknown, fallback: MarginSpec): MarginSpec => {
@@ -146,10 +150,27 @@ export function commissionConfigFromSettings(settings: unknown): CommissionConfi
     return { type, value }
   }
   return {
-    platformCommissionPct: typeof c.platformCommissionPct === 'number' ? c.platformCommissionPct : DEFAULT_COMMISSION_CONFIG.platformCommissionPct,
-    productMarginPct: typeof c.productMarginPct === 'number' ? c.productMarginPct : DEFAULT_COMMISSION_CONFIG.productMarginPct,
-    holdbackPct: typeof c.holdbackPct === 'number' ? c.holdbackPct : DEFAULT_COMMISSION_CONFIG.holdbackPct,
-    corpMargin: margin(c.corpMargin, DEFAULT_COMMISSION_CONFIG.corpMargin),
-    repMargin: margin(c.repMargin, DEFAULT_COMMISSION_CONFIG.repMargin),
+    platformCommissionPct: typeof c.platformCommissionPct === 'number' ? c.platformCommissionPct : defaults.platformCommissionPct,
+    productMarginPct: typeof c.productMarginPct === 'number' ? c.productMarginPct : defaults.productMarginPct,
+    holdbackPct: typeof c.holdbackPct === 'number' ? c.holdbackPct : defaults.holdbackPct,
+    corpMargin: margin(c.corpMargin, defaults.corpMargin),
+    repMargin: margin(c.repMargin, defaults.repMargin),
   }
+}
+
+/**
+ * The commission config a VAR is actually billed on. Byte-Back's take
+ * (platform commission, product margin, holdback) is set once on the platform
+ * tenant from /admin/commission; a VAR inherits it unless its own settings
+ * carry an explicit override. Corp/rep margins are the VAR's own and never
+ * inherited. Before this, VAR billing read only the VAR's settings, so the
+ * admin's commission page never reached any VAR — all were billed the 5% default.
+ */
+export function varCommissionConfig(varSettings: unknown, platformSettings: unknown): CommissionConfig {
+  const platform = commissionConfigFromSettings(platformSettings)
+  return commissionConfigFromSettings(varSettings, {
+    ...platform,
+    corpMargin: DEFAULT_COMMISSION_CONFIG.corpMargin,
+    repMargin: DEFAULT_COMMISSION_CONFIG.repMargin,
+  })
 }

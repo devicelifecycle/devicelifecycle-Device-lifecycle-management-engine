@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
-import { commissionConfigFromSettings, DEFAULT_COMMISSION_CONFIG, type CommissionConfig } from '@/lib/commission'
+import { varCommissionConfig, DEFAULT_COMMISSION_CONFIG, type CommissionConfig } from '@/lib/commission'
 import { projectVolume, effectiveTakeRate } from '@/lib/commission-report'
 
 interface VarOption { id: string; name: string; type: string }
@@ -45,10 +45,13 @@ export default function CommissionReportPageImpl() {
     setTenantId(id)
     setLoadingConfig(true)
     try {
-      const res = await fetch(`/api/admin/tenants/${id}`)
-      if (!res.ok) throw new Error()
+      const [res, platformRes] = await Promise.all([fetch(`/api/admin/tenants/${id}`), fetch('/api/admin/commission')])
+      if (!res.ok || !platformRes.ok) throw new Error()
       const { data } = await res.json()
-      setConfig(commissionConfigFromSettings(data.settings))
+      const { config: platformConfig } = await platformRes.json()
+      // Same effective config the invoice is reconciled on: BB's take from
+      // /admin/commission unless the VAR overrides it, the VAR's own margins.
+      setConfig(varCommissionConfig(data.settings, { commission: platformConfig }))
     } catch {
       toast.error('Failed to load VAR commission config')
       setConfig(DEFAULT_COMMISSION_CONFIG)
