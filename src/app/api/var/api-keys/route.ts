@@ -22,8 +22,12 @@ export async function GET() {
   if (!['admin', 'var_entity_admin'].includes(auth.effectiveRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const gated = await featureGate(auth.tenantId, 'api_access', 'API access')
-  if (gated) return gated
+  // The platform admin lists every tenant's keys, so there is no single
+  // tenant plan to gate on; a VAR is gated on its own plan.
+  if (auth.effectiveRole !== 'admin') {
+    const gated = await featureGate(auth.tenantId, 'api_access', 'API access')
+    if (gated) return gated
+  }
   const supabase = createServiceRoleClient()
   let query = supabase
     .from('api_keys')
@@ -40,8 +44,6 @@ export async function POST(req: NextRequest) {
   if (!['admin', 'var_entity_admin'].includes(auth.effectiveRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const gated = await featureGate(auth.tenantId, 'api_access', 'API access')
-  if (gated) return gated
   const parsed = createSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
@@ -49,6 +51,12 @@ export async function POST(req: NextRequest) {
 
   const tenantId = auth.effectiveRole === 'admin' ? parsed.data.tenant_id : auth.tenantId
   if (!tenantId) return NextResponse.json({ error: 'A tenant_id is required' }, { status: 400 })
+
+  // Gate on the plan of the tenant the key is FOR. Gating on the caller's
+  // tenant meant the platform admin (whose tenant has no api_access) could
+  // never issue a key for any VAR.
+  const gated = await featureGate(tenantId, 'api_access', 'API access')
+  if (gated) return gated
 
   const raw = `dlm_${randomBytes(24).toString('base64url')}`
   const keyPrefix = raw.slice(0, 12)
