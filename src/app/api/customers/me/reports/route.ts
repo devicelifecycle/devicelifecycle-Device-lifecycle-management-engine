@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { ensureCustomerProfileForOrganization } from '@/lib/customer-profile'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,15 +32,9 @@ export async function GET() {
     }
 
     const serviceRole = createServiceRoleClient()
-    const { data: customer } = await serviceRole
-      .from('customers')
-      .select('id')
-      .eq('organization_id', profile.organization_id)
-      .maybeSingle()
-
-    if (!customer) {
-      return NextResponse.json({ error: 'Customer profile not found' }, { status: 404 })
-    }
+    // Same resolver as /api/customers/me: an org can hold more than one customer
+    // row, and .maybeSingle() returns null for those, zeroing every counter.
+    const customer = await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, {})
 
     const assetCount = (status?: string) => {
       let query = serviceRole.from('customer_assets').select('id', { count: 'exact', head: true }).eq('customer_id', customer.id)

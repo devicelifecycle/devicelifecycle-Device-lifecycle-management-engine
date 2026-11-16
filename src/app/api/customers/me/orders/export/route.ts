@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { ensureCustomerProfileForOrganization } from '@/lib/customer-profile'
 import { generateOrderHistoryPDF } from '@/lib/pdf'
 import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 
@@ -28,15 +29,9 @@ export async function GET(request: NextRequest) {
     const format = request.nextUrl.searchParams.get('format') === 'pdf' ? 'pdf' : 'csv'
 
     const serviceRole = createServiceRoleClient()
-    const { data: customer } = await serviceRole
-      .from('customers')
-      .select('id, company_name, contact_name')
-      .eq('organization_id', profile.organization_id)
-      .maybeSingle()
-
-    if (!customer) {
-      return NextResponse.json({ error: 'Customer profile not found' }, { status: 404 })
-    }
+    // Same resolver as /api/customers/me: .maybeSingle() returns null for an
+    // org with more than one customer row, which 404'd the export.
+    const customer = await ensureCustomerProfileForOrganization(serviceRole, profile.organization_id, {})
 
     const { data: orders } = await serviceRole
       .from('orders')

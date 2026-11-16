@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Loader2, Search, Sparkles } from 'lucide-react'
 import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { useBranding } from '@/lib/branding-context'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -34,6 +35,7 @@ const CONDITION_OPTIONS = [
 
 export default function PublicDeviceValuePage() {
   const branding = useBranding()
+  const { isAuthenticated } = useAuth()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<DeviceResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -111,7 +113,7 @@ export default function PublicDeviceValuePage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center px-4 py-16">
-      <Link href="/" className="mb-8 flex items-center gap-2 text-foreground">
+      <Link href={isAuthenticated ? '/dashboard' : '/'} className="mb-8 flex items-center gap-2 text-foreground">
         <BrandedLogo className="h-6 w-6" />
         <span className="text-lg font-bold tracking-tight">{branding.name || 'Byte-Back'}</span>
       </Link>
@@ -119,7 +121,9 @@ export default function PublicDeviceValuePage() {
       <Card className="w-full max-w-lg shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">What's your device worth?</CardTitle>
-          <CardDescription>Get a quick trade-in value estimate — no account needed.</CardDescription>
+          <CardDescription>
+            {isAuthenticated ? 'Get a quick trade-in value estimate.' : 'Get a quick trade-in value estimate — no account needed.'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
@@ -192,13 +196,21 @@ export default function PublicDeviceValuePage() {
               ) : (
                 <p className="text-sm text-muted-foreground">We don't have enough data to estimate this device yet — submit a request and we'll quote it manually.</p>
               )}
-              <Link href="/register" className="block pt-2">
-                <Button variant="outline" className="w-full">Create an account to trade it in</Button>
+              <Link href={isAuthenticated ? '/orders/new' : '/register'} className="block pt-2">
+                <Button variant="outline" className="w-full">
+                  {isAuthenticated ? 'Start a trade-in order' : 'Create an account to trade it in'}
+                </Button>
               </Link>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {isAuthenticated && (
+        <Link href="/dashboard" className="mt-6 text-sm text-muted-foreground hover:text-foreground">
+          ← Back to dashboard
+        </Link>
+      )}
     </div>
   )
 }
