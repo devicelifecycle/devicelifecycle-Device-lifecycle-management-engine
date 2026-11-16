@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
-    const { supabase, profile } = auth
+    const { profile } = auth
 
     const isOrgAdmin = profile.is_org_admin && ORG_ADMIN_ROLES.includes(profile.role)
     if (profile.role !== 'admin' && !isOrgAdmin) {
@@ -29,9 +29,11 @@ export async function GET(request: NextRequest) {
     // An org admin only sees their own org/role's teammates. RLS on `users`
     // only permits a row's owner or a platform admin to SELECT it, so this
     // must go through the service-role client — the org/role filter below
-    // is the real authorization boundary, not RLS.
-    const client = isOrgAdmin ? createServiceRoleClient() : supabase
-    let query = client.from('users').select('*').order('created_at', { ascending: false })
+    // is the real authorization boundary, not RLS. The platform admin also
+    // reads via service role: tenant-isolation RLS would otherwise hide every
+    // VAR tenant's staff, leaving no way to manage or impersonate them.
+    const client = createServiceRoleClient()
+    let query = client.from('users').select('*, tenant:tenants(name, type)').order('created_at', { ascending: false })
     if (isOrgAdmin) {
       if (!profile.organization_id) {
         return NextResponse.json({ error: 'Org admin account has no organization assigned' }, { status: 403 })

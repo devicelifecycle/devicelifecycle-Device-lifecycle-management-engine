@@ -7,6 +7,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { updateUserSchema } from '@/lib/validations'
 import { isValidUUID } from '@/lib/utils'
+import { DELEGATED_ROLES, type DelegatedRole } from '@/types'
 export const dynamic = 'force-dynamic'
 
 
@@ -141,9 +142,24 @@ export async function PATCH(
       return NextResponse.json({ error: 'Cannot deactivate your own account' }, { status: 400 })
     }
 
+    // VAR staff carry roles this route's schema doesn't model; their role and
+    // region are managed on the VAR Team page, never retyped from here.
+    if (isPlatformAdmin && !isSelf && ('role' in updateData || 'secondary_role' in updateData)) {
+      const { data: target } = await createServiceRoleClient()
+        .from('users').select('role').eq('id', targetId).maybeSingle()
+      if (target && DELEGATED_ROLES.includes(target.role as DelegatedRole)) {
+        return NextResponse.json(
+          { error: 'VAR staff roles are managed on the VAR Team page' },
+          { status: 400 },
+        )
+      }
+    }
+
     // The write itself needs the service-role client for the same RLS
-    // reason as the lookup above when an org admin targets a teammate.
-    const writeClient = isOrgAdminManagingTeammate ? createServiceRoleClient() : supabase
+    // reason as the lookup above when an org admin targets a teammate, and
+    // for the platform admin because tenant-isolation RLS hides other
+    // tenants' users (an RLS-scoped update there silently matches 0 rows).
+    const writeClient = isOrgAdminManagingTeammate || (isPlatformAdmin && !isSelf) ? createServiceRoleClient() : supabase
     const { data: updatedUser, error } = await writeClient
       .from('users')
       .update(updateData)
@@ -207,14 +223,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })
     }
 
-    const { data: targetProfile } = await supabase
+    // Service role: the admin check above is the gate, and tenant-isolation
+    // RLS would hide (and silently skip updating) another tenant's user.
+    const adminClient = createServiceRoleClient()
+    const { data: targetProfile } = await adminClient
       .from('users')
       .select('role')
       .eq('id', targetId)
-      .single()
+      .maybeSingle()
+    if (!targetProfile) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
     // Prevent deletion of other admins
-    if (targetProfile?.role === 'admin') {
+    if (targetProfile.role === 'admin') {
       return NextResponse.json({ error: 'Cannot delete another admin account' }, { status: 400 })
     }
 
@@ -267,7 +287,7 @@ export async function DELETE(
     }
 
     // Soft delete — deactivate only
-    const { error } = await supabase
+    const { error } = await adminClient
       .from('users')
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', targetId)

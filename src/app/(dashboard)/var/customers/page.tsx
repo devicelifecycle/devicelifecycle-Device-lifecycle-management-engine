@@ -13,9 +13,10 @@
 
 import { useEffect, useState } from 'react'
 import {
-  Ban, Download, Layers, Loader2, MapPin, MoreHorizontal, RotateCcw, Search, Upload, Users,
+  Ban, Download, Layers, Loader2, MapPin, MoreHorizontal, RotateCcw, Search, Upload, UserCheck, Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuth } from '@/hooks/useAuth'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -38,8 +39,20 @@ interface VarCustomer {
   region: string | null
   is_active: boolean
   plan_id: string | null
+  assigned_rep_id: string | null
   created_at: string
 }
+
+interface RepOption {
+  id: string
+  full_name: string
+  region: string | null
+}
+
+// Mirrors the server: Import is tenant-level only (POST /api/customers/bulk);
+// manage actions are entity admin + regional manager (in-region); reps read.
+const IMPORT_ROLES = new Set(['admin', 'var_entity_admin'])
+const MANAGE_ROLES = new Set(['admin', 'var_entity_admin', 'var_regional_manager'])
 
 interface PlanOption {
   id: string
@@ -54,6 +67,12 @@ const STATUS_BADGE = {
 const MAX_IMPORT_ROWS = 1000 // server cap on POST /api/customers/bulk
 
 export default function VarCustomersPageImpl() {
+  const { activeRole } = useAuth()
+  const role = (activeRole as string | null) ?? ''
+  const canImport = IMPORT_ROLES.has(role)
+  const canManage = MANAGE_ROLES.has(role)
+  const [reps, setReps] = useState<RepOption[]>([])
+  const [repTarget, setRepTarget] = useState<VarCustomer | null>(null)
   const [customers, setCustomers] = useState<VarCustomer[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -109,6 +128,20 @@ export default function VarCustomersPageImpl() {
       .catch(() => {})
   }, [])
 
+  // Reps this caller may assign to: /api/var/team is already scoped (entity
+  // admin → whole tenant, regional manager → own-region reps; others 403).
+  useEffect(() => {
+    if (!canManage || role === 'admin') return
+    fetch('/api/var/team')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { data?: Array<RepOption & { role: string; is_active: boolean }> } | null) => {
+        setReps((j?.data ?? []).filter((u) => u.role === 'var_sales_rep' && u.is_active !== false))
+      })
+      .catch(() => {})
+  }, [canManage, role])
+
+  const repName = (id: string | null) => (id ? reps.find((r) => r.id === id)?.full_name ?? 'Assigned' : '—')
+
   const manage = async (customerId: string, body: Record<string, unknown>, successMsg: string): Promise<boolean> => {
     try {
       const res = await fetch(`/api/customers/${customerId}/manage`, {
@@ -151,7 +184,7 @@ export default function VarCustomersPageImpl() {
           <a href={exportHref}>
             <Button type="button" variant="outline"><Download className="mr-1 h-4 w-4" /> Export</Button>
           </a>
-          <ImportCustomersDialog onImported={load} />
+          {canImport && <ImportCustomersDialog onImported={load} />}
         </div>
       </div>
 
@@ -201,6 +234,7 @@ export default function VarCustomersPageImpl() {
                       <TableHead>Contact</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Region</TableHead>
+                      <TableHead>Rep</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Plan</TableHead>
                       <TableHead>Created</TableHead>
@@ -214,6 +248,7 @@ export default function VarCustomersPageImpl() {
                         <TableCell>{c.contact_name}</TableCell>
                         <TableCell className="text-muted-foreground">{c.contact_email}</TableCell>
                         <TableCell>{c.region || '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{repName(c.assigned_rep_id)}</TableCell>
                         <TableCell>
                           <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE[c.is_active ? 'active' : 'suspended']}`}>
                             {c.is_active ? 'Active' : 'Suspended'}
@@ -222,7 +257,7 @@ export default function VarCustomersPageImpl() {
                         <TableCell>{planName(c.plan_id)}</TableCell>
                         <TableCell className="text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
-                          <DropdownMenu>
+                          {canManage && <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
@@ -241,12 +276,17 @@ export default function VarCustomersPageImpl() {
                                   <Layers className="mr-2 h-4 w-4" /> Assign plan…
                                 </DropdownMenuItem>
                               )}
+                              {reps.length > 0 && (
+                                <DropdownMenuItem onClick={() => setRepTarget(c)}>
+                                  <UserCheck className="mr-2 h-4 w-4" /> Assign rep…
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => setMoveTarget(c)}>
                                 <MapPin className="mr-2 h-4 w-4" /> Move to region…
                               </DropdownMenuItem>
                             </DropdownMenuContent>
-                          </DropdownMenu>
+                          </DropdownMenu>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -267,7 +307,72 @@ export default function VarCustomersPageImpl() {
       {moveTarget && (
         <MoveRegionDialog customer={moveTarget} onClose={() => setMoveTarget(null)} onSaved={load} />
       )}
+      {repTarget && (
+        <AssignRepDialog customer={repTarget} reps={reps} onClose={() => setRepTarget(null)} onSaved={load} />
+      )}
     </div>
+  )
+}
+
+function AssignRepDialog({ customer, reps, onClose, onSaved }: {
+  customer: VarCustomer
+  reps: RepOption[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  // Radix SelectItem rejects value="" — sentinel for "no rep".
+  const NONE = '__none__'
+  const [repId, setRepId] = useState(customer.assigned_rep_id ?? NONE)
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/customers/${customer.id}/manage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'assign', repId: repId === NONE ? null : repId }),
+      })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) { toast.error(j?.error || 'Could not assign rep'); return }
+      toast.success(repId === NONE ? `${customer.company_name} unassigned` : `${customer.company_name} assigned`)
+      onClose()
+      onSaved()
+    } catch {
+      toast.error('Could not assign rep')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Assign sales rep</DialogTitle>
+          <DialogDescription>{customer.company_name} — the rep sees this customer in their own book and reports.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5 py-2">
+          <Label className="text-xs">Sales rep</Label>
+          <Select value={repId} onValueChange={setRepId}>
+            <SelectTrigger><SelectValue placeholder="Choose a rep" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>Unassigned</SelectItem>
+              {reps.map((r) => (
+                <SelectItem key={r.id} value={r.id}>{r.full_name}{r.region ? ` — ${r.region}` : ''}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex justify-end gap-2 pb-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="button" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+            Save
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

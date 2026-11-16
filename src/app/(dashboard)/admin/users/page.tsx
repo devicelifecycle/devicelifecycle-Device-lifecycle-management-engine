@@ -36,9 +36,17 @@ import { useCan } from '@/hooks/useCan'
 
 const roles: UserRole[] = ['admin', 'coe_manager', 'coe_tech', 'sales', 'customer', 'vendor']
 
+const VAR_ROLE_LABEL: Record<string, string> = {
+  var_entity_admin: 'VAR Admin',
+  var_regional_manager: 'VAR Regional Manager',
+  var_sales_rep: 'VAR Sales Rep',
+}
+const roleLabel = (role: string) => USER_ROLE_CONFIG[role as UserRole]?.label || VAR_ROLE_LABEL[role] || role
+type ListedUser = User & { tenant?: { name: string; type: string } | null }
+
 export default function AdminUsersPage() {
   const { can } = useCan()
-  const [users, setUsers] = useState<User[]>([])
+  const [users, setUsers] = useState<ListedUser[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -386,6 +394,10 @@ export default function AdminUsersPage() {
                         <Link href="/admin/organizations" className="hover:underline hover:text-foreground" title="View organizations">
                           {orgNameById.get(u.organization_id) || 'Unknown org'}
                         </Link>
+                      ) : u.tenant?.type === 'var' ? (
+                        <Link href="/admin/tenants" className="text-xs hover:underline hover:text-foreground" title="VAR tenant">
+                          VAR: {u.tenant.name}
+                        </Link>
                       ) : (
                         <span className="text-xs">—</span>
                       )}
@@ -393,11 +405,11 @@ export default function AdminUsersPage() {
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleColors[u.role] || ''}`}>
-                          {USER_ROLE_CONFIG[u.role]?.label || u.role}
+                          {roleLabel(u.role)}
                         </span>
                         {u.secondary_role && (
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium opacity-70 ${roleColors[u.secondary_role] || ''}`}>
-                            +{USER_ROLE_CONFIG[u.secondary_role]?.label || u.secondary_role}
+                            +{roleLabel(u.secondary_role)}
                           </span>
                         )}
                         {u.is_org_admin && (
@@ -428,14 +440,20 @@ export default function AdminUsersPage() {
                     <TableCell className="text-muted-foreground">{u.last_login_at ? formatDateTime(u.last_login_at) : 'Never'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {can('user.update') && <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenEdit(u)}
-                          title="Edit user"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>}
+                        {can('user.update') && (VAR_ROLE_LABEL[u.role] ? (
+                          <Button variant="ghost" size="sm" asChild title="VAR staff are managed on the VAR's Team page">
+                            <Link href="/admin/tenants"><Pencil className="h-4 w-4" /></Link>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenEdit(u)}
+                            title="Edit user"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        ))}
                         {u.onboarding_completed_at && (
                           <Button
                             variant="ghost"
