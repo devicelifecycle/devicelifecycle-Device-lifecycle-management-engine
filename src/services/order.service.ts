@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { VALID_ORDER_TRANSITIONS } from '@/lib/constants'
 import { sanitizeSearchInput } from '@/lib/utils'
+import { customerScopeFilter } from '@/lib/delegation'
 import { OrderSplitService } from './order-split.service'
 import { PricingService } from './pricing.service'
 import type {
@@ -102,11 +103,20 @@ export class OrderService {
       requester_id,
       requester_role,
       requester_organization_id,
+      requester_region,
     } = filters as typeof filters & { customer_name?: string; vendor_name?: string }
+
+    // VAR staff: RLS already bounds them to their tenant; a rep / regional
+    // manager is narrowed further to their customers through an inner join
+    // (no id pre-fetch, so it holds at any customer count).
+    const varScope = requester_id
+      ? customerScopeFilter({ role: requester_role, userId: requester_id, region: requester_region ?? null })
+      : null
 
     let query = supabase
       .from('orders')
-      .select('*, customer:customers(*), vendor:vendors(*)', { count: 'exact' })
+      .select(varScope ? '*, customer:customers!inner(*), vendor:vendors(*)' : '*, customer:customers(*), vendor:vendors(*)', { count: 'exact' })
+    if (varScope) query = query.eq(`customer.${varScope.column}`, varScope.value)
 
     if (requester_role === 'sales' && requester_id) {
       query = query.or(`created_by_id.eq.${requester_id},assigned_to_id.eq.${requester_id}`)

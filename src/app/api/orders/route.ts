@@ -14,6 +14,7 @@ import { orderSchema, orderFiltersSchema } from '@/lib/validations'
 import { checkRateLimitAsync, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
 import { orderCreationGate } from '@/lib/order-creation-gate'
 import { nonPlatformTenantId } from '@/lib/tenant-resolve'
+import { delegationLevel, customerInVarScope } from '@/lib/delegation'
 export const dynamic = 'force-dynamic'
 
 
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
       requester_id: authUser.id,
       requester_role: auth.effectiveRole,
       requester_organization_id: profile.organization_id,
+      requester_region: profile.region ?? null,
     }
 
     const result = await OrderService.getOrders(scopedFilters as Parameters<typeof OrderService.getOrders>[0])
@@ -117,12 +119,21 @@ export async function POST(request: NextRequest) {
     let orgId: string = profile.organization_id ?? ''
     const { data: customer } = await supabase
       .from('customers')
-      .select('id, organization_id')
+      .select('id, organization_id, tenant_id, region, assigned_rep_id')
       .eq('id', orderData.customer_id)
       .single()
 
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 400 })
+    }
+
+    // VAR staff may only raise orders for customers in their own scope (a rep
+    // for their assigned customers, a regional manager for their region).
+    if (delegationLevel(effectiveRole) !== 'none' && !customerInVarScope(
+      { role: effectiveRole, userId: profile.id, region: profile.region ?? null, tenantId: auth.tenantId },
+      customer,
+    )) {
+      return NextResponse.json({ error: 'You can only create orders for your own customers' }, { status: 403 })
     }
 
     if (effectiveRole === 'customer') {

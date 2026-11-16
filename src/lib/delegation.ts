@@ -55,6 +55,25 @@ export function customerScopeFilter(ctx: DelegationContext): ScopeFilter | null 
 }
 
 /**
+ * Is this customer inside a delegated VAR user's scope? Same tenant, then:
+ * entity admin → any; regional manager → own region (no region set → only
+ * customers assigned to them, matching customerScopeFilter); sales rep → only
+ * customers assigned to them. Non-VAR roles return false — callers keep their
+ * own rules for those.
+ */
+export function customerInVarScope(
+  actor: DelegationContext & { tenantId: string | null },
+  customer: { tenant_id?: string | null; region?: string | null; assigned_rep_id?: string | null } | null | undefined,
+): boolean {
+  const level = delegationLevel(actor.role)
+  if (level === 'none' || !customer) return false
+  if (!actor.tenantId || customer.tenant_id !== actor.tenantId) return false
+  if (level === 'tenant') return true
+  const scope = customerScopeFilter(actor)!
+  return (customer as Record<string, unknown>)[scope.column] === scope.value
+}
+
+/**
  * Can this actor run a VAR management action (suspend / assign / move) on a
  * customer that lives in `customerRegion`?
  *   • platform admin        → yes, always

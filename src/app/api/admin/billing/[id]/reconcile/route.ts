@@ -64,13 +64,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       lineItems.map((l) => ({ invoice_id: id, description: l.description, gross_amount: l.grossAmount, commission_amount: l.commissionAmount })),
     )
   }
+  // Keep any credit already applied — rebuilding lines used to discard it.
+  // Mapped to column names explicitly: spreading the helper's camelCase result
+  // sent a non-existent `taxAmount` column and failed every reconcile.
+  const after = totalsAfterCredit(totals.commissionTotal, totals.subscriptionFee, totals.taxRate, Number(invoice.credit ?? 0))
   const { error: upErr } = await supabase.from('invoices').update({
     gross_subtotal: totals.grossSubtotal,
     commission_total: totals.commissionTotal,
     tax_rate: totals.taxRate,
     tax_label: totals.taxLabel || null,
-    // Keep any credit already applied — rebuilding lines used to discard it.
-    ...totalsAfterCredit(totals.commissionTotal, totals.subscriptionFee, totals.taxRate, Number(invoice.credit ?? 0)),
+    tax_amount: after.taxAmount,
+    total: after.total,
     updated_at: new Date().toISOString(),
   }).eq('id', id)
   if (upErr) return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 })

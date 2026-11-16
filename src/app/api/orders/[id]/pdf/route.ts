@@ -8,6 +8,7 @@ import { OrderService } from '@/services/order.service'
 import { generateOrderPDF } from '@/lib/pdf'
 import { resolveTenantBrandLabel } from '@/lib/tenant-brand-label'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { delegationLevel, customerInVarScope } from '@/lib/delegation'
 export const dynamic = 'force-dynamic'
 
 
@@ -32,6 +33,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     } else if (effectiveRole === 'customer') {
       if (order.customer?.organization_id !== organization_id) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
+    } else if (delegationLevel(effectiveRole) !== 'none') {
+      // VAR staff: same scope as GET /api/orders/[id].
+      if (!customerInVarScope(
+        { role: effectiveRole, userId: profile.id, region: profile.region ?? null, tenantId: auth.tenantId },
+        order.customer as { tenant_id?: string | null; region?: string | null; assigned_rep_id?: string | null },
+      )) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
       }
     } else if (effectiveRole === 'vendor') {

@@ -943,6 +943,8 @@ export interface OrderFilters extends PaginationParams {
   requester_id?: string;
   requester_role?: UserRole;
   requester_organization_id?: string;
+  /** Delegated VAR users: the caller's region, for regional-manager scoping. */
+  requester_region?: string | null;
 }
 
 export interface CreateOrderInput {

@@ -10,6 +10,7 @@ import { SLAService } from '@/services/sla.service'
 import { sanitizeOrderForVendor } from '@/lib/order-visibility'
 import { updateOrderSchema } from '@/lib/validations'
 import { isValidUUID } from '@/lib/utils'
+import { delegationLevel, customerInVarScope } from '@/lib/delegation'
 export const dynamic = 'force-dynamic'
 
 
@@ -50,6 +51,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Customer can only access orders for their organization
     if (effectiveRole === 'customer') {
       if (order.customer?.organization_id === organization_id) {
+        const sla = await SLAService.getDisplaySLA(order)
+        return NextResponse.json({ ...order, sla })
+      }
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // VAR staff: orders of customers inside their delegation scope (the same
+    // scope that lets them list those orders). Without this a rep could list
+    // an order but every open of it answered 403.
+    if (delegationLevel(effectiveRole) !== 'none') {
+      const inScope = customerInVarScope(
+        { role: effectiveRole, userId: profile.id, region: profile.region ?? null, tenantId: auth.tenantId },
+        order.customer as { tenant_id?: string | null; region?: string | null; assigned_rep_id?: string | null },
+      )
+      if (inScope) {
         const sla = await SLAService.getDisplaySLA(order)
         return NextResponse.json({ ...order, sla })
       }

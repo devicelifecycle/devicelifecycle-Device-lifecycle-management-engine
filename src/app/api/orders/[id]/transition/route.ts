@@ -9,9 +9,11 @@ import { OrderService } from '@/services/order.service'
 import { NotificationService } from '@/services/notification.service'
 import { EmailService } from '@/services/email.service'
 import { orderTransitionSchema } from '@/lib/validations'
-import { delegationLevel } from '@/lib/delegation'
+import { customerInVarScope } from '@/lib/delegation'
 import type { OrderStatus } from '@/types'
 export const dynamic = 'force-dynamic'
+
+const VAR_ALLOWED = new Set<string>(['submitted', 'cancelled', 'accepted', 'rejected'])
 
 type VendorShipment = {
   id: string
@@ -96,14 +98,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         )
       }
     } else if (['var_entity_admin', 'var_regional_manager', 'var_sales_rep'].includes(effectiveRole)) {
-      // VAR staff accepting a quote on their customer's behalf — the trade-in
-      // quote process spec's second acceptance path (the customer emailed the
-      // VAR directly instead of logging in). Restricted to exactly that one
-      // transition, scoped by the same tenant/region/own delegation rules used
-      // for customer management elsewhere.
-      if (newStatus !== 'accepted') {
+      // VAR staff act for their customer: the customer-side moves only —
+      // submit a draft they raised, cancel it, and accept/reject a quote on the
+      // customer's behalf (the quote process spec's second acceptance path,
+      // when the customer replies to the VAR instead of logging in). Every
+      // processing step stays with Byte-Back. Before, only 'accepted' was
+      // allowed, so an order a rep created sat in draft forever.
+      if (!VAR_ALLOWED.has(newStatus)) {
         return NextResponse.json(
-          { error: 'VAR staff can only accept a quote on behalf of their customer' },
+          { error: 'VAR staff can only submit or cancel an order, or accept/reject a quote, on behalf of their customer' },
           { status: 403 }
         )
       }
@@ -112,15 +115,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         .select('tenant_id, region, assigned_rep_id')
         .eq('id', currentOrder.customer_id)
         .maybeSingle()
-      const sameTenant = !!customerRow?.tenant_id && customerRow.tenant_id === profile.tenant_id
-      const level = delegationLevel(effectiveRole)
-      const allowed = sameTenant && (
-        level === 'tenant' ||
-        (level === 'region' && !!profile.region && profile.region === customerRow?.region) ||
-        (level === 'own' && customerRow?.assigned_rep_id === profile.id)
+      const allowed = customerInVarScope(
+        { role: effectiveRole, userId: profile.id, region: profile.region ?? null, tenantId: profile.tenant_id ?? null },
+        customerRow,
       )
       if (!allowed) {
-        return NextResponse.json({ error: 'You can only accept quotes for your own customers' }, { status: 403 })
+        return NextResponse.json({ error: 'You can only manage orders for your own customers' }, { status: 403 })
       }
     } else if (!['admin', 'coe_manager', 'coe_tech', 'sales'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
