@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, requirePlatformPermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { summarizePayments, type PaymentRecord } from '@/lib/payments'
-import { canTransitionInvoice, type InvoiceStatus } from '@/lib/billing'
+import { canTransitionInvoice, invoiceMoneyBlock, type InvoiceStatus } from '@/lib/billing'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +47,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const supabase = createServiceRoleClient()
   const invoice = await loadInvoice(supabase, id)
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const blocked = invoiceMoneyBlock(invoice.status as InvoiceStatus, parsed.data.kind === 'refund' ? 'refund' : 'payment', 0)
+  if (blocked) return NextResponse.json({ error: blocked }, { status: 400 })
 
   // The refund cap and the insert happen together inside record_invoice_payment,
   // serialized on the invoice row. Doing the check here in JS and inserting

@@ -12,7 +12,7 @@ import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { featureGate } from '@/lib/supabase/require-feature'
 import { hasPermission, type PermissionKey } from '@/lib/permissions'
-import { canTransitionInvoice, type InvoiceStatus } from '@/lib/billing'
+import { canTransitionInvoice, invoiceMoneyBlock, type InvoiceStatus } from '@/lib/billing'
 import { resolveBillingMode, invoiceBalance, maxRefundable } from '@/lib/customer-billing'
 import { isValidUUID } from '@/lib/utils'
 
@@ -41,8 +41,9 @@ async function load(id: string, permission: PermissionKey = 'billing.view') {
   const auth = await requireAuth()
   if (!auth) return { error: unauthorized() }
   // Reading an invoice needs billing.view; sending, voiding or recording money
-  // against it needs billing.manage. Both were gated on view, which gave
-  // invoice write access to every role that can merely look at billing.
+  // against it needs customer_billing.manage (the VAR entity admin) — not
+  // billing.manage, which no VAR role holds because it gates BB's own
+  // invoices; using it made Option B unusable by the VAR it was built for.
   const allowed = auth.effectiveRole === 'admin' || hasPermission(auth.effectiveRole, permission)
   if (!allowed) return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   if (!auth.tenantId) return { error: NextResponse.json({ error: 'No tenant in scope' }, { status: 400 }) }
@@ -99,7 +100,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await load((await params).id, 'billing.manage')
+  const g = await load((await params).id, 'customer_billing.manage')
   if (g.error) return g.error
   const { auth, supabase, invoice, tenantId } = g
 
@@ -109,6 +110,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   const body = parsed.data
   const status = invoice.status as InvoiceStatus
+
+  if (body.action !== 'send') {
+    const netPaid = body.action === 'void'
+      ? invoiceBalance(Number(invoice.total), (await paymentsFor(supabase, invoice.id as string))
+        .map((p) => ({ kind: p.kind as 'payment' | 'refund', amount: p.amount }))).netPaid
+      : 0
+    const kind = body.action === 'void' ? 'void' : body.action === 'record_refund' ? 'refund' : 'payment'
+    const blocked = invoiceMoneyBlock(status, kind, netPaid)
+    if (blocked) return NextResponse.json({ error: blocked }, { status: 400 })
+  }
 
   if (body.action === 'send' || body.action === 'void') {
     const next: InvoiceStatus = body.action === 'send' ? 'sent' : 'void'

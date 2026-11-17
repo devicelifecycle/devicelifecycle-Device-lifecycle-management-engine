@@ -17,6 +17,9 @@ export const PERMISSION_KEYS = [
   'pricing.manage', 'pricing.view',
   'commission.manage', 'commission.view', 'commission.var_margins',
   'billing.manage', 'billing.view',
+  // A VAR invoicing its OWN end customers (Billing Option B). Kept apart from
+  // billing.manage, which gates BB's invoices to VARs.
+  'customer_billing.manage',
   'reports.view', 'audit.view',
   'impersonate.tenant', 'feature.manage', 'licensing.manage',
 ] as const
@@ -44,7 +47,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     'customer.create', 'customer.update', 'customer.delete', 'customer.view',
     'order.create', 'order.update', 'order.view',
     'pricing.view', 'commission.view', 'commission.var_margins',
-    'billing.view', 'reports.view', 'audit.view',
+    'billing.view', 'customer_billing.manage', 'reports.view', 'audit.view',
   ],
   // No commission.var_margins: the margin model is stored once per tenant
   // (settings.commission) and the outline puts "Corp Tab / Rep Tab margin

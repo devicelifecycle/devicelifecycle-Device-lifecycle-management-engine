@@ -95,3 +95,21 @@ const NEXT: Record<InvoiceStatus, InvoiceStatus[]> = {
 export function canTransitionInvoice(from: InvoiceStatus, to: InvoiceStatus): boolean {
   return NEXT[from]?.includes(to) ?? false
 }
+
+/**
+ * Money rules shared by both invoice surfaces (BB→VAR and VAR→customer), or
+ * null when allowed:
+ *  - no payment on a draft: the customer was never billed it, and a draft can
+ *    still be rebuilt underneath the payment;
+ *  - no void while money is held: the payments would be orphaned and the
+ *    invoice's orders become billable again (double billing). Refund first.
+ */
+export function invoiceMoneyBlock(
+  status: InvoiceStatus, action: 'payment' | 'refund' | 'void', netPaid: number,
+): string | null {
+  if (action === 'payment' && status === 'draft') return 'Send the invoice before recording a payment against it.'
+  if (action === 'void' && round2(netPaid) > 0) {
+    return `This invoice has ${round2(netPaid).toFixed(2)} paid on it. Refund the payments before voiding it.`
+  }
+  return null
+}

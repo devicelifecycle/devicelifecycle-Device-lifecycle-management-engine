@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { canTransitionInvoice, totalsAfterCredit, type InvoiceStatus } from '@/lib/billing'
+import { canTransitionInvoice, invoiceMoneyBlock, totalsAfterCredit, type InvoiceStatus } from '@/lib/billing'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +40,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.status !== undefined) {
     if (!canTransitionInvoice(inv.status as InvoiceStatus, parsed.data.status)) {
       return NextResponse.json({ error: `Cannot move an invoice from ${inv.status} to ${parsed.data.status}` }, { status: 400 })
+    }
+    if (parsed.data.status === 'void') {
+      const { data: pays } = await supabase.from('invoice_payments').select('kind, amount').eq('invoice_id', id)
+      const net = (pays ?? []).reduce((s, p) => s + (p.kind === 'refund' ? -1 : 1) * Number(p.amount ?? 0), 0)
+      const blocked = invoiceMoneyBlock(inv.status as InvoiceStatus, 'void', net)
+      if (blocked) return NextResponse.json({ error: blocked }, { status: 400 })
     }
     update.status = parsed.data.status
   }

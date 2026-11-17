@@ -38,8 +38,9 @@ async function guard(permission: PermissionKey = 'billing.view') {
   const auth = await requireAuth()
   if (!auth) return { error: unauthorized() }
   // Reads need billing.view; raising or changing an invoice needs
-  // billing.manage. They were both gated on view, which handed invoice
-  // creation to every role that can merely look at billing (coe_manager).
+  // customer_billing.manage (the VAR entity admin). It used billing.manage,
+  // which no VAR role holds (it gates BB's invoices), so Option B was
+  // unusable by the VAR; coe_manager still can't create invoices.
   const allowed = auth.effectiveRole === 'admin' || hasPermission(auth.effectiveRole, permission)
   if (!allowed) return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   if (!auth.tenantId) return { error: NextResponse.json({ error: 'No tenant in scope' }, { status: 400 }) }
@@ -119,7 +120,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const g = await guard('billing.manage')
+  const g = await guard('customer_billing.manage')
   if (g.error) return g.error
   const { supabase, tenantId, auth } = g
 
