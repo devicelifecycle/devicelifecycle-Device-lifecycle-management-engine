@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { hasProvider, getProvider } from '@/lib/payment-provider'
+import { initStripeProvider } from '@/lib/payment-providers/stripe'
+import { resolveProviderCustomer } from '@/lib/payment-customer'
 import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +21,6 @@ const attachSchema = z.object({
   set_default: z.boolean().optional().default(true),
 })
 
-const setupIntentSchema = z.object({
-  provider_customer_id: z.string().min(1),
-})
 
 export async function GET() {
   const auth = await requireAuth()
@@ -51,6 +50,10 @@ export async function POST(request: NextRequest) {
   }
   if (!auth.tenantId) return NextResponse.json({ error: 'No tenant context' }, { status: 400 })
 
+  // Register the adapter in this instance. Only the billing crons did this, so
+  // on a fresh server instance hasProvider() was false and adding a card
+  // always answered "not configured", even with Stripe keys set.
+  initStripeProvider()
   if (!hasProvider('stripe')) {
     return NextResponse.json({ error: 'Payment processing is not configured yet. Contact support.' }, { status: 503 })
   }
@@ -58,33 +61,16 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
   const url = new URL(request.url)
   const action = url.searchParams.get('action')
+  const supabase = createServiceRoleClient()
 
-  // Create a SetupIntent for the client to use with Stripe Elements
+  // Create a SetupIntent for the client to use with Stripe Elements. The
+  // Stripe customer is resolved server-side from the caller's tenant — the
+  // client no longer sends one. Before, the id had to match an already-saved
+  // card, so a VAR with no card could never start setting up its first one.
   if (action === 'setup-intent') {
-    const parsed = setupIntentSchema.safeParse(body)
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
-    }
-
-    // Verify the Stripe customer belongs to this tenant — prevents IDOR
-    const supabaseCheck = createServiceRoleClient()
-    const { data: owned } = await supabaseCheck
-      .from('payment_methods')
-      .select('id')
-      .eq('tenant_id', auth.tenantId)
-      .eq('provider_customer_id', parsed.data.provider_customer_id)
-      .limit(1)
-      .maybeSingle()
-
-    if (!owned) {
-      return NextResponse.json({ error: 'Invalid customer reference' }, { status: 403 })
-    }
-
     try {
-      const provider = getProvider('stripe')
-      const result = await provider.createSetupIntent({
-        providerCustomerId: parsed.data.provider_customer_id,
-      })
+      const providerCustomerId = await resolveProviderCustomer(supabase, auth.tenantId, auth.authUser.email ?? '')
+      const result = await getProvider('stripe').createSetupIntent({ providerCustomerId })
       return NextResponse.json({ data: result })
     } catch (err) {
       console.error('Failed to create setup intent:', err)
@@ -98,37 +84,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
   }
 
-  const supabase = createServiceRoleClient()
-
   try {
-    // Get or create the Stripe customer for this tenant
-    let providerCustomerId: string
-
-    const { data: existingPm } = await supabase
-      .from('payment_methods')
-      .select('provider_customer_id')
-      .eq('tenant_id', auth.tenantId)
-      .not('provider_customer_id', 'is', null)
-      .limit(1)
-      .maybeSingle()
-
-    if (existingPm?.provider_customer_id) {
-      providerCustomerId = existingPm.provider_customer_id
-    } else {
-      const { data: tenant } = await supabase
-        .from('tenants')
-        .select('name')
-        .eq('id', auth.tenantId)
-        .single()
-
-      const provider = getProvider('stripe')
-      const { providerCustomerId: newId } = await provider.createCustomer({
-        tenantId: auth.tenantId,
-        name: tenant?.name ?? 'Unknown',
-        email: auth.authUser.email ?? '',
-      })
-      providerCustomerId = newId
-    }
+    // Same customer the setup intent used, so the confirmed card attaches to it
+    // (a second customer would make Stripe reject the attach).
+    const providerCustomerId = await resolveProviderCustomer(supabase, auth.tenantId, auth.authUser.email ?? '')
 
     // Attach the payment method via Stripe
     const provider = getProvider('stripe')

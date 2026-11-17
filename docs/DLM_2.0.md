@@ -62,6 +62,15 @@ QA regional manager and sales rep were created in the `sai` tenant through
 
 **Still open:**
 - ☐ **Stripe flows** (card setup, recurring charge, dunning, webhooks) need `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` (test mode). Without them the app correctly runs in manual-payment mode.
+  - **Fixed 2026-11-17 (unit-tested; live test pending keys):**
+    - Adding a card would always have answered "not configured" even with keys set: `/api/var/payment-methods` never registered the Stripe adapter, and only the billing crons did.
+    - A VAR with no saved card could never start card setup: the setup intent required a Stripe customer id matching an existing card.
+    - The Stripe customer is now resolved server-side and persisted in `tenants.settings.billing.providerCustomerId` (`src/lib/payment-customer.ts`). The browser no longer sends it.
+  - **Payment structure still to build** (needs decisions):
+    - No card-entry screen: Stripe.js is not installed and no page calls the card endpoints.
+    - BB commission invoices and Option B customer invoices can only be paid manually (no Pay-now link or card charge).
+    - No trade-in payout rails; `payment_sent` is a status only.
+    - Seat count for per-seat billing includes **every** active user on the tenant, so a VAR's end-customer logins would be billed as seats. Confirm the intended seat definition.
 - ☐ **A VAR rep can't record ship-in tracking for its customer** (`POST /api/shipments` 403s for VAR roles). BB entered it in this run. Per the spec the customer or the logistics partner ships, so this is a product decision: allow VAR staff to enter tracking on behalf of a customer who never logs in?
 - ☐ **Impersonation shows mixed data.** API routes that read via the service role show the target's tenant; routes that read via RLS still run as the admin. Support staff see a misleading view. A real fix signs requests as the target, which needs the project's JWT signing secret (`SUPABASE_JWT_SECRET`) — not configured in this environment. Add it, then swap the RLS client in `createServerSupabaseClient` while an impersonation session is active.
 - ☑ **Platform admin can now list and manage VAR staff** on `/admin/users` (2026-11-16): the platform admin reads/writes `users` via service role after its own admin check (RLS had hidden them, and a deactivate would have matched 0 rows while still resetting the password). VAR staff show "VAR: <tenant>"; their role can't be retyped from this page (400 — managed on the VAR Team page); impersonation works from the row. Verified 8/8 live.
