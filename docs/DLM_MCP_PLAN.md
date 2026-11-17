@@ -1,6 +1,10 @@
 # DLM MCP Connector — Build Plan
 
-**Status:** plan only, nothing built yet (2026-11-17).
+**Status (2026-11-17):** **Phase 1 is built and live-tested.** It is read-only, uses API keys, and lives at `/api/mcp`; the setup guide is `docs/DLM_MCP.md`.
+- **Live run:** 34/34 checks on real `sai` data, including a real Claude Code client answering from DLM. The run covered transport, auth, all 9 tools, cross-tenant isolation, filter injection, metering, scope filtering and kill switches.
+- **Bug found and fixed during the run:** zod v4's `.uuid()` rejected DLM's seeded ids, which would have refused every estimate on a seeded catalog device.
+- **Built without the SDK:** the protocol handler is hand-written in `src/lib/mcp/` with no new dependency. It speaks protocol versions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05, uses stateless JSON responses, and generates JSON Schemas from `zod/v4`.
+- **Phases 2-3 are not started.** They need the decisions in §7.
 **Goal:** let an AI assistant (Claude, Claude Code, Cursor and other MCP clients) work with a DLM tenant's data. Examples: "what trade-ins are waiting on a quote?", "summarise this month's orders by rep", "create a trade-in for Acme with 20 iPhone 13s". The assistant gets no more access than the person or key behind it.
 
 ---

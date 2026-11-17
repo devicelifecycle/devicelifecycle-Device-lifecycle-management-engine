@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, Key, Plus, Trash2 } from 'lucide-react'
+import { Bot, Copy, Key, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,9 @@ export default function VarApiKeysPageImpl() {
   const [tenantId, setTenantId] = useState('')
   const [creating, setCreating] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
+  // Set after mount so server and client render the same markup.
+  const [mcpUrl, setMcpUrl] = useState('https://<your-domain>/api/mcp')
+  useEffect(() => { setMcpUrl(`${window.location.origin}/api/mcp`) }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -131,6 +134,48 @@ export default function VarApiKeysPageImpl() {
             Lists return <code>{'{ data, page: { limit, offset, total } }'}</code>; <code>limit</code> is capped at 200.
             Rate limit: 100 requests per minute per key. The <code>read</code> scope is required for every
             endpoint except <code>/me</code>; <code>write</code> is reserved for a future release and unlocks nothing today.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Keep in step with src/lib/mcp/tools.ts and docs/DLM_MCP.md. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base"><Bot className="h-4 w-4" /> Connect an AI assistant (MCP)</CardTitle>
+          <CardDescription>
+            Let Claude, Claude Code, Cursor or any MCP client answer questions from your data, such as
+            &ldquo;what quotes are waiting on customers?&rdquo; It is read-only, limited to your
+            organization, and counts against the same API quota. Use a key with only the <code>read</code> scope.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Connector URL</Label>
+            <div className="flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 text-xs">{mcpUrl}</code>
+              <Button size="sm" variant="outline" onClick={() => copy(mcpUrl)}><Copy className="mr-1 h-3.5 w-3.5" /> Copy</Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Claude Code:</p>
+          <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
+{`claude mcp add --transport http dlm ${mcpUrl} \\
+  --header "Authorization: Bearer dlm_…"`}
+          </pre>
+          <p className="text-xs text-muted-foreground">Other MCP clients (Streamable HTTP):</p>
+          <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
+{`{
+  "mcpServers": {
+    "dlm": {
+      "type": "http",
+      "url": "${mcpUrl}",
+      "headers": { "Authorization": "Bearer dlm_…" }
+    }
+  }
+}`}
+          </pre>
+          <p className="text-xs text-muted-foreground">
+            Tools: who am I, list/get orders, list/get customers, device register, device catalog search,
+            trade-in value estimate, order pipeline summary. Revoke the key to disconnect immediately.
           </p>
         </CardContent>
       </Card>

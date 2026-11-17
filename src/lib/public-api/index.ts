@@ -67,6 +67,7 @@ export function apiError(status: number, error: string, code?: string) {
 export async function authorizeV1(
   req: NextRequest,
   scope: Scope | null,
+  opts: { meter?: boolean } = {},
 ): Promise<{ error: NextResponse } | { ctx: V1Context }> {
   const keyed = await requireApiKey(req)
   if ('error' in keyed) return keyed
@@ -88,36 +89,50 @@ export async function authorizeV1(
     }
   }
 
-  // Monthly API-call quota (license.apiCallsPerMonth, -1 = unlimited). The
-  // count is month-to-date across every key in the tenant. Checked AFTER the
-  // gates above so a blocked request is never also a metered one, and metered
-  // only once it is definitely going to be served.
+  // Checked AFTER the gates above so a blocked request is never also a metered
+  // one. The MCP endpoint passes meter:false and meters each tool call itself,
+  // so protocol chatter (initialize, tools/list) doesn't burn the quota.
   const supabase = createServiceRoleClient()
-  try {
-    const { data: tenant, error } = await supabase
-      .from('tenants').select('settings, plan').eq('id', key.tenantId).maybeSingle()
-    if (error) throw error
-    const { license } = tenantLimits(tenant?.settings)
-    const used = (await monthUsage(key.tenantId)).api_calls
-    const blocked = quotaBlockMessage(license.apiCallsPerMonth, used, 1, 'Monthly API call', (tenant as { plan?: string | null } | null)?.plan ?? null)
-    if (blocked) return { error: apiError(429, blocked, 'quota_exceeded') }
-  } catch (err) {
-    // Fail closed, same as featureGate: a quota we cannot verify is not a quota.
-    console.error('v1: quota check failed', err)
-    return { error: apiError(503, 'Could not verify API quota. Try again shortly.', 'quota_unavailable') }
-  }
-  // Awaited, not fire-and-forget: this counter now GATES the quota checked
-  // just above. A dropped increment (serverless teardown after the response)
-  // would let a tenant drift past its limit and under-report usage on the
-  // bill. It is a single indexed upsert; a failure is logged and allowed
-  // through rather than failing a request the quota already approved.
-  try {
-    await recordUsageNow(key.tenantId, { apiCalls: 1 })
-  } catch (err) {
-    console.warn('v1: usage increment failed', err)
+  if (opts.meter !== false) {
+    const blocked = await meterApiCall(key.tenantId)
+    if (blocked) return { error: apiError(blocked.status, blocked.error, blocked.code) }
   }
 
   return { ctx: { key, tenantId: key.tenantId, supabase } }
+}
+
+/**
+ * Monthly API-call quota (license.apiCallsPerMonth, -1 = unlimited), counted
+ * month-to-date across every key in the tenant. Returns null and records one
+ * call when allowed; otherwise the refusal, without recording.
+ */
+export async function meterApiCall(
+  tenantId: string,
+): Promise<{ status: number; error: string; code: string } | null> {
+  const supabase = createServiceRoleClient()
+  try {
+    const { data: tenant, error } = await supabase
+      .from('tenants').select('settings, plan').eq('id', tenantId).maybeSingle()
+    if (error) throw error
+    const { license } = tenantLimits(tenant?.settings)
+    const used = (await monthUsage(tenantId)).api_calls
+    const blocked = quotaBlockMessage(license.apiCallsPerMonth, used, 1, 'Monthly API call', (tenant as { plan?: string | null } | null)?.plan ?? null)
+    if (blocked) return { status: 429, error: blocked, code: 'quota_exceeded' }
+  } catch (err) {
+    // Fail closed, same as featureGate: a quota we cannot verify is not a quota.
+    console.error('v1: quota check failed', err)
+    return { status: 503, error: 'Could not verify API quota. Try again shortly.', code: 'quota_unavailable' }
+  }
+  // Awaited, not fire-and-forget: this counter GATES the quota checked just
+  // above. A dropped increment (serverless teardown after the response) would
+  // let a tenant drift past its limit and under-report usage on the bill. A
+  // failure is logged and allowed through rather than failing an approved call.
+  try {
+    await recordUsageNow(tenantId, { apiCalls: 1 })
+  } catch (err) {
+    console.warn('v1: usage increment failed', err)
+  }
+  return null
 }
 
 /** Parse ?limit= & ?offset= with the documented defaults and ceilings. */
