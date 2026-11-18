@@ -17,8 +17,7 @@
 import { NextResponse } from 'next/server'
 import { cookies, headers } from 'next/headers'
 import { workUnitAsyncStorage } from 'next/dist/server/app-render/work-unit-async-storage.external'
-import { createServerSupabaseClient } from './server'
-import { createServiceRoleClient } from './service-role'
+import { createServerSupabaseClient, verifiedImpersonation } from './server'
 import type { User } from '@supabase/supabase-js'
 import { getClientIp, ipInAllowlist } from '@/lib/network'
 
@@ -119,7 +118,9 @@ export interface AuthContext {
  * role/secondary_role — falls back to primary role if cookie is absent or invalid.
  */
 export async function requireAuth(): Promise<AuthContext | null> {
-  const supabase = await createServerSupabaseClient()
+  // Identity always comes from the real cookie session, never the
+  // impersonation client (which has no session of its own).
+  const supabase = await createServerSupabaseClient({ identity: true })
 
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user) return null
@@ -194,43 +195,45 @@ export async function requireAuth(): Promise<AuthContext | null> {
   // tenants' rows from the platform admin's session, so reading a VAR user's
   // row through `supabase` returned nothing and the swap silently never
   // happened. The actor/admin checks below are the authorization boundary.
-  const impersonationCookie = cookieStore.get('bb_impersonate_id')?.value
-  if (impersonationCookie && effectiveRole === 'admin') {
-    const svc = createServiceRoleClient()
-    const { data: imp } = await svc
-      .from('impersonation_log')
-      .select('id, actor_id, target_user_id')
-      .eq('id', impersonationCookie)
-      .is('ended_at', null)
-      .maybeSingle()
-    if (imp && imp.actor_id === profile.id) {
-      const { data: target } = await svc
-        .from('users')
-        .select('id, role, secondary_role, organization_id, tenant_id, region, is_active, is_org_admin')
-        .eq('id', imp.target_user_id)
-        .single()
-      if (target && target.is_active !== false) {
-        const swapped = target as AuthProfile
-        const impActiveRoleRaw = cookieStore.get('dlm_active_role')?.value
-        const impActiveRole = impActiveRoleRaw ? decodeURIComponent(impActiveRoleRaw) : null
-        const impEffectiveRole =
-          impActiveRole && (impActiveRole === swapped.role || impActiveRole === swapped.secondary_role)
-            ? impActiveRole
-            : swapped.role
-        return {
-          supabase,
-          authUser: session.user,
-          profile: swapped,
-          effectiveRole: impEffectiveRole,
-          tenantId: swapped.tenant_id ?? null,
-          impersonating: true,
-          actorId: imp.actor_id,
-        }
+  //
+  // The verification (verifiedImpersonation) is shared with
+  // createServerSupabaseClient, which returns a client running AS the target,
+  // so the data layer and the identity can never disagree. Before, the RLS
+  // client stayed the admin's session and screens showed mixed data.
+  if (effectiveRole === 'admin' && cookieStore.get('bb_impersonate_id')?.value) {
+    const imp = await verifiedImpersonation()
+    if (imp && imp.actorId === profile.id) {
+      const swapped = imp.target as AuthProfile
+      return {
+        supabase: await createServerSupabaseClient(),
+        // Routes scope by authUser.id (my orders, created_by, assigned rep…);
+        // left as the admin's id, a rep's own orders came back empty. The
+        // real admin stays available as actorId for the audit trail.
+        authUser: { ...session.user, id: swapped.id, email: imp.target.email ?? session.user.email },
+        profile: swapped,
+        effectiveRole: swapped.role,
+        tenantId: swapped.tenant_id ?? null,
+        impersonating: true,
+        actorId: imp.actorId,
       }
     }
   }
 
   return { supabase, authUser: session.user, profile: profile as AuthProfile, effectiveRole, tenantId: (profile as AuthProfile).tenant_id ?? null }
+}
+
+/**
+ * Account-security and money actions must never be taken on someone's behalf:
+ * changing their password, saving a card, charging a card. While impersonating,
+ * authUser.id is the TARGET, so without this an admin could reset the user's
+ * password from the impersonated session. Returns the 403 to send, or null.
+ */
+export function refuseWhileImpersonating(auth: AuthContext): NextResponse | null {
+  if (!auth.impersonating) return null
+  return NextResponse.json(
+    { error: 'Not available while impersonating. End impersonation first.', code: 'impersonating' },
+    { status: 403 },
+  )
 }
 
 /**

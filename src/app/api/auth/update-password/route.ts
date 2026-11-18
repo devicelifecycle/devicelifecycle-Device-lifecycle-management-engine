@@ -7,7 +7,7 @@
 // validation and set a sub-minimum password via the Supabase JS client.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requireAuth, unauthorized, refuseWhileImpersonating } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { z } from 'zod'
 
@@ -20,6 +20,8 @@ const schema = z.object({
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  const blocked = refuseWhileImpersonating(auth)
+  if (blocked) return blocked
 
   const body = await request.json().catch(() => null)
   const parsed = schema.safeParse(body)

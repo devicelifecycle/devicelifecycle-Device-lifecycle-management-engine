@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requireAuth, unauthorized, refuseWhileImpersonating } from '@/lib/supabase/require-auth'
 import { EmailService } from '@/services/email.service'
 
 export const dynamic = 'force-dynamic'
@@ -13,6 +13,8 @@ export async function POST() {
   try {
     const auth = await requireAuth()
     if (!auth) return unauthorized()
+    const blocked = refuseWhileImpersonating(auth)
+    if (blocked) return blocked
     const { supabase, authUser, profile, effectiveRole } = auth
 
     const email = authUser.email

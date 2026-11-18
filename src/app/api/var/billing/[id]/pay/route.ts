@@ -7,7 +7,7 @@
 // double-charge protection.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requireAuth, unauthorized, refuseWhileImpersonating } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { hasProvider, getProvider } from '@/lib/payment-provider'
 import { initStripeProvider } from '@/lib/payment-providers/stripe'
@@ -21,6 +21,8 @@ export const maxDuration = 30
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  const impBlocked = refuseWhileImpersonating(auth)
+  if (impBlocked) return impBlocked
   if (auth.effectiveRole !== 'var_entity_admin') {
     return NextResponse.json({ error: 'Only your organization administrator can pay invoices.' }, { status: 403 })
   }

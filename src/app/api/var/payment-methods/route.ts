@@ -6,7 +6,7 @@
 // token. That token is all we store.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { requireAuth, unauthorized, refuseWhileImpersonating } from '@/lib/supabase/require-auth'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { hasProvider, getProvider } from '@/lib/payment-provider'
 import { initStripeProvider } from '@/lib/payment-providers/stripe'
@@ -45,6 +45,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (!auth) return unauthorized()
+  const impBlocked = refuseWhileImpersonating(auth)
+  if (impBlocked) return impBlocked
   if (!VAR_ADMIN_ROLES.includes(auth.effectiveRole)) {
     return NextResponse.json({ error: 'Only administrators can manage payment methods' }, { status: 403 })
   }

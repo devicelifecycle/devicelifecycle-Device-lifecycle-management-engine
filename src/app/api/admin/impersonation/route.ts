@@ -7,6 +7,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/supabase/require-permission'
+import { requireAuth, unauthorized } from '@/lib/supabase/require-auth'
+import { hasPermission } from '@/lib/permissions'
+import { dropImpersonationToken } from '@/lib/supabase/impersonation-session'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { featureGate } from '@/lib/supabase/require-feature'
 import { z } from 'zod'
@@ -71,15 +74,25 @@ export async function POST(request: NextRequest) {
 
 // PATCH — end a session.
 export async function PATCH(request: NextRequest) {
-  const guard = await requirePermission('impersonate.tenant')
-  if ('error' in guard) return guard.error
+  // Ending is called FROM the impersonated session, where requireAuth reports
+  // the target's role — so requirePermission refused it and the log row was
+  // never closed. Authorize the real actor instead: while impersonating,
+  // auth.actorId is the admin who started it.
+  const auth = await requireAuth()
+  if (!auth) return unauthorized()
+  const actorId = auth.impersonating && auth.actorId ? auth.actorId : auth.profile.id
+  if (!auth.impersonating && !hasPermission(auth.effectiveRole, 'impersonate.tenant')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   const parsed = endSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.errors }, { status: 400 })
 
   const supabase = createServiceRoleClient()
-  const { error } = await supabase.from('impersonation_log')
+  const { data, error } = await supabase.from('impersonation_log')
     .update({ ended_at: new Date().toISOString() })
-    .eq('id', parsed.data.id).eq('actor_id', guard.auth.profile.id).is('ended_at', null)
+    .eq('id', parsed.data.id).eq('actor_id', actorId).is('ended_at', null)
+    .select('id')
   if (error) return NextResponse.json({ error: 'Failed to end impersonation' }, { status: 500 })
-  return NextResponse.json({ ok: true })
+  dropImpersonationToken(parsed.data.id)
+  return NextResponse.json({ ok: true, ended: (data ?? []).length })
 }
