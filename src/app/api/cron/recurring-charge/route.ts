@@ -21,6 +21,7 @@ import { hasProvider, getProvider } from '@/lib/payment-provider'
 import { initStripeProvider } from '@/lib/payment-providers/stripe'
 import { renewSubscription } from '@/lib/subscription-service'
 import { tierBySlug } from '@/lib/plan-tiers'
+import { countBillableSeats } from '@/lib/seats'
 import { resolveTaxRate, computeTax } from '@/lib/tax'
 
 export const dynamic = 'force-dynamic'
@@ -84,13 +85,8 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // Count active seats (named users) on this tenant
-      const { count: seatCount } = await supabase
-        .from('users')
-        .select('id', { count: 'exact', head: true })
-        .eq('tenant_id', sub.tenant_id)
-        .eq('is_active', true)
-      const seats = Math.max(1, seatCount ?? 1)
+      // Billable seats = active staff logins (never the VAR's end customers)
+      const seats = await countBillableSeats(supabase, sub.tenant_id)
 
       const grossDollars = tier.pricePerSeat * seats * (sub.billing_interval === 'year' ? 12 : 1)
 

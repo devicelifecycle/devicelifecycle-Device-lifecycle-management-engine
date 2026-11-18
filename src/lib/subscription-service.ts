@@ -11,6 +11,7 @@ import {
   DEFAULT_TRIAL_DAYS,
 } from './subscription'
 import { tierBySlug } from './plan-tiers'
+import { countBillableSeats } from './seats'
 
 export interface SubscriptionRow {
   id: string
@@ -301,13 +302,8 @@ export async function changePlan(
 
   const oldTier = tierBySlug(row.plan_slug)
 
-  // Count active seats to compute the full monthly cost, not just per-seat
-  const { count: seatCount } = await supabase
-    .from('users')
-    .select('id', { count: 'exact', head: true })
-    .eq('tenant_id', row.tenant_id)
-    .eq('is_active', true)
-  const seats = Math.max(1, seatCount ?? 1)
+  // Billable seats = active staff logins (never the VAR's end customers)
+  const seats = await countBillableSeats(supabase as never, row.tenant_id)
 
   const oldPrice = (oldTier?.pricePerSeat ?? 0) * seats
   const newPrice = (newTier.pricePerSeat ?? 0) * seats

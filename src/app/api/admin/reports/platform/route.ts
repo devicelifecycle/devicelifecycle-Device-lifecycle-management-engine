@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import { requirePlatformPermission } from '@/lib/supabase/require-permission'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { buildPlatformSummary } from '@/lib/platform-metrics'
+import { countBillableSeatsByTenant } from '@/lib/seats'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
@@ -28,17 +29,11 @@ export async function GET() {
   const planPriceBySlug: Record<string, number> = {}
   for (const p of plansRes.data ?? []) planPriceBySlug[p.slug as string] = (p.monthly_price as number) ?? 0
 
-  // Fetch active user counts per tenant for per-seat MRR calculation
+  // Billable seats per tenant (staff only, same rule as the charge paths), in
+  // one bounded pass instead of a COUNT per tenant.
   const tenantRows = tenantsRes.data ?? []
-  const tenantsWithSeats: Array<{ is_active?: boolean | null; plan?: string | null; type?: string | null; seat_count?: number | null }> = []
-  for (const t of tenantRows) {
-    const { count } = await supabase
-      .from('users')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', t.id as string)
-      .eq('is_active', true)
-    tenantsWithSeats.push({ ...t, seat_count: count ?? 1 })
-  }
+  const seatsByTenant = await countBillableSeatsByTenant(supabase, tenantRows.map((t) => t.id as string))
+  const tenantsWithSeats = tenantRows.map((t) => ({ ...t, seat_count: seatsByTenant.get(t.id as string) ?? 1 }))
 
   const total = custTotal.count ?? 0
   const active = custActive.count ?? 0
