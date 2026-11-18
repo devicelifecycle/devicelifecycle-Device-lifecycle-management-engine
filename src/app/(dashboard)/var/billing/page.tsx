@@ -13,6 +13,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useCan } from '@/hooks/useCan'
+import { PaymentMethodCard } from '@/components/billing/PaymentMethodCard'
 
 interface Invoice {
   id: string
@@ -69,9 +70,12 @@ const SUB_STATUS_STYLES: Record<string, string> = {
 }
 
 export default function VarBillingPage() {
-  const { can } = useCan()
+  const { role } = useCan()
+  // UserRole predates the delegated VAR roles, hence the string compare.
+  const isVarAdmin = (role as string | null) === 'var_entity_admin'
   const [data, setData] = useState<BillingData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [paying, setPaying] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -88,6 +92,22 @@ export default function VarBillingPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const payNow = async (inv: Invoice, outstanding: number) => {
+    if (!window.confirm(`Charge ${formatCurrency(outstanding)} to your card on file for invoice ${inv.invoice_number ?? ''}?`)) return
+    setPaying(inv.id)
+    try {
+      const res = await fetch(`/api/var/billing/${inv.id}/pay`, { method: 'POST' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Payment failed')
+      toast.success(`Paid ${formatCurrency(j.data.amount)}${j.data.fullyPaid ? ' — invoice settled' : ''}`)
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Payment failed')
+    } finally {
+      setPaying(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -186,12 +206,14 @@ export default function VarBillingPage() {
             {subscription.past_due_since && (
               <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
                 <AlertTriangle className="mr-1.5 inline-block h-4 w-4" />
-                Payment is overdue since {formatDate(subscription.past_due_since)}. Please contact support to avoid service interruption.
+                Payment is overdue since {formatDate(subscription.past_due_since)}. {isVarAdmin ? 'Update your card under Payment method below; we retry automatically.' : 'Ask your organization administrator to update the payment card.'}
               </div>
             )}
           </CardContent>
         </Card>
       )}
+
+      <PaymentMethodCard canManage={isVarAdmin} />
 
       {/* Invoices table */}
       <Card>
@@ -240,15 +262,27 @@ export default function VarBillingPage() {
                         {inv.status === 'paid' ? formatDate(inv.updated_at) : '—'}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => window.open(`/api/var/billing/${inv.id}/pdf`, '_blank')}
-                          title="Download PDF"
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          {isVarAdmin && inv.status === 'sent' && (() => {
+                            const paid = payments.filter((p) => p.invoice_id === inv.id)
+                              .reduce((s, p) => s + (p.type === 'refund' ? -1 : 1) * Number(p.amount), 0)
+                            const outstanding = Math.round((Number(inv.total) - paid) * 100) / 100
+                            return outstanding > 0 ? (
+                              <Button size="sm" variant="outline" disabled={paying === inv.id} onClick={() => payNow(inv, outstanding)}>
+                                {paying === inv.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Pay now'}
+                              </Button>
+                            ) : null
+                          })()}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => window.open(`/api/var/billing/${inv.id}/pdf`, '_blank')}
+                            title="Download PDF"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

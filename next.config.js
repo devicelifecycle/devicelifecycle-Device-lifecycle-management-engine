@@ -15,11 +15,14 @@ const nextConfig = {
   async headers() {
     const contentSecurityPolicy = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // Stripe.js (card fields on /var/billing): script + iframes from
+      // js.stripe.com, 3-D Secure via hooks.stripe.com, API at api.stripe.com.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.js.stripe.com",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: *.supabase.co https://images.unsplash.com",
+      "img-src 'self' data: blob: *.supabase.co https://images.unsplash.com https://*.stripe.com",
       "font-src 'self' data:",
-      "connect-src 'self' *.supabase.co https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://*.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
+      "frame-src 'self' https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com",
+      "connect-src 'self' *.supabase.co https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://*.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io https://api.stripe.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
