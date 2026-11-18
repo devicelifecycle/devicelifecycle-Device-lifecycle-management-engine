@@ -37,7 +37,7 @@ import { useCan } from '@/hooks/useCan'
 import { useOrderShipments } from '@/hooks/useShipments'
 import { DiscrepancyDetail } from '@/components/orders/DiscrepancyDetail'
 import { getDefaultAppPathForRole } from '@/lib/auth-routing'
-import { formatCurrency, formatDateTime, snakeToTitle } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime, snakeToTitle } from '@/lib/utils'
 import { computeOrderTaxLine } from '@/lib/tax'
 import { ORDER_STATUS_CONFIG, CUSTOMER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS, CONDITION_CONFIG, STORAGE_OPTIONS } from '@/lib/constants'
 import type { OrderStatus, OrderItem, PricingMetadata, AuditLog, VendorBid, Vendor, TriageResult, CpoGrade } from '@/types'
@@ -389,7 +389,7 @@ export default function OrderDetailClient() {
   const handleTransition = async (newStatus: OrderStatus) => {
     try {
       if (newStatus === 'payment_sent' && (paymentMethod || paymentReference || paymentNotes)) {
-        await fetch(`/api/orders/${order?.id}`, {
+        const saved = await fetch(`/api/orders/${order?.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -399,6 +399,12 @@ export default function OrderDetailClient() {
             payment_processed_at: new Date().toISOString(),
           }),
         })
+        // Don't mark the payout sent if its details weren't saved: the record
+        // of how and where the customer was paid would be silently lost.
+        if (!saved.ok) {
+          const j = await saved.json().catch(() => ({}))
+          throw new Error(j.error || 'Could not save the payout details; the order was not changed.')
+        }
       }
       await transition({ status: newStatus, notes: transitionNotes || undefined })
       toast.success(`Order moved to ${ORDER_STATUS_CONFIG[newStatus]?.label}`)
@@ -2248,6 +2254,19 @@ export default function OrderDetailClient() {
                   <div>
                     <p className="text-sm text-muted-foreground">Final Amount</p>
                     <p className="font-medium text-green-600">{formatCurrency(order.final_amount ?? 0)}</p>
+                  </div>
+                )}
+                {/* How and when the customer was paid (recorded on "payment sent"). */}
+                {order.type === 'trade_in' && (order as { payment_method?: string | null }).payment_method && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Payout</p>
+                    <p className="font-medium">{(order as { payment_method?: string | null }).payment_method}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[(order as { payment_reference?: string | null }).payment_reference,
+                        (order as { payment_processed_at?: string | null }).payment_processed_at
+                          ? formatDate((order as { payment_processed_at?: string | null }).payment_processed_at as string) : null,
+                      ].filter(Boolean).join(' · ')}
+                    </p>
                   </div>
                 )}
               </div>
@@ -4386,7 +4405,9 @@ export default function OrderDetailClient() {
                       <SelectValue placeholder="Select method…" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="Interac e-Transfer">Interac e-Transfer</SelectItem>
                       <SelectItem value="EFT">EFT (Bank Transfer)</SelectItem>
+                      <SelectItem value="Upgrade Discount">Upgrade discount (applied by the reseller)</SelectItem>
                       <SelectItem value="Cheque">Cheque</SelectItem>
                       <SelectItem value="PayPal">PayPal</SelectItem>
                       <SelectItem value="Wire">Wire Transfer</SelectItem>
