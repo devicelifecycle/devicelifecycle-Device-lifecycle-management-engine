@@ -18,8 +18,8 @@ import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
 import { hasProvider, getProvider } from '@/lib/payment-provider'
 import { initStripeProvider } from '@/lib/payment-providers/stripe'
 import { renewSubscription } from '@/lib/subscription-service'
-import { tierBySlug } from '@/lib/plan-tiers'
-import { countBillableSeats } from '@/lib/seats'
+import { resolveChargeMethod } from '@/lib/payment-customer'
+import { computeRenewalCharge } from '@/lib/renewal-charge'
 import { EmailService } from '@/services/email.service'
 import { getAppPath } from '@/lib/app-url'
 
@@ -104,32 +104,30 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      if (!sub.payment_method_id) {
-        result.skippedNoMethod++
-        continue
-      }
-
-      const tier = tierBySlug(sub.plan_slug)
-      if (!tier?.pricePerSeat) {
+      // Same amount as the first attempt: seats × price + tax − credit. This
+      // used to retry at the pre-tax price and ignore any credit balance.
+      const charge = await computeRenewalCharge(supabase, sub)
+      if (!charge) {
         result.skippedNoPrice++
         continue
       }
+      const { tier, netChargeCents: amountCents, creditUsed } = charge
+      const creditCents = sub.credit_balance_cents ?? 0
+      if (amountCents === 0) {
+        // Credit now covers it: settle without touching the card.
+        await supabase.from('subscriptions').update({ credit_balance_cents: creditCents - creditUsed }).eq('id', sub.id)
+        await renewSubscription(supabase, sub.id)
+        await supabase.from('subscription_events').insert({
+          subscription_id: sub.id, event_type: 'dunning_retry', from_status: 'past_due', to_status: 'active',
+          metadata: { day: elapsed, result: 'covered_by_credit', creditUsed },
+        })
+        result.succeeded++
+        continue
+      }
 
-      // Billable seats = active staff logins (never the VAR's end customers)
-      const seats = await countBillableSeats(supabase, sub.tenant_id)
-
-      const amountCents = Math.round(
-        tier.pricePerSeat * seats * 100 * (sub.billing_interval === 'year' ? 12 : 1),
-      )
-
-      // Look up provider customer ID
-      const { data: pm } = await supabase
-        .from('payment_methods')
-        .select('provider_customer_id, provider_method_id')
-        .eq('id', sub.payment_method_id)
-        .maybeSingle()
-
-      if (!pm?.provider_customer_id || !pm?.provider_method_id) {
+      // The subscription's card, else the tenant's default card.
+      const pm = await resolveChargeMethod(supabase, sub.tenant_id, sub.payment_method_id)
+      if (!pm) {
         result.skippedNoMethod++
         continue
       }
@@ -139,8 +137,8 @@ export async function GET(request: NextRequest) {
       try {
         result.retried++
         const chargeResult = await provider.charge({
-          providerCustomerId: pm.provider_customer_id,
-          providerMethodId: pm.provider_method_id,
+          providerCustomerId: pm.providerCustomerId,
+          providerMethodId: pm.providerMethodId,
           amountCents,
           currency: 'CAD',
           idempotencyKey: `dunning_${sub.id}_day${elapsed}_${todayStart.toISOString().slice(0, 10)}`,
@@ -154,6 +152,9 @@ export async function GET(request: NextRequest) {
 
         if (chargeResult.status === 'succeeded') {
           result.succeeded++
+          if (creditUsed > 0) {
+            await supabase.from('subscriptions').update({ credit_balance_cents: creditCents - creditUsed }).eq('id', sub.id)
+          }
           await renewSubscription(supabase, sub.id)
           await supabase.from('subscription_events').insert({
             subscription_id: sub.id,
@@ -169,6 +170,8 @@ export async function GET(request: NextRequest) {
             provider: 'stripe',
             provider_charge_id: chargeResult.providerChargeId,
             amount_cents: amountCents,
+            payment_method_id: pm.paymentMethodId,
+            subscription_id: sub.id,
             currency: 'CAD',
             status: 'succeeded',
             idempotency_key: `dunning_${sub.id}_day${elapsed}_${todayStart.toISOString().slice(0, 10)}`,

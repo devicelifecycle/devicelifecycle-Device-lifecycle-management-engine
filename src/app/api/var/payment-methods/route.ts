@@ -123,6 +123,12 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) throw error
+    // The billing crons charge subscriptions.payment_method_id; nothing ever
+    // set it, so a saved card was never charged. Point the subscription at its
+    // new default card.
+    if (parsed.data.set_default) {
+      await supabase.from('subscriptions').update({ payment_method_id: pm.id }).eq('tenant_id', auth.tenantId)
+    }
     return NextResponse.json({ data: pm }, { status: 201 })
   } catch (err) {
     console.error('Failed to attach payment method:', err)

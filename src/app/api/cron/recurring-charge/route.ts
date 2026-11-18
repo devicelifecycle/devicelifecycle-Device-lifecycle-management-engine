@@ -20,9 +20,8 @@ import { logCronSuccess, logCronFailure } from '@/lib/cron-logging'
 import { hasProvider, getProvider } from '@/lib/payment-provider'
 import { initStripeProvider } from '@/lib/payment-providers/stripe'
 import { renewSubscription } from '@/lib/subscription-service'
-import { tierBySlug } from '@/lib/plan-tiers'
-import { countBillableSeats } from '@/lib/seats'
-import { resolveTaxRate, computeTax } from '@/lib/tax'
+import { resolveChargeMethod } from '@/lib/payment-customer'
+import { computeRenewalCharge } from '@/lib/renewal-charge'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -79,36 +78,15 @@ export async function GET(request: NextRequest) {
     for (const sub of dueSubs ?? []) {
       result.checked++
 
-      const tier = tierBySlug(sub.plan_slug)
-      if (!tier?.pricePerSeat) {
+      // Seats × price (+ tax, − credit): the same amount every retry uses.
+      const charge = await computeRenewalCharge(supabase, sub)
+      if (!charge) {
         result.skippedNoPrice++
         continue
       }
-
-      // Billable seats = active staff logins (never the VAR's end customers)
-      const seats = await countBillableSeats(supabase, sub.tenant_id)
-
-      const grossDollars = tier.pricePerSeat * seats * (sub.billing_interval === 'year' ? 12 : 1)
-
-      // Resolve tax from the tenant's organization address
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('address')
-        .eq('tenant_id', sub.tenant_id)
-        .limit(1)
-        .maybeSingle()
-      const addr = org?.address as Record<string, unknown> | null
-      const province = (addr?.state ?? addr?.province ?? '') as string
-      const country = (addr?.country ?? '') as string
-      const taxResult = resolveTaxRate(province, country)
-      const taxDollars = taxResult.rate > 0 ? computeTax(grossDollars, taxResult.rate) : 0
-      const totalDollars = grossDollars + taxDollars
-      const grossCents = Math.round(totalDollars * 100)
-
-      // Apply credit balance
+      const { tier, grossCents, taxDollars, netChargeCents, creditUsed } = charge
+      const taxResult = { label: charge.taxLabel }
       const creditCents = sub.credit_balance_cents ?? 0
-      const netChargeCents = Math.max(0, grossCents - creditCents)
-      const creditUsed = Math.min(creditCents, grossCents)
 
       if (netChargeCents === 0) {
         // Fully covered by credit
@@ -131,19 +109,9 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      if (!sub.payment_method_id) {
-        result.skippedNoMethod++
-        continue
-      }
-
-      // Look up provider payment method
-      const { data: pm } = await supabase
-        .from('payment_methods')
-        .select('provider_customer_id, provider_method_id')
-        .eq('id', sub.payment_method_id)
-        .maybeSingle()
-
-      if (!pm?.provider_customer_id || !pm?.provider_method_id) {
+      // The subscription's card, else the tenant's default card.
+      const pm = await resolveChargeMethod(supabase, sub.tenant_id, sub.payment_method_id)
+      if (!pm) {
         result.skippedNoMethod++
         continue
       }
@@ -153,8 +121,8 @@ export async function GET(request: NextRequest) {
 
       try {
         const chargeResult = await provider.charge({
-          providerCustomerId: pm.provider_customer_id,
-          providerMethodId: pm.provider_method_id,
+          providerCustomerId: pm.providerCustomerId,
+          providerMethodId: pm.providerMethodId,
           amountCents: netChargeCents,
           currency: 'CAD',
           idempotencyKey,
@@ -181,6 +149,8 @@ export async function GET(request: NextRequest) {
             provider: 'stripe',
             provider_charge_id: chargeResult.providerChargeId,
             amount_cents: netChargeCents,
+            payment_method_id: pm.paymentMethodId,
+            subscription_id: sub.id,
             currency: 'CAD',
             status: 'succeeded',
             idempotency_key: idempotencyKey,

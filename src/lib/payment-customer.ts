@@ -7,6 +7,44 @@ import { getProvider } from '@/lib/payment-provider'
 
 type Svc = ReturnType<typeof createServiceRoleClient>
 
+export interface ChargeMethod {
+  paymentMethodId: string
+  providerCustomerId: string
+  providerMethodId: string
+}
+
+/**
+ * The card to charge for a tenant: the subscription's own payment method if
+ * set and still active, else the tenant's active default card. Null when there
+ * is nothing chargeable.
+ *
+ * Both billing crons used to select a `provider_method_id` column that does not
+ * exist (the token lives in `provider_token`), so the lookup always failed and
+ * every subscription was skipped as "no payment method".
+ */
+export async function resolveChargeMethod(
+  supabase: Svc, tenantId: string, subscriptionMethodId: string | null,
+): Promise<ChargeMethod | null> {
+  const cols = 'id, provider_customer_id, provider_token'
+  let row: Record<string, unknown> | null = null
+  if (subscriptionMethodId) {
+    const { data } = await supabase.from('payment_methods').select(cols)
+      .eq('id', subscriptionMethodId).eq('tenant_id', tenantId).eq('is_active', true).maybeSingle()
+    row = data as Record<string, unknown> | null
+  }
+  if (!row) {
+    const { data } = await supabase.from('payment_methods').select(cols)
+      .eq('tenant_id', tenantId).eq('is_active', true).eq('is_default', true).maybeSingle()
+    row = data as Record<string, unknown> | null
+  }
+  if (!row?.provider_customer_id || !row?.provider_token) return null
+  return {
+    paymentMethodId: row.id as string,
+    providerCustomerId: row.provider_customer_id as string,
+    providerMethodId: row.provider_token as string,
+  }
+}
+
 /**
  * The tenant's Stripe customer: tenants.settings.billing.providerCustomerId,
  * else one already on a saved card, else a new one. The result is persisted to
