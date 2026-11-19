@@ -509,6 +509,11 @@ export class OrderService {
         .insert(items)
 
       if (itemsError) {
+        // No transaction spans the two inserts: remove the order row we just
+        // wrote, or an empty phantom draft is left behind. Service role, since
+        // the creator (e.g. a VAR rep) may have no delete right on orders.
+        await createServiceRoleClient().from('orders').delete().eq('id', order.id)
+          .then(() => undefined, (e: unknown) => console.error('createOrder: orphan cleanup failed', order.id, e))
         throw new Error(itemsError.message)
       }
 

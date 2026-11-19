@@ -148,6 +148,23 @@ export async function POST(request: NextRequest) {
       orgId = profile.organization_id ?? customer.organization_id ?? ''
     }
 
+    // Every line must name a real, active catalog device. An unknown id used to
+    // fail the item insert AFTER the order row was written, leaving an empty
+    // phantom draft behind and answering 500.
+    const deviceIds = [...new Set((orderData.items ?? [])
+      .map((i) => (i as { device_id?: string; device_catalog_id?: string }).device_id ?? (i as { device_catalog_id?: string }).device_catalog_id)
+      .filter((v): v is string => !!v))]
+    if (deviceIds.length > 0) {
+      const { data: found, error: devErr } = await createServiceRoleClient()
+        .from('device_catalog').select('id').in('id', deviceIds).eq('is_active', true)
+      if (devErr) return NextResponse.json({ error: 'Could not verify the devices. Try again.' }, { status: 503 })
+      const known = new Set((found ?? []).map((d) => d.id as string))
+      const unknown = deviceIds.filter((id) => !known.has(id))
+      if (unknown.length) {
+        return NextResponse.json({ error: `Unknown or inactive device: ${unknown.join(', ')}`, code: 'unknown_device' }, { status: 400 })
+      }
+    }
+
     // Per-tenant module + monthly-transaction gating (shared with the CSV path).
     const gate = await orderCreationGate(supabase, auth.tenantId, orderData.type === 'cpo' ? 'cpo' : 'trade_in')
     if (gate) return gate

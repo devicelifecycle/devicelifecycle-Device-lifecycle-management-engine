@@ -134,9 +134,22 @@ function makeServerSupabase(profile = {
   }
 }
 
+let knownDevices = ['88888888-8888-8888-8888-888888888888']
+
 function makeServiceRoleSupabase() {
   return {
     from: vi.fn().mockImplementation((table: string) => {
+      if (table === 'device_catalog') {
+        let ids: string[] = []
+        const q: Record<string, unknown> = {}
+        q.select = () => q
+        q.eq = () => q
+        q.in = (_c: string, v: string[]) => { ids = v; return q }
+        q.then = (res: (v: unknown) => unknown) =>
+          Promise.resolve({ data: ids.filter((i) => knownDevices.includes(i)).map((id) => ({ id })), error: null }).then(res)
+        return q
+      }
+
       if (table === 'users') {
         return makeQuery({
           listResult: (filters) => {
@@ -321,5 +334,28 @@ describe('POST /api/orders', () => {
       error: 'Sales can create trade-in orders only',
     })
     expect(createOrderMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses an unknown device BEFORE writing anything (no phantom empty draft)', async () => {
+    knownDevices = []
+    try {
+      const { POST } = await import('@/app/api/orders/route')
+      const response = await POST(
+        new NextRequest('http://localhost:3000/api/orders', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            type: 'trade_in',
+            customer_id: '33333333-3333-3333-3333-333333333333',
+            items: [{ device_id: '00000000-0000-4000-8000-000000000000', quantity: 1, storage: '128GB', condition: 'good' }],
+          }),
+        }),
+      )
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toMatchObject({ code: 'unknown_device' })
+      expect(createOrderMock).not.toHaveBeenCalled()
+    } finally {
+      knownDevices = ['88888888-8888-8888-8888-888888888888']
+    }
   })
 })
