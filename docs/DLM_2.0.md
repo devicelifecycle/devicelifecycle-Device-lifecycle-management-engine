@@ -66,13 +66,35 @@ QA regional manager and sales rep were created in the `sai` tenant through
     - Adding a card would always have answered "not configured" even with keys set: `/api/var/payment-methods` never registered the Stripe adapter, and only the billing crons did.
     - A VAR with no saved card could never start card setup: the setup intent required a Stripe customer id matching an existing card.
     - The Stripe customer is now resolved server-side and persisted in `tenants.settings.billing.providerCustomerId` (`src/lib/payment-customer.ts`). The browser no longer sends it.
-  - **Payment structure still to build** (needs decisions):
-    - No card-entry screen: Stripe.js is not installed and no page calls the card endpoints.
-    - BB commission invoices and Option B customer invoices can only be paid manually (no Pay-now link or card charge).
-    - No trade-in payout rails; `payment_sent` is a status only.
-    - Seat count for per-seat billing includes **every** active user on the tenant, so a VAR's end-customer logins would be billed as seats. Confirm the intended seat definition.
+  - **Payment structure built 2026-11-17/18** (recommended defaults; live card test still needs keys + `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`):
+    - ☑ **Seats:** only staff are billed. A VAR's end customers and vendors are never seats (`src/lib/seats.ts`). This applies to every charge path and to platform MRR.
+    - ☑ **Automatic subscription billing could never charge.** Three bugs:
+      - both crons read a non-existent `provider_method_id` column;
+      - saving a card never linked it to the subscription;
+      - the dunning retry billed the pre-tax amount and ignored credit.
+      There is now one shared `computeRenewalCharge` and `resolveChargeMethod`, and these are the crons' first tests.
+    - ☑ **Card on file** at `/var/billing`, entity admin only. Card details go into Stripe's own field (SAQ-A), with 3-D Secure support. The CSP allows Stripe.
+    - ☑ **"Pay now" on sent BB invoices:** the saved card is charged for the balance. It can't double-charge: a unique charge row is claimed before charging. The webhook never treats an invoice payment as a subscription renewal, and records a bank-confirmed (3-D Secure) payment exactly once.
+    - ☑ **Money rules on both invoice types:**
+      - no payment on an unsent draft;
+      - no voiding an invoice while money is still paid on it.
+    - ☑ **Trade-in payouts:**
+      - Interac e-Transfer and upgrade-discount methods added;
+      - payout details are shown on the order;
+      - a failed save no longer marks the payout sent.
+    - ☐ **Card payment for Option B customer invoices:** not built. Money there goes to the VAR, not BB, so it needs Stripe Connect, a product and legal decision.
+    - ☐ **Automated payout rails:** not built. Payouts are recorded, not sent.
 - ☐ **A VAR rep can't record ship-in tracking for its customer** (`POST /api/shipments` 403s for VAR roles). BB entered it in this run. Per the spec the customer or the logistics partner ships, so this is a product decision: allow VAR staff to enter tracking on behalf of a customer who never logs in?
-- ☐ **Impersonation shows mixed data.** API routes that read via the service role show the target's tenant; routes that read via RLS still run as the admin. Support staff see a misleading view. A real fix signs requests as the target, which needs the project's JWT signing secret (`SUPABASE_JWT_SECRET`) — not configured in this environment. Add it, then swap the RLS client in `createServerSupabaseClient` while an impersonation session is active.
+- ☑ **Impersonation showed mixed data. Fixed 2026-11-17, no JWT secret needed.** While impersonating, `createServerSupabaseClient` now runs as the target.
+  - **How:** the server mints a real session for the target (service-role magic-link token exchanged server-side). The session is revoked immediately so no login lingers, and the access token never reaches the browser.
+  - **Also fixed:**
+    - `authUser.id` is now the target, so "my orders" works;
+    - password, card and payment actions are refused while impersonating;
+    - "End impersonation" now actually closes the audit row (it was refused before).
+  - **Verified:** 14/14 live as the QA rep.
+- ☑ **MCP connector Phase 1 + 2** (2026-11-17/18). AI assistants connect by API key (read-only) or by signing in (OAuth), and then act as that person, with each change confirmed by them. See `docs/DLM_MCP.md`.
+  - Live: 34/34 for Phase 1 and 38/38 for Phase 2, plus a real Claude Code client.
+  - Fixed on the way: an **open redirect** on the login page.
 - ☑ **Platform admin can now list and manage VAR staff** on `/admin/users` (2026-11-16): the platform admin reads/writes `users` via service role after its own admin check (RLS had hidden them, and a deactivate would have matched 0 rows while still resetting the password). VAR staff show "VAR: <tenant>"; their role can't be retyped from this page (400 — managed on the VAR Team page); impersonation works from the row. Verified 8/8 live.
 - ☑ **Regional managers and sales reps now have the Customers page** (`/var/customers`, 2026-11-16). Controls follow the server rules: Import only for the entity admin, actions menu for entity admin + regional manager, read-only for reps. Added the missing **Assign rep** action (the `assign` manage action existed with no UI) and a Rep column.
 - ☐ **Only a VAR entity admin can create customers** (single create is admin/coe_manager only; Import is entity-admin only). Confirm that matches intent for regional managers / reps.

@@ -5,7 +5,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
-import { getDefaultAppPathForRole } from '@/lib/auth-routing'
+import { getDefaultAppPathForRole, currentSafeRedirect } from '@/lib/auth-routing'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { User, UserRole, AppRole } from '@/types'
 
@@ -389,7 +389,8 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         // Keep isLoading:true through router.replace so the login overlay stays
         // visible during navigation — prevents a flash of the bare login form.
         setState({ user: cachedUser, isLoading: true, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(cachedUser) })
-        const dest = getDefaultAppPathForRole(cachedUser.role)
+        // Back to where sign-in was asked for (e.g. an assistant's consent screen).
+        const dest = currentSafeRedirect() ?? getDefaultAppPathForRole(cachedUser.role)
         router.replace(dest)
         // Hard-nav fallback: force full-page reload ONLY if soft navigation stalled
         // (URL hasn't changed after 2.5 s). Guard: skip if fetchUser() signed the user
@@ -436,7 +437,7 @@ function useProvideAuth(initialUser?: User | null): AuthContextValue {
         // Keep isLoading:true through router.replace — overlay stays visible
         // during the navigation so the login form never flashes.
         setState({ user: profile, isLoading: true, isInitializing: false, isAuthenticated: true, activeRole: getActiveRole(profile) })
-        const dest = getDefaultAppPathForRole(profile.role)
+        const dest = currentSafeRedirect() ?? getDefaultAppPathForRole(profile.role)
         router.replace(dest)
         // Hard-nav fallback: force full-page reload ONLY if soft navigation stalled.
         // Skip if session was revoked between login and the timer firing.

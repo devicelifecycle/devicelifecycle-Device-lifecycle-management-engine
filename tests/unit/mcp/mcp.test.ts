@@ -5,7 +5,7 @@ vi.mock('@/services/pricing.service', () => ({
 }))
 
 import { handleMessage, negotiateVersion, MAX_RESULT_CHARS, SUPPORTED_PROTOCOL_VERSIONS } from '@/lib/mcp/handler'
-import { TOOLS } from '@/lib/mcp/tools'
+import { TOOLS } from '@/lib/mcp/catalog'
 import { describeTool } from '@/lib/mcp/registry'
 import { RESOURCES } from '@/lib/mcp/resources'
 
@@ -31,16 +31,22 @@ const call = (name: string, args: unknown = {}) => ({ jsonrpc: '2.0', id: 1, met
 
 describe('MCP registry contract', () => {
   it('every tool has name, title, description, scope, annotations and an object input schema', () => {
-    expect(TOOLS.length).toBe(9)
+    expect(TOOLS.length).toBe(15)
     const names = new Set<string>()
     for (const t of TOOLS) {
       expect(t.name).toMatch(/^[a-z_]+$/)
       expect(names.has(t.name)).toBe(false); names.add(t.name)
       expect(t.title.length).toBeGreaterThan(2)
       expect(t.description.length).toBeGreaterThan(20)
-      expect([null, 'read']).toContain(t.scope)
-      // Phase 1 is read-only: nothing may claim otherwise.
-      expect(t.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false })
+      if (t.scope === 'write') {
+        // Every write tool needs a signed-in user, is never read-only, and is two-step.
+        expect(t.requiresUser).toBe(true)
+        expect(t.annotations.readOnlyHint).toBe(false)
+        expect((describeTool(t).inputSchema as { properties: Record<string, unknown> }).properties).toHaveProperty('confirm_token')
+      } else {
+        expect([null, 'read']).toContain(t.scope)
+        expect(t.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false })
+      }
       const d = describeTool(t)
       expect(d.inputSchema.type).toBe('object')
       expect(d.inputSchema.additionalProperties).toBe(false)
@@ -49,7 +55,7 @@ describe('MCP registry contract', () => {
   })
 
   it('list page size is capped at 50 for the model', () => {
-    const lo = describeTool(TOOLS.find((t) => t.name === 'list_orders')!).inputSchema as { properties: Record<string, { maximum?: number }> }
+    const lo = describeTool(TOOLS.find((t: { name: string }) => t.name === 'list_orders')!).inputSchema as { properties: Record<string, { maximum?: number }> }
     expect(lo.properties.limit.maximum).toBe(50)
   })
 })
@@ -73,10 +79,19 @@ describe('MCP protocol', () => {
     expect(await handleMessage({ jsonrpc: '2.0', id: 4, method: 'ping' }, c, deps())).toEqual({ jsonrpc: '2.0', id: 4, result: {} })
   })
 
-  it('tools/list only offers tools the key can use', async () => {
-    const list = async (scopes: string[]) => ((await handleMessage({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxWith(fakeSupabase({ data: null }), scopes), deps())) as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)
+  it('tools/list only offers tools the key can use; write tools need a signed-in user', async () => {
+    const list = async (scopes: string[], user?: object) => ((await handleMessage({ jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      { ...(ctxWith(fakeSupabase({ data: null }), scopes) as object), user } as never, deps())) as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)
     expect(await list(['read'])).toHaveLength(9)
+    expect(await list(['read', 'write'])).toHaveLength(9) // API key: no user → no write tools
+    expect(await list(['read', 'write'], { id: 'u', role: 'var_sales_rep', region: null, clientName: 'C' })).toHaveLength(15)
+    expect(await list(['read'], { id: 'u', role: 'var_sales_rep', region: null, clientName: 'C' })).toHaveLength(9)
     expect(await list(['write'])).toEqual(['whoami'])
+  })
+
+  it('a write tool called with an API key (no user) is refused', async () => {
+    const r = await handleMessage(call('submit_order', { order: 'PO-1' }), ctxWith(fakeSupabase({ data: null }), ['read', 'write']), deps()) as { result: { isError: boolean; content: { text: string }[] } }
+    expect(r.result.content[0].text).toMatch(/user_required/)
   })
 
   it('a write-only key calling a read tool is refused and NOT metered', async () => {

@@ -46,17 +46,25 @@ async function mint(targetUserId: string): Promise<{ token: string; expiresAt: n
   return { token: v.session.access_token, expiresAt }
 }
 
-/** An access token for the target of a verified impersonation (cached per instance). */
-export async function impersonationAccessToken(impersonationId: string, targetUserId: string): Promise<string> {
-  const hit = tokens.get(impersonationId)
+/**
+ * A Supabase access token for `userId`, cached per instance under `cacheKey`
+ * (an impersonation id, or `mcp:<user id>` for the MCP connector).
+ */
+export async function userAccessToken(cacheKey: string, userId: string): Promise<string> {
+  const hit = tokens.get(cacheKey)
   if (hit && hit.expiresAt - REFRESH_MARGIN_MS > Date.now()) return hit.token
-  const pending = inFlight.get(impersonationId)
+  const pending = inFlight.get(cacheKey)
   if (pending) return pending
-  const p = mint(targetUserId)
-    .then((t) => { tokens.set(impersonationId, t); return t.token })
-    .finally(() => inFlight.delete(impersonationId))
-  inFlight.set(impersonationId, p)
+  const p = mint(userId)
+    .then((t) => { tokens.set(cacheKey, t); return t.token })
+    .finally(() => inFlight.delete(cacheKey))
+  inFlight.set(cacheKey, p)
   return p
+}
+
+/** An access token for the target of a verified impersonation. */
+export function impersonationAccessToken(impersonationId: string, targetUserId: string): Promise<string> {
+  return userAccessToken(impersonationId, targetUserId)
 }
 
 /** Forget a finished impersonation's token (called when the session ends). */

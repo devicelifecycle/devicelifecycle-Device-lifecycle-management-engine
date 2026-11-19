@@ -136,7 +136,9 @@ export async function proxy(request: NextRequest) {
 
     if (!authUser) {
       const loginUrl = new URL('/login', request.url)
-      loginUrl.searchParams.set('redirect', pathname)
+      // Keep the query: the assistant consent screen (/oauth/authorize) is
+      // useless without its parameters after sign-in.
+      loginUrl.searchParams.set('redirect', pathname + request.nextUrl.search)
       return NextResponse.redirect(loginUrl)
     }
 

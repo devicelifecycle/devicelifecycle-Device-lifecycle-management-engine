@@ -143,12 +143,19 @@ export default function VarApiKeysPageImpl() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><Bot className="h-4 w-4" /> Connect an AI assistant (MCP)</CardTitle>
           <CardDescription>
-            Let Claude, Claude Code, Cursor or any MCP client answer questions from your data, such as
-            &ldquo;what quotes are waiting on customers?&rdquo; It is read-only, limited to your
-            organization, and counts against the same API quota. Use a key with only the <code>read</code> scope.
+            Let Claude, Claude Code, Cursor or any MCP client work with your data, for example
+            &ldquo;what quotes are waiting on customers?&rdquo; or &ldquo;create a trade-in for Acme with 20
+            iPhone 13s&rdquo;. Two ways to connect: <strong>sign in</strong> (recommended), so the assistant
+            sees exactly what you see and can act for you, asking you to confirm each action; or an
+            organization <strong>API key</strong>, which is read-only.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            <strong>Sign in:</strong> add the connector URL in your assistant (e.g. Claude &rarr; Settings &rarr;
+            Connectors &rarr; Add custom connector). It opens a DLM sign-in and asks you to allow access.
+            Each person manages their own connections under <a className="underline" href="/var/assistants">AI Assistants</a>.
+          </p>
           <div className="space-y-1.5">
             <Label className="text-xs">Connector URL</Label>
             <div className="flex items-center gap-2">
@@ -156,7 +163,7 @@ export default function VarApiKeysPageImpl() {
               <Button size="sm" variant="outline" onClick={() => copy(mcpUrl)}><Copy className="mr-1 h-3.5 w-3.5" /> Copy</Button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">Claude Code:</p>
+          <p className="text-xs text-muted-foreground"><strong>API key</strong> (read-only), Claude Code:</p>
           <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
 {`claude mcp add --transport http dlm ${mcpUrl} \\
   --header "Authorization: Bearer dlm_…"`}
@@ -174,11 +181,14 @@ export default function VarApiKeysPageImpl() {
 }`}
           </pre>
           <p className="text-xs text-muted-foreground">
-            Tools: who am I, list/get orders, list/get customers, device register, device catalog search,
-            trade-in value estimate, order pipeline summary. Revoke the key to disconnect immediately.
+            Read tools: who am I, list/get orders, list/get customers, device register, device catalog search,
+            trade-in value estimate, order pipeline summary. With sign-in, also: create and submit trade-ins,
+            accept, reject or cancel quotes, and assign reps, each previewed and confirmed by you first.
+            Never: payments, invoices, passwords, users or settings.
           </p>
         </CardContent>
       </Card>
+
 
       <Card>
         <CardHeader>

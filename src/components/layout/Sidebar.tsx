@@ -35,6 +35,7 @@ import {
   UserCog,
   Users,
   Key,
+  Bot,
   Archive,
 } from 'lucide-react'
 import { ByteBackMark } from '@/components/brand/ByteBackMark'
@@ -115,6 +116,7 @@ const navSections: NavSection[] = [
       { title: 'Features', href: '/var/features', icon: SlidersHorizontal, roles: ['var_entity_admin', 'admin'] },
       { title: 'Customers', href: '/var/customers', icon: Users, roles: ['var_entity_admin', 'var_regional_manager', 'var_sales_rep', 'admin'], tourId: 'nav-var-customers' },
       { title: 'API Keys', href: '/var/api-keys', icon: Key, roles: ['var_entity_admin', 'admin'] },
+      { title: 'AI Assistants', href: '/var/assistants', icon: Bot, roles: ['var_entity_admin', 'var_regional_manager', 'var_sales_rep'] },
       { title: 'Customer Invoices', href: '/var/customer-invoices', icon: FileText, roles: ['var_entity_admin', 'admin'] },
       { title: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen, roles: ['admin', 'var_entity_admin'] },
       { title: 'Audit Log', href: '/var/audit-log', icon: FileText, roles: ['var_entity_admin', 'admin'] },

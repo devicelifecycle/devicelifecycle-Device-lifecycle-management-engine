@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { ByteBackMark } from '@/components/brand/ByteBackMark'
 import { useAuthBranding } from '@/lib/auth-branding-context'
-import { getDefaultAppPathForRole } from '@/lib/auth-routing'
+import { getDefaultAppPathForRole, safeRedirectPath } from '@/lib/auth-routing'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/input'
 
@@ -83,9 +83,9 @@ function LoginPageInner() {
       }
       // User landed on /login already authenticated (e.g. direct URL) — redirect silently
       setIsNavigating(true)
-      const redirect = searchParams.get('redirect')
+      const redirect = safeRedirectPath(searchParams.get('redirect'))
       const dest =
-        redirect && redirect.startsWith('/')
+        redirect
           ? redirect
           : user
           ? getDefaultAppPathForRole(user.role)

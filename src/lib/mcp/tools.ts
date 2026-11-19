@@ -16,7 +16,8 @@ import { ORDER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS } from '@/lib/constants'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 import { sanitizeSearchInput } from '@/lib/utils'
 import { PricingService } from '@/services/pricing.service'
-import { defineTool, READ_ONLY, ToolError, type McpTool } from './registry'
+import { customerScopeFilter, customerInVarScope, type ScopeFilter } from '@/lib/delegation'
+import { defineTool, READ_ONLY, ToolError, type McpTool, type McpContext } from './registry'
 
 const ORDER_STATUSES = Object.keys(ORDER_STATUS_CONFIG) as [string, ...string[]]
 /** Statuses with no onward transition: the order is finished. */
@@ -42,6 +43,23 @@ function listResult<T>(rows: T[], limit: number, offset: number, total: number |
     data: rows,
     page: { limit, offset, total: t, has_more: offset + rows.length < t },
   }
+}
+
+/**
+ * With a signed-in user (OAuth), narrow to that user's own scope — a rep to
+ * customers assigned to them, a regional manager to their region — exactly
+ * like the web app. API keys are organization-wide (null).
+ */
+export function userScope(ctx: McpContext): ScopeFilter | null {
+  return ctx.user ? customerScopeFilter({ role: ctx.user.role, userId: ctx.user.id, region: ctx.user.region }) : null
+}
+
+/** Is this customer visible to the caller? (Out of scope reads as not found.) */
+export async function customerVisible(ctx: McpContext, customerId: string | null | undefined): Promise<boolean> {
+  if (!customerId) return false
+  if (!ctx.user) return true
+  const { data } = await tenantQuery(ctx, 'customers', 'tenant_id, region, assigned_rep_id').eq('id', customerId).maybeSingle()
+  return customerInVarScope({ role: ctx.user.role, userId: ctx.user.id, region: ctx.user.region, tenantId: ctx.tenantId }, asRow(data))
 }
 
 function dbFail(what: string, err: unknown): never {
@@ -80,7 +98,9 @@ const listOrders = defineTool({
   }).strict(),
   annotations: READ_ONLY,
   async run(ctx, a) {
-    let q = tenantQuery(ctx, 'orders', ORDER_COLUMNS, { count: 'exact' })
+    const scope = userScope(ctx)
+    let q = tenantQuery(ctx, 'orders', scope ? `${ORDER_COLUMNS}, customer:customers!inner(id)` : ORDER_COLUMNS, { count: 'exact' })
+    if (scope) q = q.eq(`customer.${scope.column}`, scope.value)
     if (a.status) q = q.eq('status', a.status)
     if (a.type) q = q.eq('type', a.type)
     if (a.customer_id) q = q.eq('customer_id', a.customer_id)
@@ -107,8 +127,10 @@ const getOrder = defineTool({
       .eq(isId ? 'id' : 'order_number', a.order.trim()).maybeSingle()
     if (error) dbFail('order', error)
     const row = asRow(data)
-    // Wrong-tenant and nonexistent look identical — existence is not leaked.
-    if (!row) throw new ToolError('not_found', `No order "${a.order}" in this organization.`)
+    // Wrong-tenant, out-of-scope and nonexistent look identical.
+    if (!row || !(await customerVisible(ctx, row.customer_id as string))) {
+      throw new ToolError('not_found', `No order "${a.order}" visible to you.`)
+    }
     return { data: serializeOrderDetail(row) }
   },
 })
@@ -126,7 +148,9 @@ const listCustomers = defineTool({
   annotations: READ_ONLY,
   async run(ctx, a) {
     const text = sanitizeSearchInput(a.query?.trim() ?? '')
+    const scope = userScope(ctx)
     let q = tenantQuery(ctx, 'customers', CUSTOMER_COLUMNS, { count: 'exact' })
+    if (scope) q = q.eq(scope.column, scope.value)
     if (a.is_active !== undefined) q = q.eq('is_active', a.is_active)
     if (text) q = q.or(`company_name.ilike.%${text}%,contact_name.ilike.%${text}%,contact_email.ilike.%${text}%`)
     const { data, error, count } = await q.order('company_name', { ascending: true }).range(a.offset, a.offset + a.limit - 1)
@@ -146,7 +170,7 @@ const getCustomer = defineTool({
     const { data, error } = await tenantQuery(ctx, 'customers', CUSTOMER_COLUMNS).eq('id', a.customer_id).maybeSingle()
     if (error) dbFail('customer', error)
     const row = asRow(data)
-    if (!row) throw new ToolError('not_found', 'No such customer in this organization.')
+    if (!row || !(await customerVisible(ctx, a.customer_id))) throw new ToolError('not_found', 'No such customer visible to you.')
     const { data: orders, error: oErr } = await tenantQuery(ctx, 'orders', 'status')
       .eq('customer_id', a.customer_id).limit(5000)
     if (oErr) dbFail('customer orders', oErr)
@@ -168,7 +192,10 @@ const listDevices = defineTool({
   }).strict(),
   annotations: READ_ONLY,
   async run(ctx, a) {
-    let q = tenantQuery(ctx, 'customer_assets', `${ASSET_COLUMNS}, device:device_catalog(${DEVICE_CATALOG_COLUMNS})`, { count: 'exact' })
+    const scope = userScope(ctx)
+    let q = tenantQuery(ctx, 'customer_assets',
+      `${ASSET_COLUMNS}, device:device_catalog(${DEVICE_CATALOG_COLUMNS})${scope ? ', customer:customers!inner(id)' : ''}`, { count: 'exact' })
+    if (scope) q = q.eq(`customer.${scope.column}`, scope.value)
     if (a.customer_id) q = q.eq('customer_id', a.customer_id)
     if (a.status) q = q.eq('status', a.status)
     const { data, error, count } = await q.order('created_at', { ascending: false }).range(a.offset, a.offset + a.limit - 1)
@@ -209,26 +236,33 @@ const estimate = defineTool({
   }).strict(),
   annotations: READ_ONLY,
   async run(ctx, a) {
-    const { data: device } = await ctx.supabase.from('device_catalog').select('id, make, model')
-      .eq('id', a.device_id).eq('is_active', true).maybeSingle()
-    if (!device) throw new ToolError('not_found', 'No such active device in the catalog.')
-    const calc = await PricingService.calculateAdaptivePrice(
-      { device_id: a.device_id, storage: a.storage.toUpperCase(), carrier: 'Unlocked', condition: a.condition, quantity: 1 },
-      ctx.supabase,
-    )
-    const base = { device: { make: device.make, model: device.model }, storage: a.storage.toUpperCase(), condition: a.condition, currency: 'CAD' }
-    if (!calc.success || calc.trade_price == null) return { ...base, estimate_available: false }
-    // Same rounding as the public value lookup: a ±10% range to the nearest $5,
-    // never the exact price or its breakdown.
-    const rounded = Math.round(calc.trade_price / 5) * 5
-    return {
-      ...base,
-      estimate_available: true,
-      estimate_low: Math.max(0, Math.round((rounded * 0.9) / 5) * 5),
-      estimate_high: Math.round((rounded * 1.1) / 5) * 5,
-    }
+    return estimateFor(ctx, a.device_id, a.storage, a.condition)
   },
 })
+
+/**
+ * Indicative per-unit trade-in range for one catalog device. Same rounding as
+ * the public value lookup: ±10% to the nearest $5, never the exact price.
+ */
+export async function estimateFor(ctx: McpContext, deviceId: string, storageRaw: string, condition: typeof DEVICE_CONDITION_VALUES[number]) {
+  const { data: device } = await ctx.supabase.from('device_catalog').select('id, make, model')
+    .eq('id', deviceId).eq('is_active', true).maybeSingle()
+  if (!device) throw new ToolError('not_found', `No active catalog device ${deviceId}.`)
+  const storage = storageRaw.toUpperCase()
+  const calc = await PricingService.calculateAdaptivePrice(
+    { device_id: deviceId, storage, carrier: 'Unlocked', condition, quantity: 1 },
+    ctx.supabase,
+  )
+  const base = { device: { make: device.make as string, model: device.model as string }, storage, condition, currency: 'CAD' }
+  if (!calc.success || calc.trade_price == null) return { ...base, estimate_available: false as const }
+  const rounded = Math.round(calc.trade_price / 5) * 5
+  return {
+    ...base,
+    estimate_available: true as const,
+    estimate_low: Math.max(0, Math.round((rounded * 0.9) / 5) * 5),
+    estimate_high: Math.round((rounded * 1.1) / 5) * 5,
+  }
+}
 
 const PIPELINE_CAP = 5000
 const pipeline = defineTool({
@@ -242,7 +276,10 @@ const pipeline = defineTool({
   }).strict(),
   annotations: READ_ONLY,
   async run(ctx, a) {
-    let q = tenantQuery(ctx, 'orders', 'order_number, status, total_amount, quoted_amount, final_amount, created_at, is_sla_breached', { count: 'exact' })
+    const scope = userScope(ctx)
+    let q = tenantQuery(ctx, 'orders',
+      `order_number, status, total_amount, quoted_amount, final_amount, created_at, is_sla_breached${scope ? ', customer:customers!inner(id)' : ''}`, { count: 'exact' })
+    if (scope) q = q.eq(`customer.${scope.column}`, scope.value)
     if (a.type) q = q.eq('type', a.type)
     if (a.created_since) q = q.gte('created_at', new Date(a.created_since).toISOString())
     const { data, error, count } = await q.order('created_at', { ascending: false }).limit(PIPELINE_CAP)
@@ -289,8 +326,8 @@ const pipeline = defineTool({
   },
 })
 
-export const TOOLS: McpTool[] = [
+export const READ_TOOLS: McpTool[] = [
   whoami, listOrders, getOrder, listCustomers, getCustomer, listDevices, searchCatalog, estimate, pipeline,
 ] as unknown as McpTool[]
 
-export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]))
+export { ID_PATTERN }

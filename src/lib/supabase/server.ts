@@ -16,6 +16,7 @@ import { cookies } from 'next/headers'
 import { workUnitAsyncStorage } from 'next/dist/server/app-render/work-unit-async-storage.external'
 import { createServiceRoleClient } from './service-role'
 import { impersonationAccessToken, clientForToken } from './impersonation-session'
+import { actingUser } from './acting-user'
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseUrl = rawUrl.startsWith('https://') ? rawUrl : 'https://placeholder.supabase.co'
@@ -120,6 +121,9 @@ export async function verifiedImpersonation(): Promise<VerifiedImpersonation | n
  */
 export async function createServerSupabaseClient(opts: { identity?: boolean } = {}) {
   if (opts.identity) return createCookieSupabaseClient()
+  // MCP connector acting for a signed-in user: run under their RLS.
+  const acting = actingUser()
+  if (acting) return clientForToken(acting.accessToken)
   const imp = await verifiedImpersonation()
   if (imp) {
     try {

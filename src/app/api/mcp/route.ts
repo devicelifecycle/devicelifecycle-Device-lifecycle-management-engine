@@ -10,6 +10,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authorizeV1, meterApiCall } from '@/lib/public-api'
 import { handleMessage, RPC, type RpcResponse } from '@/lib/mcp/handler'
+import type { McpContext } from '@/lib/mcp/registry'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { featureGate } from '@/lib/supabase/require-feature'
+import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/rate-limit'
+import { ACCESS_PREFIX, OAUTH_ROLES, verifyAccessToken } from '@/lib/oauth/oauth'
+import { protectedResourceMetadataUrl } from '@/lib/oauth/metadata'
+
+/**
+ * Resolve an OAuth access token to a per-user MCP context. Re-checked on every
+ * call: token live, user still active and still a VAR staff role in the same
+ * tenant, the tenant's api_access still on.
+ */
+async function oauthContext(req: NextRequest, token: string): Promise<{ ctx: McpContext } | { error: NextResponse }> {
+  const svc = createServiceRoleClient()
+  const p = await verifyAccessToken(svc, token)
+  if (!p) return { error: rpcError(401, RPC.INVALID_REQUEST, 'Access token is invalid or expired. Sign in again.') }
+  const { data: u } = await svc.from('users').select('id, role, region, tenant_id, is_active').eq('id', p.userId).maybeSingle()
+  if (!u || u.is_active === false || !(OAUTH_ROLES as readonly string[]).includes(u.role as string) || u.tenant_id !== p.tenantId || !p.tenantId) {
+    return { error: rpcError(401, RPC.INVALID_REQUEST, 'This connection is no longer valid for your account. Sign in again.') }
+  }
+  const rl = await checkRateLimitAsync(`mcp-oauth:${p.familyId}`, RATE_LIMITS.api)
+  if (!rl.allowed) return { error: rpcError(429, RPC.INVALID_REQUEST, 'Rate limit exceeded. Try again shortly.') }
+  const gate = await featureGate(p.tenantId, 'api_access', 'API access')
+  if (gate) return { error: gate }
+  const { data: client } = await svc.from('oauth_clients').select('client_name').eq('id', p.clientId).maybeSingle()
+  return {
+    ctx: {
+      key: { keyId: `oauth:${p.familyId}`, tenantId: p.tenantId, scopes: p.scopes.map((s) => s.replace(/^dlm:/, '')) },
+      tenantId: p.tenantId,
+      supabase: svc,
+      user: { id: u.id as string, role: u.role as string, region: (u.region as string | null) ?? null, clientName: (client?.client_name as string) ?? 'AI assistant' },
+    },
+  }
+}
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -36,15 +70,30 @@ export async function POST(req: NextRequest) {
   }
   if (!originAllowed(req)) return rpcError(403, RPC.INVALID_REQUEST, 'Origin not allowed.')
 
-  // Authenticate before reading the body.
-  const auth = await authorizeV1(req, null, { meter: false })
-  if ('error' in auth) {
-    if (auth.error.status === 401) {
-      auth.error.headers.set('WWW-Authenticate', 'Bearer realm="DLM", error="invalid_token", error_description="Use a DLM API key: Authorization: Bearer dlm_..."')
-    }
-    return auth.error
+  // Authenticate before reading the body. Two credentials:
+  //   dlmo_…  OAuth access token — a signed-in person (their scope, can act)
+  //   dlm_…   organization API key — read-only, organization-wide
+  const bearer = (req.headers.get('authorization') ?? '').match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
+  const challenge = `Bearer realm="DLM", resource_metadata="${protectedResourceMetadataUrl(req)}"`
+  if (!bearer) {
+    return rpcError(401, RPC.INVALID_REQUEST, 'Sign in to DLM (OAuth) or send an API key: Authorization: Bearer dlm_...', { 'WWW-Authenticate': challenge })
   }
-  const { ctx } = auth
+  let ctx: McpContext
+  if (bearer.startsWith(ACCESS_PREFIX)) {
+    const o = await oauthContext(req, bearer)
+    if ('error' in o) {
+      if (o.error.status === 401) o.error.headers.set('WWW-Authenticate', `${challenge}, error="invalid_token"`)
+      return o.error
+    }
+    ctx = o.ctx
+  } else {
+    const auth = await authorizeV1(req, null, { meter: false })
+    if ('error' in auth) {
+      if (auth.error.status === 401) auth.error.headers.set('WWW-Authenticate', `${challenge}, error="invalid_token"`)
+      return auth.error
+    }
+    ctx = auth.ctx
+  }
 
   const raw = await req.text()
   if (raw.length > MAX_BODY_BYTES) return rpcError(413, RPC.INVALID_REQUEST, 'Request too large.')

@@ -4,7 +4,18 @@
 - **Live run:** 34/34 checks on real `sai` data, including a real Claude Code client answering from DLM. The run covered transport, auth, all 9 tools, cross-tenant isolation, filter injection, metering, scope filtering and kill switches.
 - **Bug found and fixed during the run:** zod v4's `.uuid()` rejected DLM's seeded ids, which would have refused every estimate on a seeded catalog device.
 - **Built without the SDK:** the protocol handler is hand-written in `src/lib/mcp/` with no new dependency. It speaks protocol versions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05, uses stateless JSON responses, and generates JSON Schemas from `zod/v4`.
-- **Phases 2-3 are not started.** They need the decisions in §7.
+- **Phase 2 built and live-tested (2026-11-18).** Built with the plan's recommended defaults, since the §7 questions weren't answered: VAR staff only, under the existing `api_access` feature, and the write set in §3.
+  - **OAuth 2.1:** PKCE S256, dynamic client registration, single-use 60 s codes, 1 h access and 30 d rotating refresh tokens. A replayed refresh token revokes the whole grant. Everything is stored hashed (`20261118000000_mcp_oauth.sql`).
+  - **Consent and management:** consent screen at `/oauth/authorize`; **AI Assistants** page (`/var/assistants`) to list and disconnect.
+  - **Write tools:** two-step, HMAC-signed and single-use confirmations. They run the app's own route handlers as the signed-in user (`runAsUser`), so every rule is DLM's.
+  - **Read tools:** narrowed to the user's own delegation scope.
+  - **Live run, 38/38:** discovery, registration, consent, PKCE, code reuse refused, open redirect and cross-site refused, customer refused, rep and regional-manager scopes, create, submit and cancel through the app, replay without duplicates, refresh rotation and theft detection, disconnect, API-access kill switch, API-key path unchanged. A real Claude Code client also ran over OAuth.
+  - **Found and fixed during Phase 2:**
+    - an **open redirect** on the login page (`?redirect=//evil.com`);
+    - login dropped the return path;
+    - the registration rate limit would have throttled every Claude.ai user together;
+    - OAuth URLs pointed local and preview sites at production.
+- **Phase 3 (Byte-Back operations tools) not started.**
 **Goal:** let an AI assistant (Claude, Claude Code, Cursor and other MCP clients) work with a DLM tenant's data. Examples: "what trade-ins are waiting on a quote?", "summarise this month's orders by rep", "create a trade-in for Acme with 20 iPhone 13s". The assistant gets no more access than the person or key behind it.
 
 ---

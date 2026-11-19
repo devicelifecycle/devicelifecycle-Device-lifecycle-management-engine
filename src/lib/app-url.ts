@@ -75,6 +75,16 @@ export function getAppUrl(request?: RequestLike | null): string {
   return 'http://localhost:3000'
 }
 
+/**
+ * The origin THIS request was served on (forwarded host/proto aware), falling
+ * back to getAppUrl. OAuth issuer/resource identifiers must be the host the
+ * client actually talks to — getAppUrl swaps a local origin for the configured
+ * production URL, which pointed local and preview sign-ins at production.
+ */
+export function getServedUrl(request?: RequestLike | null): string {
+  return getRequestOrigin(request) ?? getAppUrl(request)
+}
+
 export function getAppPath(path: string, request?: RequestLike | null): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${getAppUrl(request)}${normalizedPath}`

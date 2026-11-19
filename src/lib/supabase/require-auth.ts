@@ -18,6 +18,9 @@ import { NextResponse } from 'next/server'
 import { cookies, headers } from 'next/headers'
 import { workUnitAsyncStorage } from 'next/dist/server/app-render/work-unit-async-storage.external'
 import { createServerSupabaseClient, verifiedImpersonation } from './server'
+import { createServiceRoleClient } from './service-role'
+import { actingUser } from './acting-user'
+import { clientForToken } from './impersonation-session'
 import type { User } from '@supabase/supabase-js'
 import { getClientIp, ipInAllowlist } from '@/lib/network'
 
@@ -118,6 +121,13 @@ export interface AuthContext {
  * role/secondary_role — falls back to primary role if cookie is absent or invalid.
  */
 export async function requireAuth(): Promise<AuthContext | null> {
+  // MCP connector acting for a signed-in user (OAuth grant). The grant was
+  // issued through a normal signed-in session, so identity is the grant's
+  // user; deactivation and the tenant IP allowlist are still re-checked on
+  // every call.
+  const acting = actingUser()
+  if (acting) return actingUserContext(acting.userId, acting.accessToken)
+
   // Identity always comes from the real cookie session, never the
   // impersonation client (which has no session of its own).
   const supabase = await createServerSupabaseClient({ identity: true })
@@ -220,6 +230,32 @@ export async function requireAuth(): Promise<AuthContext | null> {
   }
 
   return { supabase, authUser: session.user, profile: profile as AuthProfile, effectiveRole, tenantId: (profile as AuthProfile).tenant_id ?? null }
+}
+
+async function actingUserContext(userId: string, accessToken: string): Promise<AuthContext | null> {
+  const svc = createServiceRoleClient()
+  const { data: p } = await svc.from('users')
+    .select('id, email, role, secondary_role, organization_id, tenant_id, region, is_active, is_org_admin, tenants(branding)')
+    .eq('id', userId).maybeSingle()
+  if (!p || p.is_active === false) return null
+  const tenantRow = (p as unknown as { tenants?: Record<string, unknown> | Record<string, unknown>[] }).tenants
+  const branding = (Array.isArray(tenantRow) ? tenantRow[0] : tenantRow) as { branding?: { allowedIps?: string[] | null } } | undefined
+  const allowedIps = branding?.branding?.allowedIps
+  if (Array.isArray(allowedIps) && allowedIps.length > 0) {
+    const h = await headers()
+    if (!ipInAllowlist(getClientIp(h), allowedIps)) return null
+  }
+  const profile = p as unknown as AuthProfile
+  return {
+    supabase: clientForToken(accessToken),
+    authUser: { id: profile.id, email: (p as { email?: string }).email, app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '' } as User,
+    profile,
+    effectiveRole: profile.role,
+    tenantId: profile.tenant_id ?? null,
+    // Acting for someone else: refuse account-security/money actions here too.
+    impersonating: true,
+    actorId: profile.id,
+  }
 }
 
 /**

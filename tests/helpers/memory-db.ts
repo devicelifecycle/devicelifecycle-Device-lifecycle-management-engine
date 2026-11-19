@@ -6,7 +6,7 @@
 type Row = Record<string, unknown>
 type Filter = (r: Row) => boolean
 
-export function memoryDb(seed: Record<string, Row[]> = {}) {
+export function memoryDb(seed: Record<string, Row[]> = {}, unique: Record<string, string> = {}) {
   const tables: Record<string, Row[]> = Object.fromEntries(Object.entries(seed).map(([k, v]) => [k, v.map((r) => ({ ...r }))]))
   let nextId = 1
   const t = (name: string) => (tables[name] ??= [])
@@ -46,9 +46,12 @@ export function memoryDb(seed: Record<string, Row[]> = {}) {
       update(p: Row) { mode = 'update'; patch = p; return b },
       delete() { mode = 'delete'; return b },
       insert(rows: Row | Row[]) {
-        const list = (Array.isArray(rows) ? rows : [rows]).map((r) => ({ id: `id-${nextId++}`, ...r }))
-        t(table).push(...list)
-        const res = { data: list, error: null }
+        const list: Row[] = (Array.isArray(rows) ? rows : [rows]).map((r) => ({ id: `id-${nextId++}`, ...r }))
+        const col = unique[table]
+        const dup = col && list.some((r) => t(table).some((x) => x[col] === r[col]))
+        const res = dup
+          ? { data: null, error: { code: '23505', message: 'duplicate key' } }
+          : (t(table).push(...list), { data: list, error: null })
         return { ...res, select: () => ({ single: async () => ({ data: list[0], error: null }) }), then: (f: (v: unknown) => unknown) => Promise.resolve(res).then(f) }
       },
       upsert(row: Row, o?: { onConflict?: string }) {
