@@ -31,7 +31,9 @@ const call = (name: string, args: unknown = {}) => ({ jsonrpc: '2.0', id: 1, met
 
 describe('MCP registry contract', () => {
   it('every tool has name, title, description, scope, annotations and an object input schema', () => {
-    expect(TOOLS.length).toBe(15)
+    expect(TOOLS.length).toBe(18)
+    // operations tools are signed-in, Byte-Back-only
+    for (const t of TOOLS.filter((x: { platformOnly?: boolean }) => x.platformOnly)) expect(t.requiresUser).toBe(true)
     const names = new Set<string>()
     for (const t of TOOLS) {
       expect(t.name).toMatch(/^[a-z_]+$/)
@@ -84,9 +86,23 @@ describe('MCP protocol', () => {
       { ...(ctxWith(fakeSupabase({ data: null }), scopes) as object), user } as never, deps())) as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)
     expect(await list(['read'])).toHaveLength(9)
     expect(await list(['read', 'write'])).toHaveLength(9) // API key: no user → no write tools
-    expect(await list(['read', 'write'], { id: 'u', role: 'var_sales_rep', region: null, clientName: 'C' })).toHaveLength(15)
+    const varTools = await list(['read', 'write'], { id: 'u', role: 'var_sales_rep', region: null, clientName: 'C' })
+    expect(varTools).toHaveLength(16)
+    expect(varTools).not.toContain('ops_queue')
     expect(await list(['read'], { id: 'u', role: 'var_sales_rep', region: null, clientName: 'C' })).toHaveLength(9)
+    const opsTools = await list(['read', 'write'], { id: 'u', role: 'coe_manager', region: null, clientName: 'C' })
+    expect(opsTools).toHaveLength(18)
+    expect(opsTools).toContain('release_quote')
+    expect(await list(['read'], { id: 'u', role: 'admin', region: null, clientName: 'C' })).toContain('ops_queue')
     expect(await list(['write'])).toEqual(['whoami'])
+  })
+
+  it('a VAR user calling an operations tool gets "unknown tool" (existence not revealed)', async () => {
+    const c = { ...(ctxWith(fakeSupabase({ data: [] }), ['read', 'write']) as object), user: { id: 'u', role: 'var_entity_admin', region: null, clientName: 'C' } } as never
+    const r = await handleMessage(call('ops_queue', {}), c, deps()) as { result: { content: { text: string }[] } }
+    expect(r.result.content[0].text).toMatch(/unknown_tool/)
+    const r2 = await handleMessage(call('release_quote', { order: 'PO-1' }), c, deps()) as { result: { content: { text: string }[] } }
+    expect(r2.result.content[0].text).toMatch(/unknown_tool/)
   })
 
   it('a write tool called with an API key (no user) is refused', async () => {

@@ -52,7 +52,7 @@ async function signedInEligible() {
   if (!auth) return { error: unauthorized('Sign in to continue.') }
   if (auth.impersonating) return { error: NextResponse.json({ error: 'End impersonation before connecting an assistant.' }, { status: 403 }) }
   if (!(OAUTH_ROLES as readonly string[]).includes(auth.effectiveRole)) {
-    return { error: NextResponse.json({ error: 'Assistant connections are available to your organization’s staff accounts (administrator, regional manager, sales rep).', code: 'role_not_eligible' }, { status: 403 }) }
+    return { error: NextResponse.json({ error: 'Assistant connections are available to staff accounts (reseller administrators, regional managers and sales reps, and Byte-Back operations staff).', code: 'role_not_eligible' }, { status: 403 }) }
   }
   return { auth }
 }

@@ -15,7 +15,12 @@
     - login dropped the return path;
     - the registration rate limit would have throttled every Claude.ai user together;
     - OAuth URLs pointed local and preview sites at production.
-- **Phase 3 (Byte-Back operations tools) not started.**
+- **Phase 3 built and live-tested (2026-11-18).** Byte-Back admin, COE manager and COE tech can sign in.
+  - `ops_queue`: stage counts across every VAR, plus the oldest orders per stage (awaiting quote / customer / shipment, at COE, awaiting payout, SLA breached).
+  - `release_quote`: two-step, through the real transition route.
+  - Operations tools are invisible to VAR users ("unknown tool"). Operators must be on the platform tenant and aren't plan-gated.
+  - VAR staff also got `record_ship_in`.
+  - **Live, 16/16:** a rep creates and submits an order via the assistant; the BB admin sees it queued with the reseller name and releases the quote; a COE tech is refused by the app's own rule; the rep accepts and records the ship-in; the order moves to the at-COE stage.
 **Goal:** let an AI assistant (Claude, Claude Code, Cursor and other MCP clients) work with a DLM tenant's data. Examples: "what trade-ins are waiting on a quote?", "summarise this month's orders by rep", "create a trade-in for Acme with 20 iPhone 13s". The assistant gets no more access than the person or key behind it.
 
 ---

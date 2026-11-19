@@ -84,7 +84,10 @@ QA regional manager and sales rep were created in the `sai` tenant through
       - a failed save no longer marks the payout sent.
     - ☐ **Card payment for Option B customer invoices:** not built. Money there goes to the VAR, not BB, so it needs Stripe Connect, a product and legal decision.
     - ☐ **Automated payout rails:** not built. Payouts are recorded, not sent.
-- ☐ **A VAR rep can't record ship-in tracking for its customer** (`POST /api/shipments` 403s for VAR roles). BB entered it in this run. Per the spec the customer or the logistics partner ships, so this is a product decision: allow VAR staff to enter tracking on behalf of a customer who never logs in?
+- ☑ **VAR staff can record a customer's ship-in** (2026-11-18). This is the default chosen to mirror "accept on behalf": many VAR customers never log in.
+  - **Rules:** only for an accepted trade-in, only for the person's own customers (delegation scope), inbound only, tracking number required.
+  - **Effect:** the order auto-advances to Shipped to COE, admins are notified, and the timeline notes the reseller recorded it. The assistant can do it too (`record_ship_in`).
+  - **Verified** live.
 - ☑ **Impersonation showed mixed data. Fixed 2026-11-17, no JWT secret needed.** While impersonating, `createServerSupabaseClient` now runs as the target.
   - **How:** the server mints a real session for the target (service-role magic-link token exchanged server-side). The session is revoked immediately so no login lingers, and the access token never reaches the browser.
   - **Also fixed:**
@@ -92,6 +95,7 @@ QA regional manager and sales rep were created in the `sai` tenant through
     - password, card and payment actions are refused while impersonating;
     - "End impersonation" now actually closes the audit row (it was refused before).
   - **Verified:** 14/14 live as the QA rep.
+- ☑ **MCP connector Phase 3** (2026-11-18). Byte-Back operations tools (`ops_queue`, `release_quote`), live 16/16.
 - ☑ **MCP connector Phase 1 + 2** (2026-11-17/18). AI assistants connect by API key (read-only) or by signing in (OAuth), and then act as that person, with each change confirmed by them. See `docs/DLM_MCP.md`.
   - Live: 34/34 for Phase 1 and 38/38 for Phase 2, plus a real Claude Code client.
   - Fixed on the way: an **open redirect** on the login page.

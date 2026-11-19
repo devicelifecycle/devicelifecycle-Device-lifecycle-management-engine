@@ -35,6 +35,13 @@ Your organization needs API access on its plan. Customer and vendor accounts can
 | `accept_quote` / `reject_quote` | Accepts or rejects a quote on the customer's behalf (after they agreed by email); the customer still gets the full terms |
 | `cancel_order` | Cancels an order that hasn't been processed |
 | `assign_customer_rep` | Assigns a customer to a sales rep (administrators and regional managers) |
+| `record_ship_in` | Records the carrier and tracking number when your customer has shipped an accepted trade-in; the order moves to "shipped to COE" |
+
+**Byte-Back operations staff** (admin, COE manager, COE tech) can sign in too, and also get:
+- `ops_queue`: what's waiting at each processing stage across every reseller;
+- `release_quote`: releases the quote on a submitted order, with a preview first. Only roles allowed to quote in DLM can do it.
+
+These two tools are never offered to reseller accounts.
 
 The assistant shows a preview, you agree, and it confirms with a one-time token that is valid for 10 minutes and only for exactly those details. Every action goes through the same rules as the DLM screens. It is recorded as you, with "Via <assistant> (AI assistant)" on the order timeline.
 

@@ -21,6 +21,20 @@ export interface McpUser {
 
 export type McpContext = V1Context & { user?: McpUser }
 
+const OPERATOR_ROLES = new Set(['admin', 'coe_manager', 'coe_tech'])
+/** A signed-in Byte-Back operator (platform staff) — the audience for ops tools. */
+export function isOperator(ctx: McpContext): boolean {
+  return !!ctx.user && OPERATOR_ROLES.has(ctx.user.role)
+}
+
+/** Can this caller use this tool at all? (scope, signed-in user, audience) */
+export function toolAvailable(tool: McpTool, ctx: McpContext): boolean {
+  if (tool.scope !== null && !ctx.key.scopes.includes(tool.scope)) return false
+  if (tool.requiresUser && !ctx.user) return false
+  if (tool.platformOnly && !isOperator(ctx)) return false
+  return true
+}
+
 export interface ToolAnnotations {
   readOnlyHint: boolean
   destructiveHint: boolean
@@ -38,6 +52,8 @@ export interface McpTool<S extends z.ZodType = z.ZodType> {
   annotations: ToolAnnotations
   /** Needs a signed-in user (OAuth), not an organization API key. */
   requiresUser?: boolean
+  /** Only offered to Byte-Back operators (admin / COE), never to VAR users. */
+  platformOnly?: boolean
   run(ctx: McpContext, args: z.output<S>): Promise<unknown>
 }
 

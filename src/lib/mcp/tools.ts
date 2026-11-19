@@ -16,7 +16,7 @@ import { ORDER_STATUS_CONFIG, VALID_ORDER_TRANSITIONS } from '@/lib/constants'
 import { DEVICE_CONDITION_VALUES } from '@/lib/validations'
 import { sanitizeSearchInput } from '@/lib/utils'
 import { PricingService } from '@/services/pricing.service'
-import { customerScopeFilter, customerInVarScope, type ScopeFilter } from '@/lib/delegation'
+import { customerScopeFilter, customerInVarScope, delegationLevel, type ScopeFilter } from '@/lib/delegation'
 import { defineTool, READ_ONLY, ToolError, type McpTool, type McpContext } from './registry'
 
 const ORDER_STATUSES = Object.keys(ORDER_STATUS_CONFIG) as [string, ...string[]]
@@ -57,7 +57,8 @@ export function userScope(ctx: McpContext): ScopeFilter | null {
 /** Is this customer visible to the caller? (Out of scope reads as not found.) */
 export async function customerVisible(ctx: McpContext, customerId: string | null | undefined): Promise<boolean> {
   if (!customerId) return false
-  if (!ctx.user) return true
+  // API keys and Byte-Back staff: the tenant filter on every query is the scope.
+  if (!ctx.user || delegationLevel(ctx.user.role) === 'none') return true
   const { data } = await tenantQuery(ctx, 'customers', 'tenant_id, region, assigned_rep_id').eq('id', customerId).maybeSingle()
   return customerInVarScope({ role: ctx.user.role, userId: ctx.user.id, region: ctx.user.region, tenantId: ctx.tenantId }, asRow(data))
 }

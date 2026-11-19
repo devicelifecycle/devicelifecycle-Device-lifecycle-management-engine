@@ -19,6 +19,7 @@ import { userAccessToken } from '@/lib/supabase/impersonation-session'
 import { POST as createOrderRoute } from '@/app/api/orders/route'
 import { POST as transitionRoute } from '@/app/api/orders/[id]/transition/route'
 import { POST as manageCustomerRoute } from '@/app/api/customers/[id]/manage/route'
+import { POST as shipmentsRoute } from '@/app/api/shipments/route'
 import { defineTool, ToolError, WRITE, DESTRUCTIVE, type McpContext, type McpTool, type McpUser } from './registry'
 import { customerVisible, estimateFor, ID_PATTERN } from './tools'
 import { issueConfirmToken, checkConfirmToken, claimConfirmation, recordConfirmationResult } from './confirm'
@@ -27,13 +28,13 @@ const confirmField = z.string().max(2000).optional()
   .describe('Leave out to PREVIEW. After the user agrees to the preview, call again with the same arguments plus this token.')
 const orderRef = z.string().min(1).max(64).describe('Order UUID or order number (e.g. PO-2026-2141).')
 
-function needUser(ctx: McpContext): McpUser {
+export function needUser(ctx: McpContext): McpUser {
   if (!ctx.user) throw new ToolError('user_required', 'This action needs a signed-in connection (OAuth), not an organization API key.')
   return ctx.user
 }
 
 /** Call an app route handler as the signed-in user; returns its JSON or throws its refusal. */
-async function asUser(ctx: McpContext, call: () => Promise<Response>): Promise<Record<string, unknown>> {
+export async function asUser(ctx: McpContext, call: () => Promise<Response>): Promise<Record<string, unknown>> {
   const user = needUser(ctx)
   const accessToken = await userAccessToken(`mcp:${user.id}`, user.id)
   const res = await runAsUser({ userId: user.id, accessToken }, call)
@@ -44,14 +45,14 @@ async function asUser(ctx: McpContext, call: () => Promise<Response>): Promise<R
   return body
 }
 
-const internal = (ctx: McpContext, path: string, body: unknown) => new NextRequest(`http://dlm.internal${path}`, {
+export const internal = (ctx: McpContext, path: string, body: unknown) => new NextRequest(`http://dlm.internal${path}`, {
   method: 'POST',
   headers: { 'content-type': 'application/json', 'x-forwarded-for': `mcp-${ctx.user?.id ?? 'anon'}` },
   body: JSON.stringify(body),
 })
 
 /** Preview → (user agrees) → confirm, single-use, re-validated at confirm time. */
-async function twoStep<A extends { confirm_token?: string }>(
+export async function twoStep<A extends { confirm_token?: string }>(
   ctx: McpContext, tool: string, args: A,
   preview: () => Promise<Record<string, unknown>>,
   act: () => Promise<Record<string, unknown>>,
@@ -226,6 +227,38 @@ const assignRep = defineTool({
   },
 })
 
+// ── record_ship_in ──────────────────────────────────────────────────────────
+const recordShipIn = defineTool({
+  name: 'record_ship_in',
+  title: 'Record customer ship-in',
+  description: "Record the carrier and tracking number when your customer has shipped the devices of an accepted trade-in to the COE (for customers who don't log in themselves). Moves the order to \"shipped to COE\". Two steps: preview, then confirm.",
+  scope: 'write',
+  requiresUser: true,
+  input: z.object({
+    order: orderRef,
+    carrier: z.string().min(2).max(60).describe('e.g. Canada Post, Purolator, UPS, FedEx.'),
+    tracking_number: z.string().min(4).max(60),
+    confirm_token: confirmField,
+  }).strict(),
+  annotations: WRITE,
+  async run(ctx, a) {
+    return twoStep(ctx, 'record_ship_in', a, async () => {
+      const o = await resolveOrder(ctx, a.order)
+      if (o.type !== 'trade_in' || o.status !== 'accepted') {
+        throw new ToolError('not_allowed', `Order ${o.order_number} is "${label(o.status)}"; ship-in can be recorded once a trade-in quote is accepted.`)
+      }
+      return { order: o.order_number, carrier: a.carrier, tracking_number: a.tracking_number, new_status: label('shipped_to_coe') }
+    }, async () => {
+      const o = await resolveOrder(ctx, a.order)
+      const s = await asUser(ctx, () => shipmentsRoute(internal(ctx, '/api/shipments', {
+        order_id: o.id, carrier: a.carrier, tracking_number: a.tracking_number.trim(), direction: 'inbound',
+        from_address: {}, to_address: {},
+      })))
+      return { order: o.order_number, shipment_id: s.id, order_status: label('shipped_to_coe') }
+    })
+  },
+})
+
 export const WRITE_TOOLS: McpTool[] = [
-  createTradeIn, submitOrder, acceptQuote, rejectQuote, cancelOrder, assignRep,
+  createTradeIn, submitOrder, acceptQuote, rejectQuote, cancelOrder, assignRep, recordShipIn,
 ] as unknown as McpTool[]

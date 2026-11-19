@@ -20,8 +20,10 @@ export const CODE_TTL_S = 60
 export const ACCESS_PREFIX = 'dlmo_'
 export const REFRESH_PREFIX = 'dlmr_'
 
-/** Roles that may connect an assistant (Phase 2): the VAR's own staff. */
-export const OAUTH_ROLES = ['var_entity_admin', 'var_regional_manager', 'var_sales_rep'] as const
+/** Byte-Back staff who run order processing (Phase 3 operations tools). */
+export const PLATFORM_OPERATOR_ROLES = ['admin', 'coe_manager', 'coe_tech'] as const
+/** Roles that may connect an assistant: the VAR's own staff (Phase 2) and BB operators (Phase 3). */
+export const OAUTH_ROLES = ['var_entity_admin', 'var_regional_manager', 'var_sales_rep', ...PLATFORM_OPERATOR_ROLES] as const
 
 export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 const b64url = (b: Buffer) => b.toString('base64url')

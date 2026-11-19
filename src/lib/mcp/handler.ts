@@ -10,7 +10,7 @@
 import { z } from 'zod/v4'
 import { TOOLS, TOOLS_BY_NAME } from './catalog'
 import { RESOURCES, PROMPTS } from './resources'
-import { describeTool, ToolError, type McpContext } from './registry'
+import { describeTool, ToolError, toolAvailable, isOperator, type McpContext } from './registry'
 
 export const SERVER_INFO = { name: 'dlm', title: 'DLM — Device Lifecycle Management', version: '1.0.0' }
 
@@ -86,7 +86,7 @@ export async function handleMessage(msg: unknown, ctx: McpContext, deps: Handler
     case 'tools/list':
       // Only tools this key can actually use are offered.
       return ok(id, {
-        tools: TOOLS.filter((t) => (t.scope === null || ctx.key.scopes.includes(t.scope)) && (!t.requiresUser || !!ctx.user)).map(describeTool),
+        tools: TOOLS.filter((t) => toolAvailable(t, ctx)).map(describeTool),
       })
 
     case 'tools/call':
@@ -136,6 +136,11 @@ async function callTool(params: Record<string, unknown>, ctx: McpContext, deps: 
   if (tool.requiresUser && !ctx.user) {
     log('user_required')
     return toolError('user_required', 'This action needs a signed-in connection (OAuth), not an organization API key.')
+  }
+  if (tool.platformOnly && !isOperator(ctx)) {
+    // Same answer as a nonexistent tool: VAR users don't learn ops tools exist.
+    log('not_operator')
+    return toolError('unknown_tool', `Unknown tool "${name}".`)
   }
   if (tool.scope !== null && !ctx.key.scopes.includes(tool.scope)) {
     log('insufficient_scope')

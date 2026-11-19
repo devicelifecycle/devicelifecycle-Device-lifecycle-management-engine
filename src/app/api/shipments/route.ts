@@ -8,6 +8,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { ShipmentService } from '@/services/shipment.service'
 import { NotificationService } from '@/services/notification.service'
 import { OrderService } from '@/services/order.service'
+import { delegationLevel, customerInVarScope } from '@/lib/delegation'
 import type { Shipment } from '@/types'
 export const dynamic = 'force-dynamic'
 
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
     }
 
     let customerOrder: CustomerShipmentOrder | null = null
+    const isVarStaff = delegationLevel(effectiveRole) !== 'none'
 
     // Customer can only create shipments for their own accepted orders
     if (effectiveRole === 'customer') {
@@ -132,6 +134,28 @@ export async function POST(request: NextRequest) {
       if (order.status !== 'accepted') {
         return NextResponse.json({ error: 'You can only ship devices after accepting the quote' }, { status: 400 })
       }
+    } else if (isVarStaff) {
+      // VAR staff record the customer's ship-in on their behalf (most VAR end
+      // customers never log in) — same rules as the customer path: their own
+      // customer (delegation scope), an accepted trade-in, inbound, tracked.
+      const { data: order } = await createServiceRoleClient()
+        .from('orders')
+        .select('status, type, customer_id, customer:customers(tenant_id, region, assigned_rep_id)')
+        .eq('id', body.order_id)
+        .maybeSingle()
+      const cust = (Array.isArray(order?.customer) ? order?.customer[0] : order?.customer) as { tenant_id?: string; region?: string; assigned_rep_id?: string } | null
+      if (!order || !customerInVarScope({ role: effectiveRole, userId: profile.id, region: profile.region ?? null, tenantId: auth.tenantId }, cust)) {
+        return NextResponse.json({ error: 'You can only record shipments for your own customers' }, { status: 403 })
+      }
+      if (order.type !== 'trade_in' || order.status !== 'accepted') {
+        return NextResponse.json({ error: 'Ship-in can be recorded once the trade-in quote is accepted' }, { status: 400 })
+      }
+      if ((body.direction ?? 'inbound') !== 'inbound') {
+        return NextResponse.json({ error: 'VAR staff can only record the inbound shipment to the COE' }, { status: 400 })
+      }
+      body.direction = 'inbound'
+      if (!normalizedTrackingNumber) return NextResponse.json({ error: 'tracking_number is required' }, { status: 400 })
+      customerOrder = order as CustomerShipmentOrder
     } else if (effectiveRole === 'vendor') {
       const { data: order } = await supabase
         .from('orders')
@@ -172,7 +196,7 @@ export async function POST(request: NextRequest) {
     }
 
     const advanceTradeInToInboundTransit = async () => {
-      if (effectiveRole !== 'customer') return
+      if (effectiveRole !== 'customer' && !isVarStaff) return
       if (body.direction !== 'inbound') return
       const currentCustomerOrder = customerOrder
       if (!currentCustomerOrder) return
@@ -182,7 +206,7 @@ export async function POST(request: NextRequest) {
         body.order_id,
         'shipped_to_coe',
         authUser.id,
-        'Customer submitted inbound shipment',
+        isVarStaff ? 'Reseller recorded the customer’s inbound shipment' : 'Customer submitted inbound shipment',
       )
     }
 
@@ -208,8 +232,8 @@ export async function POST(request: NextRequest) {
 
     await advanceTradeInToInboundTransit()
 
-    // Notify admins when a customer submits shipment details (fire-and-forget)
-    if (effectiveRole === 'customer') {
+    // Notify admins when a customer (or their reseller) submits shipment details (fire-and-forget)
+    if (effectiveRole === 'customer' || isVarStaff) {
       ;(async () => {
         const svc = createServiceRoleClient()
         const { data: order } = await svc.from('orders').select('order_number').eq('id', body.order_id).single()
